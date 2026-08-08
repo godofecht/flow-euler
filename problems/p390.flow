@@ -1,0 +1,196 @@
+# Project Euler 390
+# Sum of integer areas ≤ 10^10 for triangles sqrt(1+b²), sqrt(1+c²), sqrt(b²+c²).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function p_bound(N: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = 1
+    while 8 * hi * hi * hi + hi <= N {
+        hi = hi * 2
+    }
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if 8 * mid * mid * mid + mid <= N {
+            lo = mid
+        } else {
+            hi = mid
+        }
+    }
+    return lo
+}
+
+function abs64(x: i64) -> i64 {
+    if x < 0 { return 0 - x }
+    return x
+}
+
+# Try to compute x*y if |x*y| fits in i64 and product >= 0 when needed.
+function mul_nonneg(x: i64, y: i64) -> i64 {
+    # returns x*y if both >=0 and no overflow, else -1
+    if x < 0 || y < 0 { return -1 }
+    if x == 0 || y == 0 { return 0 }
+    let LIM: i64 = 9223372036854775807
+    if y > LIM / x { return -1 }
+    return x * y
+}
+
+function add_cap(sum0: i64, term: i64, N: i64) -> i64 {
+    # returns sum0+term if both >=0 and result <= N, else -1
+    if sum0 < 0 || term < 0 { return -1 }
+    if term > N - sum0 { return -1 }
+    return sum0 + term
+}
+
+function area_new(p: i64, q: i64, A: i64, N: i64) -> i64 {
+    # A' = 16 p^3 q + 4 p q + 8 p^2 A + A   (for p>0)
+    # Handles q possibly negative by separating cases.
+    if p <= 0 { return -1 }
+    if A < 0 { return -1 }
+
+    if q >= 0 {
+        let mut sum: i64 = 0
+        # + A
+        sum = add_cap(sum, A, N)
+        if sum < 0 { return -1 }
+
+        # + 8 p^2 A
+        let p2: i64 = mul_nonneg(p, p)
+        if p2 < 0 { return -1 }
+        let eight_p2: i64 = mul_nonneg(8, p2)
+        if eight_p2 < 0 { return -1 }
+        let t2: i64 = mul_nonneg(eight_p2, A)
+        if t2 < 0 { return -1 }
+        sum = add_cap(sum, t2, N)
+        if sum < 0 { return -1 }
+
+        # + 4 p q
+        let four_p: i64 = mul_nonneg(4, p)
+        if four_p < 0 { return -1 }
+        let t3: i64 = mul_nonneg(four_p, q)
+        if t3 < 0 { return -1 }
+        sum = add_cap(sum, t3, N)
+        if sum < 0 { return -1 }
+
+        # + 16 p^3 q = 16 p * p2 * q
+        let sixteen_p: i64 = mul_nonneg(16, p)
+        if sixteen_p < 0 { return -1 }
+        let t4a: i64 = mul_nonneg(sixteen_p, p2)
+        if t4a < 0 {
+            # 16*p^3 may overflow i64; do (N-sum)/q comparison style
+            if q == 0 {
+                return sum
+            }
+            # t4 = 16*p^3*q = (16*p*q)*p2
+            let t16pq: i64 = mul_nonneg(sixteen_p, q)
+            if t16pq < 0 { return -1 }
+            let t4: i64 = mul_nonneg(t16pq, p2)
+            if t4 < 0 { return -1 }
+            sum = add_cap(sum, t4, N)
+            if sum < 0 { return -1 }
+            return sum
+        }
+        let t4: i64 = mul_nonneg(t4a, q)
+        if t4 < 0 { return -1 }
+        sum = add_cap(sum, t4, N)
+        if sum < 0 { return -1 }
+        return sum
+    }
+
+    # q < 0: A' = 8p^2 A + A - 16 p^3 mq - 4 p mq
+    # Positive partial sums may exceed N before subtraction, so do not cap at N yet.
+    let mq: i64 = 0 - q
+    let p2: i64 = mul_nonneg(p, p)
+    if p2 < 0 { return -1 }
+    let eight_p2: i64 = mul_nonneg(8, p2)
+    if eight_p2 < 0 { return -1 }
+    let mut pos: i64 = mul_nonneg(eight_p2, A)
+    if pos < 0 { return -1 }
+    let LIM: i64 = 9223372036854775807
+    if A > LIM - pos { return -1 }
+    pos = pos + A
+
+    let four_p: i64 = mul_nonneg(4, p)
+    if four_p < 0 { return -1 }
+    let sub1: i64 = mul_nonneg(four_p, mq)
+    if sub1 < 0 { return -1 }
+    if sub1 > pos { return -1 }
+    pos = pos - sub1
+
+    let sixteen_p: i64 = mul_nonneg(16, p)
+    if sixteen_p < 0 { return -1 }
+    let t16pq: i64 = mul_nonneg(sixteen_p, mq)
+    if t16pq < 0 { return -1 }
+    let sub2: i64 = mul_nonneg(t16pq, p2)
+    if sub2 < 0 { return -1 }
+    if sub2 > pos { return -1 }
+    pos = pos - sub2
+    if pos < 1 || pos > N { return -1 }
+    return pos
+}
+
+function q_new_val(p: i64, q: i64, A: i64) -> i64 {
+    # q' = (8p^2+1)q + 4p A = 8 p^2 q + q + 4 p A
+    # May be large; must fit in i64 for stack storage.
+    let p2: i64 = p * p  # |p| <= 2.5e9 fits
+    # Use i64 carefully; values observed up to ~2.4e9 fit.
+    return (8 * p2 + 1) * q + 4 * p * A
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000000
+    let bound: i64 = p_bound(N)
+    let CAP: i64 = 100000
+    let sp: ptr<i64> = calloc(CAP, 8)
+    let sq: ptr<i64> = calloc(CAP, 8)
+    let sA: ptr<i64> = calloc(CAP, 8)
+    if sp == null || sq == null || sA == null { return 1 }
+
+    let mut top: i64 = 0
+    let mut p0: i64 = 1
+    while p0 <= bound {
+        sp[top] = p0
+        sq[top] = 0
+        sA[top] = p0
+        top = top + 1
+        p0 = p0 + 1
+    }
+
+    let mut total: i64 = 0
+    while top > 0 {
+        top = top - 1
+        let mut pp: i64 = sp[top]
+        let mut qq: i64 = sq[top]
+        let AA: i64 = sA[top]
+        # Normalize to p > 0 (sign flip of p and q leaves A' invariant).
+        if pp < 0 {
+            pp = 0 - pp
+            qq = 0 - qq
+        }
+        if pp == 0 { continue }
+
+        let A_new: i64 = area_new(pp, qq, AA, N)
+        if A_new > 0 {
+            # q_new may overflow for huge values; only needed when A_new valid
+            # For valid branches, |q_new| stayed <= ~2.4e9 in reference runs.
+            let q_new: i64 = (8 * pp * pp + 1) * qq + 4 * pp * AA
+            total = total + A_new
+            if top + 3 > CAP {
+                printf("stack overflow\n")
+                return 1
+            }
+            sp[top] = pp; sq[top] = q_new; sA[top] = A_new; top = top + 1
+            sp[top] = q_new; sq[top] = pp; sA[top] = A_new; top = top + 1
+            sp[top] = q_new; sq[top] = 0 - pp; sA[top] = A_new; top = top + 1
+        }
+    }
+
+    printf("%lld\n", total)
+    free(sA)
+    free(sq)
+    free(sp)
+    return 0
+}

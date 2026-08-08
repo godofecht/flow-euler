@@ -1,0 +1,105 @@
+# Project Euler 308
+# FRACTRAN PRIMEGAME steps until 2^(p_10001).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function sum_floor_range(n: i64, lo: i64, hi: i64) -> i64 {
+    let mut s: i64 = 0
+    let mut d: i64 = lo
+    while d <= hi {
+        let q: i64 = n / d
+        let mut dmax: i64 = n / q
+        if dmax > hi { dmax = hi }
+        s = s + q * (dmax - d + 1)
+        d = dmax + 1
+    }
+    return s
+}
+
+function main() -> i32 {
+    # 10001st prime via sieve
+    let limit: i64 = 120000
+    let is_prime: ptr<i8> = calloc(limit + 1, 1)
+    let mut i: i64 = 0
+    while i <= limit {
+        is_prime[i] = 1
+        i = i + 1
+    }
+    is_prime[0] = 0
+    is_prime[1] = 0
+    i = 2
+    while i * i <= limit {
+        if is_prime[i] == 1 {
+            let mut j: i64 = i * i
+            while j <= limit {
+                is_prime[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut count: i64 = 0
+    let mut p: i64 = 0
+    i = 2
+    while i <= limit {
+        if is_prime[i] == 1 {
+            count = count + 1
+            if count == 10001 {
+                p = i
+                break
+            }
+        }
+        i = i + 1
+    }
+
+    let spf: ptr<i32> = calloc(p + 1, 4)
+    i = 0
+    while i <= p {
+        spf[i] = i as i32
+        i = i + 1
+    }
+    i = 2
+    while i * i <= p {
+        if spf[i] == i as i32 {
+            let mut j: i64 = i * i
+            while j <= p {
+                if spf[j] == j as i32 {
+                    spf[j] = i as i32
+                }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let mut steps: i64 = 0
+    let mut prev_b: i64 = 0
+    let mut N: i64 = 2
+    while N <= p {
+        let mut bN: i64 = 1
+        if N >= 2 {
+            let s: i64 = spf[N] as i64
+            if s != N {
+                bN = N / s
+            } else {
+                bN = 1
+            }
+        }
+        let extra: i64 = 0
+        if N != 2 {
+            extra = prev_b - 1
+        }
+        let sfloor: i64 = sum_floor_range(N, bN, N - 1)
+        let cost: i64 = (N - 1) + (6 * N + 2) * (N - bN) + 2 * sfloor + extra
+        steps = steps + cost
+        prev_b = bN
+        N = N + 1
+    }
+    printf("%lld\n", steps)
+    free(is_prime)
+    free(spf)
+    return 0
+}

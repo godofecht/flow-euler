@@ -1,0 +1,77 @@
+# Project Euler 057
+# In the first one-thousand expansions of √2, how many fractions have a
+# numerator with more digits than the denominator?
+# Expansion: 1 + 1/(2 + 1/(2 + ...)); recurrence p/q: p'=p+2q, q'=p+q
+# Starting from 1/1, next = 1 + 1/(1 + p/q) = (p+2q)/(p+q)
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function max2i(a: i32, b: i32) -> i32 {
+    if a > b { return a }
+    return b
+}
+
+function add(a: ptr<i32>, alen: i32, b: ptr<i32>, blen: i32, out: ptr<i32>) -> i32 {
+    let mut carry: i32 = 0
+    let mut i: i32 = 0
+    let maxlen: i32 = max2i(alen, blen)
+    while i < maxlen || carry > 0 {
+        let mut v: i32 = carry
+        if i < alen { v = v + a[i] }
+        if i < blen { v = v + b[i] }
+        out[i] = v % 10
+        carry = v / 10
+        i = i + 1
+    }
+    return i
+}
+
+function copy_digits(src: ptr<i32>, dst: ptr<i32>, len: i32) -> void {
+    let mut i: i32 = 0
+    while i < len {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function main() -> i32 {
+    let width: i32 = 400
+    let p: ptr<i32> = calloc(width as i64, 4)
+    let q: ptr<i32> = calloc(width as i64, 4)
+    let np: ptr<i32> = calloc(width as i64, 4)
+    let nq: ptr<i32> = calloc(width as i64, 4)
+    let tmp: ptr<i32> = calloc(width as i64, 4)
+    if p == null || q == null || np == null || nq == null || tmp == null { return 1 }
+
+    # start with first expansion 3/2
+    p[0] = 3
+    q[0] = 2
+    let mut plen: i32 = 1
+    let mut qlen: i32 = 1
+    let mut count: i64 = 0
+    let mut i: i32 = 1
+    while i <= 1000 {
+        if plen > qlen {
+            count = count + 1
+        }
+        # np = p + 2q; nq = p + q
+        let tlen: i32 = add(q, qlen, q, qlen, tmp)  # 2q
+        let nplen: i32 = add(p, plen, tmp, tlen, np)
+        let nqlen: i32 = add(p, plen, q, qlen, nq)
+        copy_digits(np, p, nplen)
+        copy_digits(nq, q, nqlen)
+        plen = nplen
+        qlen = nqlen
+        i = i + 1
+    }
+    printf("%lld\n", count)
+    free(tmp)
+    free(nq)
+    free(np)
+    free(q)
+    free(p)
+    return 0
+}

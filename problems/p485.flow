@@ -1,0 +1,75 @@
+# Project Euler 485
+# Maximum Number of Divisors — S(10^8, 10^5) via τ sieve + most-recent window max.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 100000000
+    let BLOCK: i64 = 100000
+
+    let tau: ptr<i16> = calloc(LIMIT + 1, 2)
+    if tau == null { return 1 }
+
+    # O(n log n) divisor count sieve — correct for all n
+    let mut i: i64 = 1
+    while i <= LIMIT {
+        let mut j: i64 = i
+        while j <= LIMIT {
+            tau[j] = ((tau[j] as i64) + 1) as i16
+            j = j + i
+        }
+        i = i + 1
+    }
+
+    # most_recent[d] = latest index with tau == d; mr_len-1 is current window max
+    let CAP: i64 = 1024
+    let most_recent: ptr<i32> = calloc(CAP, 4)
+    if most_recent == null { return 1 }
+    let mut mr_len: i64 = 0
+
+    i = 0
+    while i < BLOCK {
+        let current: i64 = tau[i] as i64
+        if current >= mr_len {
+            let mut t: i64 = mr_len
+            while t <= current {
+                most_recent[t] = 0
+                t = t + 1
+            }
+            mr_len = current + 1
+        }
+        most_recent[current] = i as i32
+        i = i + 1
+    }
+
+    let mut result: i64 = 0
+    i = BLOCK
+    while i <= LIMIT {
+        let too_far: i64 = i - BLOCK
+        while mr_len > 0 {
+            if (most_recent[mr_len - 1] as i64) > too_far { break }
+            mr_len = mr_len - 1
+        }
+
+        let current2: i64 = tau[i] as i64
+        if current2 >= mr_len {
+            let mut t2: i64 = mr_len
+            while t2 <= current2 {
+                most_recent[t2] = 0
+                t2 = t2 + 1
+            }
+            mr_len = current2 + 1
+        }
+        most_recent[current2] = i as i32
+        result = result + (mr_len - 1)
+        i = i + 1
+    }
+
+    printf("%lld\n", result)
+    free(most_recent)
+    free(tau)
+    return 0
+}

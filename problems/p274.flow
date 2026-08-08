@@ -1,0 +1,62 @@
+# Project Euler 274
+# Sum of divisibility multipliers m for primes p < 10^7, p != 2,5.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if exp % 2 == 1 {
+            result = (result * base) % mod
+        }
+        base = (base * base) % mod
+        exp = exp / 2
+    }
+    return result
+}
+
+function main() -> i32 {
+    let limit: i64 = 10000000
+    let sieve: ptr<i8> = calloc(limit, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i < limit {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 1 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut total: i64 = 0
+    let mut n: i64 = 3
+    while n < limit {
+        if sieve[n] == 1 && n != 5 {
+            let last_digit: i64 = n % 10
+            let first_digits: i64 = n / 10
+            if last_digit != 7 {
+                total = total + (n - first_digits) / last_digit
+            } else {
+                total = total + mod_pow(10, n - 2, n)
+            }
+        }
+        n = n + 2
+    }
+    printf("%lld\n", total)
+    free(sieve)
+    return 0
+}

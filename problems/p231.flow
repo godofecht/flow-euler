@@ -1,0 +1,65 @@
+# Project Euler 231
+# Prime factor sum of C(20000000, 15000000).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function add_fact(n: i64, primes: ptr<i64>, pc: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut i: i64 = 0
+    while i < pc {
+        let p: i64 = primes[i]
+        if p > n { break }
+        let mut multiple: i64 = p
+        let mut count: i64 = n / multiple
+        while count > 0 {
+            total = total + p * count
+            if multiple > n / p { break }
+            multiple = multiple * p
+            count = n / multiple
+        }
+        i = i + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    let N: i64 = 20000000
+    let K: i64 = 15000000
+    let sieve: ptr<i8> = calloc(N + 1, 1)
+    let primes: ptr<i64> = calloc(N / 10, 8)
+    if sieve == null || primes == null { return 1 }
+    let mut i: i64 = 0
+    while i <= N {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    i = 2
+    while i * i <= N {
+        if sieve[i] == 1 {
+            let mut j: i64 = i * i
+            while j <= N {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut pc: i64 = 0
+    i = 2
+    while i <= N {
+        if sieve[i] == 1 {
+            primes[pc] = i
+            pc = pc + 1
+        }
+        i = i + 1
+    }
+    let ans: i64 = add_fact(N, primes, pc) - add_fact(N - K, primes, pc) - add_fact(K, primes, pc)
+    printf("%lld\n", ans)
+    free(sieve); free(primes)
+    return 0
+}

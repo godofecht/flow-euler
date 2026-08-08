@@ -1,0 +1,40 @@
+# Project Euler 297
+# Sum of Zeckendorf lengths for 0 < n < 10^17.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function search(x: i64, fib: ptr<i64>, fib_sum: ptr<i64>) -> i64 {
+    let mut pos: i64 = 0
+    while fib[pos + 1] <= x {
+        pos = pos + 1
+    }
+    let reduced: i64 = x - fib[pos]
+    if reduced == 0 {
+        return fib_sum[pos]
+    }
+    return fib_sum[pos] + reduced + search(reduced, fib, fib_sum)
+}
+
+function main() -> i32 {
+    let limit: i64 = 100000000000000000
+    let fib: ptr<i64> = calloc(100, 8)
+    let fib_sum: ptr<i64> = calloc(100, 8)
+    if fib == null || fib_sum == null { return 1 }
+    fib[0] = 1
+    fib[1] = 2
+    fib_sum[0] = 1
+    fib_sum[1] = 2
+    let mut size: i64 = 2
+    while fib[size - 1] < limit {
+        fib[size] = fib[size - 1] + fib[size - 2]
+        fib_sum[size] = fib_sum[size - 1] + fib_sum[size - 2] + fib[size - 2] - 1
+        size = size + 1
+    }
+    printf("%lld\n", search(limit - 1, fib, fib_sum))
+    free(fib)
+    free(fib_sum)
+    return 0
+}

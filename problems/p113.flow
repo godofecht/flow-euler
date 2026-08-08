@@ -1,0 +1,47 @@
+# Project Euler 113
+# How many numbers below a googol (10^100) are not bouncy?
+
+# Non-bouncy = increasing + decreasing - both (flat numbers counted twice).
+# Increasing (non-decreasing) d-digit with digits 1-9: C(9+d-1,d) wait digits can repeat:
+# Combinations with repetition: C(9+d-1, d) for digits 1-9? Actually 0 not leading —
+# Non-decreasing positive: choose multisets from 1-9 of size 1..100: sum_d C(9+d-1,d) = C(9+100,100)-1? 
+# Actually: numbers with non-decreasing digits = nonempty multisets of {1..9}: 2^9 - 1 = 511 total of any length ≤9 digits max unique... with repetition: for ≤100 digits: C(9+100, 9) - 1.
+# Standard: count of non-decreasing ≤ 10^n - 1 is C(n+9,9)-1? 
+# For n digits max: sum_{k=1}^{n} C(k+8,8) = C(n+9,9)-1.
+
+function comb(n: i64, k: i64) -> i64 {
+    if k < 0 || k > n { return 0 }
+    if k > n - k { k = n - k }
+    let mut r: i64 = 1
+    let mut i: i64 = 1
+    while i <= k {
+        r = r * (n - k + i) / i
+        i = i + 1
+    }
+    return r
+}
+
+function main() -> i32 {
+    let n: i64 = 100
+    # increasing (non-decreasing digits 1-9): C(n+9,9)-1
+    let inc: i64 = comb(n + 9, 9) - 1
+    # decreasing: digits 0-9 with leading zeros representing shorter, exclude all-zero,
+    # but flat numbers like 111 counted in both — and 0-padded means C(n+10,10)-1 total
+    # "decreasing" including those with 0: C(n+10,10)-1, but exclude numbers with leading zeros
+    # which are already shorter decreasing numbers. Standard result:
+    # decreasing count (incl flats, excl 0) = C(n+10,10) - 1 - n
+    # because C(n+10,10)-1 counts multisets of size ≤n from 0-9 nonempty, minus the n pure-zero-padded? 
+    # Actually: combinations with repetition from 0-9 of length exactly allowing leading zeros =
+    # for numbers with at most n digits that are non-increasing: C(n+10,10)-1 (nonempty), 
+    # but this double-counts nothing yet; numbers like 000... are excluded by -1 for empty.
+    # All-zero representations: there are none of positive value.
+    # However 10...0 style: multiset {0,1} → "100..0" sorted decreasing "100..0" ok.
+    # Known formula for non-bouncy below 10^n:
+    # inc + dec - flats = (C(n+9,9)-1) + (C(n+10,10)-1-n) - 9*n
+    # flats: 9 per digit length (1,2,..9 and 11,22,..99 etc) = 9*n
+    let dec: i64 = comb(n + 10, 10) - 1 - n
+    let flats: i64 = 9 * n
+    let ans: i64 = inc + dec - flats
+    printf("%lld\n", ans)
+    return 0
+}

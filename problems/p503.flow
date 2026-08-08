@@ -1,0 +1,27 @@
+# Project Euler 503
+# Compromise or Persist — F(10^6) via backward rank-threshold DP.
+
+function main() -> i32 {
+    let N: i32 = 1000000
+    let mut x_next: f64 = 0.5
+    let mut t: i32 = N - 1
+    while t >= 1 {
+        let tp1: f64 = (t + 1) as f64
+        let y: f64 = x_next
+        let mut K: i32 = (y * tp1) as i32
+        if K > t { K = t }
+        while K > 0 && ((K as f64) / tp1) > y + 1.0e-15 {
+            K = K - 1
+        }
+        while K < t && (((K + 1) as f64) / tp1) <= y - 1.0e-15 {
+            K = K + 1
+        }
+        let sumk: f64 = (K as f64) * ((K + 1) as f64) / 2.0
+        let x_t: f64 = (sumk / tp1 + ((t - K) as f64) * y) / (t as f64)
+        x_next = x_t
+        t = t - 1
+    }
+    let ans: f64 = x_next * ((N + 1) as f64)
+    printf("%.10f\n", ans)
+    return 0
+}

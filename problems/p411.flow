@@ -1,0 +1,205 @@
+# Project Euler 411
+# sum_{k=1..30} S(k^5): longest nondecreasing path through modular stations.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function phi_of(n0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut result: i64 = n0
+    let mut p: i64 = 2
+    while p * p <= n {
+        if n % p == 0 {
+            while n % p == 0 { n = n / p }
+            result = result / p * (p - 1)
+        }
+        if p == 2 { p = 3 } else { p = p + 2 }
+    }
+    if n > 1 { result = result / n * (n - 1) }
+    return result
+}
+
+function mult_order(a: i64, n: i64) -> i64 {
+    if n == 1 { return 1 }
+    let mut order: i64 = phi_of(n)
+    let mut x: i64 = order
+    let mut p: i64 = 2
+    while p * p <= x {
+        if x % p == 0 {
+            while x % p == 0 { x = x / p }
+            while order % p == 0 && modpow(a, order / p, n) == 1 {
+                order = order / p
+            }
+        }
+        if p == 2 { p = 3 } else { p = p + 2 }
+    }
+    if x > 1 {
+        while order % x == 0 && modpow(a, order / x, n) == 1 {
+            order = order / x
+        }
+    }
+    return order
+}
+
+function lcm64(a: i64, b: i64) -> i64 {
+    return a / gcd(a, b) * b
+}
+
+function compute_S(n: i64) -> i64 {
+    let mut n2: i64 = n
+    let mut v2: i64 = 0
+    while n2 % 2 == 0 { n2 = n2 / 2; v2 = v2 + 1 }
+    let mut n3: i64 = n
+    let mut v3: i64 = 0
+    while n3 % 3 == 0 { n3 = n3 / 3; v3 = v3 + 1 }
+    let mut preperiod: i64 = v2
+    if v3 > preperiod { preperiod = v3 }
+    let ord2: i64 = 1
+    if n2 > 1 { ord2 = mult_order(2, n2) }
+    let ord3: i64 = 1
+    if n3 > 1 { ord3 = mult_order(3, n3) }
+    let period: i64 = lcm64(ord2, ord3)
+    let total: i64 = preperiod + period
+
+    let counts: ptr<i32> = calloc(n + 1, 4)
+    if counts == null { return -1 }
+    let mut x: i64 = 1 % n
+    let mut t: i64 = 0
+    while t < total {
+        counts[x] = (counts[x] as i64 + 1) as i32
+        x = (x * 2) % n
+        t = t + 1
+    }
+
+    # prefix: counts[i] = start index, counts[i+1]-counts[i] = length
+    let mut running: i64 = 0
+    let mut i: i64 = 0
+    while i < n {
+        let c: i64 = counts[i] as i64
+        counts[i] = running as i32
+        running = running + c
+        i = i + 1
+    }
+    counts[n] = running as i32
+
+    let pos: ptr<i32> = calloc(n, 4)
+    let ys: ptr<i32> = calloc(total, 4)
+    if pos == null || ys == null { return -1 }
+    i = 0
+    while i < n {
+        pos[i] = counts[i]
+        i = i + 1
+    }
+
+    x = 1 % n
+    let mut y: i64 = 1 % n
+    t = 0
+    while t < total {
+        let idx: i64 = pos[x] as i64
+        ys[idx] = y as i32
+        pos[x] = (idx + 1) as i32
+        x = (x * 2) % n
+        y = (y * 3) % n
+        t = t + 1
+    }
+
+    # For each x bucket, sort ys and run patience LIS across increasing x
+    let tails: ptr<i32> = calloc(total + 1, 4)
+    let mut len: i64 = 0
+    let mut xx: i64 = 0
+    while xx < n {
+        let start: i64 = counts[xx] as i64
+        let end: i64 = counts[xx + 1] as i64
+        let segn: i64 = end - start
+        if segn == 1 {
+            let v: i64 = ys[start] as i64
+            let mut lo: i64 = 0
+            let mut hi: i64 = len
+            while lo < hi {
+                let mid: i64 = (lo + hi) / 2
+                if (tails[mid] as i64) <= v { lo = mid + 1 } else { hi = mid }
+            }
+            tails[lo] = v as i32
+            if lo == len { len = len + 1 }
+        } elif segn > 1 {
+            # insertion sort segment (usually small)
+            let mut a: i64 = start + 1
+            while a < end {
+                let key: i32 = ys[a]
+                let mut b: i64 = a
+                while b > start && (ys[b - 1] as i64) > (key as i64) {
+                    ys[b] = ys[b - 1]
+                    b = b - 1
+                }
+                ys[b] = key
+                a = a + 1
+            }
+            a = start
+            while a < end {
+                let v2: i64 = ys[a] as i64
+                let mut lo2: i64 = 0
+                let mut hi2: i64 = len
+                while lo2 < hi2 {
+                    let mid2: i64 = (lo2 + hi2) / 2
+                    if (tails[mid2] as i64) <= v2 { lo2 = mid2 + 1 } else { hi2 = mid2 }
+                }
+                tails[lo2] = v2 as i32
+                if lo2 == len { len = len + 1 }
+                a = a + 1
+            }
+        }
+        xx = xx + 1
+    }
+
+    free(tails)
+    free(ys)
+    free(pos)
+    free(counts)
+    return len
+}
+
+function ipow(a: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i64 = 0
+    while i < e { r = r * a; i = i + 1 }
+    return r
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut k: i64 = 1
+    while k <= 30 {
+        let n: i64 = ipow(k, 5)
+        total = total + compute_S(n)
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

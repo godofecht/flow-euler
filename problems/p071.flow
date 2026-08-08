@@ -1,0 +1,23 @@
+# Project Euler 071
+# Numerator of the fraction immediately to the left of 3/7
+# among fractions with denominator ≤ 1,000,000 in lowest terms.
+# Maximize a/b < 3/7 => a/b = floor((3b-1)/7)/b; take best.
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let mut best_a: i64 = 0
+    let mut best_b: i64 = 1
+    let mut d: i64 = 1
+    while d <= limit {
+        # a = floor((3*d - 1) / 7)
+        let a: i64 = (3 * d - 1) / 7
+        # compare a/d > best_a/best_b => a*best_b > best_a*d
+        if a * best_b > best_a * d {
+            best_a = a
+            best_b = d
+        }
+        d = d + 1
+    }
+    printf("%lld\n", best_a)
+    return 0
+}

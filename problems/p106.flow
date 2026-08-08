@@ -1,0 +1,36 @@
+# Project Euler 106
+# For n=12, how many subset pairs need equality testing?
+
+# Disjoint B,C with |B|=|C|=k>=2: need test iff the sorted pairing is not
+# strictly componentwise ordered (Catalan-related).
+# Count = C(n, 2k) * C(2k, k) / 2 * (1 - C_k / (C(2k,k)/(k+1 wait)))
+# Number needing test for size k: C(n,2k) * (C(2k,k)/2 - C_{k-1})
+# where C_m is Catalan number = (1/(m+1))*C(2m,m), and for pairs:
+# Need test count for equal size k: C(n,2k) * C(2k,k) * (k-1)/(2*(k+1))
+
+function comb(n: i64, k: i64) -> i64 {
+    if k < 0 || k > n { return 0 }
+    if k > n - k { k = n - k }
+    let mut r: i64 = 1
+    let mut i: i64 = 1
+    while i <= k {
+        r = r * (n - k + i) / i
+        i = i + 1
+    }
+    return r
+}
+
+function main() -> i32 {
+    let n: i64 = 12
+    let mut total: i64 = 0
+    let mut k: i64 = 2
+    while 2 * k <= n {
+        # C(n,2k) * C(2k,k) * (k-1) / (2*(k+1))
+        let c1: i64 = comb(n, 2 * k)
+        let c2: i64 = comb(2 * k, k)
+        total = total + c1 * c2 * (k - 1) / (2 * (k + 1))
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

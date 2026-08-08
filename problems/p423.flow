@@ -1,0 +1,112 @@
+# Project Euler 423
+# S(5e7) mod 10^9+7 for consecutive die-throw match counts.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let L: i64 = 50000000
+    let MOD: i64 = 1000000007
+
+    let size: i64 = L / 2 + 1
+    let odd: ptr<i8> = calloc(size, 1)
+    if odd == null { return 1 }
+    let mut i: i64 = 0
+    while i < size {
+        odd[i] = 1
+        i = i + 1
+    }
+    odd[0] = 0
+    let mut p: i64 = 3
+    while p * p <= L {
+        if odd[p >> 1] != 0 {
+            let mut cur: i64 = (p * p) >> 1
+            while cur < size {
+                odd[cur] = 0
+                cur = cur + p
+            }
+        }
+        p = p + 2
+    }
+
+    let mut pi_L: i64 = 1
+    i = 1
+    while i < size {
+        if odd[i] != 0 { pi_L = pi_L + 1 }
+        i = i + 1
+    }
+    let d_L: i64 = L - pi_L
+    let max_needed: i64 = d_L
+    if pi_L + 1 > max_needed { max_needed = pi_L + 1 }
+    max_needed = max_needed + 2
+
+    let inv: ptr<i64> = calloc(max_needed + 1, 8)
+    if inv == null { return 1 }
+    inv[1] = 1
+    i = 2
+    while i <= max_needed {
+        inv[i] = MOD - ((MOD / i) * inv[MOD % i]) % MOD
+        i = i + 1
+    }
+    let inv5: i64 = 400000003  # pow(5, MOD-2, MOD)
+
+    let mut C: i64 = 6
+    let mut b: i64 = 6
+    let mut k: i64 = 0
+    let mut d: i64 = 1
+    let mut S: i64 = 6
+
+    # n=2 prime
+    C = 36
+    b = 6
+    k = 1
+    d = 1
+    S = (S + C) % MOD
+
+    let mut n: i64 = 2
+    while n <= L - 2 {
+        let m: i64 = n + 1
+        let mut C1: i64 = 0
+        let mut b1: i64 = 0
+        let mut k1: i64 = 0
+        let mut d1: i64 = 0
+        if odd[m >> 1] != 0 {
+            let mut extra: i64 = (b * inv5) % MOD
+            extra = (extra * (d - 1)) % MOD
+            extra = (extra * inv[k + 1]) % MOD
+            C1 = (6 * C + 5 * extra) % MOD
+            b1 = (b + 5 * extra) % MOD
+            k1 = k + 1
+            d1 = d
+        } else {
+            C1 = (6 * C - b) % MOD
+            if C1 < 0 { C1 = C1 + MOD }
+            b1 = (b * 5) % MOD
+            b1 = (b1 * n) % MOD
+            b1 = (b1 * inv[d]) % MOD
+            k1 = k
+            d1 = d + 1
+        }
+        S = (S + C1) % MOD
+
+        let mut C2: i64 = (6 * C1 - b1) % MOD
+        if C2 < 0 { C2 = C2 + MOD }
+        let mut b2: i64 = (b1 * 5) % MOD
+        b2 = (b2 * m) % MOD
+        b2 = (b2 * inv[d1]) % MOD
+        S = (S + C2) % MOD
+
+        C = C2
+        b = b2
+        k = k1
+        d = d1 + 1
+        n = m + 1
+    }
+
+    printf("%lld\n", S)
+    free(inv)
+    free(odd)
+    return 0
+}

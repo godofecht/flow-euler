@@ -1,0 +1,63 @@
+# Project Euler 008
+# Greatest product of thirteen adjacent digits in the 1000-digit number.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function load_digits(path: string, out: ptr<i32>, cap: i32) -> i32 {
+    let f: ptr<void> = fopen(path, "r")
+    if f == null {
+        return -1
+    }
+    let mut n: i32 = 0
+    let mut c: i32 = fgetc(f)
+    while c >= 0 && n < cap {
+        if c >= 48 && c <= 57 {
+            out[n] = c - 48
+            n = n + 1
+        }
+        c = fgetc(f)
+    }
+    fclose(f)
+    return n
+}
+
+function solve(digits: ptr<i32>, n: i32, window: i32) -> i64 {
+    let mut best: i64 = 0
+    let mut i: i32 = 0
+    while i + window <= n {
+        let mut prod: i64 = 1
+        let mut j: i32 = 0
+        while j < window {
+            prod = prod * (digits[i + j] as i64)
+            j = j + 1
+        }
+        if prod > best {
+            best = prod
+        }
+        i = i + 1
+    }
+    return best
+}
+
+function main() -> i32 {
+    let digits: ptr<i32> = calloc(1000, 4)
+    if digits == null {
+        printf("oom\n")
+        return 1
+    }
+    let n: i32 = load_digits("data/p008.txt", digits, 1000)
+    if n < 0 {
+        printf("failed to read data/p008.txt\n")
+        free(digits)
+        return 1
+    }
+    printf("%lld\n", solve(digits, n, 13))
+    free(digits)
+    return 0
+}

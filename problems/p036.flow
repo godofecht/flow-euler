@@ -1,0 +1,26 @@
+# Project Euler 036
+# Sum of numbers below one million that are palindromic in base 10 and base 2.
+
+function is_pal_base(n0: i64, base: i64) -> bool {
+    let mut n: i64 = n0
+    let mut rev: i64 = 0
+    let original: i64 = n0
+    while n > 0 {
+        rev = rev * base + n % base
+        n = n / base
+    }
+    return rev == original
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n < 1000000 {
+        if is_pal_base(n, 10) && is_pal_base(n, 2) {
+            total = total + n
+        }
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

@@ -1,0 +1,41 @@
+# Project Euler 053
+# How many values of C(n,r) for 1 ≤ n ≤ 100 are greater than one million?
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    # Pascal triangle with capping at 1000001 (only care > 1e6)
+    let nmax: i32 = 100
+    let row: ptr<i64> = calloc((nmax + 1) as i64, 8)
+    if row == null { return 1 }
+    row[0] = 1
+    let mut count: i64 = 0
+    let mut n: i32 = 1
+    while n <= nmax {
+        # build next row right-to-left in place
+        row[n] = 1
+        let mut r: i32 = n - 1
+        while r >= 1 {
+            let mut v: i64 = row[r] + row[r - 1]
+            if v > 1000001 {
+                v = 1000001
+            }
+            row[r] = v
+            r = r - 1
+        }
+        r = 0
+        while r <= n {
+            if row[r] > 1000000 {
+                count = count + 1
+            }
+            r = r + 1
+        }
+        n = n + 1
+    }
+    printf("%lld\n", count)
+    free(row)
+    return 0
+}

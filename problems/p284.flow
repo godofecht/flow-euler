@@ -1,0 +1,214 @@
+# Project Euler 284
+# Base-14 digit-sum of steady squares with <= 10000 digits.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Little-endian base-10^9 limbs for value/quotient; track length in base14 digits separately.
+# Simpler: store value and quotient as base-14 digit arrays.
+
+function dig_add_into(a: ptr<i64>, alen: i64, b: ptr<i64>, blen: i64) -> i64 {
+    let BASE: i64 = 14
+    let mut carry: i64 = 0
+    let mut i: i64 = 0
+    let n: i64 = alen
+    if blen > n { n = blen }
+    while i < n || carry != 0 {
+        let mut s: i64 = carry
+        if i < alen { s = s + a[i] }
+        if i < blen { s = s + b[i] }
+        a[i] = s % BASE
+        carry = s / BASE
+        i = i + 1
+    }
+    return i
+}
+
+function dig_mul_small(a: ptr<i64>, alen: i64, m: i64, out: ptr<i64>) -> i64 {
+    let BASE: i64 = 14
+    let mut carry: i64 = 0
+    let mut i: i64 = 0
+    while i < alen || carry != 0 {
+        let mut s: i64 = carry
+        if i < alen { s = s + a[i] * m }
+        out[i] = s % BASE
+        carry = s / BASE
+        i = i + 1
+    }
+    return i
+}
+
+function dig_copy(src: ptr<i64>, n: i64, dst: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function dig_div_base(a: ptr<i64>, alen: i64) -> i64 {
+    # divide by BASE=14: shift down one digit
+    let mut i: i64 = 0
+    while i + 1 < alen {
+        a[i] = a[i + 1]
+        i = i + 1
+    }
+    if alen > 0 {
+        a[alen - 1] = 0
+        return alen - 1
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let BASE: i64 = 14
+    let max_digits: i64 = 10000
+    let CAP: i64 = max_digits + 8
+    let inv: ptr<i64> = calloc(14, 8)
+    inv[1]=1; inv[3]=5; inv[5]=3; inv[9]=11; inv[11]=9; inv[13]=13
+
+    let v0: ptr<i64> = calloc(CAP, 8)
+    let v1: ptr<i64> = calloc(CAP, 8)
+    let q0: ptr<i64> = calloc(CAP, 8)
+    let q1: ptr<i64> = calloc(CAP, 8)
+    let tmp: ptr<i64> = calloc(CAP + 4, 8)
+    let tmp2: ptr<i64> = calloc(CAP + 4, 8)
+    if v0 == null || v1 == null || q0 == null || q1 == null { return 1 }
+
+    v0[0] = 7; v1[0] = 8
+    q0[0] = 3; q1[0] = 4
+    let mut vlen0: i64 = 1
+    let mut vlen1: i64 = 1
+    let mut qlen0: i64 = 1
+    let mut qlen1: i64 = 1
+    let mut ds0: i64 = 7
+    let mut ds1: i64 = 8
+    let mut lead0: i64 = 7
+    let mut lead1: i64 = 8
+    let mut total: i64 = 1
+
+    let mut length: i64 = 1
+    while length <= max_digits {
+        if lead0 != 0 { total = total + ds0 }
+        if lead1 != 0 { total = total + ds1 }
+        if length == max_digits { break }
+
+        # lift 0
+        let coef0: i64 = (2 * v0[0] - 1) % BASE
+        if coef0 < 0 { coef0 = coef0 + BASE }
+        let mut ld0: i64 = ((-(q0[0] % BASE)) * inv[coef0]) % BASE
+        if ld0 < 0 { ld0 = ld0 + BASE }
+
+        # next_quotient = (q + (2v-1)*ld + ld*ld * 14^{len}) / 14
+        # Build (2v-1)*ld into tmp
+        let mut tlen: i64 = dig_mul_small(v0, vlen0, 2, tmp)
+        # subtract 1
+        let mut i: i64 = 0
+        tmp[0] = tmp[0] - 1
+        while tmp[i] < 0 {
+            tmp[i] = tmp[i] + BASE
+            i = i + 1
+            tmp[i] = tmp[i] - 1
+        }
+        tlen = dig_mul_small(tmp, tlen, ld0, tmp2)
+        # tmp2 = (2v-1)*ld; add q0
+        dig_copy(q0, qlen0, tmp)
+        let mut alen: i64 = qlen0
+        # zero rest of tmp
+        i = alen
+        while i < CAP + 4 { tmp[i] = 0; i = i + 1 }
+        alen = dig_add_into(tmp, alen, tmp2, tlen)
+        # add ld*ld at position length (i.e. * 14^length)
+        let addv: i64 = ld0 * ld0
+        let mut pos: i64 = length
+        let mut carry: i64 = addv
+        while carry != 0 {
+            let s: i64 = tmp[pos] + carry
+            tmp[pos] = s % BASE
+            carry = s / BASE
+            pos = pos + 1
+            if pos > alen { alen = pos }
+        }
+        # divide by BASE
+        qlen0 = dig_div_base(tmp, alen)
+        dig_copy(tmp, qlen0, q0)
+        if qlen0 == 0 { q0[0] = 0; qlen0 = 1 }
+
+        # next value: append ld0
+        v0[vlen0] = ld0
+        vlen0 = vlen0 + 1
+        lead0 = ld0
+        ds0 = ds0 + ld0
+
+        # lift 1 (same)
+        let coef1: i64 = (2 * v1[0] - 1) % BASE
+        if coef1 < 0 { coef1 = coef1 + BASE }
+        let mut ld1: i64 = ((-(q1[0] % BASE)) * inv[coef1]) % BASE
+        if ld1 < 0 { ld1 = ld1 + BASE }
+
+        tlen = dig_mul_small(v1, vlen1, 2, tmp)
+        tmp[0] = tmp[0] - 1
+        i = 0
+        while tmp[i] < 0 {
+            tmp[i] = tmp[i] + BASE
+            i = i + 1
+            tmp[i] = tmp[i] - 1
+        }
+        tlen = dig_mul_small(tmp, tlen, ld1, tmp2)
+        dig_copy(q1, qlen1, tmp)
+        alen = qlen1
+        i = alen
+        while i < CAP + 4 { tmp[i] = 0; i = i + 1 }
+        alen = dig_add_into(tmp, alen, tmp2, tlen)
+        let addv1: i64 = ld1 * ld1
+        pos = length
+        carry = addv1
+        while carry != 0 {
+            let s2: i64 = tmp[pos] + carry
+            tmp[pos] = s2 % BASE
+            carry = s2 / BASE
+            pos = pos + 1
+            if pos > alen { alen = pos }
+        }
+        qlen1 = dig_div_base(tmp, alen)
+        dig_copy(tmp, qlen1, q1)
+        if qlen1 == 0 { q1[0] = 0; qlen1 = 1 }
+
+        v1[vlen1] = ld1
+        vlen1 = vlen1 + 1
+        lead1 = ld1
+        ds1 = ds1 + ld1
+
+        length = length + 1
+    }
+
+    # print total in base 14
+    if total == 0 {
+        printf("0\n")
+    } else {
+        let digs: ptr<i64> = calloc(64, 8)
+        let mut nd: i64 = 0
+        let mut x: i64 = total
+        while x > 0 {
+            digs[nd] = x % BASE
+            x = x / BASE
+            nd = nd + 1
+        }
+        let mut j: i64 = nd - 1
+        while j >= 0 {
+            let d: i64 = digs[j]
+            if d < 10 {
+                printf("%c", (48 + d) as i32)
+            } else {
+                printf("%c", (87 + d) as i32)  # a=97=87+10
+            }
+            j = j - 1
+        }
+        printf("\n")
+        free(digs)
+    }
+    free(v0); free(v1); free(q0); free(q1); free(tmp); free(tmp2); free(inv)
+    return 0
+}

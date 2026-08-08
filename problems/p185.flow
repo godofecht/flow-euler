@@ -1,0 +1,154 @@
+# Project Euler 185
+# Number Mind: recover unique 16-digit sequence from guesses.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+}
+
+let mut seed: i64 = 0
+
+function myrand(modulo: i32) -> i32 {
+    seed = seed * 1103515245 + 12345
+    # keep lower 32 bits
+    seed = seed - (seed / 4294967296) * 4294967296
+    if seed < 0 { seed = seed + 4294967296 }
+    return (seed % (modulo as i64)) as i32
+}
+
+function shuffle_digit(digit: i32) -> i32 {
+    let old: i32 = digit
+    let mut d: i32 = myrand(10)
+    while d == old {
+        d = myrand(10)
+    }
+    return d
+}
+
+function distance(cur: ptr<i32>, seqs: ptr<i32>, hits: ptr<i32>, ng: i32, nd: i32) -> i32 {
+    let mut errors: i32 = 0
+    let mut i: i32 = 0
+    while i < ng {
+        let mut same: i32 = 0
+        let mut j: i32 = 0
+        while j < nd {
+            if cur[j] == seqs[i * nd + j] { same = same + 1 }
+            j = j + 1
+        }
+        if same > hits[i] { errors = errors + (same - hits[i]) }
+        else { errors = errors + (hits[i] - same) }
+        i = i + 1
+    }
+    return errors
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p185.txt", "r")
+    if f == null {
+        printf("missing data\n")
+        return 1
+    }
+    let NG: i32 = 22
+    let ND: i32 = 16
+    let seqs: ptr<i32> = calloc((NG * ND) as i64, 4)
+    let hits: ptr<i32> = calloc(NG as i64, 4)
+    let cur: ptr<i32> = calloc(ND as i64, 4)
+    if seqs == null || hits == null || cur == null { return 1 }
+
+    let mut gi: i32 = 0
+    let mut di: i32 = 0
+    let mut in_guess: bool = true
+    let mut hit_val: i32 = 0
+    let mut reading_hit: bool = false
+    let mut c: i32 = fgetc(f)
+    while c >= 0 && gi < NG {
+        if c >= 48 && c <= 57 {
+            if in_guess && di < ND {
+                seqs[gi * ND + di] = c - 48
+                di = di + 1
+            } elif reading_hit {
+                hit_val = hit_val * 10 + (c - 48)
+            }
+        } elif c == 59 {
+            in_guess = false
+            reading_hit = true
+            hit_val = 0
+        } elif c == 10 || c == 13 {
+            if di == ND {
+                hits[gi] = hit_val
+                gi = gi + 1
+            }
+            di = 0
+            in_guess = true
+            reading_hit = false
+            hit_val = 0
+        }
+        c = fgetc(f)
+    }
+    # last line without newline
+    if gi < NG && di == ND {
+        hits[gi] = hit_val
+        gi = gi + 1
+    }
+    fclose(f)
+    if gi != NG {
+        printf("parse fail %d\n", gi)
+        return 1
+    }
+
+    let mut attempt: i32 = 0
+    while attempt < 100 {
+        seed = attempt as i64
+        let mut i: i32 = 0
+        while i < ND {
+            cur[i] = myrand(10)
+            i = i + 1
+        }
+        let mut errors: i32 = distance(cur, seqs, hits, NG, ND)
+        let mut previous: i32 = errors
+        let mut quiet: i32 = 0
+        let mut steps: i32 = 0
+        while errors != 0 && steps < 100000 {
+            i = 0
+            while i < ND {
+                let prev_d: i32 = cur[i]
+                cur[i] = shuffle_digit(prev_d)
+                let modified: i32 = distance(cur, seqs, hits, NG, ND)
+                if modified <= errors {
+                    errors = modified
+                } else {
+                    cur[i] = prev_d
+                }
+                i = i + 1
+            }
+            if errors == previous {
+                quiet = quiet + 1
+                if quiet == 20 {
+                    let idx: i32 = myrand(ND)
+                    cur[idx] = shuffle_digit(cur[idx])
+                    errors = distance(cur, seqs, hits, NG, ND)
+                    quiet = 0
+                }
+            } else {
+                quiet = 0
+                previous = errors
+            }
+            steps = steps + 1
+        }
+        if errors == 0 { break }
+        attempt = attempt + 1
+    }
+
+    let mut ans: i64 = 0
+    let mut i: i32 = 0
+    while i < ND {
+        ans = ans * 10 + (cur[i] as i64)
+        i = i + 1
+    }
+    printf("%lld\n", ans)
+    free(seqs); free(hits); free(cur)
+    return 0
+}

@@ -1,0 +1,195 @@
+# Project Euler 432
+# Last 9 digits of sum_{i=1}^{10^11} phi(510510*i).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function hget(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64) -> i64 {
+    let mut h: i64 = key % cap
+    if h < 0 { h = h + cap }
+    while used[h] != 0 {
+        if keys[h] == key { return vals[h] }
+        h = h + 1
+        if h >= cap { h = 0 }
+    }
+    return -1
+}
+
+function hput(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, val: i64) -> void {
+    let mut h: i64 = key % cap
+    if h < 0 { h = h + cap }
+    while used[h] != 0 {
+        if keys[h] == key { vals[h] = val; return }
+        h = h + 1
+        if h >= cap { h = 0 }
+    }
+    used[h] = 1
+    keys[h] = key
+    vals[h] = val
+}
+
+function Phi(
+    x: i64, LIMIT: i64, MOD: i64, pref: ptr<i64>,
+    keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, HCAP: i64
+) -> i64 {
+    if x <= LIMIT { return pref[x] }
+    let cached: i64 = hget(keys, vals, used, HCAP, x)
+    if cached >= 0 { return cached }
+    let mut ans: i64 = ((x % (2 * MOD)) * ((x + 1) % (2 * MOD)) / 2) % MOD
+    let mut i: i64 = 2
+    while i <= x {
+        let q: i64 = x / i
+        let j: i64 = x / q
+        let cnt: i64 = (j - i + 1) % MOD
+        ans = (ans - cnt * Phi(q, LIMIT, MOD, pref, keys, vals, used, HCAP)) % MOD
+        if ans < 0 { ans = ans + MOD }
+        i = j + 1
+    }
+    hput(keys, vals, used, HCAP, x, ans)
+    return ans
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000
+    let n: i64 = 510510
+    let m: i64 = 100000000000
+    let LIMIT: i64 = 5000000
+
+    let phi: ptr<i32> = calloc(LIMIT + 1, 4)
+    let pref: ptr<i64> = calloc(LIMIT + 1, 8)
+    let primes: ptr<i32> = calloc(LIMIT / 5 + 10, 4)
+    if phi == null || pref == null || primes == null { return 1 }
+    phi[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= LIMIT {
+        if phi[i] == 0 {
+            phi[i] = (i - 1) as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > LIMIT { break }
+            if i % p == 0 {
+                phi[ip] = ((phi[i] as i64) * p) as i32
+                break
+            } else {
+                phi[ip] = ((phi[i] as i64) * (p - 1)) as i32
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let mut acc: i64 = 0
+    i = 1
+    while i <= LIMIT {
+        acc = (acc + (phi[i] as i64)) % MOD
+        pref[i] = acc
+        i = i + 1
+    }
+
+    let pf0: i64 = 2
+    let pf1: i64 = 3
+    let pf2: i64 = 5
+    let pf3: i64 = 7
+    let pf4: i64 = 11
+    let pf5: i64 = 13
+    let pf6: i64 = 17
+    let kpf: i64 = 7
+    let nsub: i64 = 128
+    let prods: ptr<i64> = calloc(nsub, 8)
+    let signs: ptr<i64> = calloc(nsub, 8)
+    let mut nlist: i64 = 0
+    let mut mask: i64 = 1
+    while mask < nsub {
+        let mut prod: i64 = 1
+        let mut bits: i64 = 0
+        if (mask & 1) != 0 { prod = prod * pf0; bits = bits + 1 }
+        if (mask & 2) != 0 { prod = prod * pf1; bits = bits + 1 }
+        if (mask & 4) != 0 { prod = prod * pf2; bits = bits + 1 }
+        if (mask & 8) != 0 { prod = prod * pf3; bits = bits + 1 }
+        if (mask & 16) != 0 { prod = prod * pf4; bits = bits + 1 }
+        if (mask & 32) != 0 { prod = prod * pf5; bits = bits + 1 }
+        if (mask & 64) != 0 { prod = prod * pf6; bits = bits + 1 }
+        prods[nlist] = prod
+        if (bits & 1) == 1 { signs[nlist] = 1 } else { signs[nlist] = -1 }
+        nlist = nlist + 1
+        mask = mask + 1
+    }
+    let mut a: i64 = 1
+    while a < nlist {
+        let mut b2: i64 = a
+        while b2 > 0 && prods[b2 - 1] > prods[b2] {
+            let tp: i64 = prods[b2]
+            prods[b2] = prods[b2 - 1]
+            prods[b2 - 1] = tp
+            let ts: i64 = signs[b2]
+            signs[b2] = signs[b2 - 1]
+            signs[b2 - 1] = ts
+            b2 = b2 - 1
+        }
+        a = a + 1
+    }
+
+    let phi_n: i64 = phi[n] as i64
+    let HCAP: i64 = 4000003
+    let keys: ptr<i64> = calloc(HCAP, 8)
+    let vals: ptr<i64> = calloc(HCAP, 8)
+    let used: ptr<i8> = calloc(HCAP, 1)
+    let Skeys: ptr<i64> = calloc(HCAP, 8)
+    let Svals: ptr<i64> = calloc(HCAP, 8)
+    let Suset: ptr<i8> = calloc(HCAP, 1)
+    let stack: ptr<i64> = calloc(300000, 8)
+    if keys == null || Skeys == null || stack == null { return 1 }
+
+    let mut top: i64 = 0
+    stack[top] = m
+    top = top + 1
+    while top > 0 {
+        let mm: i64 = stack[top - 1]
+        if hget(Skeys, Svals, Suset, HCAP, mm) >= 0 {
+            top = top - 1
+            continue
+        }
+        let _p: i64 = Phi(mm, LIMIT, MOD, pref, keys, vals, used, HCAP)
+        let mut ready: i64 = 1
+        let mut t: i64 = 0
+        while t < nlist {
+            let pr: i64 = prods[t]
+            if pr <= mm {
+                let q: i64 = mm / pr
+                if q > 0 && hget(Skeys, Svals, Suset, HCAP, q) < 0 {
+                    stack[top] = q
+                    top = top + 1
+                    ready = 0
+                }
+            }
+            t = t + 1
+        }
+        if ready == 1 {
+            let mut ans: i64 = ((phi_n % MOD) * Phi(mm, LIMIT, MOD, pref, keys, vals, used, HCAP)) % MOD
+            t = 0
+            while t < nlist {
+                let pr2: i64 = prods[t]
+                if pr2 <= mm {
+                    let q2: i64 = mm / pr2
+                    let sq: i64 = hget(Skeys, Svals, Suset, HCAP, q2)
+                    ans = (ans + signs[t] * sq) % MOD
+                }
+                t = t + 1
+            }
+            if ans < 0 { ans = ans + MOD }
+            hput(Skeys, Svals, Suset, HCAP, mm, ans)
+            top = top - 1
+        }
+    }
+
+    let answer: i64 = hget(Skeys, Svals, Suset, HCAP, m)
+    printf("%09lld\n", answer)
+    return 0
+}

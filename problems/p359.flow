@@ -1,0 +1,89 @@
+# Project Euler 359
+# Hilbert's Hotel: sum P(2^a * 3^b, 2^{27-a}*3^{12-b}) mod 10^8.
+
+function mulmod(a: i64, b: i64, mod: i64) -> i64 {
+    # (a * b) % mod with a,b reduced; uses i128 via double-and-add for safety
+    let mut x: i64 = a % mod
+    if x < 0 { x = x + mod }
+    let mut y: i64 = b % mod
+    if y < 0 { y = y + mod }
+    let mut res: i64 = 0
+    while y > 0 {
+        if y % 2 == 1 {
+            res = res + x
+            if res >= mod { res = res - mod }
+        }
+        x = x + x
+        if x >= mod { x = x - mod }
+        y = y / 2
+    }
+    return res
+}
+
+function p_value(floor: i64, room: i64, mod: i64) -> i64 {
+    # result = ((floor+1)//2)*floor  [- (floor+1)//2 if floor odd > 1]
+    let half: i64 = (floor + 1) / 2
+    let mut result: i64 = mulmod(half, floor, mod)
+    if floor % 2 == 1 && floor > 1 {
+        result = result - (half % mod)
+        if result < 0 { result = result + mod }
+    }
+
+    let mut increment_even: i64 = 1
+    if floor % 2 == 0 {
+        increment_even = 2 * floor + 1
+    }
+    let mut increment_odd: i64 = 2
+    if floor % 2 == 1 {
+        increment_odd = 2 * floor
+    }
+    if floor == 1 {
+        increment_odd = 3
+        increment_even = 2
+    }
+
+    let num_even: i64 = room / 2
+    let num_odd: i64 = (room - 1) / 2
+
+    # triangle_even*2 cancelled: num_even*(num_even+1)
+    # triangle_odd*2 cancelled: num_odd*(num_odd+1)
+    let te: i64 = mulmod(num_even, num_even + 1, mod)
+    let tod: i64 = mulmod(num_odd, num_odd + 1, mod)
+
+    let ie: i64 = increment_even - 2
+    let io: i64 = increment_odd - 2
+
+    result = (result + mulmod(num_even, ie, mod)) % mod
+    if result < 0 { result = result + mod }
+    result = (result + te) % mod
+    result = (result + mulmod(num_odd, io, mod)) % mod
+    if result < 0 { result = result + mod }
+    result = (result + tod) % mod
+    return result
+}
+
+function main() -> i32 {
+    let mod: i64 = 100000000
+    let number: i64 = 134217728  # 2^27
+    number = number * 531441     # * 3^12
+
+    let mut total: i64 = 0
+    let mut two: i64 = 1
+    let mut a: i32 = 0
+    while a <= 27 {
+        let mut three: i64 = 1
+        let mut b: i32 = 0
+        while b <= 12 {
+            let floor: i64 = two * three
+            let room: i64 = number / floor
+            total = (total + p_value(floor, room, mod)) % mod
+            three = three * 3
+            b = b + 1
+        }
+        two = two * 2
+        a = a + 1
+    }
+
+    printf("%lld\n", total)
+    return 0
+}

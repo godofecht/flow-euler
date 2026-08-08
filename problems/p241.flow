@@ -1,0 +1,229 @@
+# Project Euler 241
+# Sum of n <= 10^18 with sigma(n)/n a half-integer.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function addmod(a: i64, b: i64, mod: i64) -> i64 {
+    let s: i64 = a + b
+    if s >= mod || s < a { return s - mod }
+    return s
+}
+
+function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    let mut b: i64 = b0 % mod
+    if a < 0 { a = a + mod }
+    if b < 0 { b = b + mod }
+    let mut result: i64 = 0
+    while b > 0 {
+        if b % 2 == 1 { result = addmod(result, a, mod) }
+        a = addmod(a, a, mod)
+        b = b / 2
+    }
+    return result
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = mulmod(r, b, mod) }
+        b = mulmod(b, b, mod)
+        e = e / 2
+    }
+    return r
+}
+
+function is_prime(value: i64) -> bool {
+    if value < 2 { return false }
+    if value % 2 == 0 { return value == 2 }
+    if value % 3 == 0 { return value == 3 }
+    if value % 5 == 0 { return value == 5 }
+    if value % 7 == 0 { return value == 7 }
+    if value % 11 == 0 { return value == 11 }
+    if value % 13 == 0 { return value == 13 }
+    if value % 17 == 0 { return value == 17 }
+    if value % 19 == 0 { return value == 19 }
+    if value % 23 == 0 { return value == 23 }
+    if value % 29 == 0 { return value == 29 }
+    let mut d: i64 = value - 1
+    let mut shifts: i32 = 0
+    while d % 2 == 0 { d = d / 2; shifts = shifts + 1 }
+    let bases: ptr<i64> = calloc(7, 8)
+    bases[0] = 2; bases[1] = 325; bases[2] = 9375; bases[3] = 28178
+    bases[4] = 450775; bases[5] = 9780504; bases[6] = 1795265022
+    let mut bi: i32 = 0
+    while bi < 7 {
+        let base: i64 = bases[bi] % value
+        if base != 0 {
+            let mut x: i64 = modpow(base, d, value)
+            if !(x == 1 || x == value - 1) {
+                let mut ok: bool = false
+                let mut r: i32 = 0
+                while r < shifts - 1 {
+                    x = mulmod(x, x, value)
+                    if x == value - 1 { ok = true; break }
+                    r = r + 1
+                }
+                if !ok { free(bases); return false }
+            }
+        }
+        bi = bi + 1
+    }
+    free(bases)
+    return true
+}
+
+function pollard_rho(n: i64) -> i64 {
+    if n % 2 == 0 { return 2 }
+    let mut c: i64 = 1
+    while true {
+        let mut x: i64 = 2
+        let mut y: i64 = 2
+        let mut d: i64 = 1
+        while d == 1 {
+            x = addmod(mulmod(x, x, n), c, n)
+            y = addmod(mulmod(y, y, n), c, n)
+            y = addmod(mulmod(y, y, n), c, n)
+            let mut diff: i64 = x - y
+            if diff < 0 { diff = 0 - diff }
+            d = gcd(diff, n)
+        }
+        if d != n { return d }
+        c = c + 1
+    }
+    return n
+}
+
+# Factor into primes array (with multiplicity), then group
+function factor_smallest(n0: i64) -> i64 {
+    # return smallest prime factor
+    let mut n: i64 = n0
+    if n % 2 == 0 { return 2 }
+    if is_prime(n) { return n }
+    let f: i64 = pollard_rho(n)
+    while !is_prime(f) {
+        f = pollard_rho(f)
+    }
+    # also check n/f factors - we need smallest prime factor of n0
+    let mut spf: i64 = f
+    let mut rem: i64 = n0
+    # fully factor via trial + pollard
+    let mut p: i64 = 2
+    while p * p <= rem && p <= 1000000 {
+        if rem % p == 0 { return p }
+        if p == 2 { p = 3 } else { p = p + 2 }
+    }
+    if rem > 1 && is_prime(rem) { return rem }
+    # pollard tree
+    let mut stack: ptr<i64> = calloc(64, 8)
+    let mut sp: i32 = 0
+    stack[0] = n0; sp = 1
+    let mut best: i64 = n0
+    while sp > 0 {
+        sp = sp - 1
+        let cur: i64 = stack[sp]
+        if cur < best && is_prime(cur) { best = cur; continue }
+        if is_prime(cur) {
+            if cur < best { best = cur }
+            continue
+        }
+        let g: i64 = pollard_rho(cur)
+        stack[sp] = g; sp = sp + 1
+        stack[sp] = cur / g; sp = sp + 1
+    }
+    free(stack)
+    return best
+}
+
+let mut TOTAL: i64 = 0
+const LIMIT: i64 = 1000000000000000000
+
+function search_target(target_num: i64) -> void {
+    # stack of (n, numerator, denominator) - ignore used_primes by checking factor of denom
+    let CAP: i64 = 100000
+    let sn: ptr<i64> = calloc(CAP, 8)
+    let snum: ptr<i64> = calloc(CAP, 8)
+    let sden: ptr<i64> = calloc(CAP, 8)
+    let mut sp: i64 = 0
+    sn[0] = 1; snum[0] = target_num; sden[0] = 2; sp = 1
+    while sp > 0 {
+        sp = sp - 1
+        let n: i64 = sn[sp]
+        let numerator: i64 = snum[sp]
+        let denominator: i64 = sden[sp]
+        if numerator == denominator {
+            TOTAL = TOTAL + n
+            continue
+        }
+        if numerator < denominator { continue }
+        if n > LIMIT / denominator { continue }
+        if denominator == 1 { continue }
+        let p: i64 = factor_smallest(denominator)
+        # min exponent: how many times p divides denominator? for the forced min, use valuation of denom
+        # From python: p, min_exponent = factor_items_tuple(denominator)[0]
+        # factor_items_tuple returns sorted unique primes with exponents of the full factorization
+        # So we need the smallest prime and its exponent in denominator
+        let mut min_exp: i32 = 0
+        let mut tmp: i64 = denominator
+        while tmp % p == 0 {
+            tmp = tmp / p
+            min_exp = min_exp + 1
+        }
+        # check p not already used: if n % p == 0 then used
+        if n % p == 0 { continue }
+        let mut prime_power: i64 = 1
+        let mut sigma_power: i64 = 1
+        let mut e: i32 = 0
+        while e < min_exp {
+            prime_power = prime_power * p
+            sigma_power = sigma_power + prime_power
+            e = e + 1
+        }
+        while n <= LIMIT / prime_power {
+            let mut new_num: i64 = numerator * prime_power
+            let mut new_den: i64 = denominator * sigma_power
+            let g: i64 = gcd(new_num, new_den)
+            new_num = new_num / g
+            new_den = new_den / g
+            if new_num < new_den { break }
+            sn[sp] = n * prime_power
+            snum[sp] = new_num
+            sden[sp] = new_den
+            sp = sp + 1
+            if prime_power > LIMIT / p { break }
+            prime_power = prime_power * p
+            sigma_power = sigma_power + prime_power
+        }
+    }
+    free(sn); free(snum); free(sden)
+}
+
+function main() -> i32 {
+    let targets: ptr<i64> = calloc(6, 8)
+    targets[0] = 3; targets[1] = 5; targets[2] = 7
+    targets[3] = 9; targets[4] = 11; targets[5] = 13
+    let mut i: i32 = 0
+    while i < 6 {
+        search_target(targets[i])
+        i = i + 1
+    }
+    printf("%lld\n", TOTAL)
+    free(targets)
+    return 0
+}

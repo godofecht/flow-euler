@@ -1,0 +1,162 @@
+# Project Euler 468
+# Smooth Divisors of Binomial Coefficients — segment tree over prime powers.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 11111111
+const MOD: i64 = 1000000993
+
+let mut G_spf: ptr<i32> = null
+let mut G_primes: ptr<i32> = null
+let mut G_pidx: ptr<i32> = null
+let mut G_w: ptr<i32> = null
+let mut G_prod: ptr<i64> = null
+let mut G_seg: ptr<i64> = null
+let mut G_inv: ptr<i64> = null
+let mut G_npc: i64 = 0
+let mut G_base: i64 = 1
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function mul_leaf(i: i64, factor: i64) -> void {
+    let mut pos: i64 = G_base + i
+    G_prod[pos] = (G_prod[pos] * factor) % MOD
+    G_seg[pos] = ((G_w[i] as i64) * G_prod[pos]) % MOD
+    pos = pos / 2
+    while pos > 0 {
+        let l: i64 = pos * 2
+        G_prod[pos] = (G_prod[l] * G_prod[l + 1]) % MOD
+        G_seg[pos] = (G_seg[l] + G_prod[l] * G_seg[l + 1]) % MOD
+        pos = pos / 2
+    }
+}
+
+function apply_factor(x0: i64, sign: i64) -> void {
+    let mut x: i64 = x0
+    while x > 1 {
+        let p: i64 = G_spf[x] as i64
+        let mut cnt: i64 = 0
+        while x % p == 0 {
+            x = x / p
+            cnt = cnt + 1
+        }
+        let mut factor: i64 = modpow(p, cnt, MOD)
+        if sign < 0 {
+            if G_inv[p] == 0 {
+                G_inv[p] = modpow(p, MOD - 2, MOD)
+            }
+            factor = modpow(G_inv[p], cnt, MOD)
+        }
+        mul_leaf(G_pidx[p] as i64, factor)
+    }
+}
+
+function main() -> i32 {
+    G_spf = calloc(N + 1, 4)
+    G_primes = calloc(N / 5 + 16, 4)
+    G_pidx = calloc(N + 1, 4)
+    G_inv = calloc(N + 1, 8)
+    if G_spf == null || G_primes == null || G_pidx == null || G_inv == null { return 1 }
+
+    let mut i: i64 = 0
+    while i <= N {
+        G_pidx[i] = -1
+        i = i + 1
+    }
+
+    i = 2
+    while i <= N {
+        if G_spf[i] == 0 {
+            G_spf[i] = i as i32
+            G_primes[G_npc] = i as i32
+            G_npc = G_npc + 1
+        }
+        let mut j: i64 = 0
+        while j < G_npc {
+            let p: i64 = G_primes[j] as i64
+            let v: i64 = i * p
+            if v > N { break }
+            G_spf[v] = p as i32
+            if i % p == 0 { break }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    G_w = calloc(G_npc, 4)
+    i = 0
+    while i + 1 < G_npc {
+        G_w[i] = G_primes[i + 1] - G_primes[i]
+        G_pidx[G_primes[i] as i64] = i as i32
+        i = i + 1
+    }
+    G_w[G_npc - 1] = (N - (G_primes[G_npc - 1] as i64) + 1) as i32
+    G_pidx[G_primes[G_npc - 1] as i64] = (G_npc - 1) as i32
+
+    while G_base < G_npc {
+        G_base = G_base * 2
+    }
+    G_prod = calloc(2 * G_base, 8)
+    G_seg = calloc(2 * G_base, 8)
+    if G_w == null || G_prod == null || G_seg == null { return 1 }
+
+    i = 0
+    while i < 2 * G_base {
+        G_prod[i] = 1
+        G_seg[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i < G_npc {
+        G_seg[G_base + i] = (G_w[i] as i64) % MOD
+        i = i + 1
+    }
+    i = G_base - 1
+    while i >= 1 {
+        let l: i64 = i * 2
+        G_prod[i] = (G_prod[l] * G_prod[l + 1]) % MOD
+        G_seg[i] = (G_seg[l] + G_prod[l] * G_seg[l + 1]) % MOD
+        i = i - 1
+    }
+
+    let mut total: i64 = 0
+    let mid: i64 = N / 2
+    let even: i64 = 1 - (N % 2)
+    let mut r: i64 = 0
+    while r <= mid {
+        let h: i64 = (1 + G_seg[1]) % MOD
+        if even == 1 && r == mid {
+            total = (total + h) % MOD
+            break
+        }
+        total = (total + 2 * h) % MOD
+        apply_factor(N - r, 1)
+        apply_factor(r + 1, -1)
+        r = r + 1
+    }
+
+    printf("%lld\n", total)
+    free(G_seg)
+    free(G_prod)
+    free(G_w)
+    free(G_inv)
+    free(G_pidx)
+    free(G_primes)
+    free(G_spf)
+    return 0
+}

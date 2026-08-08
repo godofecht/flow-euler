@@ -1,0 +1,47 @@
+# Project Euler 335
+# Sum_{i=0}^{10^18} M(2^i+1) mod 7^9 via closed form.
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = ((base % mod) + mod) % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function modinv(a0: i64, m: i64) -> i64 {
+    # extended Euclid
+    let mut a: i64 = ((a0 % m) + m) % m
+    let mut b: i64 = m
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = a - q * b
+        a = b
+        b = t
+        let tx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = tx
+    }
+    return ((x0 % m) + m) % m
+}
+
+function mod_div(a: i64, b: i64, m: i64) -> i64 {
+    return (((a % m) + m) % m) * modinv(b, m) % m
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000000000000000
+    let mod: i64 = 40353607
+    let t2: i64 = (modpow(2, limit + 2, mod) + mod - 2) % mod
+    let t3: i64 = mod_div((modpow(3, limit + 1, mod) + mod - 1) % mod, 2, mod)
+    let t4: i64 = mod_div((modpow(4, limit + 1, mod) + mod - 1) % mod, 3, mod)
+    let ans: i64 = (t2 - t3 + mod + t4) % mod
+    printf("%lld\n", ans)
+    return 0
+}

@@ -1,0 +1,79 @@
+# Project Euler 202
+# Laserbeam reflections exiting at C after 12017639147 bounces.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function count_ways(N: i64) -> i64 {
+    if N % 2 == 0 { return 0 }
+    let M: i64 = (N + 3) / 2
+    if M % 3 == 0 { return 0 }
+
+    # factorize M into primes[0..pc)
+    let primes: ptr<i64> = calloc(64, 8)
+    if primes == null { return 0 }
+    let mut pc: i32 = 0
+    let mut n: i64 = M
+    if n % 2 == 0 {
+        primes[pc] = 2
+        pc = pc + 1
+        while n % 2 == 0 { n = n / 2 }
+    }
+    while n % 3 == 0 {
+        if pc == 0 || primes[pc - 1] != 3 {
+            primes[pc] = 3
+            pc = pc + 1
+        }
+        n = n / 3
+    }
+    let mut f: i64 = 5
+    let mut step: i64 = 2
+    while f * f <= n {
+        if n % f == 0 {
+            primes[pc] = f
+            pc = pc + 1
+            while n % f == 0 { n = n / f }
+        }
+        f = f + step
+        step = 6 - step
+    }
+    if n > 1 {
+        primes[pc] = n
+        pc = pc + 1
+    }
+
+    let mut phi_M: i64 = M
+    let mut i: i32 = 0
+    while i < pc {
+        let p: i64 = primes[i]
+        phi_M = phi_M / p * (p - 1)
+        i = i + 1
+    }
+
+    let mut has_p1: bool = false
+    i = 0
+    while i < pc {
+        if primes[i] % 3 == 1 { has_p1 = true }
+        i = i + 1
+    }
+    if !has_p1 {
+        let mut G: i64 = 0 - 1
+        if M % 3 == 1 { G = 1 }
+        let mut tw: i64 = 1
+        let mut j: i32 = 0
+        while j < pc {
+            tw = tw * 2
+            j = j + 1
+        }
+        phi_M = phi_M - G * tw
+    }
+    free(primes)
+    return phi_M / 3
+}
+
+function main() -> i32 {
+    printf("%lld\n", count_ways(12017639147))
+    return 0
+}

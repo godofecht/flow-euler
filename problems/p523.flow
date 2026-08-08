@@ -1,0 +1,15 @@
+# Project Euler 523
+# First Sort I — E(n) = sum_{k=1..n} (2^{k-1}-1)/k; E(30) to 2 d.p.
+
+function main() -> i32 {
+    let mut e: f64 = 0.0
+    let mut p2: f64 = 1.0
+    let mut k: i32 = 1
+    while k <= 30 {
+        e = e + (p2 - 1.0) / (k as f64)
+        p2 = p2 * 2.0
+        k = k + 1
+    }
+    printf("%.2f\n", e)
+    return 0
+}

@@ -1,0 +1,175 @@
+# Project Euler 391
+# sum_{n=1..1000} M(n)^3 via popcount block mapping composition.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Mapping kinds: 0=identity, 1=constant, 2=table
+
+function apply_map(kind: i32, cval: i32, tab: ptr<i32>, base: i64, s: i32) -> i32 {
+    if kind == 0 { return s }
+    if kind == 1 { return cval }
+    return tab[base + (s as i64)]
+}
+
+function is_const_table(tab: ptr<i32>, base: i64, n: i32) -> i32 {
+    let first: i32 = tab[base]
+    let mut s: i32 = 1
+    while s <= n {
+        if tab[base + (s as i64)] != first { return 0 - 1 }
+        s = s + 1
+    }
+    return first
+}
+
+function compute_M(n: i32) -> i32 {
+    let MAX_K: i32 = 40
+    let WIDTH: i32 = MAX_K + 2
+    let np1: i64 = (n + 1) as i64
+    let cells: i64 = (WIDTH as i64) * np1
+
+    let kind_a: ptr<i32> = calloc(WIDTH as i64, 4)
+    let kind_b: ptr<i32> = calloc(WIDTH as i64, 4)
+    let cval_a: ptr<i32> = calloc(WIDTH as i64, 4)
+    let cval_b: ptr<i32> = calloc(WIDTH as i64, 4)
+    let tab_a: ptr<i32> = calloc(cells, 4)
+    let tab_b: ptr<i32> = calloc(cells, 4)
+    if kind_a == null || kind_b == null || cval_a == null || cval_b == null { return 0 }
+    if tab_a == null || tab_b == null { return 0 }
+
+    kind_a[0] = 0
+    let mut off: i32 = 1
+    while off < WIDTH {
+        if off > n {
+            kind_a[off] = 1
+            cval_a[off] = 0
+        } else {
+            kind_a[off] = 2
+            let base: i64 = (off as i64) * np1
+            let lim: i32 = n - off
+            let mut s: i32 = 0
+            while s <= n {
+                if s <= lim {
+                    tab_a[base + (s as i64)] = s + off
+                } else {
+                    tab_a[base + (s as i64)] = 0
+                }
+                s = s + 1
+            }
+        }
+        off = off + 1
+    }
+
+    let mut k: i32 = 1
+    let mut result: i32 = 0
+    let mut done: i32 = 0
+    while k <= MAX_K {
+        if done == 1 { break }
+        let mut o: i32 = 0
+        while o < WIDTH - 1 {
+            let ak: i32 = kind_a[o]
+            let bk: i32 = kind_a[o + 1]
+            let ac: i32 = cval_a[o]
+            let bc: i32 = cval_a[o + 1]
+            let abase: i64 = (o as i64) * np1
+            let bbase: i64 = ((o + 1) as i64) * np1
+            let obase: i64 = abase
+
+            if ak == 1 {
+                kind_b[o] = 1
+                cval_b[o] = ac
+            } else {
+                if bk == 1 {
+                    kind_b[o] = 1
+                    cval_b[o] = apply_map(ak, ac, tab_a, abase, bc)
+                } else {
+                    if ak == 0 {
+                        kind_b[o] = bk
+                        cval_b[o] = bc
+                        if bk == 2 {
+                            let mut s: i32 = 0
+                            while s <= n {
+                                tab_b[obase + (s as i64)] = tab_a[bbase + (s as i64)]
+                                s = s + 1
+                            }
+                        }
+                    } else {
+                        if bk == 0 {
+                            kind_b[o] = ak
+                            cval_b[o] = ac
+                            if ak == 2 {
+                                let mut s: i32 = 0
+                                while s <= n {
+                                    tab_b[obase + (s as i64)] = tab_a[abase + (s as i64)]
+                                    s = s + 1
+                                }
+                            }
+                        } else {
+                            kind_b[o] = 2
+                            let mut s: i32 = 0
+                            while s <= n {
+                                let mid: i32 = tab_a[bbase + (s as i64)]
+                                tab_b[obase + (s as i64)] = tab_a[abase + (mid as i64)]
+                                s = s + 1
+                            }
+                        }
+                    }
+                }
+            }
+            o = o + 1
+        }
+        kind_b[WIDTH - 1] = 1
+        cval_b[WIDTH - 1] = 0
+
+        let mut root_k: i32 = kind_b[0]
+        let mut root_c: i32 = cval_b[0]
+        if root_k == 2 {
+            let c: i32 = is_const_table(tab_b, 0, n)
+            if c >= 0 {
+                kind_b[0] = 1
+                cval_b[0] = c
+                root_c = c
+                root_k = 1
+            }
+        }
+        if root_k == 1 {
+            result = root_c
+            done = 1
+        } else {
+            let mut i: i32 = 0
+            while i < WIDTH {
+                kind_a[i] = kind_b[i]
+                cval_a[i] = cval_b[i]
+                i = i + 1
+            }
+            let mut j: i64 = 0
+            while j < cells {
+                tab_a[j] = tab_b[j]
+                j = j + 1
+            }
+        }
+        k = k + 1
+    }
+
+    free(tab_b)
+    free(tab_a)
+    free(cval_b)
+    free(cval_a)
+    free(kind_b)
+    free(kind_a)
+    return result
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut n: i32 = 1
+    while n <= 1000 {
+        let x: i64 = compute_M(n) as i64
+        total = total + x * x * x
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

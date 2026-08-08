@@ -1,0 +1,49 @@
+# Project Euler 010
+# Sum of all primes below two million.
+#
+# Linear sieve → portable C. Same algorithm you'd write in C, less noise.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function sum_primes_below(limit: i64) -> i64 {
+    let sieve: ptr<i8> = calloc(limit, 1)
+    if sieve == null {
+        return -1
+    }
+
+    # sieve[i] == 0 means prime (calloc zero-fills)
+    sieve[0] = 1
+    sieve[1] = 1
+
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let mut total: i64 = 0
+    let mut i: i64 = 2
+    while i < limit {
+        if sieve[i] == 0 {
+            total = total + i
+        }
+        i = i + 1
+    }
+
+    free(sieve)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", sum_primes_below(2000000))
+    return 0
+}

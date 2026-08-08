@@ -1,0 +1,231 @@
+# Project Euler 562
+# Maximal Perimeter — empty lattice triangles maximizing T(r) for r=10^7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+    function llround(x: f64) -> i64
+}
+
+function igcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut yy: i64 = (x + 1) / 2
+    while yy < x {
+        x = yy
+        yy = (x + n / x) / 2
+    }
+    return x
+}
+
+function iabs(x: i64) -> i64 {
+    if x < 0 { return -x }
+    return x
+}
+
+function egcd(a0: i64, b0: i64, outx: ptr<i64>, outy: ptr<i64>) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    let mut x0: i64 = 1
+    let mut y0: i64 = 0
+    let mut x1: i64 = 0
+    let mut y1: i64 = 1
+    while b != 0 {
+        let q: i64 = a / b
+        let na: i64 = b
+        b = a - q * b
+        a = na
+        let nx: i64 = x1
+        x1 = x0 - q * x1
+        x0 = nx
+        let ny: i64 = y1
+        y1 = y0 - q * y1
+        y0 = ny
+    }
+    outx[0] = x0
+    outy[0] = y0
+    return a
+}
+
+function ceil_div(a: i64, b: i64) -> i64 {
+    # Python: -((-a)//b) for b>0
+    return 0 - ((0 - a) / b)
+}
+
+function compute_T(r: i64) -> i64 {
+    let deficit_limit: i64 = 8000
+    let r2: i64 = r * r
+    let cap: i64 = 200000
+    let xs: ptr<i64> = calloc(cap, 8)
+    let ys: ptr<i64> = calloc(cap, 8)
+    let mut m: i64 = 0
+    let mut x: i64 = r
+    let mut x2: i64 = x * x
+    let mut y2: i64 = 0
+    let mut y: i64 = 0
+    while y <= r {
+        while x2 + y2 > r2 {
+            x = x - 1
+            x2 = x * x
+        }
+        let deficit: i64 = r2 - x2 - y2
+        if deficit <= deficit_limit {
+            xs[m] = x
+            ys[m] = y
+            m = m + 1
+        }
+        y2 = y2 + 2 * y + 1
+        y = y + 1
+    }
+
+    let mut best_u2: i64 = -1
+    let cand_cap: i64 = 10000
+    let ci: ptr<i64> = calloc(cand_cap, 8)
+    let cj: ptr<i64> = calloc(cand_cap, 8)
+    let cux: ptr<i64> = calloc(cand_cap, 8)
+    let cuy: ptr<i64> = calloc(cand_cap, 8)
+    let mut nc: i64 = 0
+    let mut i: i64 = 0
+    while i < m {
+        let xi: i64 = xs[i]
+        let yi: i64 = ys[i]
+        let mut j: i64 = i + 1
+        while j < m {
+            let ux: i64 = xi + xs[j]
+            let uy: i64 = yi + ys[j]
+            let u2: i64 = ux * ux + uy * uy
+            if u2 >= best_u2 {
+                if ((ux | uy) & 1) != 0 {
+                    if igcd(ux, uy) == 1 {
+                        if u2 > best_u2 {
+                            best_u2 = u2
+                            nc = 0
+                        }
+                        ci[nc] = i
+                        cj[nc] = j
+                        cux[nc] = ux
+                        cuy[nc] = uy
+                        nc = nc + 1
+                    }
+                }
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let mut best_s1: i64 = 0
+    let mut best_s2: i64 = 0
+    let mut best_s3: i64 = 0
+    let mut best_per: f64 = -1.0
+    let eg: ptr<i64> = calloc(2, 8)
+
+    let mut c: i64 = 0
+    while c < nc {
+        let ux: i64 = cux[c]
+        let uy: i64 = cuy[c]
+        let ii: i64 = ci[c]
+        let jj: i64 = cj[c]
+        let mut pass: i64 = 0
+        while pass < 2 {
+            let mut ax: i64 = -xs[ii]
+            let mut ay: i64 = -ys[ii]
+            if pass == 1 {
+                ax = -xs[jj]
+                ay = -ys[jj]
+            }
+            let bx: i64 = ax + ux
+            let by: i64 = ay + uy
+            if ax * ax + ay * ay <= r2 && bx * bx + by * by <= r2 {
+                let s1: i64 = ux * ux + uy * uy
+                egcd(iabs(ux), iabs(uy), eg, eg + 1)
+                let mut s: i64 = eg[0]
+                let mut t: i64 = eg[1]
+                if ux < 0 { s = -s }
+                if uy < 0 { t = -t }
+                let v0x: i64 = -t
+                let v0y: i64 = s
+                let mut sign: i64 = 1
+                let mut si: i64 = 0
+                while si < 2 {
+                    let bvx: i64 = sign * v0x
+                    let bvy: i64 = sign * v0y
+                    let p0x: i64 = ax + bvx
+                    let p0y: i64 = ay + bvy
+                    let pu: i128 = (p0x as i128) * (ux as i128) + (p0y as i128) * (uy as i128)
+                    let pp: i128 = (p0x as i128) * (p0x as i128) + (p0y as i128) * (p0y as i128)
+                    let uu: i128 = s1 as i128
+                    let disc: i128 = pu * pu - uu * (pp - (r2 as i128))
+                    if disc >= 0 {
+                        # isqrt for i128
+                        let mut rx: i128 = disc
+                        let mut ry: i128 = (rx + 1) / 2
+                        while ry < rx {
+                            rx = ry
+                            ry = (rx + disc / rx) / 2
+                        }
+                        let root: i128 = rx
+                        # k_lo = ceil((-pu-root)/uu), k_hi = floor((-pu+root)/uu)
+                        let mut num_lo: i128 = 0 - pu - root
+                        let mut k_lo: i64 = 0
+                        if num_lo >= 0 {
+                            k_lo = ((num_lo + uu - 1) / uu) as i64
+                        } else {
+                            k_lo = (num_lo / uu) as i64
+                        }
+                        let k_hi: i64 = ((0 - pu + root) / uu) as i64
+                        let mut k: i64 = k_lo
+                        while k <= k_hi {
+                            let vx: i64 = bvx + k * ux
+                            let vy: i64 = bvy + k * uy
+                            let cx: i128 = (ax as i128) + (vx as i128)
+                            let cy: i128 = (ay as i128) + (vy as i128)
+                            if cx * cx + cy * cy <= (r2 as i128) {
+                                let s2: i64 = vx * vx + vy * vy
+                                let wx: i64 = ux - vx
+                                let wy: i64 = uy - vy
+                                let s3: i64 = wx * wx + wy * wy
+                                let per: f64 = sqrt(s1 as f64) + sqrt(s2 as f64) + sqrt(s3 as f64)
+                                if per > best_per {
+                                    best_per = per
+                                    best_s1 = s1
+                                    best_s2 = s2
+                                    best_s3 = s3
+                                }
+                            }
+                            k = k + 1
+                        }
+                    }
+                    sign = -1
+                    si = si + 1
+                }
+            }
+            pass = pass + 1
+        }
+        c = c + 1
+    }
+
+    let tv: f64 = sqrt(best_s1 as f64) * sqrt(best_s2 as f64) * sqrt(best_s3 as f64) / (2.0 * (r as f64))
+    let ans: i64 = llround(tv)
+    free(xs); free(ys); free(ci); free(cj); free(cux); free(cuy); free(eg)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", compute_T(10000000))
+    return 0
+}

@@ -1,0 +1,51 @@
+# Project Euler 164
+# 20-digit numbers where no 3 consecutive digits sum to more than 9.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digit_sum3(n: i32) -> i32 {
+    return (n / 100) + ((n / 10) % 10) + (n % 10)
+}
+
+function main() -> i32 {
+    let inner: i32 = 1000
+    let prev: ptr<i64> = calloc(inner as i64, 8)
+    let cur: ptr<i64> = calloc(inner as i64, 8)
+    if prev == null || cur == null { return 1 }
+    prev[0] = 1
+
+    let mut last0: i64 = 0
+    let mut prev0: i64 = 0
+    let mut d: i32 = 1
+    while d <= 23 {
+        let mut prefix: i32 = 0
+        while prefix < inner {
+            let mut s: i64 = 0
+            if digit_sum3(prefix) <= 9 {
+                let mut nd: i32 = 0
+                while nd < 10 {
+                    let p: i32 = (prefix % 100) * 10 + nd
+                    s = s + prev[p]
+                    nd = nd + 1
+                }
+            }
+            cur[prefix] = s
+            prefix = prefix + 1
+        }
+        prev0 = last0
+        last0 = cur[0]
+        let mut i: i32 = 0
+        while i < inner {
+            prev[i] = cur[i]
+            i = i + 1
+        }
+        d = d + 1
+    }
+    printf("%lld\n", last0 - prev0)
+    free(prev)
+    free(cur)
+    return 0
+}

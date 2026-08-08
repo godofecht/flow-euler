@@ -1,0 +1,105 @@
+# Project Euler 330
+# (A(10^9)+B(10^9)) mod 77777777 via CRT over prime factors.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = ((base % mod) + mod) % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function comb_small(n: i64, k0: i64, p: i64) -> i64 {
+    if k0 < 0 || k0 > n { return 0 }
+    if k0 == 0 || k0 == n { return 1 }
+    let mut k: i64 = k0
+    if k > n - k { k = n - k }
+    let mut num: i64 = 1
+    let mut den: i64 = 1
+    let mut i: i64 = 1
+    while i <= k {
+        num = (num * (n - (k - i))) % p
+        den = (den * i) % p
+        i = i + 1
+    }
+    return (num * modpow(den, p - 2, p)) % p
+}
+
+function s_mod_prime(n: i64, p: i64) -> i64 {
+    let n0: i64 = n % p
+    let inv2: i64 = modpow(2, p - 2, p)
+    let r: ptr<i64> = calloc(p, 8)
+    let r_exp: ptr<i64> = calloc(p, 8)
+    let fact: ptr<i64> = calloc(n0 + 1, 8)
+    let mut inv2_pow: i64 = 1
+    let mut prev: i64 = 1
+    let mut i: i64 = 1
+    while i < p {
+        inv2_pow = (inv2_pow * inv2) % p
+        r[i] = (inv2_pow - prev + p) % p
+        prev = inv2_pow
+        i = i + 1
+    }
+    let mut e: i64 = 0
+    while e < p - 1 {
+        let mut s: i64 = 0
+        i = 1
+        while i < p {
+            s = (s + r[i] * modpow(i, e, p)) % p
+            i = i + 1
+        }
+        r_exp[e] = s
+        e = e + 1
+    }
+    fact[0] = 1
+    i = 1
+    while i <= n0 {
+        fact[i] = (fact[i - 1] * i) % p
+        i = i + 1
+    }
+    let mut res: i64 = 0
+    let mut m: i64 = 0
+    while m <= n0 {
+        let c_nm: i64 = comb_small(n0, m, p)
+        let ee: i64 = (n - m) % (p - 1)
+        res = (res + fact[m] * c_nm % p * r_exp[ee]) % p
+        m = m + 1
+    }
+    free(r); free(r_exp); free(fact)
+    return res
+}
+
+function main() -> i32 {
+    let n: i64 = 1000000000
+    let residues: ptr<i64> = calloc(5, 8)
+    let mods: ptr<i64> = calloc(5, 8)
+    mods[0] = 7; mods[1] = 11; mods[2] = 73; mods[3] = 101; mods[4] = 137
+    let mut i: i64 = 0
+    while i < 5 {
+        residues[i] = s_mod_prime(n, mods[i])
+        i = i + 1
+    }
+    let mut x: i64 = 0
+    let mut m: i64 = 1
+    i = 0
+    while i < 5 {
+        let mi: i64 = mods[i]
+        let ai: i64 = residues[i]
+        let t: i64 = ((ai - x) % mi + mi) % mi * modpow(m % mi, mi - 2, mi) % mi
+        x = x + m * t
+        m = m * mi
+        i = i + 1
+    }
+    printf("%lld\n", x % m)
+    free(residues); free(mods)
+    return 0
+}

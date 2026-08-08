@@ -1,0 +1,52 @@
+# Project Euler 078
+# Least n such that p(n) is divisible by one million (pentagonal recurrence).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let mod: i64 = 1000000
+    let maxn: i32 = 100000
+    let p: ptr<i64> = calloc((maxn + 1) as i64, 8)
+    if p == null { return 1 }
+    p[0] = 1
+
+    let mut n: i32 = 1
+    let mut ans: i64 = 0
+    while n <= maxn {
+        let mut s: i64 = 0
+        let mut k: i32 = 1
+        while true {
+            let g1: i32 = k * (3 * k - 1) / 2
+            let g2: i32 = k * (3 * k + 1) / 2
+            if g1 > n {
+                break
+            }
+            # generalized pentagonals for ±k share sign (-1)^{k-1}
+            let mut sign: i64 = 1
+            if k % 2 == 0 {
+                sign = 0 - 1
+            }
+            s = s + sign * p[n - g1]
+            if g2 <= n {
+                s = s + sign * p[n - g2]
+            }
+            k = k + 1
+        }
+        s = s % mod
+        if s < 0 {
+            s = s + mod
+        }
+        p[n] = s
+        if s == 0 {
+            ans = n as i64
+            break
+        }
+        n = n + 1
+    }
+    printf("%lld\n", ans)
+    free(p)
+    return 0
+}

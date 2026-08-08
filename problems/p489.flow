@@ -1,0 +1,576 @@
+# Project Euler 489
+# Common Factors Between Two Sequences
+# H(18, 1900) = sum G(a,b) via Hensel lift + CRT.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut PRIMES: ptr<i64> = null
+let mut PC: i64 = 0
+let mut A3: ptr<i64> = null
+let mut A6: ptr<i64> = null
+let mut FAC_A_P: ptr<i64> = null
+let mut FAC_A_E: ptr<i64> = null
+let mut FAC_AN: ptr<i64> = null
+
+function igcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = 0 - a }
+    if b < 0 { b = 0 - b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    if b < 0 { b = b + mod }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function modinv(a0: i64, m: i64) -> i64 {
+    let mut old_r: i64 = a0 % m
+    if old_r < 0 { old_r = old_r + m }
+    let mut r: i64 = m
+    let mut old_s: i64 = 1
+    let mut s: i64 = 0
+    while r != 0 {
+        let q: i64 = old_r / r
+        let nr: i64 = old_r - q * r
+        old_r = r
+        r = nr
+        let ns: i64 = old_s - q * s
+        old_s = s
+        s = ns
+    }
+    let mut x: i64 = old_s % m
+    if x < 0 { x = x + m }
+    return x
+}
+
+function tonelli(n0: i64, p: i64) -> i64 {
+    # returns sqrt or -1 if none
+    let mut n: i64 = n0 % p
+    if n < 0 { n = n + p }
+    if n == 0 { return 0 }
+    if p == 2 { return n }
+    if modpow(n, (p - 1) / 2, p) != 1 { return -1 }
+    if p % 4 == 3 {
+        return modpow(n, (p + 1) / 4, p)
+    }
+    let mut q: i64 = p - 1
+    let mut s: i64 = 0
+    while q % 2 == 0 {
+        q = q / 2
+        s = s + 1
+    }
+    let mut z: i64 = 2
+    while modpow(z, (p - 1) / 2, p) != p - 1 {
+        z = z + 1
+    }
+    let mut m: i64 = s
+    let mut c: i64 = modpow(z, q, p)
+    let mut t: i64 = modpow(n, q, p)
+    let mut r: i64 = modpow(n, (q + 1) / 2, p)
+    while t != 1 {
+        let mut i: i64 = 1
+        let mut t2i: i64 = (t * t) % p
+        while i < m {
+            if t2i == 1 { break }
+            t2i = (t2i * t2i) % p
+            i = i + 1
+        }
+        if i == m { return -1 }
+        let mut exp: i64 = 1
+        let mut k: i64 = 0
+        while k < m - i - 1 {
+            exp = exp * 2
+            k = k + 1
+        }
+        let b: i64 = modpow(c, exp, p)
+        r = (r * b) % p
+        c = (b * b) % p
+        t = (t * c) % p
+        m = i
+    }
+    return r
+}
+
+function factor_into(n0: i64, ps: ptr<i64>, es: ptr<i64>) -> i64 {
+    let mut n: i64 = n0
+    let mut on: i64 = 0
+    let mut i: i64 = 0
+    while i < PC {
+        if PRIMES[i] * PRIMES[i] > n { break }
+        if n % PRIMES[i] == 0 {
+            let mut e: i64 = 0
+            while n % PRIMES[i] == 0 {
+                n = n / PRIMES[i]
+                e = e + 1
+            }
+            ps[on] = PRIMES[i]
+            es[on] = e
+            on = on + 1
+        }
+        i = i + 1
+    }
+    if n > 1 {
+        ps[on] = n
+        es[on] = 1
+        on = on + 1
+    }
+    return on
+}
+
+function init_sols(a: i64, b: i64, p: i64, sols: ptr<i64>) -> i64 {
+    let bmod: i64 = b % p
+    let mut ns: i64 = 0
+    if a % p == 0 {
+        let mut n: i64 = 0
+        while n < p {
+            if (modpow(n, 3, p) + bmod) % p == 0 {
+                if (modpow((n + a) % p, 3, p) + bmod) % p == 0 {
+                    sols[ns] = n
+                    ns = ns + 1
+                }
+            }
+            n = n + 1
+        }
+        return ns
+    }
+    if p == 3 { return 0 }
+    if p == 2 {
+        let mut n2: i64 = 0
+        while n2 < 2 {
+            let c1: i64 = (n2 * n2 * n2 + b) % 2
+            let na: i64 = n2 + a
+            let c2: i64 = (na * na * na + b) % 2
+            if c1 == 0 {
+                if c2 == 0 {
+                    sols[ns] = n2
+                    ns = ns + 1
+                }
+            }
+            n2 = n2 + 1
+        }
+        return ns
+    }
+    let a_mod: i64 = a % p
+    let mut disc: i64 = (0 - 3 * a_mod * a_mod) % p
+    if disc < 0 { disc = disc + p }
+    let sqrt_disc: i64 = tonelli(disc, p)
+    if sqrt_disc < 0 { return 0 }
+    let inv6: i64 = modinv(6 % p, p)
+    let mut tt: i64 = (0 - 3 * a_mod) % p
+    if tt < 0 { tt = tt + p }
+    let n1: i64 = ((tt + sqrt_disc) % p * inv6) % p
+    let mut n2b: i64 = (tt - sqrt_disc) % p
+    if n2b < 0 { n2b = n2b + p }
+    n2b = (n2b * inv6) % p
+    let mut ci: i64 = 0
+    while ci < 2 {
+        let mut n: i64 = n1
+        if ci == 1 { n = n2b }
+        let mut ok: i64 = 1
+        let mut j: i64 = 0
+        while j < ns {
+            if sols[j] == n { ok = 0 }
+            j = j + 1
+        }
+        if ok != 0 {
+            if (modpow(n, 3, p) + bmod) % p == 0 {
+                if (modpow((n + a) % p, 3, p) + bmod) % p == 0 {
+                    sols[ns] = n
+                    ns = ns + 1
+                }
+            }
+        }
+        ci = ci + 1
+    }
+    return ns
+}
+
+function linear_sols(A0: i64, B0: i64, p: i64, out: ptr<i64>) -> i64 {
+    let mut A: i64 = A0 % p
+    let mut B: i64 = B0 % p
+    if A < 0 { A = A + p }
+    if B < 0 { B = B + p }
+    if A == 0 {
+        if B == 0 {
+            let mut i: i64 = 0
+            while i < p {
+                out[i] = i
+                i = i + 1
+            }
+            return p
+        }
+        return 0
+    }
+    out[0] = (B * modinv(A, p)) % p
+    return 1
+}
+
+function lift(a: i64, b: i64, p: i64, e_max: i64, sols_out: ptr<i64>, e_out: ptr<i64>) -> i64 {
+    let sols: ptr<i64> = calloc(512, 8)
+    let new_sols: ptr<i64> = calloc(512, 8)
+    let t1: ptr<i64> = calloc(256, 8)
+    let t2: ptr<i64> = calloc(256, 8)
+    let ts: ptr<i64> = calloc(256, 8)
+    if sols == null || new_sols == null { return 0 }
+    let mut ns: i64 = init_sols(a, b, p, sols)
+    if ns == 0 {
+        e_out[0] = 0
+        free(sols); free(new_sols); free(t1); free(t2); free(ts)
+        return 0
+    }
+    let mut modv: i64 = p
+    let mut e: i64 = 1
+    while e < e_max {
+        let mod2: i64 = modv * p
+        let mut nn: i64 = 0
+        let mut si: i64 = 0
+        while si < ns {
+            let r: i64 = sols[si]
+            let v1: i64 = (modpow(r % mod2, 3, mod2) + b) % mod2
+            let v2: i64 = (modpow((r + a) % mod2, 3, mod2) + b) % mod2
+            if v1 % modv == 0 {
+                if v2 % modv == 0 {
+                    let c1: i64 = (v1 / modv) % p
+                    let c2: i64 = (v2 / modv) % p
+                    let r_mod_p: i64 = r % p
+                    let s_mod_p: i64 = (r + a) % p
+                    let A1: i64 = (3 * r_mod_p * r_mod_p) % p
+                    let A2: i64 = (3 * s_mod_p * s_mod_p) % p
+                    let B1: i64 = (0 - c1) % p
+                    let B2: i64 = (0 - c2) % p
+                    if B1 < 0 { }
+                    let mut bb1: i64 = (0 - c1) % p
+                    if bb1 < 0 { bb1 = bb1 + p }
+                    let mut bb2: i64 = (0 - c2) % p
+                    if bb2 < 0 { bb2 = bb2 + p }
+                    let n1: i64 = linear_sols(A1, bb1, p, t1)
+                    if n1 != 0 {
+                        let n2: i64 = linear_sols(A2, bb2, p, t2)
+                        if n2 != 0 {
+                            let mut nt: i64 = 0
+                            if n1 == p {
+                                if n2 == p {
+                                    let mut t: i64 = 0
+                                    while t < p {
+                                        ts[nt] = t
+                                        nt = nt + 1
+                                        t = t + 1
+                                    }
+                                } else {
+                                    let mut i2: i64 = 0
+                                    while i2 < n2 {
+                                        ts[nt] = t2[i2]
+                                        nt = nt + 1
+                                        i2 = i2 + 1
+                                    }
+                                }
+                            } else {
+                                if n2 == p {
+                                    let mut i1: i64 = 0
+                                    while i1 < n1 {
+                                        ts[nt] = t1[i1]
+                                        nt = nt + 1
+                                        i1 = i1 + 1
+                                    }
+                                } else {
+                                    if t1[0] == t2[0] {
+                                        ts[nt] = t1[0]
+                                        nt = nt + 1
+                                    }
+                                }
+                            }
+                            let mut ii: i64 = 0
+                            while ii < nt {
+                                let v: i64 = r + ts[ii] * modv
+                                let mut ok: i64 = 1
+                                let mut jj: i64 = 0
+                                while jj < nn {
+                                    if new_sols[jj] == v { ok = 0 }
+                                    jj = jj + 1
+                                }
+                                if ok != 0 {
+                                    new_sols[nn] = v
+                                    nn = nn + 1
+                                }
+                                ii = ii + 1
+                            }
+                        }
+                    }
+                }
+            }
+            si = si + 1
+        }
+        if nn == 0 { break }
+        ns = nn
+        let mut k: i64 = 0
+        while k < ns {
+            sols[k] = new_sols[k]
+            k = k + 1
+        }
+        modv = mod2
+        e = e + 1
+    }
+    e_out[0] = e
+    let mut o: i64 = 0
+    while o < ns {
+        sols_out[o] = sols[o]
+        o = o + 1
+    }
+    free(sols); free(new_sols); free(t1); free(t2); free(ts)
+    return ns
+}
+
+function combine(
+    s1: ptr<i64>, n1: i64, m1: i64,
+    s2: ptr<i64>, n2: i64, m2: i64,
+    out: ptr<i64>, mout: ptr<i64>
+) -> i64 {
+    if m1 == 1 {
+        let mut i: i64 = 0
+        while i < n2 {
+            out[i] = s2[i] % m2
+            i = i + 1
+        }
+        mout[0] = m2
+        return n2
+    }
+    if m2 == 1 {
+        let mut i2: i64 = 0
+        while i2 < n1 {
+            out[i2] = s1[i2] % m1
+            i2 = i2 + 1
+        }
+        mout[0] = m1
+        return n1
+    }
+    let inv: i64 = modinv(m1 % m2, m2)
+    let nm: i64 = m1 * m2
+    let mut nn: i64 = 0
+    let mut i: i64 = 0
+    while i < n1 {
+        let mut x: i64 = s1[i] % m1
+        if x < 0 { x = x + m1 }
+        let mut j: i64 = 0
+        while j < n2 {
+            let mut y: i64 = s2[j] % m2
+            if y < 0 { y = y + m2 }
+            let mut diff: i64 = (y - x) % m2
+            if diff < 0 { diff = diff + m2 }
+            let t: i64 = (diff * inv) % m2
+            let v: i64 = x + m1 * t
+            let mut ok: i64 = 1
+            let mut k: i64 = 0
+            while k < nn {
+                if out[k] == v { ok = 0 }
+                k = k + 1
+            }
+            if ok != 0 {
+                out[nn] = v
+                nn = nn + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    mout[0] = nm
+    return nn
+}
+
+function compute_G(a: i64, b: i64) -> i64 {
+    let R: i64 = A6[a] + 27 * b * b
+    let fac_p: ptr<i64> = calloc(64, 8)
+    let fac_e: ptr<i64> = calloc(64, 8)
+    if fac_p == null || fac_e == null { return -1 }
+    let nr: i64 = factor_into(R, fac_p, fac_e)
+    let mp: ptr<i64> = calloc(64, 8)
+    let me: ptr<i64> = calloc(64, 8)
+    if mp == null || me == null { return -1 }
+    let mut nm: i64 = 0
+    let mut i: i64 = 0
+    while i < nr {
+        mp[nm] = fac_p[i]
+        me[nm] = fac_e[i]
+        nm = nm + 1
+        i = i + 1
+    }
+    i = 0
+    while i < FAC_AN[a] {
+        let p: i64 = FAC_A_P[a * 8 + i]
+        let e: i64 = 3 * FAC_A_E[a * 8 + i]
+        let mut f: i64 = -1
+        let mut j: i64 = 0
+        while j < nm {
+            if mp[j] == p { f = j }
+            j = j + 1
+        }
+        if f >= 0 {
+            me[f] = me[f] + e
+        } else {
+            mp[nm] = p
+            me[nm] = e
+            nm = nm + 1
+        }
+        i = i + 1
+    }
+    # sort by p
+    i = 0
+    while i < nm {
+        let mut j: i64 = i + 1
+        while j < nm {
+            if mp[j] < mp[i] {
+                let tp: i64 = mp[i]
+                mp[i] = mp[j]
+                mp[j] = tp
+                let te: i64 = me[i]
+                me[i] = me[j]
+                me[j] = te
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let sols: ptr<i64> = calloc(1024, 8)
+    let out: ptr<i64> = calloc(1024, 8)
+    let ps: ptr<i64> = calloc(512, 8)
+    let ebox: ptr<i64> = calloc(1, 8)
+    let mbox: ptr<i64> = calloc(1, 8)
+    if sols == null || out == null || ps == null { return -1 }
+    sols[0] = 0
+    let mut ns: i64 = 1
+    let mut modv: i64 = 1
+    let mut any: i64 = 0
+    i = 0
+    while i < nm {
+        let nps: i64 = lift(a, b, mp[i], me[i], ps, ebox)
+        let e: i64 = ebox[0]
+        if e > 0 {
+            any = 1
+            let mut pe: i64 = 1
+            let mut k: i64 = 0
+            while k < e {
+                pe = pe * mp[i]
+                k = k + 1
+            }
+            let on: i64 = combine(sols, ns, modv, ps, nps, pe, out, mbox)
+            ns = on
+            modv = mbox[0]
+            k = 0
+            while k < ns {
+                sols[k] = out[k]
+                k = k + 1
+            }
+        }
+        i = i + 1
+    }
+    let mut ans: i64 = 0
+    if any != 0 {
+        ans = sols[0]
+        i = 1
+        while i < ns {
+            if sols[i] < ans { ans = sols[i] }
+            i = i + 1
+        }
+    }
+    free(mbox); free(ebox); free(ps); free(out); free(sols)
+    free(me); free(mp); free(fac_e); free(fac_p)
+    return ans
+}
+
+function main() -> i32 {
+    let lim: i64 = 12000
+    let sieve: ptr<i8> = calloc(lim + 1, 1)
+    PRIMES = calloc(lim, 8)
+    A3 = calloc(20, 8)
+    A6 = calloc(20, 8)
+    FAC_A_P = calloc(20 * 8, 8)
+    FAC_A_E = calloc(20 * 8, 8)
+    FAC_AN = calloc(20, 8)
+    if sieve == null || PRIMES == null { return 1 }
+    let mut i: i64 = 0
+    while i <= lim {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    i = 2
+    while i * i <= lim {
+        if sieve[i] != 0 {
+            let mut j: i64 = i * i
+            while j <= lim {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    PC = 0
+    i = 2
+    while i <= lim {
+        if sieve[i] != 0 {
+            PRIMES[PC] = i
+            PC = PC + 1
+        }
+        i = i + 1
+    }
+    free(sieve)
+
+    let mut a: i64 = 1
+    while a <= 18 {
+        A3[a] = a * a * a
+        A6[a] = A3[a] * A3[a]
+        let ps: ptr<i64> = calloc(8, 8)
+        let es: ptr<i64> = calloc(8, 8)
+        let n: i64 = factor_into(a, ps, es)
+        FAC_AN[a] = n
+        let mut k: i64 = 0
+        while k < n {
+            FAC_A_P[a * 8 + k] = ps[k]
+            FAC_A_E[a * 8 + k] = es[k]
+            k = k + 1
+        }
+        free(ps)
+        free(es)
+        a = a + 1
+    }
+
+    let mut total: i64 = 0
+    a = 1
+    while a <= 18 {
+        let mut b: i64 = 1
+        while b <= 1900 {
+            total = total + compute_G(a, b)
+            b = b + 1
+        }
+        a = a + 1
+    }
+    printf("%lld\n", total)
+    free(FAC_AN)
+    free(FAC_A_E)
+    free(FAC_A_P)
+    free(A6)
+    free(A3)
+    free(PRIMES)
+    return 0
+}

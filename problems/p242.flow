@@ -1,0 +1,58 @@
+# Project Euler 242
+# Odd triplets count for n <= 10^12.
+
+function pow3(m: i32) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i32 = 0
+    while i < m {
+        r = r * 3
+        i = i + 1
+    }
+    return r
+}
+
+function bit_length(t: i64) -> i32 {
+    if t == 0 { return 0 }
+    let mut n: i64 = t
+    let mut m: i32 = 0
+    while n > 0 {
+        n = n / 2
+        m = m + 1
+    }
+    return m
+}
+
+function prefix_sum_pow2_popcount(t0: i64) -> i64 {
+    if t0 < 0 { return 0 }
+    let mut res: i64 = 0
+    let mut mult: i64 = 1
+    let mut t: i64 = t0
+    while true {
+        if t == 0 {
+            res = res + mult
+            break
+        }
+        let m: i32 = bit_length(t) - 1
+        let p: i64 = 1
+        let mut i: i32 = 0
+        while i < m {
+            p = p * 2
+            i = i + 1
+        }
+        if t == p - 1 {
+            res = res + mult * pow3(m)
+            break
+        }
+        res = res + mult * pow3(m)
+        t = t - p
+        mult = mult * 2
+    }
+    return res
+}
+
+function main() -> i32 {
+    let n_max: i64 = 1000000000000
+    let t_max: i64 = (n_max - 1) / 4
+    printf("%lld\n", prefix_sum_pow2_popcount(t_max))
+    return 0
+}

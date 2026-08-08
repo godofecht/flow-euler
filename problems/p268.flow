@@ -1,0 +1,72 @@
+# Project Euler 268
+# Count numbers <= 10^16 divisible by at least 4 distinct primes <= 100.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function tetrahedral(n: i64) -> i64 {
+    return n * (n + 1) * (n + 2) / 6
+}
+
+function main() -> i32 {
+    let primes: ptr<i64> = calloc(25, 8)
+    primes[0]=2; primes[1]=3; primes[2]=5; primes[3]=7; primes[4]=11
+    primes[5]=13; primes[6]=17; primes[7]=19; primes[8]=23; primes[9]=29
+    primes[10]=31; primes[11]=37; primes[12]=41; primes[13]=43; primes[14]=47
+    primes[15]=53; primes[16]=59; primes[17]=61; primes[18]=67; primes[19]=71
+    primes[20]=73; primes[21]=79; primes[22]=83; primes[23]=89; primes[24]=97
+    let num_primes: i64 = 25
+    let min_primes: i64 = 4
+    let limit: i64 = 10000000000000000
+    let count: ptr<i64> = calloc(num_primes + 1, 8)
+    let mut i: i64 = min_primes
+    while i <= num_primes {
+        count[i] = tetrahedral(i - min_primes + 1)
+        i = i + 1
+    }
+    let mut total: i64 = 0
+    let one: i64 = 1
+    let max_mask: i64 = (one << num_primes) - 1
+    let mut mask: i64 = 0
+    while mask < max_mask {
+        let mut product: i64 = 1
+        let mut too_large: bool = false
+        let mut num_bits: i64 = 0
+        let mut current: i64 = 0
+        while current < num_primes {
+            let bitpos: i64 = one << current
+            if (mask & bitpos) != 0 {
+                num_bits = num_bits + 1
+                if product > limit / primes[current] {
+                    too_large = true
+                    let with_lowest: i64 = mask & (mask - 1)
+                    let mut lowest: i64 = mask - with_lowest
+                    mask = mask + lowest
+                    while (mask & (lowest << 1)) != 0 {
+                        lowest = lowest << 1
+                        mask = mask + lowest
+                    }
+                    mask = mask - 1
+                    break
+                }
+                product = product * primes[current]
+            }
+            current = current + 1
+        }
+        if !too_large && num_bits >= min_primes {
+            let mut divisible: i64 = limit / product
+            divisible = divisible * count[num_bits]
+            if num_bits % 2 == 1 {
+                total = total - divisible
+            } else {
+                total = total + divisible
+            }
+        }
+        mask = mask + 1
+    }
+    printf("%lld\n", total)
+    free(primes); free(count)
+    return 0
+}

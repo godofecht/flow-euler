@@ -1,0 +1,69 @@
+# Project Euler 049
+# Concatenate the three terms of the 4-digit prime permutation arithmetic
+# sequence (excluding 1487/4817/8147).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digit_sig(n0: i64) -> i64 {
+    let mut counts: array<i32, 10> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let mut n: i64 = n0
+    while n > 0 {
+        let d: i32 = (n % 10) as i32
+        counts[d] = counts[d] + 1
+        n = n / 10
+    }
+    let mut sig: i64 = 0
+    let mut d: i32 = 0
+    while d < 10 {
+        sig = sig * 10 + (counts[d] as i64)
+        d = d + 1
+    }
+    return sig
+}
+
+function main() -> i32 {
+    let limit: i64 = 10000
+    let sieve: ptr<i8> = calloc(limit, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let mut a: i64 = 1000
+    while a < 10000 {
+        if sieve[a] == 0 {
+            let sig_a: i64 = digit_sig(a)
+            let mut b: i64 = a + 1
+            while b < 10000 {
+                if sieve[b] == 0 && digit_sig(b) == sig_a {
+                    let c: i64 = b + (b - a)
+                    if c < 10000 && sieve[c] == 0 && digit_sig(c) == sig_a {
+                        if a != 1487 {
+                            let ans: i64 = a * 100000000 + b * 10000 + c
+                            printf("%lld\n", ans)
+                            free(sieve)
+                            return 0
+                        }
+                    }
+                }
+                b = b + 1
+            }
+        }
+        a = a + 1
+    }
+    free(sieve)
+    return 1
+}

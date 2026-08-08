@@ -1,0 +1,85 @@
+# Project Euler 089
+# Characters saved by writing Roman numerals in minimal form.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+}
+
+function roman_value(c: i32) -> i32 {
+    if c == 73 { return 1 }       # I
+    if c == 86 { return 5 }       # V
+    if c == 88 { return 10 }      # X
+    if c == 76 { return 50 }      # L
+    if c == 67 { return 100 }     # C
+    if c == 68 { return 500 }     # D
+    if c == 77 { return 1000 }    # M
+    return 0
+}
+
+function minimal_len(n: i32) -> i32 {
+    # standard Roman length for 1..3999
+    let vals: array<i32, 13> = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+    let lens: array<i32, 13> = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1]
+    let mut len: i32 = 0
+    let mut x: i32 = n
+    let mut i: i32 = 0
+    while i < 13 {
+        while x >= vals[i] {
+            x = x - vals[i]
+            len = len + lens[i]
+        }
+        i = i + 1
+    }
+    return len
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p089.txt", "r")
+    if f == null {
+        printf("failed to read data/p089.txt\n")
+        return 1
+    }
+    let mut saved: i64 = 0
+    let mut buf: array<i32, 32> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        let mut len: i32 = 0
+        while c >= 0 && c != 10 {
+            if roman_value(c) > 0 {
+                buf[len] = c
+                len = len + 1
+            }
+            c = fgetc(f)
+        }
+        if len > 0 {
+            # parse value (subtractive)
+            let mut val: i32 = 0
+            let mut i: i32 = 0
+            while i < len {
+                let v: i32 = roman_value(buf[i])
+                if i + 1 < len {
+                    let w: i32 = roman_value(buf[i + 1])
+                    if v < w {
+                        val = val + (w - v)
+                        i = i + 2
+                    } else {
+                        val = val + v
+                        i = i + 1
+                    }
+                } else {
+                    val = val + v
+                    i = i + 1
+                }
+            }
+            saved = saved + ((len - minimal_len(val)) as i64)
+        }
+        if c == 10 {
+            c = fgetc(f)
+        }
+    }
+    fclose(f)
+    printf("%lld\n", saved)
+    return 0
+}

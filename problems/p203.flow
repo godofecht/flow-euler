@@ -1,0 +1,77 @@
+# Project Euler 203
+# Sum of distinct squarefree numbers in first 51 Pascal rows.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function is_squarefree(x: i64, max_p: i64) -> bool {
+    let mut p: i64 = 2
+    while p <= max_p {
+        if x % (p * p) == 0 { return false }
+        p = p + 1
+    }
+    return true
+}
+
+function main() -> i32 {
+    let ROWS: i32 = 51
+    let vals: ptr<i64> = calloc(2000, 8)
+    let mut vc: i64 = 0
+    vals[0] = 1
+    vc = 1
+
+    let cur: ptr<i64> = calloc(ROWS + 2, 8)
+    let nxt: ptr<i64> = calloc(ROWS + 2, 8)
+    if cur == null || nxt == null || vals == null { return 1 }
+    cur[0] = 1
+    let mut len: i32 = 1
+
+    let mut row: i32 = 1
+    while row < ROWS {
+        nxt[0] = 1
+        let mut col: i32 = 1
+        while col < len {
+            nxt[col] = cur[col - 1] + cur[col]
+            col = col + 1
+        }
+        nxt[len] = 1
+        len = len + 1
+
+        col = 1
+        while col <= len / 2 {
+            let x: i64 = nxt[col]
+            if is_squarefree(x, ROWS as i64) {
+                let mut found: bool = false
+                let mut k: i64 = 0
+                while k < vc {
+                    if vals[k] == x { found = true; break }
+                    k = k + 1
+                }
+                if !found {
+                    vals[vc] = x
+                    vc = vc + 1
+                }
+            }
+            col = col + 1
+        }
+
+        col = 0
+        while col < len {
+            cur[col] = nxt[col]
+            col = col + 1
+        }
+        row = row + 1
+    }
+
+    let mut total: i64 = 0
+    let mut k: i64 = 0
+    while k < vc {
+        total = total + vals[k]
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    free(vals); free(cur); free(nxt)
+    return 0
+}

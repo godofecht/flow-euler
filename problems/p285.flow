@@ -1,0 +1,30 @@
+# Project Euler 285
+# Expected score sum for k=1..10^5.
+
+extern {
+    function sqrt(x: f64) -> f64
+    function asin(x: f64) -> f64
+}
+
+function area_under_circle(k: f64, r: f64) -> f64 {
+    let u_max: f64 = sqrt(r * r - 1.0)
+    # primitive(u) = 0.5*(u*sqrt(r^2-u^2) + r^2*asin(u/r))
+    let p_max: f64 = 0.5 * (u_max * sqrt(r * r - u_max * u_max) + r * r * asin(u_max / r))
+    let p_one: f64 = 0.5 * (1.0 * sqrt(r * r - 1.0) + r * r * asin(1.0 / r))
+    return (p_max - p_one - (u_max - 1.0)) / (k * k)
+}
+
+function main() -> i32 {
+    let limit: i64 = 100000
+    let mut total: f64 = area_under_circle(1.0, 1.5)
+    let mut k: i64 = 2
+    while k <= limit {
+        let kf: f64 = k as f64
+        let up: f64 = area_under_circle(kf, kf + 0.5)
+        let lo: f64 = area_under_circle(kf, kf - 0.5)
+        total = total + kf * (up - lo)
+        k = k + 1
+    }
+    printf("%.5f\n", total)
+    return 0
+}

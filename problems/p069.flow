@@ -1,0 +1,18 @@
+# Project Euler 069
+# Find n ≤ 1,000,000 maximizing n/φ(n).
+# Maximized by product of smallest primes.
+
+function main() -> i32 {
+    let primes: array<i64, 20> = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71]
+    let mut n: i64 = 1
+    let mut i: i32 = 0
+    while i < 20 {
+        if n * primes[i] > 1000000 {
+            break
+        }
+        n = n * primes[i]
+        i = i + 1
+    }
+    printf("%lld\n", n)
+    return 0
+}

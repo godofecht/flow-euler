@@ -1,0 +1,52 @@
+# Project Euler 194
+# Last 8 digits of N(25,75,1984).
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function SA(c: i64) -> i64 {
+    return c*c*c*c*c - 9*c*c*c*c + 34*c*c*c - 69*c*c + 77*c - 38
+}
+
+function SB(c: i64) -> i64 {
+    return c*c*c*c*c - 8*c*c*c*c + 27*c*c*c - 50*c*c + 52*c - 24
+}
+
+function comb_mod(n: i64, k: i64, mod: i64) -> i64 {
+    # n! / (k! (n-k)!) mod mod; mod=1e8 not prime, so compute exactly with i128 then mod
+    let mut num: i128 = 1
+    let mut i: i64 = 0
+    while i < k {
+        num = num * ((n - i) as i128)
+        i = i + 1
+        num = num / (i as i128)
+    }
+    return (num % (mod as i128)) as i64
+}
+
+function main() -> i32 {
+    let MOD: i64 = 100000000
+    let a: i64 = 25
+    let b: i64 = 75
+    let c: i64 = 1984
+    let n: i64 = a + b
+    let comb: i64 = comb_mod(n, a, MOD)
+    let sa: i64 = ((SA(c) % MOD) + MOD) % MOD
+    let sb: i64 = ((SB(c) % MOD) + MOD) % MOD
+    let mut val: i64 = comb
+    val = (val * c) % MOD
+    val = (val * (c - 1)) % MOD
+    val = (val * modpow(sa, a, MOD)) % MOD
+    val = (val * modpow(sb, b, MOD)) % MOD
+    printf("%lld\n", val)
+    return 0
+}

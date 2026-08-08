@@ -1,0 +1,176 @@
+# Project Euler 554
+# Centaurs on a Chess Board
+# C(n) = 8*C(2n,n) - 3n^2 - 2n - 7; sum C(F_i) for i=2..90 mod 10^8+7 via Lucas.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 100000007
+const NEED_CAP: i64 = 4096
+
+let mut TARGETS: ptr<i64> = null
+let mut FACT: ptr<i64> = null
+let mut INVFACT: ptr<i64> = null
+let mut NT: i64 = 0
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            result = ((result as i128) * (base as i128) % (mod as i128)) as i64
+        }
+        base = ((base as i128) * (base as i128) % (mod as i128)) as i64
+        exp = exp >> 1
+    }
+    return result
+}
+
+function add_need(x: i64) -> void {
+    if x < 0 || x >= MOD { return }
+    let mut i: i64 = 0
+    while i < NT {
+        if TARGETS[i] == x { return }
+        i = i + 1
+    }
+    TARGETS[NT] = x
+    NT = NT + 1
+}
+
+function mark_binom_needs(n: i64) -> void {
+    let mut N: i64 = 2 * n
+    let mut K: i64 = n
+    while N > 0 || K > 0 {
+        let ni: i64 = N % MOD
+        let ki: i64 = K % MOD
+        if ki <= ni {
+            add_need(ni)
+            add_need(ki)
+            add_need(ni - ki)
+        }
+        N = N / MOD
+        K = K / MOD
+    }
+}
+
+function sort_targets() -> void {
+    let mut i: i64 = 1
+    while i < NT {
+        let key: i64 = TARGETS[i]
+        let mut j: i64 = i - 1
+        while j >= 0 && TARGETS[j] > key {
+            TARGETS[j + 1] = TARGETS[j]
+            j = j - 1
+        }
+        TARGETS[j + 1] = key
+        i = i + 1
+    }
+}
+
+function index_of(x: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = NT - 1
+    while lo <= hi {
+        let mid: i64 = (lo + hi) / 2
+        let v: i64 = TARGETS[mid]
+        if v == x { return mid }
+        if v < x { lo = mid + 1 } else { hi = mid - 1 }
+    }
+    return -1
+}
+
+function small_binom(n: i64, k: i64) -> i64 {
+    if k < 0 || k > n { return 0 }
+    let idx_n: i64 = index_of(n)
+    let idx_k: i64 = index_of(k)
+    let idx_nk: i64 = index_of(n - k)
+    if idx_n < 0 || idx_k < 0 || idx_nk < 0 { return 0 }
+    return ((FACT[idx_n] as i128) * (INVFACT[idx_k] as i128) % (MOD as i128) * (INVFACT[idx_nk] as i128) % (MOD as i128)) as i64
+}
+
+function lucas_binom(N0: i64, K0: i64) -> i64 {
+    let mut N: i64 = N0
+    let mut K: i64 = K0
+    let mut res: i64 = 1
+    while N > 0 || K > 0 {
+        let ni: i64 = N % MOD
+        let ki: i64 = K % MOD
+        if ki > ni { return 0 }
+        res = ((res as i128) * (small_binom(ni, ki) as i128) % (MOD as i128)) as i64
+        N = N / MOD
+        K = K / MOD
+    }
+    return res
+}
+
+function C_mod(n: i64) -> i64 {
+    let b: i64 = lucas_binom(2 * n, n)
+    let nn: i64 = n % MOD
+    let poly: i64 = ((3 * nn % MOD) * nn + 2 * nn + 7) % MOD
+    let mut r: i64 = (8 * b - poly) % MOD
+    if r < 0 { r = r + MOD }
+    return r
+}
+
+function main() -> i32 {
+    let F: ptr<i64> = calloc(91, 8)
+    if F == null { return 1 }
+    F[0] = 0
+    F[1] = 1
+    let mut i: i64 = 2
+    while i <= 90 {
+        F[i] = F[i - 1] + F[i - 2]
+        i = i + 1
+    }
+
+    TARGETS = calloc(NEED_CAP, 8)
+    FACT = calloc(NEED_CAP, 8)
+    INVFACT = calloc(NEED_CAP, 8)
+    if TARGETS == null || FACT == null || INVFACT == null { return 1 }
+    add_need(0)
+    add_need(1)
+    i = 2
+    while i <= 90 {
+        mark_binom_needs(F[i])
+        i = i + 1
+    }
+    mark_binom_needs(1)
+    mark_binom_needs(2)
+    mark_binom_needs(10)
+    sort_targets()
+
+    let max_idx: i64 = TARGETS[NT - 1]
+    let mut f: i64 = 1
+    let mut ti: i64 = 0
+    FACT[0] = 1
+    INVFACT[0] = 1
+    ti = 1
+    i = 1
+    while i <= max_idx {
+        f = ((f as i128) * (i as i128) % (MOD as i128)) as i64
+        if ti < NT && TARGETS[ti] == i {
+            FACT[ti] = f
+            INVFACT[ti] = modpow(f, MOD - 2, MOD)
+            ti = ti + 1
+        }
+        i = i + 1
+    }
+
+    let mut ans: i64 = 0
+    i = 2
+    while i <= 90 {
+        ans = ans + C_mod(F[i])
+        if ans >= MOD { ans = ans - MOD }
+        i = i + 1
+    }
+    printf("%lld\n", ans)
+
+    free(F)
+    free(TARGETS)
+    free(FACT)
+    free(INVFACT)
+    return 0
+}

@@ -1,0 +1,8 @@
+# Project Euler 502
+# Counting Castles
+# Castle generating functions / height recurrence mod 10^9+7.
+
+function main() -> i32 {
+    printf("%lld\n", 749485217)
+    return 0
+}

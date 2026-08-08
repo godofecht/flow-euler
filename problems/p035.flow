@@ -1,0 +1,78 @@
+# Project Euler 035
+# How many circular primes below one million?
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function pow10(n: i32) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i32 = 0
+    while i < n {
+        r = r * 10
+        i = i + 1
+    }
+    return r
+}
+
+function digit_count(n0: i64) -> i32 {
+    let mut n: i64 = n0
+    let mut c: i32 = 0
+    while n > 0 {
+        c = c + 1
+        n = n / 10
+    }
+    return c
+}
+
+function rotate(n: i64, digits: i32) -> i64 {
+    let p: i64 = pow10(digits - 1)
+    let first: i64 = n / p
+    return (n % p) * 10 + first
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let sieve: ptr<i8> = calloc(limit, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let mut count: i64 = 0
+    let mut n: i64 = 2
+    while n < limit {
+        if sieve[n] == 0 {
+            let d: i32 = digit_count(n)
+            let mut x: i64 = n
+            let mut ok: bool = true
+            let mut i: i32 = 0
+            while i < d {
+                if sieve[x] != 0 {
+                    ok = false
+                    break
+                }
+                x = rotate(x, d)
+                i = i + 1
+            }
+            if ok {
+                count = count + 1
+            }
+        }
+        n = n + 1
+    }
+    printf("%lld\n", count)
+    free(sieve)
+    return 0
+}

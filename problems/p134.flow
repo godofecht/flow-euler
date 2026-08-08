@@ -1,0 +1,68 @@
+# Project Euler 134
+# Sum of S(p1,p2) for consecutive primes with 5 ≤ p1 ≤ 10^6.
+
+function tens(x: i64) -> i64 {
+    let mut r: i64 = 1
+    while r <= x { r = r * 10 }
+    return r
+}
+
+# return (x * inv(m1)) % m2 style via extended gcd: find x with x*m1 ≡ small (mod m2)?
+# S ends with digits of p1 and divisible by p2: S = k*m2 + 0, S ≡ p1 (mod m1) where m1=tens(p1)
+# So k*p2 ≡ p1 (mod m1) => k ≡ p1 * inv(p2) (mod m1)
+function mod_inverse(a0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    if a < 0 { a = a + mod }
+    let mut t: i64 = 0
+    let mut newt: i64 = 1
+    let mut r: i64 = mod
+    let mut newr: i64 = a
+    while newr != 0 {
+        let q: i64 = r / newr
+        let tmp: i64 = newt
+        newt = t - q * newt
+        t = tmp
+        let tmp2: i64 = newr
+        newr = r - q * newr
+        r = tmp2
+    }
+    if t < 0 { t = t + mod }
+    return t
+}
+
+function S(p1: i64, p2: i64) -> i64 {
+    let m1: i64 = tens(p1)
+    let inv: i64 = mod_inverse(p2 % m1, m1)
+    let k: i64 = (p1 * inv) % m1
+    return k * p2
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    # sieve primes up to limit + some
+    let slim: i64 = limit + 1000
+    # collect primes
+    let mut primes_cap: i64 = 80000
+    # simple trial generation
+    let mut prev: i64 = 3
+    let mut total: i64 = 0
+    let mut n: i64 = 5
+    while true {
+        let mut prime: bool = true
+        let mut d: i64 = 3
+        while d * d <= n {
+            if n % d == 0 { prime = false; break }
+            d = d + 2
+        }
+        if prime {
+            if prev >= 5 && prev <= limit {
+                total = total + S(prev, n)
+            }
+            if n > limit { break }
+            prev = n
+        }
+        n = n + 2
+    }
+    printf("%lld\n", total)
+    return 0
+}

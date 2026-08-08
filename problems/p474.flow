@@ -1,0 +1,212 @@
+# Project Euler 474
+# Last Digits of Divisors
+# Count divisors of 10^6! ending with 65432, mod 10^16+61.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 10000000000000061
+const N: i64 = 1000000
+const D: i64 = 65432
+const POW10: i64 = 100000
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function expo(n0: i64, p: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut v: i64 = 0
+    while n > 0 {
+        n = n / p
+        v = v + n
+    }
+    return v
+}
+
+function main() -> i32 {
+    let mut dd: i64 = D
+    let mut alpha: i64 = 0
+    let mut beta: i64 = 0
+    while dd % 2 == 0 {
+        dd = dd / 2
+        alpha = alpha + 1
+    }
+    while dd % 5 == 0 {
+        dd = dd / 5
+        beta = beta + 1
+    }
+    let mut fixed: i64 = 1
+    let mut i: i64 = 0
+    while i < alpha {
+        fixed = fixed * 2
+        i = i + 1
+    }
+    i = 0
+    while i < beta {
+        fixed = fixed * 5
+        i = i + 1
+    }
+    let modulus: i64 = POW10 / fixed
+    let target: i64 = D / fixed
+    if gcd(target, modulus) != 1 {
+        printf("%lld\n", 0)
+        return 0
+    }
+
+    let units: ptr<i64> = calloc(modulus, 8)
+    let index: ptr<i64> = calloc(modulus, 8)
+    if units == null || index == null { return 1 }
+    i = 0
+    while i < modulus {
+        index[i] = -1
+        i = i + 1
+    }
+    let mut nu: i64 = 0
+    let mut r: i64 = 1
+    while r < modulus {
+        if gcd(r, modulus) == 1 {
+            units[nu] = r
+            index[r] = nu
+            nu = nu + 1
+        }
+        r = r + 1
+    }
+
+    let sieve: ptr<i8> = calloc(N + 1, 1)
+    if sieve == null { return 1 }
+    i = 0
+    while i <= N {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    i = 2
+    while i * i <= N {
+        if sieve[i] != 0 {
+            let mut j: i64 = i * i
+            while j <= N {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let primes: ptr<i64> = calloc(N / 5 + 10, 8)
+    if primes == null { return 1 }
+    let mut pc: i64 = 0
+    i = 2
+    while i <= N {
+        if sieve[i] != 0 {
+            primes[pc] = i
+            pc = pc + 1
+        }
+        i = i + 1
+    }
+    free(sieve)
+
+    let dp: ptr<i64> = calloc(nu, 8)
+    let ndp: ptr<i64> = calloc(nu, 8)
+    let seen: ptr<i8> = calloc(nu, 1)
+    let cycle: ptr<i64> = calloc(nu, 8)
+    let vals: ptr<i64> = calloc(nu, 8)
+    if dp == null || ndp == null || seen == null || cycle == null || vals == null { return 1 }
+    dp[index[1]] = 1
+
+    let mut cur: ptr<i64> = dp
+    let mut nxt: ptr<i64> = ndp
+    let mut pi: i64 = 0
+    while pi < pc {
+        let p: i64 = primes[pi]
+        if p != 2 {
+            if p != 5 {
+                let terms: i64 = expo(N, p) + 1
+                let mult: i64 = p % modulus
+                i = 0
+                while i < nu {
+                    seen[i] = 0
+                    nxt[i] = 0
+                    i = i + 1
+                }
+                let mut start: i64 = 0
+                while start < nu {
+                    if seen[start] == 0 {
+                        let mut len: i64 = 0
+                        let mut idx: i64 = start
+                        while seen[idx] == 0 {
+                            seen[idx] = 1
+                            cycle[len] = idx
+                            len = len + 1
+                            idx = index[(units[idx] * mult) % modulus]
+                        }
+                        let full_turns: i64 = terms / len
+                        let tail: i64 = terms % len
+                        let mut sumv: i64 = 0
+                        i = 0
+                        while i < len {
+                            vals[i] = cur[cycle[i]]
+                            sumv = sumv + vals[i]
+                            if sumv >= MOD { sumv = sumv - MOD }
+                            i = i + 1
+                        }
+                        let full: i64 = ((full_turns % MOD) * sumv) % MOD
+                        if tail == 0 {
+                            i = 0
+                            while i < len {
+                                nxt[cycle[i]] = full
+                                i = i + 1
+                            }
+                        } else {
+                            let mut window: i64 = 0
+                            let mut j: i64 = 0
+                            while j < tail {
+                                let mut ix: i64 = (0 - j) % len
+                                if ix < 0 { ix = ix + len }
+                                window = window + vals[ix]
+                                if window >= MOD { window = window - MOD }
+                                j = j + 1
+                            }
+                            i = 0
+                            while i < len {
+                                nxt[cycle[i]] = (full + window) % MOD
+                                window = window + vals[(i + 1) % len]
+                                let mut subix: i64 = (i + 1 - tail) % len
+                                if subix < 0 { subix = subix + len }
+                                window = window - vals[subix]
+                                window = window % MOD
+                                if window < 0 { window = window + MOD }
+                                i = i + 1
+                            }
+                        }
+                    }
+                    start = start + 1
+                }
+                let tmp: ptr<i64> = cur
+                cur = nxt
+                nxt = tmp
+            }
+        }
+        pi = pi + 1
+    }
+
+    printf("%lld\n", cur[index[target % modulus]])
+    free(vals)
+    free(cycle)
+    free(seen)
+    free(ndp)
+    free(dp)
+    free(primes)
+    free(index)
+    free(units)
+    return 0
+}

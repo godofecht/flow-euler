@@ -1,0 +1,91 @@
+# Project Euler 175
+# Shortened binary expansion for f(n)/f(n-1) = 123456789/987654321.
+# Harness expects integer: concatenate run lengths (drop commas).
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function digit_shift(v: i64) -> i64 {
+    if v == 0 { return 10 }
+    let mut shift: i64 = 1
+    let mut t: i64 = v
+    while t > 0 {
+        shift = shift * 10
+        t = t / 10
+    }
+    return shift
+}
+
+function main() -> i32 {
+    let p: i64 = 123456789
+    let q: i64 = 987654321
+    let g: i64 = gcd(q, p)
+    let mut a: i64 = q / g
+    let mut b: i64 = p / g
+
+    let mut sb: array<i8, 64> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    let mut sc: array<i32, 64> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    let mut nsteps: i32 = 0
+    while a != b {
+        if a > b {
+            let k: i64 = (a - 1) / b
+            sb[nsteps] = 1
+            sc[nsteps] = k as i32
+            a = a - k * b
+        } else {
+            let k2: i64 = (b - 1) / a
+            sb[nsteps] = 0
+            sc[nsteps] = k2 as i32
+            b = b - k2 * a
+        }
+        nsteps = nsteps + 1
+    }
+
+    let mut sbe: array<i32, 64> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    let mut nsbe: i32 = 0
+    let mut cur_bit: i32 = 1
+    let mut cur_len: i32 = 1
+    let mut i: i32 = nsteps - 1
+    while i >= 0 {
+        let bit: i32 = sb[i] as i32
+        let count: i32 = sc[i]
+        if bit == cur_bit {
+            cur_len = cur_len + count
+        } else {
+            sbe[nsbe] = cur_len
+            nsbe = nsbe + 1
+            cur_bit = bit
+            cur_len = count
+        }
+        i = i - 1
+    }
+    sbe[nsbe] = cur_len
+    nsbe = nsbe + 1
+
+    let mut ans: i64 = 0
+    let mut j: i32 = 0
+    while j < nsbe {
+        let v: i64 = sbe[j] as i64
+        ans = ans * digit_shift(v) + v
+        j = j + 1
+    }
+    printf("%lld\n", ans)
+    return 0
+}

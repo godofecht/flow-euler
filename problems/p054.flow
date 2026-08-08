@@ -1,0 +1,225 @@
+# Project Euler 054
+# How many hands does Player 1 win?
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function rank_val(c: i32) -> i32 {
+    if c == 84 { return 10 }
+    if c == 74 { return 11 }
+    if c == 81 { return 12 }
+    if c == 75 { return 13 }
+    if c == 65 { return 14 }
+    return c - 48
+}
+
+function sort5(v: ptr<i32>) -> void {
+    let mut i: i32 = 0
+    while i < 5 {
+        let mut j: i32 = i + 1
+        while j < 5 {
+            if v[j] < v[i] {
+                let t: i32 = v[i]
+                v[i] = v[j]
+                v[j] = t
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function max2i(a: i32, b: i32) -> i32 {
+    if a > b { return a }
+    return b
+}
+
+function min2i(a: i32, b: i32) -> i32 {
+    if a < b { return a }
+    return b
+}
+
+# Higher score wins. Category in high digits, then kickers.
+function hand_score(ranks: ptr<i32>, suits: ptr<i32>) -> i64 {
+    let r: ptr<i32> = calloc(5, 4)
+    let cnt: ptr<i32> = calloc(15, 4)
+    if r == null || cnt == null { return 0 }
+    let mut i: i32 = 0
+    while i < 5 {
+        r[i] = ranks[i]
+        i = i + 1
+    }
+    sort5(r)
+
+    let mut flush: bool = true
+    i = 1
+    while i < 5 {
+        if suits[i] != suits[0] { flush = false }
+        i = i + 1
+    }
+
+    let mut straight: bool = true
+    let mut hi: i32 = r[4]
+    i = 0
+    while i < 4 {
+        if r[i + 1] != r[i] + 1 { straight = false }
+        i = i + 1
+    }
+    if r[0] == 2 && r[1] == 3 && r[2] == 4 && r[3] == 5 && r[4] == 14 {
+        straight = true
+        hi = 5
+    }
+
+    i = 0
+    while i < 5 {
+        cnt[r[i]] = cnt[r[i]] + 1
+        i = i + 1
+    }
+
+    let mut four: i32 = 0
+    let mut three: i32 = 0
+    let mut p1: i32 = 0
+    let mut p2: i32 = 0
+    let mut pairs: i32 = 0
+    i = 14
+    while i >= 2 {
+        if cnt[i] == 4 { four = i }
+        if cnt[i] == 3 { three = i }
+        if cnt[i] == 2 {
+            if p1 == 0 {
+                p1 = i
+            } else {
+                p2 = i
+            }
+            pairs = pairs + 1
+        }
+        i = i - 1
+    }
+
+    let mut cat: i64 = 0
+    let mut key: i64 = 0
+
+    if straight && flush {
+        cat = 8
+        key = hi as i64
+    } elif four != 0 {
+        cat = 7
+        key = four as i64
+        i = 14
+        while i >= 2 {
+            if cnt[i] == 1 {
+                key = key * 100 + (i as i64)
+                break
+            }
+            i = i - 1
+        }
+    } elif three != 0 && pairs >= 1 {
+        cat = 6
+        key = (three as i64) * 100 + (p1 as i64)
+    } elif flush {
+        cat = 5
+        key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64)
+    } elif straight {
+        cat = 4
+        key = hi as i64
+    } elif three != 0 {
+        cat = 3
+        key = three as i64
+        i = 14
+        while i >= 2 {
+            if cnt[i] == 1 {
+                key = key * 100 + (i as i64)
+            }
+            i = i - 1
+        }
+    } elif pairs == 2 {
+        cat = 2
+        let hi_p: i32 = max2i(p1, p2)
+        let lo_p: i32 = min2i(p1, p2)
+        key = (hi_p as i64) * 10000 + (lo_p as i64) * 100
+        i = 14
+        while i >= 2 {
+            if cnt[i] == 1 {
+                key = key + (i as i64)
+                break
+            }
+            i = i - 1
+        }
+    } elif pairs == 1 {
+        cat = 1
+        key = p1 as i64
+        i = 14
+        while i >= 2 {
+            if cnt[i] == 1 {
+                key = key * 100 + (i as i64)
+            }
+            i = i - 1
+        }
+    } else {
+        cat = 0
+        key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64)
+    }
+
+    free(cnt)
+    free(r)
+    return cat * 10000000000 + key
+}
+
+function skip_ws(f: ptr<void>, c0: i32) -> i32 {
+    let mut c: i32 = c0
+    while c == 32 || c == 10 || c == 13 || c == 9 {
+        c = fgetc(f)
+    }
+    return c
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p054.txt", "r")
+    if f == null {
+        printf("failed to read data/p054.txt\n")
+        return 1
+    }
+    let r1: ptr<i32> = calloc(5, 4)
+    let s1: ptr<i32> = calloc(5, 4)
+    let r2: ptr<i32> = calloc(5, 4)
+    let s2: ptr<i32> = calloc(5, 4)
+    if r1 == null || s1 == null || r2 == null || s2 == null { return 1 }
+
+    let mut wins: i64 = 0
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        c = skip_ws(f, c)
+        if c < 0 { break }
+        let mut i: i32 = 0
+        while i < 5 {
+            r1[i] = rank_val(c)
+            s1[i] = fgetc(f)
+            c = fgetc(f)
+            c = skip_ws(f, c)
+            i = i + 1
+        }
+        i = 0
+        while i < 5 {
+            r2[i] = rank_val(c)
+            s2[i] = fgetc(f)
+            c = fgetc(f)
+            c = skip_ws(f, c)
+            i = i + 1
+        }
+        if hand_score(r1, s1) > hand_score(r2, s2) {
+            wins = wins + 1
+        }
+    }
+    fclose(f)
+    printf("%lld\n", wins)
+    free(r1)
+    free(s1)
+    free(r2)
+    free(s2)
+    return 0
+}

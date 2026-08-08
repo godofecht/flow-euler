@@ -1,0 +1,31 @@
+# Project Euler 219
+# Minimal cost for 10^9 binary codes with costs 1 and 4.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 1000000000
+    let costs: ptr<i64> = calloc(80, 8)
+    if costs == null { return 1 }
+    costs[1] = 1
+    costs[4] = 1
+    let mut total: i64 = 5
+    let mut current: i64 = 1
+    let mut remaining: i64 = LIMIT - 2
+    while remaining > 0 {
+        while costs[current] == 0 { current = current + 1 }
+        let mut block: i64 = costs[current]
+        if block > remaining { block = remaining }
+        remaining = remaining - block
+        costs[current] = costs[current] - block
+        costs[current + 1] = costs[current + 1] + block
+        costs[current + 4] = costs[current + 4] + block
+        total = total + block * (current + 5)
+    }
+    printf("%lld\n", total)
+    free(costs)
+    return 0
+}

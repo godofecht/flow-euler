@@ -1,0 +1,31 @@
+# Project Euler 235
+# Find r where s(r) = -6e11 for arithmetic-geometric series.
+
+function s(r: f64) -> f64 {
+    let mut result: f64 = 0.0
+    let mut x: f64 = 1.0
+    let mut k: i32 = 1
+    while k <= 5000 {
+        result = result + (900.0 - 3.0 * (k as f64)) * x
+        x = x * r
+        k = k + 1
+    }
+    return result
+}
+
+function main() -> i32 {
+    let mut lower: f64 = 0.0
+    let mut upper: f64 = 2.0
+    let mut iter: i32 = 0
+    while iter < 80 {
+        let mid: f64 = (upper + lower) / 2.0
+        if s(mid) < 0.0 - 600000000000.0 {
+            upper = mid
+        } else {
+            lower = mid
+        }
+        iter = iter + 1
+    }
+    printf("%.12f\n", (upper + lower) / 2.0)
+    return 0
+}

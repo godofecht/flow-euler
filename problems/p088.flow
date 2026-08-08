@@ -1,0 +1,53 @@
+# Project Euler 088
+# Sum of all minimal product-sum numbers for 2≤k≤12000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function search(prod: i32, sum: i32, cnt: i32, start: i32, limit: i32, kmax: i32, min_n: ptr<i32>) -> void {
+    if cnt > 0 {
+        let k: i32 = prod - sum + cnt
+        if k >= 2 && k <= kmax {
+            if prod < min_n[k] {
+                min_n[k] = prod
+            }
+        }
+    }
+    let mut f: i32 = start
+    while prod * f <= limit {
+        search(prod * f, sum + f, cnt + 1, f, limit, kmax, min_n)
+        f = f + 1
+    }
+}
+
+function main() -> i32 {
+    let kmax: i32 = 12000
+    let limit: i32 = 2 * kmax
+    let min_n: ptr<i32> = calloc((kmax + 1) as i64, 4)
+    if min_n == null { return 1 }
+    let mut k: i32 = 0
+    while k <= kmax {
+        min_n[k] = limit + 1
+        k = k + 1
+    }
+    search(1, 0, 0, 2, limit, kmax, min_n)
+
+    let used: ptr<i8> = calloc((limit + 1) as i64, 1)
+    if used == null { return 1 }
+    let mut total: i64 = 0
+    k = 2
+    while k <= kmax {
+        let n: i32 = min_n[k]
+        if used[n] == 0 {
+            used[n] = 1
+            total = total + (n as i64)
+        }
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    free(min_n)
+    free(used)
+    return 0
+}

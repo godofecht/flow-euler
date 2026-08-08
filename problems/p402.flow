@@ -1,0 +1,340 @@
+# Project Euler 402
+# Last 9 digits of sum_{k=2..K} S(F_k), K=1234567890123.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mat_mul(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>, n: i64, mod: i64) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        let mut j: i64 = 0
+        while j < n {
+            let mut total: i128 = 0
+            let mut k: i64 = 0
+            while k < n {
+                total = total + (a[i * n + k] as i128) * (b[k * n + j] as i128)
+                k = k + 1
+            }
+            out[i * n + j] = (total % (mod as i128)) as i64
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function mat_vec(a: ptr<i64>, v: ptr<i64>, out: ptr<i64>, n: i64, mod: i64) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        let mut total: i128 = 0
+        let mut j: i64 = 0
+        while j < n {
+            total = total + (a[i * n + j] as i128) * (v[j] as i128)
+            j = j + 1
+        }
+        out[i] = (total % (mod as i128)) as i64
+        i = i + 1
+    }
+}
+
+function compute_S(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let divs: ptr<i64> = calloc(8, 8)
+    divs[0]=1; divs[1]=2; divs[2]=3; divs[3]=4; divs[4]=6; divs[5]=8; divs[6]=12; divs[7]=24
+    let A: ptr<i64> = calloc(8, 8)
+    let Bv: ptr<i64> = calloc(8, 8)
+    let mut mi: i64 = 0
+    while mi < 8 {
+        let mm: i64 = divs[mi]
+        let q: i64 = n / mm
+        let rem: i64 = n % mm
+        let counts: ptr<i64> = calloc(mm, 8)
+        let mut r: i64 = 0
+        while r < mm { counts[r] = q; r = r + 1 }
+        r = 1
+        while r <= rem { counts[r] = counts[r] + 1; r = r + 1 }
+        let mut total: i64 = 0
+        let mut a: i64 = 0
+        while a < mm {
+            let mut b: i64 = 0
+            while b < mm {
+                let mut c: i64 = 0
+                while c < mm {
+                    let p1: i64 = (1 + a + b + c) % mm
+                    let p2: i64 = (16 + 8 * a + 4 * b + 2 * c) % mm
+                    let p3: i64 = (81 + 27 * a + 9 * b + 3 * c) % mm
+                    let p4: i64 = (256 + 64 * a + 16 * b + 4 * c) % mm
+                    if p1 == 0 && p2 == 0 && p3 == 0 && p4 == 0 {
+                        total = total + counts[a] * counts[b] * counts[c]
+                    }
+                    c = c + 1
+                }
+                b = b + 1
+            }
+            a = a + 1
+        }
+        A[mi] = total
+        free(counts)
+        mi = mi + 1
+    }
+    # B from large to small
+    mi = 7
+    while mi >= 0 {
+        let mm: i64 = divs[mi]
+        let mut total: i64 = A[mi]
+        let mut ki: i64 = 0
+        while ki < 8 {
+            let kk: i64 = divs[ki]
+            if kk > mm && kk % mm == 0 {
+                total = total - Bv[ki]
+            }
+            ki = ki + 1
+        }
+        Bv[mi] = total
+        mi = mi - 1
+    }
+    let mut ans: i64 = 0
+    mi = 0
+    while mi < 8 {
+        ans = ans + divs[mi] * Bv[mi]
+        mi = mi + 1
+    }
+    free(Bv)
+    free(A)
+    free(divs)
+    return ans
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000
+    let KMAX: i64 = 1234567890123
+    let mod_big: i64 = 24 * 24 * 24 * 6 * MOD
+
+    # coeffs[r] = (d0,d1,d2,d3) for S(r+24t)
+    let coeffs: ptr<i64> = calloc(24 * 4, 8)
+    let mut r: i64 = 0
+    while r < 24 {
+        let mut t: i64 = 0
+        let ys: ptr<i64> = calloc(4, 8)
+        while t < 4 {
+            ys[t] = compute_S(r + 24 * t)
+            t = t + 1
+        }
+        let y0: i64 = ys[0]
+        let y1: i64 = ys[1]
+        let y2: i64 = ys[2]
+        let y3: i64 = ys[3]
+        coeffs[r * 4 + 0] = y0
+        coeffs[r * 4 + 1] = y1 - y0
+        coeffs[r * 4 + 2] = y2 - 2 * y1 + y0
+        coeffs[r * 4 + 3] = y3 - 3 * y2 + 3 * y1 - y0
+        free(ys)
+        r = r + 1
+    }
+
+    let fib_big: ptr<i64> = calloc(50, 8)
+    fib_big[0] = 0
+    fib_big[1] = 1
+    let mut i: i64 = 2
+    while i < 50 {
+        fib_big[i] = (fib_big[i - 1] + fib_big[i - 2]) % mod_big
+        i = i + 1
+    }
+    let a: i64 = fib_big[25] % mod_big
+    let b: i64 = fib_big[24] % mod_big
+    let c: i64 = fib_big[24] % mod_big
+    let d: i64 = fib_big[23] % mod_big
+
+    # Build 14x14 aug matrix
+    let N: i64 = 14
+    let mono: ptr<i64> = calloc(10 * 10, 8)
+    # fill mono as in python
+    mono[0*10+0] = 1
+    mono[1*10+1] = a
+    mono[1*10+2] = b
+    mono[2*10+1] = c
+    mono[2*10+2] = d
+    mono[3*10+3] = (a * a) % mod_big
+    mono[3*10+4] = (2 * a * b) % mod_big
+    mono[3*10+5] = (b * b) % mod_big
+    mono[4*10+3] = (a * c) % mod_big
+    mono[4*10+4] = (a * d + b * c) % mod_big
+    mono[4*10+5] = (b * d) % mod_big
+    mono[5*10+3] = (c * c) % mod_big
+    mono[5*10+4] = (2 * c * d) % mod_big
+    mono[5*10+5] = (d * d) % mod_big
+    mono[6*10+6] = (a * a % mod_big * a) % mod_big
+    mono[6*10+7] = (3 * a % mod_big * a % mod_big * b) % mod_big
+    mono[6*10+8] = (3 * a % mod_big * b % mod_big * b) % mod_big
+    mono[6*10+9] = (b * b % mod_big * b) % mod_big
+    mono[7*10+6] = (a * a % mod_big * c) % mod_big
+    mono[7*10+7] = (a * a % mod_big * d + 2 * a % mod_big * b % mod_big * c) % mod_big
+    mono[7*10+8] = (2 * a % mod_big * b % mod_big * d + b * b % mod_big * c) % mod_big
+    mono[7*10+9] = (b * b % mod_big * d) % mod_big
+    mono[8*10+6] = (a * c % mod_big * c) % mod_big
+    mono[8*10+7] = (2 * a % mod_big * c % mod_big * d + b * c % mod_big * c) % mod_big
+    mono[8*10+8] = (a * d % mod_big * d + 2 * b % mod_big * c % mod_big * d) % mod_big
+    mono[8*10+9] = (b * d % mod_big * d) % mod_big
+    mono[9*10+6] = (c * c % mod_big * c) % mod_big
+    mono[9*10+7] = (3 * c % mod_big * c % mod_big * d) % mod_big
+    mono[9*10+8] = (3 * c % mod_big * d % mod_big * d) % mod_big
+    mono[9*10+9] = (d * d % mod_big * d) % mod_big
+
+    let aug: ptr<i64> = calloc(N * N, 8)
+    let mut ii: i64 = 0
+    let mut jj: i64 = 0
+    while ii < 10 {
+        jj = 0
+        while jj < 10 {
+            aug[ii * N + jj] = mono[ii * 10 + jj]
+            jj = jj + 1
+        }
+        ii = ii + 1
+    }
+    aug[10 * N + 0] = 1
+    aug[10 * N + 10] = 1
+    jj = 0
+    while jj < 10 {
+        aug[11 * N + jj] = mono[2 * 10 + jj]
+        aug[12 * N + jj] = mono[5 * 10 + jj]
+        aug[13 * N + jj] = mono[9 * 10 + jj]
+        jj = jj + 1
+    }
+    aug[11 * N + 11] = 1
+    aug[12 * N + 12] = 1
+    aug[13 * N + 13] = 1
+
+    let max_bits: i64 = 50
+    let powers: ptr<i64> = calloc(max_bits * N * N, 8)
+    ii = 0
+    while ii < N * N {
+        powers[ii] = aug[ii]
+        ii = ii + 1
+    }
+    let mut bit: i64 = 1
+    let tmp: ptr<i64> = calloc(N * N, 8)
+    while bit < max_bits {
+        let mut src: i64 = (bit - 1) * N * N
+        # copy blocks into temps
+        let pa: ptr<i64> = calloc(N * N, 8)
+        let pb: ptr<i64> = calloc(N * N, 8)
+        ii = 0
+        while ii < N * N {
+            pa[ii] = powers[src + ii]
+            pb[ii] = powers[src + ii]
+            ii = ii + 1
+        }
+        mat_mul(pa, pb, tmp, N, mod_big)
+        free(pa)
+        free(pb)
+        ii = 0
+        while ii < N * N {
+            powers[bit * N * N + ii] = tmp[ii]
+            ii = ii + 1
+        }
+        bit = bit + 1
+    }
+
+    let fib_mod24: ptr<i64> = calloc(24, 8)
+    fib_mod24[0] = 0
+    fib_mod24[1] = 1
+    i = 2
+    while i < 24 {
+        fib_mod24[i] = (fib_mod24[i - 1] + fib_mod24[i - 2]) % 24
+        i = i + 1
+    }
+
+    let mod6: i64 = 6 * MOD
+    let mod1: i64 = 24 * mod6
+    let mod2: i64 = 24 * 24 * mod6
+    let mod3: i64 = 24 * 24 * 24 * mod6
+
+    let mut total: i64 = 0
+    let mut s: i64 = 0
+    let v: ptr<i64> = calloc(N, 8)
+    let v2: ptr<i64> = calloc(N, 8)
+    while s < 24 {
+        let mut k0: i64 = s
+        if k0 < 2 { k0 = s + 24 }
+        if k0 <= KMAX {
+            let n_terms: i64 = 1 + (KMAX - k0) / 24
+            # subseq_sums
+            let x: i64 = fib_big[k0 + 1]
+            let y: i64 = fib_big[k0]
+            let mut vi: i64 = 0
+            while vi < N { v[vi] = 0; vi = vi + 1 }
+            v[0] = 1
+            v[1] = x
+            v[2] = y
+            v[3] = (x * x) % mod_big
+            v[4] = (x * y) % mod_big
+            v[5] = (y * y) % mod_big
+            v[6] = (v[3] * x) % mod_big
+            v[7] = (v[3] * y) % mod_big
+            v[8] = (v[5] * x) % mod_big
+            v[9] = (v[5] * y) % mod_big
+            v[10] = 1
+            v[11] = y
+            v[12] = v[5]
+            v[13] = v[9]
+            let mut steps: i64 = n_terms - 1
+            bit = 0
+            while steps > 0 {
+                if (steps & 1) == 1 {
+                    let mut src2: i64 = bit * N * N
+                    let pm: ptr<i64> = calloc(N * N, 8)
+                    vi = 0
+                    while vi < N * N {
+                        pm[vi] = powers[src2 + vi]
+                        vi = vi + 1
+                    }
+                    mat_vec(pm, v, v2, N, mod_big)
+                    free(pm)
+                    vi = 0
+                    while vi < N { v[vi] = v2[vi]; vi = vi + 1 }
+                }
+                steps = steps >> 1
+                bit = bit + 1
+            }
+            let sum0: i64 = v[10]
+            let sum1: i64 = v[11]
+            let sum2: i64 = v[12]
+            let sum3: i64 = v[13]
+            let rr: i64 = fib_mod24[s]
+
+            let mut num1: i64 = (sum1 % mod1 - rr * (n_terms % mod1)) % mod1
+            if num1 < 0 { num1 = num1 + mod1 }
+            let sum_t: i64 = (num1 / 24) % mod6
+
+            let sum1_m2: i64 = sum1 % mod2
+            let mut num2: i64 = (sum2 % mod2 - 2 * rr * sum1_m2 + (rr * rr) * (n_terms % mod2)) % mod2
+            if num2 < 0 { num2 = num2 + mod2 }
+            let sum_t2: i64 = (num2 / (24 * 24)) % mod6
+
+            let sum1_m3: i64 = sum1 % mod3
+            let sum2_m3: i64 = sum2 % mod3
+            let mut num3: i64 = (sum3 % mod3 - 3 * rr * sum2_m3 + 3 * rr * rr * sum1_m3 - rr * rr * rr * (n_terms % mod3)) % mod3
+            if num3 < 0 { num3 = num3 + mod3 }
+            let sum_t3: i64 = (num3 / (24 * 24 * 24)) % mod6
+
+            let mut diff2: i64 = (sum_t2 - sum_t) % (2 * MOD)
+            if diff2 < 0 { diff2 = diff2 + 2 * MOD }
+            let sum_c2: i64 = (diff2 / 2) % MOD
+
+            let mut diff3: i64 = (sum_t3 - 3 * sum_t2 + 2 * sum_t) % (6 * MOD)
+            if diff3 < 0 { diff3 = diff3 + 6 * MOD }
+            let sum_c3: i64 = (diff3 / 6) % MOD
+
+            let d0: i64 = coeffs[rr * 4 + 0]
+            let d1: i64 = coeffs[rr * 4 + 1]
+            let d2: i64 = coeffs[rr * 4 + 2]
+            let d3: i64 = coeffs[rr * 4 + 3]
+            total = (total + (d0 % MOD) * (n_terms % MOD) + (d1 % MOD) * (sum_t % MOD) + (d2 % MOD) * sum_c2 + (d3 % MOD) * sum_c3) % MOD
+            if total < 0 { total = total + MOD }
+        }
+        s = s + 1
+    }
+    printf("%09lld\n", total)
+    return 0
+}

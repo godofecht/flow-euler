@@ -1,0 +1,117 @@
+# Project Euler 458
+# Permutations of Project — T(10^12) mod 10^9 via transfer matrix.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mat_mul(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>, n: i32, mod: i64) -> void {
+    let mut i: i32 = 0
+    while i < n {
+        let mut j: i32 = 0
+        while j < n {
+            let mut s: i64 = 0
+            let mut k: i32 = 0
+            while k < n {
+                let t: i128 = (a[i * n + k] as i128) * (b[k * n + j] as i128)
+                s = ((s as i128 + t) % (mod as i128)) as i64
+                if s < 0 { s = s + mod }
+                k = k + 1
+            }
+            out[i * n + j] = s
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function mat_pow(base: ptr<i64>, exp0: i64, n: i32, mod: i64, out: ptr<i64>) -> void {
+    let tmp: ptr<i64> = calloc((n * n) as i64, 8)
+    let cur: ptr<i64> = calloc((n * n) as i64, 8)
+    if tmp == null || cur == null { return }
+    let mut i: i32 = 0
+    while i < n * n {
+        out[i] = 0
+        cur[i] = base[i]
+        i = i + 1
+    }
+    i = 0
+    while i < n {
+        out[i * n + i] = 1
+        i = i + 1
+    }
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if exp % 2 == 1 {
+            mat_mul(out, cur, tmp, n, mod)
+            i = 0
+            while i < n * n {
+                out[i] = tmp[i]
+                i = i + 1
+            }
+        }
+        mat_mul(cur, cur, tmp, n, mod)
+        i = 0
+        while i < n * n {
+            cur[i] = tmp[i]
+            i = i + 1
+        }
+        exp = exp / 2
+    }
+    free(tmp)
+    free(cur)
+}
+
+function main() -> i32 {
+    let N: i32 = 8
+    let MOD: i64 = 1000000000
+    let mat: ptr<i64> = calloc((N * N) as i64, 8)
+    let res: ptr<i64> = calloc((N * N) as i64, 8)
+    if mat == null || res == null { return 1 }
+    mat[1 * N + 0] = 7
+    let mut c: i32 = 1
+    while c <= 6 {
+        mat[1 * N + c] = 1
+        c = c + 1
+    }
+    mat[2 * N + 1] = 6
+    c = 2
+    while c <= 6 {
+        mat[2 * N + c] = 1
+        c = c + 1
+    }
+    mat[3 * N + 2] = 5
+    c = 3
+    while c <= 6 {
+        mat[3 * N + c] = 1
+        c = c + 1
+    }
+    mat[4 * N + 3] = 4
+    c = 4
+    while c <= 6 {
+        mat[4 * N + c] = 1
+        c = c + 1
+    }
+    mat[5 * N + 4] = 3
+    c = 5
+    while c <= 6 {
+        mat[5 * N + c] = 1
+        c = c + 1
+    }
+    mat[6 * N + 5] = 2
+    mat[6 * N + 6] = 1
+    mat[7 * N + 6] = 1
+    mat[7 * N + 7] = 7
+
+    mat_pow(mat, 1000000000000, N, MOD, res)
+    let with_project: i64 = res[7 * N + 0]
+    let mut all_strings: i64 = res[7 * N + 7]
+    if all_strings < with_project {
+        all_strings = all_strings + MOD
+    }
+    printf("%lld\n", all_strings - with_project)
+    free(res)
+    free(mat)
+    return 0
+}

@@ -1,0 +1,143 @@
+# Project Euler 295
+# L(100000) from precomputed radius multiplicity tables.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fclose(f: ptr<void>) -> i32
+    function fgetc(f: ptr<void>) -> i32
+}
+
+function read_i64(f: ptr<void>, out: ptr<i64>) -> bool {
+    let mut c: i32 = fgetc(f)
+    while c == 32 || c == 10 || c == 13 || c == 9 {
+        c = fgetc(f)
+    }
+    if c < 0 { return false }
+    let mut sign: i64 = 1
+    if c == 45 {
+        sign = -1
+        c = fgetc(f)
+    }
+    if c < 48 || c > 57 { return false }
+    let mut v: i64 = 0
+    while c >= 48 && c <= 57 {
+        v = v * 10 + (c - 48)
+        c = fgetc(f)
+    }
+    out[0] = v * sign
+    return true
+}
+
+function main() -> i32 {
+    let CAP: i64 = 200003
+    let su: ptr<i8> = calloc(CAP, 1)
+    let sk: ptr<i64> = calloc(CAP, 8)
+    let sv: ptr<i64> = calloc(CAP, 8)
+    let tmp: ptr<i64> = calloc(1, 8)
+    let f: ptr<void> = fopen("data/p295_single.txt", "r")
+    while read_i64(f, tmp) {
+        let s: i64 = tmp[0]
+        if !read_i64(f, tmp) { break }
+        let c: i64 = tmp[0]
+        let mut h: i64 = s % CAP
+        if h < 0 { h = -h }
+        while su[h] != 0 {
+            h = h + 1
+            if h == CAP { h = 0 }
+        }
+        su[h] = 1
+        sk[h] = s
+        sv[h] = c
+    }
+    fclose(f)
+
+    let ms: ptr<i64> = calloc(20000 * 8, 8)
+    let mc: ptr<i64> = calloc(20000, 8)
+    let mn: ptr<i32> = calloc(20000, 4)
+    let mut nmulti: i64 = 0
+    f = fopen("data/p295_multi.txt", "r")
+    while read_i64(f, tmp) {
+        let k: i64 = tmp[0]
+        mn[nmulti] = k as i32
+        let mut i: i64 = 0
+        while i < k {
+            read_i64(f, tmp)
+            ms[nmulti * 8 + i] = tmp[0]
+            i = i + 1
+        }
+        read_i64(f, tmp)
+        mc[nmulti] = tmp[0]
+        nmulti = nmulti + 1
+    }
+    fclose(f)
+
+    let mut total: i64 = 0
+    let mut h: i64 = 0
+    while h < CAP {
+        if su[h] != 0 {
+            let c: i64 = sv[h]
+            total = total + c * (c + 1) / 2
+        }
+        h = h + 1
+    }
+    let mut i: i64 = 0
+    while i < nmulti {
+        let c: i64 = mc[i]
+        total = total + c * (c + 1) / 2
+        i = i + 1
+    }
+    i = 0
+    while i < nmulti {
+        let c: i64 = mc[i]
+        let k: i64 = mn[i] as i64
+        let mut sum_single: i64 = 0
+        let mut j: i64 = 0
+        while j < k {
+            let s: i64 = ms[i * 8 + j]
+            let mut hh: i64 = s % CAP
+            if hh < 0 { hh = -hh }
+            while su[hh] != 0 {
+                if sk[hh] == s {
+                    sum_single = sum_single + sv[hh]
+                    break
+                }
+                hh = hh + 1
+                if hh == CAP { hh = 0 }
+            }
+            j = j + 1
+        }
+        total = total + c * sum_single
+        i = i + 1
+    }
+    i = 0
+    while i < nmulti {
+        let mut j: i64 = i + 1
+        while j < nmulti {
+            let ki: i64 = mn[i] as i64
+            let kj: i64 = mn[j] as i64
+            let mut inter: bool = false
+            let mut a: i64 = 0
+            while a < ki {
+                let mut b: i64 = 0
+                while b < kj {
+                    if ms[i * 8 + a] == ms[j * 8 + b] {
+                        inter = true
+                        break
+                    }
+                    b = b + 1
+                }
+                if inter { break }
+                a = a + 1
+            }
+            if inter {
+                total = total + mc[i] * mc[j]
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

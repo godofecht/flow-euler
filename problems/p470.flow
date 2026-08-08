@@ -1,0 +1,251 @@
+# Project Euler 470
+# Super Ramvok — expected visits by visible-count × average optimal Ramvok profit.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fabs(x: f64) -> f64
+}
+
+function comb(n: i64, k0: i64) -> f64 {
+    if k0 < 0 || k0 > n { return 0.0 }
+    let mut k: i64 = k0
+    if k > n - k { k = n - k }
+    let mut r: f64 = 1.0
+    let mut i: i64 = 1
+    while i <= k {
+        r = r * ((n - k + i) as f64) / (i as f64)
+        i = i + 1
+    }
+    return r
+}
+
+function invert(A: ptr<f64>, n: i64, out: ptr<f64>) -> i32 {
+    # Gauss-Jordan invert n×n matrix A into out. Uses 2n augmented rows in-place buffer.
+    let aug: ptr<f64> = calloc(n * (2 * n), 8)
+    if aug == null { return 1 }
+    let mut i: i64 = 0
+    while i < n {
+        let mut j: i64 = 0
+        while j < n {
+            aug[i * (2 * n) + j] = A[i * n + j]
+            j = j + 1
+        }
+        j = 0
+        while j < n {
+            if i == j {
+                aug[i * (2 * n) + n + j] = 1.0
+            } else {
+                aug[i * (2 * n) + n + j] = 0.0
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let mut col: i64 = 0
+    while col < n {
+        let mut pivot: i64 = col
+        let mut best: f64 = fabs(aug[pivot * (2 * n) + col])
+        let mut r: i64 = col + 1
+        while r < n {
+            let v: f64 = fabs(aug[r * (2 * n) + col])
+            if v > best {
+                best = v
+                pivot = r
+            }
+            r = r + 1
+        }
+        if best == 0.0 {
+            free(aug)
+            return 1
+        }
+        if pivot != col {
+            let mut j2: i64 = 0
+            while j2 < 2 * n {
+                let tmp: f64 = aug[col * (2 * n) + j2]
+                aug[col * (2 * n) + j2] = aug[pivot * (2 * n) + j2]
+                aug[pivot * (2 * n) + j2] = tmp
+                j2 = j2 + 1
+            }
+        }
+        let piv: f64 = aug[col * (2 * n) + col]
+        let invp: f64 = 1.0 / piv
+        let mut j3: i64 = 0
+        while j3 < 2 * n {
+            aug[col * (2 * n) + j3] = aug[col * (2 * n) + j3] * invp
+            j3 = j3 + 1
+        }
+        r = 0
+        while r < n {
+            if r != col {
+                let f: f64 = aug[r * (2 * n) + col]
+                if f != 0.0 {
+                    j3 = 0
+                    while j3 < 2 * n {
+                        aug[r * (2 * n) + j3] = aug[r * (2 * n) + j3] - f * aug[col * (2 * n) + j3]
+                        j3 = j3 + 1
+                    }
+                }
+            }
+            r = r + 1
+        }
+        col = col + 1
+    }
+    i = 0
+    while i < n {
+        let mut j: i64 = 0
+        while j < n {
+            out[i * n + j] = aug[i * (2 * n) + n + j]
+            j = j + 1
+        }
+        i = i + 1
+    }
+    free(aug)
+    return 0
+}
+
+function visit_counts(d: i64, V: ptr<f64>) -> void {
+    let n: i64 = d
+    let A: ptr<f64> = calloc(n * n, 8)
+    let Ninv: ptr<f64> = calloc(n * n, 8)
+    if A == null || Ninv == null { return }
+    let mut k: i64 = 1
+    while k <= d {
+        let i: i64 = k - 1
+        A[i * n + i] = 1.0
+        if k == d {
+            A[i * n + (d - 2)] = A[i * n + (d - 2)] - 1.0
+        } else {
+            let down: f64 = (k as f64) / (d as f64)
+            let up: f64 = ((d - k) as f64) / (d as f64)
+            if k > 1 {
+                A[i * n + (k - 2)] = A[i * n + (k - 2)] - down
+            }
+            if k < d {
+                A[i * n + k] = A[i * n + k] - up
+            }
+        }
+        k = k + 1
+    }
+    if invert(A, n, Ninv) != 0 { return }
+    let start: i64 = d - 1
+    k = 1
+    while k <= d {
+        V[k] = Ninv[start * n + (k - 1)]
+        k = k + 1
+    }
+    free(Ninv)
+    free(A)
+}
+
+function best_profits_mask(mask0: i64, d: i64, max_c: i64, best: ptr<f64>) -> void {
+    let vals: ptr<i64> = calloc(d + 1, 8)
+    let cum: ptr<i64> = calloc(d + 1, 8)
+    if vals == null || cum == null { return }
+    let mut m: i64 = mask0
+    let mut k: i64 = 0
+    let mut total: i64 = 0
+    while m != 0 {
+        let lsb: i64 = m & -m
+        let mut v: i64 = 0
+        let mut t: i64 = lsb
+        while t > 0 {
+            v = v + 1
+            t = t / 2
+        }
+        vals[k] = v
+        total = total + v
+        cum[k] = total
+        k = k + 1
+        m = m ^ lsb
+    }
+    let maxv: i64 = vals[k - 1]
+    let mut c: i64 = 0
+    while c <= max_c {
+        best[c] = 0.0
+        c = c + 1
+    }
+    best[0] = maxv as f64
+    let mut prev: f64 = 0.0
+    let mut p: i64 = 0
+    let mut tt: i64 = 1
+    while tt <= maxv {
+        while p < k && (vals[p] as f64) < prev {
+            p = p + 1
+        }
+        let mut low_sum: i64 = 0
+        if p > 0 { low_sum = cum[p - 1] }
+        let sum_ge: f64 = (total - low_sum) as f64
+        prev = (prev * (p as f64) + sum_ge) / (k as f64)
+        let mut lim: i64 = (prev / (tt as f64)) as i64
+        if lim > max_c { lim = max_c }
+        c = 1
+        while c <= lim {
+            let prof: f64 = prev - (c as f64) * (tt as f64)
+            if prof > best[c] { best[c] = prof }
+            c = c + 1
+        }
+        tt = tt + 1
+    }
+    free(cum)
+    free(vals)
+}
+
+function popcount(x0: i64) -> i64 {
+    let mut x: i64 = x0
+    let mut c: i64 = 0
+    while x > 0 {
+        c = c + (x & 1)
+        x = x / 2
+    }
+    return c
+}
+
+function compute_S_sum(d: i64) -> f64 {
+    let V: ptr<f64> = calloc(d + 1, 8)
+    let sum_R: ptr<f64> = calloc((d + 1) * (d + 1), 8)
+    let best: ptr<f64> = calloc(d + 1, 8)
+    if V == null || sum_R == null || best == null { return 0.0 }
+    visit_counts(d, V)
+    let mut mask: i64 = 1
+    let lim: i64 = 1 << d
+    while mask < lim {
+        let kk: i64 = popcount(mask)
+        best_profits_mask(mask, d, d, best)
+        let mut c: i64 = 0
+        while c <= d {
+            sum_R[kk * (d + 1) + c] = sum_R[kk * (d + 1) + c] + best[c]
+            c = c + 1
+        }
+        mask = mask + 1
+    }
+    let mut total: f64 = 0.0
+    let mut c2: i64 = 0
+    while c2 <= d {
+        let mut s: f64 = 0.0
+        let mut kk: i64 = 1
+        while kk <= d {
+            let avg: f64 = sum_R[kk * (d + 1) + c2] / comb(d, kk)
+            s = s + V[kk] * avg
+            kk = kk + 1
+        }
+        total = total + s
+        c2 = c2 + 1
+    }
+    free(best)
+    free(sum_R)
+    free(V)
+    return total
+}
+
+function main() -> i32 {
+    let mut F: f64 = 0.0
+    let mut d: i64 = 4
+    while d <= 20 {
+        F = F + compute_S_sum(d)
+        d = d + 1
+    }
+    let ans: i64 = (F + 0.5) as i64
+    printf("%lld\n", ans)
+    return 0
+}

@@ -1,0 +1,110 @@
+# Project Euler 375
+# M(2e9) for minima of PRNG subsequences; period 6308948, quadratic fit.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function M_small(n: i64) -> i64 {
+    let MOD: i64 = 50515093
+    let SEED: i64 = 290797
+    let mut s: i64 = SEED
+    let vals: ptr<i64> = calloc(n + 10, 8)
+    let cnts: ptr<i64> = calloc(n + 10, 8)
+    if vals == null || cnts == null { return 0 }
+    let mut top: i64 = 0
+    let mut cur_sum: i64 = 0
+    let mut total: i64 = 0
+    let mut i: i64 = 0
+    while i < n {
+        s = (s * s) % MOD
+        let x: i64 = s
+        let mut cnt: i64 = 1
+        while top > 0 && vals[top - 1] >= x {
+            top = top - 1
+            let v: i64 = vals[top]
+            let c: i64 = cnts[top]
+            cur_sum = cur_sum - v * c
+            cnt = cnt + c
+        }
+        vals[top] = x
+        cnts[top] = cnt
+        top = top + 1
+        cur_sum = cur_sum + x * cnt
+        total = total + cur_sum
+        i = i + 1
+    }
+    free(cnts)
+    free(vals)
+    return total
+}
+
+function main() -> i32 {
+    let CYCLE_LEN: i64 = 6308948
+    let MOD: i64 = 50515093
+    let SEED: i64 = 290797
+    let N: i64 = 2000000000
+    let k: i64 = N / CYCLE_LEN
+    let r: i64 = N % CYCLE_LEN
+
+    # Build one cycle S1..CYCLE_LEN
+    let cycle: ptr<i32> = calloc(CYCLE_LEN, 4)
+    if cycle == null { return 1 }
+    let mut s: i64 = SEED
+    let mut i: i64 = 0
+    while i < CYCLE_LEN {
+        s = (s * s) % MOD
+        cycle[i] = s as i32
+        i = i + 1
+    }
+
+    # Sample M at CYCLE+r, 2*CYCLE+r, 3*CYCLE+r in one pass
+    let t1: i64 = CYCLE_LEN + r
+    let t2: i64 = 2 * CYCLE_LEN + r
+    let t3: i64 = 3 * CYCLE_LEN + r
+    let vals: ptr<i64> = calloc(100, 8)
+    let cnts: ptr<i64> = calloc(100, 8)
+    if vals == null || cnts == null { return 1 }
+    let mut top: i64 = 0
+    let mut cur_sum: i64 = 0
+    let mut total: i64 = 0
+    let mut y1: i64 = 0
+    let mut y2: i64 = 0
+    let mut y3: i64 = 0
+    let mut idx: i64 = 0
+    let mut pos: i64 = 0
+
+    while pos < t3 {
+        let x: i64 = cycle[idx] as i64
+        idx = idx + 1
+        if idx == CYCLE_LEN { idx = 0 }
+        pos = pos + 1
+        let mut cnt: i64 = 1
+        while top > 0 && vals[top - 1] >= x {
+            top = top - 1
+            cur_sum = cur_sum - vals[top] * cnts[top]
+            cnt = cnt + cnts[top]
+        }
+        vals[top] = x
+        cnts[top] = cnt
+        top = top + 1
+        cur_sum = cur_sum + x * cnt
+        total = total + cur_sum
+        if pos == t1 { y1 = total }
+        if pos == t2 { y2 = total }
+        if pos == t3 { y3 = total }
+    }
+
+    let second: i64 = y3 - 2 * y2 + y1
+    let a: i64 = second / 2
+    let b: i64 = (y2 - y1) - 3 * a
+    let c: i64 = y1 - a - b
+    let ans: i64 = a * k * k + b * k + c
+    printf("%lld\n", ans)
+
+    free(cnts)
+    free(vals)
+    free(cycle)
+    return 0
+}

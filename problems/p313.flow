@@ -1,0 +1,51 @@
+# Project Euler 313
+# Sliding game on prime squares: count primes p≤10^6 with search cost = p^2.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let half: i64 = (limit >> 1) + 1
+    let sieve: ptr<i8> = calloc(half, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i < half {
+        sieve[i] = 1
+        i = i + 1
+    }
+    if half > 0 { sieve[0] = 0 }
+    i = 1
+    while 2 * i * i < half {
+        if sieve[i] == 1 {
+            let mut current: i64 = 3 * i + 1
+            let step: i64 = 2 * i + 1
+            while current < half {
+                sieve[current] = 0
+                current = current + step
+            }
+        }
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    # p = 2
+    # (4-1)/12 = 0 — skip; formula for odd primes
+    let mut p: i64 = 3
+    while p <= limit {
+        let odd: i64 = p >> 1
+        if sieve[odd] == 1 {
+            if p == 3 {
+                total = total + 2
+            } else {
+                total = total + (p * p - 1) / 12
+            }
+        }
+        p = p + 2
+    }
+    printf("%lld\n", total)
+    free(sieve)
+    return 0
+}

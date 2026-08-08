@@ -1,0 +1,112 @@
+# Project Euler 356
+# Last 8 digits of sum_{n=1..30} floor(a_n^987654321), a_n largest root of x^3-2^n x^2+n.
+
+function modpow2(n: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = 2 % mod
+    let mut e: i64 = n
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function mat_mul(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>, mod: i64) -> void {
+    let mut i: i32 = 0
+    while i < 3 {
+        let mut j: i32 = 0
+        while j < 3 {
+            let mut s: i64 = 0
+            let mut k: i32 = 0
+            while k < 3 {
+                s = (s + a[i * 3 + k] * b[k * 3 + j]) % mod
+                k = k + 1
+            }
+            out[i * 3 + j] = s
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function mat_copy(src: ptr<i64>, dst: ptr<i64>) -> void {
+    let mut i: i32 = 0
+    while i < 9 {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function power_sum_mod(n: i64, k: i64, mod: i64) -> i64 {
+    if k == 0 { return 3 % mod }
+    let A: i64 = modpow2(n, mod)
+    if k == 1 { return A }
+    if k == 2 { return (A * A) % mod }
+
+    # M = [[A, 0, -n], [1, 0, 0], [0, 1, 0]]
+    let M: ptr<i64> = calloc(9, 8)
+    let base: ptr<i64> = calloc(9, 8)
+    let res: ptr<i64> = calloc(9, 8)
+    let tmp: ptr<i64> = calloc(9, 8)
+    if M == null || base == null || res == null || tmp == null { return 0 }
+
+    M[0] = A
+    M[1] = 0
+    M[2] = ((0 - n) % mod + mod) % mod
+    M[3] = 1
+    M[4] = 0
+    M[5] = 0
+    M[6] = 0
+    M[7] = 1
+    M[8] = 0
+
+    # identity
+    res[0] = 1; res[1] = 0; res[2] = 0
+    res[3] = 0; res[4] = 1; res[5] = 0
+    res[6] = 0; res[7] = 0; res[8] = 1
+
+    mat_copy(M, base)
+    let mut e: i64 = k - 2
+    while e > 0 {
+        if e % 2 == 1 {
+            mat_mul(res, base, tmp, mod)
+            mat_copy(tmp, res)
+        }
+        mat_mul(base, base, tmp, mod)
+        mat_copy(tmp, base)
+        e = e / 2
+    }
+
+    let v0: i64 = (A * A) % mod
+    let v1: i64 = A
+    let v2: i64 = 3 % mod
+    let Sk: i64 = (res[0] * v0 + res[1] * v1 + res[2] * v2) % mod
+
+    free(tmp)
+    free(res)
+    free(base)
+    free(M)
+    return Sk
+}
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let MOD: i64 = 100000000
+    let EXP: i64 = 987654321
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n <= 30 {
+        let Sk: i64 = power_sum_mod(n, EXP, MOD)
+        total = (total + Sk - 1) % MOD
+        n = n + 1
+    }
+    if total < 0 { total = total + MOD }
+    printf("%lld\n", total)
+    return 0
+}

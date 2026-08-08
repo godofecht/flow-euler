@@ -1,0 +1,259 @@
+# Project Euler 513
+# Integral Median — F(100000) via floor-sum trapezoid queries.
+
+const CAP: i64 = 65536
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function abs64(x: i64) -> i64 {
+    if x < 0 { return -x }
+    return x
+}
+
+function floordiv(n: i64, d: i64) -> i64 {
+    if n >= 0 { return n / d }
+    return (n - d + 1) / d
+}
+
+function modfloor(n: i64, d: i64) -> i64 {
+    return n - floordiv(n, d) * d
+}
+
+function trapezoid_floor_sum(
+    slope0: i64, intercept0: i64, denom0: i64,
+    lower_x0: i64, upper_x0: i64, include_boundary0: i32
+) -> i64 {
+    let mut slope: i64 = slope0
+    let mut intercept: i64 = intercept0
+    let mut denom: i64 = denom0
+    let mut lower_x: i64 = lower_x0
+    let mut upper_x: i64 = upper_x0
+    let mut include_boundary: i32 = include_boundary0
+    let mut total: i64 = 0
+
+    while true {
+        if abs64(upper_x - lower_x) <= 8 {
+            let mut adjustment: i64 = 0
+            if include_boundary == 0 { adjustment = 1 }
+            if upper_x > lower_x {
+                let mut x: i64 = lower_x + 1
+                while x <= upper_x {
+                    total = total + floordiv(slope * x + intercept - adjustment, denom)
+                    x = x + 1
+                }
+            } else {
+                let mut sub: i64 = 0
+                let mut x2: i64 = upper_x + 1
+                while x2 <= lower_x {
+                    sub = sub + floordiv(slope * x2 + intercept - adjustment, denom)
+                    x2 = x2 + 1
+                }
+                total = total - sub
+            }
+            return total
+        }
+
+        let whole_intercept: i64 = floordiv(intercept, denom)
+        if whole_intercept != 0 {
+            total = total + (upper_x - lower_x) * whole_intercept
+            intercept = modfloor(intercept, denom)
+        }
+        let whole_slope: i64 = floordiv(slope, denom)
+        if whole_slope != 0 {
+            total = total + (upper_x - lower_x) * (upper_x + lower_x + 1) / 2 * whole_slope
+            slope = modfloor(slope, denom)
+        }
+        if slope == 0 {
+            if intercept == 0 && include_boundary == 0 {
+                total = total - (upper_x - lower_x)
+            }
+            return total
+        }
+
+        let upper_y: i64 = floordiv(slope * upper_x + intercept, denom)
+        let lower_y: i64 = floordiv(slope * lower_x + intercept, denom)
+        total = total + upper_x * upper_y - lower_x * lower_y
+
+        let nx: i64 = upper_y
+        upper_x = lower_y
+        lower_x = nx
+        let ns: i64 = denom
+        denom = slope
+        slope = ns
+        intercept = -intercept
+        if include_boundary == 1 { include_boundary = 0 } else { include_boundary = 1 }
+    }
+    return total
+}
+
+function trapezoid_floor_sum_mod2(
+    slope0: i64, intercept0: i64, denom0: i64,
+    lower_x0: i64, upper_x0: i64, include_boundary0: i32,
+    x_residue: i64, y_residue: i64
+) -> i64 {
+    let mut intercept: i64 = intercept0
+    let mut lower_x: i64 = lower_x0
+    let mut upper_x: i64 = upper_x0
+    if (y_residue & 1) != 0 { intercept = intercept + denom0 }
+    if (x_residue & 1) != 0 {
+        intercept = intercept - slope0
+        lower_x = lower_x + 1
+        upper_x = upper_x + 1
+    }
+    return trapezoid_floor_sum(2 * slope0, intercept, 2 * denom0, lower_x / 2, upper_x / 2, include_boundary0)
+}
+
+function primitive_count(n: i64) -> i64 {
+    let mut total: i64 = 0
+    let three_halves_n: i64 = n + n / 2
+    let root: i64 = isqrt(three_halves_n)
+
+    let mut ir: i64 = 0
+    while ir <= 2 {
+        let mut i_residue: i64 = 0
+        let mut j_residue: i64 = 0
+        if ir == 0 { i_residue = 0; j_residue = 1 }
+        elif ir == 1 { i_residue = 1; j_residue = 0 }
+        else { i_residue = 1; j_residue = 1 }
+
+        let mut max_t: i64 = 1
+        let mut s: i64 = 2
+        while s < root {
+            if 3 * (max_t + 1) * (max_t + 1) <= s * s { max_t = max_t + 1 }
+            if i_residue == j_residue || (s & 1) == 0 {
+                let start_t: i64 = ((s - 1) & 1) + 1
+                let mut t: i64 = start_t
+                while t <= max_t {
+                    let v_mid: i64 = t * n / ((s - t) * (s + t))
+                    let v_max: i64 = n * (s + t) / (s * s + 2 * s * t - t * t)
+                    total = total + trapezoid_floor_sum_mod2(s, 0, t, 0, v_mid, 1, j_residue, i_residue)
+                    total = total + trapezoid_floor_sum_mod2(t, n, s, v_mid, v_max, 1, j_residue, i_residue)
+                    total = total - trapezoid_floor_sum_mod2(s + 3 * t, 0, s + t, 0, v_max, 0, j_residue, i_residue)
+                    t = t + 2
+                }
+            }
+            s = s + 1
+        }
+
+        let max_u: i64 = three_halves_n / root
+        let start_u: i64 = 1 + ((i_residue + 1) & 1)
+        let mut u: i64 = start_u
+        while u <= max_u {
+            let mut max_v_outer: i64 = u - 1
+            if n / 2 < u - 1 { max_v_outer = n / 2 }
+            let start_v: i64 = 1 + ((j_residue + 1) & 1)
+            let mut v: i64 = start_v
+            while v <= max_v_outer {
+                let split_s: i64 = (v + n) / u
+                let mut residue_count: i64 = 1
+                if i_residue == j_residue { residue_count = 2 }
+
+                let mut sr: i64 = 0
+                while sr < residue_count {
+                    let mut s_residue: i64 = sr
+                    if i_residue != j_residue { s_residue = 0 }
+
+                    let mut min_s: i64 = root
+                    let mut max_s: i64 = 0
+                    let mut slope0: i64 = 0
+                    let mut slope1: i64 = 0
+                    if u * u < 3 * v * v {
+                        min_s = root
+                        max_s = n * (3 * v - u) / (2 * u * v + v * v - u * u)
+                        slope0 = u - v
+                        slope1 = 3 * v - u
+                    } else {
+                        let ms: i64 = (u + v - 1) / v
+                        if ms > root { min_s = ms } else { min_s = root }
+                        max_s = n * u / ((u - v) * (u + v))
+                        slope0 = v
+                        slope1 = u
+                    }
+
+                    if max_s >= min_s {
+                        total = total + trapezoid_floor_sum_mod2(slope0, 0, slope1, min_s - 1, max_s, 1, s_residue, s_residue)
+                        if split_s < max_s {
+                            let mut lo: i64 = min_s - 1
+                            if split_s > lo { lo = split_s }
+                            total = total - trapezoid_floor_sum_mod2(u, -n, v, lo, max_s, 0, s_residue, s_residue)
+                        }
+                    }
+                    sr = sr + 1
+                }
+                v = v + 2
+            }
+            u = u + 2
+        }
+        ir = ir + 1
+    }
+    return total
+}
+
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
+    let mut h: i64 = key % CAP
+    if h < 0 { h = h + CAP }
+    while used[h] == 1 && keys[h] != key {
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function F(n: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>) -> i64 {
+    if n <= 0 { return 0 }
+    let s: i64 = hslot(n, keys, used)
+    if used[s] == 1 { return vals[s] }
+
+    let mut result: i64 = primitive_count(n)
+
+    let mut k: i64 = 3
+    let mut quotient: i64 = n / k
+    while k <= quotient {
+        result = result - F(quotient, keys, vals, used)
+        k = k + 2
+        quotient = n / k
+    }
+
+    let mut min_k: i64 = n
+    if quotient + 1 > 0 { min_k = n / (quotient + 1) }
+    while quotient > 0 {
+        let max_k: i64 = n / quotient
+        let left: i64 = (min_k + 1) + (min_k & 1)
+        let right: i64 = max_k - ((max_k + 1) & 1)
+        if right >= left {
+            result = result - F(quotient, keys, vals, used) * ((right - left) / 2 + 1)
+        }
+        quotient = quotient - 1
+        min_k = max_k
+    }
+
+    used[s] = 1
+    keys[s] = n
+    vals[s] = result
+    return result
+}
+
+function main() -> i32 {
+    let keys: ptr<i64> = calloc(CAP, 8)
+    let vals: ptr<i64> = calloc(CAP, 8)
+    let used: ptr<i8> = calloc(CAP, 1)
+    if keys == null || vals == null || used == null { return 1 }
+    let ans: i64 = F(100000, keys, vals, used)
+    printf("%lld\n", ans)
+    free(keys); free(vals); free(used)
+    return 0
+}

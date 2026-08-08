@@ -1,0 +1,220 @@
+# Project Euler 578
+# Integers with Decreasing Prime Powers — C(10^13) via Möbius squarefree tails.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x { x = y; y = (x + n / x) / 2 }
+    return x
+}
+
+const SIEVE_LIMIT: i64 = 31622781
+const MCAP: i64 = 16000057
+
+let mut PRIMES: ptr<i64> = null
+let mut NPR: i64 = 0
+let mut PREF: ptr<i32> = null
+
+let mut QK: ptr<i64> = null
+let mut QV: ptr<i64> = null
+let mut QU: ptr<i8> = null
+
+let mut FK: ptr<i64> = null
+let mut FV: ptr<i64> = null
+let mut FU: ptr<i8> = null
+
+let mut CK: ptr<i64> = null
+let mut CV: ptr<i64> = null
+let mut CU: ptr<i8> = null
+
+function build_sieve() -> void {
+    let n: i64 = SIEVE_LIMIT
+    let lp: ptr<i32> = calloc(n + 1, 4)
+    let mu: ptr<i8> = calloc(n + 1, 1)
+    PRIMES = calloc(n / 5, 8)
+    NPR = 0
+    mu[1] = 1
+    let mut i: i64 = 2
+    while i <= n {
+        if lp[i] == 0 {
+            lp[i] = i as i32
+            PRIMES[NPR] = i
+            NPR = NPR + 1
+            mu[i] = 0 - 1
+        }
+        let mut j: i64 = 0
+        while j < NPR {
+            let p: i64 = PRIMES[j]
+            let ip: i64 = i * p
+            if ip > n { break }
+            lp[ip] = p as i32
+            if p == (lp[i] as i64) {
+                mu[ip] = 0
+                break
+            }
+            mu[ip] = 0 - mu[i]
+            j = j + 1
+        }
+        i = i + 1
+    }
+    PREF = calloc(n + 1, 4)
+    let mut s: i32 = 0
+    i = 1
+    while i <= n {
+        s = s + (mu[i] as i32)
+        PREF[i] = s
+        i = i + 1
+    }
+    free(lp); free(mu)
+    QK = calloc(MCAP, 8); QV = calloc(MCAP, 8); QU = calloc(MCAP, 1)
+    FK = calloc(MCAP, 8); FV = calloc(MCAP, 8); FU = calloc(MCAP, 1)
+    CK = calloc(MCAP, 8); CV = calloc(MCAP, 8); CU = calloc(MCAP, 1)
+}
+
+function memo_get(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, key: i64, out: ptr<i64>) -> i64 {
+    let mut h: i64 = key % MCAP
+    if h < 0 { h = -h }
+    let mut p: i64 = 0
+    while p < 10000 {
+        if used[h] == 0 { return 0 }
+        if keys[h] == key {
+            out[0] = vals[h]
+            return 1
+        }
+        h = h + 1
+        if h >= MCAP { h = 0 }
+        p = p + 1
+    }
+    return 0
+}
+
+function memo_put(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, key: i64, val: i64) -> void {
+    let mut h: i64 = key % MCAP
+    if h < 0 { h = -h }
+    let mut p: i64 = 0
+    while p < 10000 {
+        if used[h] == 0 {
+            used[h] = 1
+            keys[h] = key
+            vals[h] = val
+            return
+        }
+        if keys[h] == key {
+            vals[h] = val
+            return
+        }
+        h = h + 1
+        if h >= MCAP { h = 0 }
+        p = p + 1
+    }
+}
+
+function squarefree_upto(x: i64) -> i64 {
+    if x <= 0 { return 0 }
+    let out: ptr<i64> = calloc(1, 8)
+    if memo_get(QK, QV, QU, x, out) != 0 {
+        let v: i64 = out[0]
+        free(out)
+        return v
+    }
+    let r: i64 = isqrt(x)
+    let mut res: i64 = 0
+    let mut i: i64 = 1
+    while i <= r {
+        let t: i64 = x / (i * i)
+        let j: i64 = isqrt(x / t)
+        res = res + t * ((PREF[j] - PREF[i - 1]) as i64)
+        i = j + 1
+    }
+    memo_put(QK, QV, QU, x, res)
+    free(out)
+    return res
+}
+
+function pack2(a: i64, b: i64) -> i64 {
+    return (a << 16) ^ b
+}
+
+function squarefree_min(x: i64, start_idx: i64) -> i64 {
+    if x <= 0 { return 0 }
+    if x == 1 { return 1 }
+    if start_idx == 0 { return squarefree_upto(x) }
+    if start_idx < NPR && PRIMES[start_idx] > x { return 1 }
+    let key: i64 = pack2(x, start_idx)
+    let out: ptr<i64> = calloc(1, 8)
+    if memo_get(FK, FV, FU, key, out) != 0 {
+        let v: i64 = out[0]
+        free(out)
+        return v
+    }
+    let mut total: i64 = squarefree_upto(x)
+    let mut i: i64 = 0
+    while i < start_idx {
+        let p: i64 = PRIMES[i]
+        if p > x { break }
+        total = total - squarefree_min(x / p, i + 1)
+        i = i + 1
+    }
+    memo_put(FK, FV, FU, key, total)
+    free(out)
+    return total
+}
+
+function pack3(a: i64, b: i64, c: i64) -> i64 {
+    return ((a * 1315423911) ^ (b * 2654435761) ^ (c * 97531))
+}
+
+function count_dpowers(limit: i64, start_idx: i64, max_exp: i64) -> i64 {
+    if limit <= 0 { return 0 }
+    if limit == 1 { return 1 }
+    if max_exp <= 1 { return squarefree_min(limit, start_idx) }
+    let key: i64 = pack3(limit, start_idx, max_exp)
+    let out: ptr<i64> = calloc(1, 8)
+    if memo_get(CK, CV, CU, key, out) != 0 {
+        let v: i64 = out[0]
+        free(out)
+        return v
+    }
+    let mut res: i64 = squarefree_min(limit, start_idx)
+    let mut i: i64 = start_idx
+    while i < NPR {
+        let p: i64 = PRIMES[i]
+        let p2: i64 = p * p
+        if p2 > limit { break }
+        let mut pe: i64 = p2
+        let mut e: i64 = 2
+        while e <= max_exp && pe <= limit {
+            res = res + count_dpowers(limit / pe, i + 1, e)
+            e = e + 1
+            if pe > limit / p { break }
+            pe = pe * p
+        }
+        i = i + 1
+    }
+    memo_put(CK, CV, CU, key, res)
+    free(out)
+    return res
+}
+
+function max_exp(n: i64) -> i64 {
+    let mut e: i64 = 0
+    let mut v: i64 = 1
+    while v * 2 <= n {
+        v = v * 2
+        e = e + 1
+    }
+    return e
+}
+
+function main() -> i32 {
+    build_sieve()
+    let n: i64 = 10000000000000
+    printf("%lld\n", count_dpowers(n, 0, max_exp(n)))
+    return 0
+}

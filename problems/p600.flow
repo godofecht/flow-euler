@@ -1,0 +1,41 @@
+# Project Euler 600
+# Integer sided equiangular hexagons with perimeter <= 55106.
+# H(n) = # ways to write n-6 as 1a+2b+3c+4d+6e (coin DP).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function H(n: i64) -> i64 {
+    let m: i64 = n - 6
+    if m < 0 { return 0 }
+    let dp: ptr<i64> = calloc(m + 1, 8)
+    if dp == null { return -1 }
+    dp[0] = 1
+    let coins: ptr<i64> = calloc(5, 8)
+    coins[0] = 1
+    coins[1] = 2
+    coins[2] = 3
+    coins[3] = 4
+    coins[4] = 6
+    let mut ci: i64 = 0
+    while ci < 5 {
+        let c: i64 = coins[ci]
+        let mut i: i64 = c
+        while i <= m {
+            dp[i] = dp[i] + dp[i - c]
+            i = i + 1
+        }
+        ci = ci + 1
+    }
+    let ans: i64 = dp[m]
+    free(coins)
+    free(dp)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", H(55106))
+    return 0
+}

@@ -1,0 +1,219 @@
+# Project Euler 536
+# Modulo Power Identity — S(10^12).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N_LIMIT: i64 = 1000000000000
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function modinv(a0: i64, m: i64) -> i64 {
+    let mut old_r: i64 = a0 % m
+    if old_r < 0 { old_r = old_r + m }
+    let mut r: i64 = m
+    let mut old_s: i64 = 1
+    let mut s: i64 = 0
+    while r != 0 {
+        let q: i64 = old_r / r
+        let nr: i64 = old_r - q * r
+        old_r = r
+        r = nr
+        let ns: i64 = old_s - q * s
+        old_s = s
+        s = ns
+    }
+    let mut x: i64 = old_s % m
+    if x < 0 { x = x + m }
+    return x
+}
+
+function floordiv(a: i64, b: i64) -> i64 {
+    let q: i64 = a / b
+    let r: i64 = a % b
+    if r != 0 && ((r > 0) != (b > 0)) { return q - 1 }
+    return q
+}
+
+function leaf_count(
+    x: i64, lam: i64, plist: ptr<i64>, pn: i64, idx: i64, q_low: i64,
+    step: i64, r0: i64, N: i64, pmax: i64, isp: ptr<i8>, total: ptr<i64>
+) -> void {
+    let mut ql: i64 = q_low
+    if ql < plist[idx] { ql = plist[idx] }
+    let mut max_q: i64 = N / x
+    if max_q > pmax { max_q = pmax }
+    if ql > max_q { return }
+    if step == 1 {
+        let mut lo: i64 = idx
+        let mut hi: i64 = pn
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if plist[mid] < ql { lo = mid + 1 } else { hi = mid }
+        }
+        let mut j: i64 = lo
+        while j < pn {
+            let q: i64 = plist[j]
+            if q > max_q { break }
+            if (x + 3) % (q - 1) == 0 { total[0] = total[0] + x * q }
+            j = j + 1
+        }
+        return
+    }
+    if step <= 2 {
+        let mut lo2: i64 = idx
+        let mut hi2: i64 = pn
+        while lo2 < hi2 {
+            let mid: i64 = (lo2 + hi2) / 2
+            if plist[mid] < ql { lo2 = mid + 1 } else { hi2 = mid }
+        }
+        let mut j2: i64 = lo2
+        while j2 < pn {
+            let q2: i64 = plist[j2]
+            if q2 > max_q { break }
+            if (q2 - r0) % step == 0 && (x + 3) % (q2 - 1) == 0 {
+                total[0] = total[0] + x * q2
+            }
+            j2 = j2 + 1
+        }
+        return
+    }
+    let mut q3: i64 = r0
+    if q3 < ql { q3 = q3 + ((ql - q3 + step - 1) / step) * step }
+    while q3 <= max_q {
+        if isp[q3] == 1 && (x + 3) % (q3 - 1) == 0 {
+            total[0] = total[0] + x * q3
+        }
+        q3 = q3 + step
+    }
+}
+
+function dfs(
+    x: i64, lam: i64, plist: ptr<i64>, pn: i64, idx: i64,
+    N: i64, pmax: i64, isp: ptr<i8>, total: ptr<i64>
+) -> void {
+    if (x + 3) % lam == 0 { total[0] = total[0] + x }
+    if idx >= pn { return }
+    let bound: i64 = isqrt(N / x)
+    let q_low: i64 = bound + 1
+    let gx: i64 = gcd(x, lam)
+    if 3 % gx != 0 { return }
+    let step: i64 = lam / gx
+    let mut r0: i64 = 0
+    if step > 1 {
+        let a: i64 = x / gx
+        let inv: i64 = modinv(a, step)
+        r0 = (floordiv(-3, gx) % step + step) % step
+        r0 = (r0 * inv) % step
+    }
+    let mut q0: i64 = r0
+    if q0 < plist[idx] { q0 = plist[idx] }
+    if x * q0 > N { return }
+    if q_low <= pmax {
+        leaf_count(x, lam, plist, pn, idx, q_low, step, r0, N, pmax, isp, total)
+    }
+    let mut j: i64 = idx
+    while j < pn {
+        let p: i64 = plist[j]
+        if p > bound { break }
+        let xp: i64 = x * p
+        let pm1: i64 = p - 1
+        let d: i64 = gcd(lam, pm1)
+        let lam2: i64 = (lam / d) * pm1
+        let gp: i64 = gcd(xp, lam2)
+        if gp == 1 || gp == 3 {
+            dfs(xp, lam2, plist, pn, j + 1, N, pmax, isp, total)
+        }
+        j = j + 1
+    }
+}
+
+function main() -> i32 {
+    let N: i64 = N_LIMIT
+    let pmax: i64 = isqrt(N + 4) + 5
+    let isp: ptr<i8> = calloc(pmax + 1, 1)
+    let plist: ptr<i64> = calloc(80000, 8)
+    let plist32: ptr<i64> = calloc(80000, 8)
+    let total: ptr<i64> = calloc(1, 8)
+    if isp == null || plist == null || total == null { return 1 }
+    let mut i: i64 = 0
+    while i <= pmax {
+        isp[i] = 1
+        i = i + 1
+    }
+    isp[0] = 0; isp[1] = 0
+    if pmax >= 4 {
+        i = 4
+        while i <= pmax {
+            isp[i] = 0
+            i = i + 2
+        }
+    }
+    let r: i64 = isqrt(pmax)
+    let mut p: i64 = 3
+    while p <= r {
+        if isp[p] == 1 {
+            let mut j: i64 = p * p
+            let step: i64 = p << 1
+            while j <= pmax {
+                isp[j] = 0
+                j = j + step
+            }
+        }
+        p = p + 2
+    }
+    let mut pn: i64 = 0
+    let mut pn32: i64 = 0
+    plist[pn] = 2; pn = pn + 1
+    p = 3
+    while p <= pmax {
+        if isp[p] == 1 {
+            plist[pn] = p
+            pn = pn + 1
+            if p >= 5 && p != 3 && (p % 3) == 2 {
+                plist32[pn32] = p
+                pn32 = pn32 + 1
+            }
+        }
+        p = p + 2
+    }
+    # plist_after3: odd primes >=5
+    let pa3: ptr<i64> = calloc(pn, 8)
+    let mut pa3n: i64 = 0
+    i = 0
+    while i < pn {
+        if plist[i] >= 5 {
+            pa3[pa3n] = plist[i]
+            pa3n = pa3n + 1
+        }
+        i = i + 1
+    }
+    if N >= 2 { total[0] = 2 }
+    if N >= 3 { dfs(3, 2, pa3, pa3n, 0, N, pmax, isp, total) }
+    dfs(1, 1, plist32, pn32, 0, N, pmax, isp, total)
+    printf("%lld\n", total[0])
+    free(isp); free(plist); free(plist32); free(pa3); free(total)
+    return 0
+}

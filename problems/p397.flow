@@ -1,0 +1,191 @@
+# Project Euler 397
+# Count triangles on y=x^2/k with a 45-degree angle: F(10^6, 10^9).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Floor division toward -inf (C/Flow truncate toward 0).
+function floordiv(a: i64, b: i64) -> i64 {
+    let q: i64 = a / b
+    let r: i64 = a % b
+    if r != 0 {
+        if (a < 0 && b > 0) || (a > 0 && b < 0) {
+            return q - 1
+        }
+    }
+    return q
+}
+
+function count_left(X: i64, s: i64, t: i64) -> i64 {
+    let mut L: i64 = t - X
+    if L < (0 - X) { L = 0 - X }
+    let mut U: i64 = s + X
+    if U > X { U = X }
+    let u2: i64 = floordiv(s - 1, 2)
+    if u2 < U { U = u2 }
+    if U < L { return 0 }
+    return U - L + 1
+}
+
+function count_mid(X: i64, p: i64, q: i64) -> i64 {
+    let mut L: i64 = p - X
+    if L < (0 - X) { L = 0 - X }
+    let qx: i64 = q - X
+    if qx > L { L = qx }
+    let l2: i64 = floordiv(p, 2) + 1
+    if l2 > L { L = l2 }
+    let mut U: i64 = p + X
+    if U > X { U = X }
+    let u2: i64 = floordiv(q - 1, 2)
+    if u2 < U { U = u2 }
+    if U < L { return 0 }
+    return U - L + 1
+}
+
+function main() -> i32 {
+    let K: i64 = 1000000
+    let X: i64 = 1000000000
+    let spf: ptr<i32> = calloc(K + 1, 4)
+    let mut i: i64 = 0
+    while i <= K {
+        spf[i] = i as i32
+        i = i + 1
+    }
+    i = 2
+    while i * i <= K {
+        if (spf[i] as i64) == i {
+            let mut j: i64 = i * i
+            while j <= K {
+                if (spf[j] as i64) == j { spf[j] = i as i32 }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let twoX: i64 = 2 * X
+    let mut count_A: i64 = 0
+    let mut count_B: i64 = 0
+    let mut overlap_AB: i64 = 0
+    let mut overlap_AC: i64 = 0
+
+    let fac_p: ptr<i32> = calloc(64, 4)
+    let fac_e: ptr<i32> = calloc(64, 4)
+    let divs: ptr<i64> = calloc(4096, 8)
+    let new_divs: ptr<i64> = calloc(4096, 8)
+
+    let mut k: i64 = 1
+    while k <= K {
+        let D: i64 = 2 * k * k
+        # factor 2*k^2 from spf of k
+        let mut x: i64 = k
+        let mut fc: i64 = 0
+        let mut has2: i64 = 0
+        while x > 1 {
+            let p: i64 = spf[x] as i64
+            let mut e: i64 = 0
+            while x % p == 0 {
+                x = x / p
+                e = e + 1
+            }
+            if p == 2 {
+                fac_p[fc] = 2
+                fac_e[fc] = (2 * e + 1) as i32
+                has2 = 1
+            } else {
+                fac_p[fc] = p as i32
+                fac_e[fc] = (2 * e) as i32
+            }
+            fc = fc + 1
+        }
+        if has2 == 0 {
+            fac_p[fc] = 2
+            fac_e[fc] = 1
+            fc = fc + 1
+        }
+
+        divs[0] = 1
+        let mut dc: i64 = 1
+        let mut fi: i64 = 0
+        while fi < fc {
+            let p: i64 = fac_p[fi] as i64
+            let expv: i64 = fac_e[fi] as i64
+            let mut pe: i64 = 1
+            let mut ndc: i64 = 0
+            let mut di: i64 = 0
+            while di < dc {
+                let base: i64 = divs[di]
+                pe = 1
+                let mut e: i64 = 0
+                while e <= expv {
+                    new_divs[ndc] = base * pe
+                    ndc = ndc + 1
+                    if e < expv { pe = pe * p }
+                    e = e + 1
+                }
+                di = di + 1
+            }
+            di = 0
+            while di < ndc {
+                divs[di] = new_divs[di]
+                di = di + 1
+            }
+            dc = ndc
+            fi = fi + 1
+        }
+
+        let mut di: i64 = 0
+        while di < dc {
+            let d: i64 = divs[di]
+            let u: i64 = D / d
+            let s: i64 = k - u
+            let t: i64 = d - k
+            if s >= (0 - twoX) && s <= twoX && t >= (0 - twoX) && t <= twoX {
+                count_A = count_A + count_left(X, s, t)
+                let denom: i64 = s + k
+                if denom != 0 {
+                    let num: i64 = k * (s - k)
+                    if num % denom == 0 {
+                        let q: i64 = num / denom
+                        if q >= (0 - twoX) && q <= twoX && ((s + t - q) & 1) == 0 {
+                            let a: i64 = (s + t - q) / 2
+                            let b: i64 = (s + q - t) / 2
+                            let c: i64 = (t + q - s) / 2
+                            if a >= (0 - X) && a < b && b < c && c <= X {
+                                overlap_AB = overlap_AB + 1
+                            }
+                        }
+                    }
+                }
+                let denom2: i64 = k - t
+                if denom2 != 0 {
+                    let num2: i64 = k * (k + t)
+                    if num2 % denom2 == 0 {
+                        let q2: i64 = num2 / denom2
+                        if q2 >= (0 - twoX) && q2 <= twoX && ((s + t - q2) & 1) == 0 {
+                            let a: i64 = (s + t - q2) / 2
+                            let b: i64 = (s + q2 - t) / 2
+                            let c: i64 = (t + q2 - s) / 2
+                            if a >= (0 - X) && a < b && b < c && c <= X {
+                                overlap_AC = overlap_AC + 1
+                            }
+                        }
+                    }
+                }
+            }
+            let p: i64 = 0 - (k + u)
+            let q: i64 = k + d
+            if p >= (0 - twoX) && p <= twoX && q <= twoX {
+                count_B = count_B + count_mid(X, p, q)
+            }
+            di = di + 1
+        }
+        k = k + 1
+    }
+
+    let total: i64 = 2 * count_A + count_B - 2 * overlap_AB - overlap_AC
+    printf("%lld\n", total)
+    return 0
+}

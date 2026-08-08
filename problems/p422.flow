@@ -1,0 +1,134 @@
+# Project Euler 422
+# (a+b+c+d) mod 10^9+7 for P_{11^14} on the hyperbola.
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    if b < 0 { b = b + mod }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+# Return (F_n, F_{n+1}) mod mod via fast doubling.
+function fib_mod(n: i64, mod: i64, out_fn: ptr<i64>, out_fn1: ptr<i64>) -> void {
+    if n == 0 {
+        out_fn[0] = 0
+        out_fn1[0] = 1
+        return
+    }
+    let mut stack_n: i64 = n
+    let mut depth: i64 = 0
+    # unwind via iterative doubling from MSB
+    let mut bits: i64 = 0
+    let mut t: i64 = n
+    while t > 0 {
+        bits = bits + 1
+        t = t / 2
+    }
+    let mut a: i64 = 0
+    let mut b: i64 = 1
+    let mut bit: i64 = bits - 1
+    while bit >= 0 {
+        # double: (F_k, F_{k+1}) -> (F_{2k}, F_{2k+1})
+        let two_b_minus_a: i64 = (2 * b - a) % mod
+        if two_b_minus_a < 0 { two_b_minus_a = two_b_minus_a + mod }
+        let c: i64 = ((a as i128) * (two_b_minus_a as i128) % (mod as i128)) as i64
+        let d: i64 = (((a as i128) * (a as i128) + (b as i128) * (b as i128)) % (mod as i128)) as i64
+        a = c
+        b = d
+        if ((n >> bit) & 1) == 1 {
+            let e: i64 = (a + b) % mod
+            a = b
+            b = e
+        }
+        bit = bit - 1
+    }
+    out_fn[0] = a
+    out_fn1[0] = b
+}
+
+function solve_mod(n: i64) -> i64 {
+    let MOD: i64 = 1000000007
+    let PHI: i64 = MOD - 1
+    if n == 1 { return (13 + 1 + 61 + 4) % MOD }
+    if n == 2 {
+        # (-43)/6 + (-4)/1 -> 43+6+4+1
+        return (43 + 6 + 4 + 1) % MOD
+    }
+
+    let fn_buf: i64 = 0
+    let fn1_buf: i64 = 0
+    fib_mod(n, PHI, &fn_buf, &fn1_buf)
+    let Fn: i64 = fn_buf
+    let Fn1: i64 = fn1_buf
+    let Fnm1: i64 = (Fn1 - Fn) % PHI
+    if Fnm1 < 0 { Fnm1 = Fnm1 + PHI }
+    let Fnm2: i64 = (Fn - Fnm1) % PHI
+    if Fnm2 < 0 { Fnm2 = Fnm2 + PHI }
+
+    fib_mod(n - 1, 2, &fn_buf, &fn1_buf)
+    let sign: i64 = 1
+    if fn_buf == 1 { sign = -1 }
+
+    let E: i64 = (Fn + Fnm2) % PHI
+    let F: i64 = Fnm1
+
+    let mut N_abs: i64 = 0
+    let mut D: i64 = 0
+    let mut gx: i64 = 0
+    let mut gy: i64 = 0
+    if n % 2 == 1 {
+        N_abs = modpow(2, E, MOD)
+        D = modpow(3, F, MOD)
+        gx = 12
+        gy = 1
+    } else {
+        N_abs = modpow(3, F, MOD)
+        D = modpow(2, E, MOD)
+        gx = 1
+        gy = 12
+    }
+
+    let mut N: i64 = N_abs
+    if sign == -1 { N = (MOD - N_abs) % MOD }
+
+    let N2: i64 = ((N_abs as i128) * (N_abs as i128) % (MOD as i128)) as i64
+    let D2: i64 = ((D as i128) * (D as i128) % (MOD as i128)) as i64
+    let mut num_x: i64 = (3 * N2 + 4 * D2) % MOD
+    let mut num_y: i64 = (4 * N2 - 3 * D2) % MOD
+    if num_y < 0 { num_y = num_y + MOD }
+    let mut den: i64 = ((N as i128) * (D as i128) % (MOD as i128)) as i64
+
+    if sign == -1 {
+        num_x = (MOD - num_x) % MOD
+        num_y = (MOD - num_y) % MOD
+        den = (MOD - den) % MOD
+    }
+
+    let inv_gx: i64 = modpow(gx, MOD - 2, MOD)
+    let inv_gy: i64 = modpow(gy, MOD - 2, MOD)
+    let a: i64 = ((num_x as i128) * (inv_gx as i128) % (MOD as i128)) as i64
+    let b: i64 = ((den as i128) * (inv_gx as i128) % (MOD as i128)) as i64
+    let c: i64 = ((num_y as i128) * (inv_gy as i128) % (MOD as i128)) as i64
+    let d: i64 = ((den as i128) * (inv_gy as i128) % (MOD as i128)) as i64
+    return (a + b + c + d) % MOD
+}
+
+function main() -> i32 {
+    # n = 11^14
+    let mut n: i64 = 1
+    let mut i: i64 = 0
+    while i < 14 {
+        n = n * 11
+        i = i + 1
+    }
+    printf("%lld\n", solve_mod(n))
+    return 0
+}

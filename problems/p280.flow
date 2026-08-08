@@ -1,0 +1,193 @@
+# Project Euler 280
+# Expected steps for ant moving 5 seeds on 5x5 grid.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function popcount(x0: i64) -> i64 {
+    let mut x: i64 = x0
+    let mut c: i64 = 0
+    while x != 0 {
+        c = c + 1
+        x = x & (x - 1)
+    }
+    return c
+}
+
+function make_hash(x: i64, y: i64, carries: i64, top: i64, bot: i64) -> i64 {
+    let mut h: i64 = carries
+    h = (h << 5) + top
+    h = (h << 5) + bot
+    h = h * 5 + x
+    h = h * 5 + y
+    return h
+}
+
+function is_final(top: i64, carries: i64) -> bool {
+    return popcount(top) == 5 && carries == 0
+}
+
+function is_valid(x: i64, y: i64, carries: i64, top: i64, bot: i64) -> bool {
+    let one: i64 = 1
+    if y == 0 && carries == 1 && (top & (one << x)) == 0 {
+        return false
+    }
+    if y == 4 && carries == 0 && (bot & (one << x)) != 0 {
+        return false
+    }
+    if is_final(top, carries) && y != 0 {
+        return false
+    }
+    let mut seeds: i64 = popcount(top) + popcount(bot)
+    if carries == 1 { seeds = seeds + 1 }
+    return seeds == 5
+}
+
+function main() -> i32 {
+    let GRID: i64 = 5
+    let all_bits: i64 = 31
+    let one: i64 = 1
+    let max_hash: i64 = 50000
+    let is_state: ptr<i8> = calloc(max_hash + 1, 1)
+    let is_fin: ptr<i8> = calloc(max_hash + 1, 1)
+    let ntrans: ptr<i32> = calloc(max_hash + 1, 4)
+    let trans: ptr<i32> = calloc((max_hash + 1) * 4, 4)
+    let last: ptr<f64> = calloc(max_hash + 1, 8)
+    let nxt: ptr<f64> = calloc(max_hash + 1, 8)
+    let state_list: ptr<i32> = calloc(12000, 4)
+    let mut nstates: i64 = 0
+
+    let mut x: i64 = 0
+    while x < GRID {
+        let mut y: i64 = 0
+        while y < GRID {
+            let mut carries: i64 = 0
+            while carries <= 1 {
+                let mut top: i64 = 0
+                while top <= all_bits {
+                    let mut bot: i64 = 0
+                    while bot <= all_bits {
+                        if is_valid(x, y, carries, top, bot) {
+                            let h: i64 = make_hash(x, y, carries, top, bot)
+                            is_state[h] = 1
+                            state_list[nstates] = h as i32
+                            nstates = nstates + 1
+                            if is_final(top, carries) {
+                                is_fin[h] = 1
+                            }
+                        }
+                        bot = bot + 1
+                    }
+                    top = top + 1
+                }
+                carries = carries + 1
+            }
+            y = y + 1
+        }
+        x = x + 1
+    }
+
+    let mut si: i64 = 0
+    while si < nstates {
+        let h: i64 = state_list[si] as i64
+        if is_fin[h] == 1 {
+            si = si + 1
+            continue
+        }
+        # decode hash: ... reverse make_hash
+        let mut hh: i64 = h
+        let y0: i64 = hh % 5
+        hh = hh / 5
+        let x0: i64 = hh % 5
+        hh = hh / 5
+        let bot0: i64 = hh & 31
+        hh = hh >> 5
+        let top0: i64 = hh & 31
+        hh = hh >> 5
+        let car0: i64 = hh & 1
+
+        let mut nt: i64 = 0
+        let mut dir: i64 = 0
+        while dir < 4 {
+            let mut cx: i64 = x0
+            let mut cy: i64 = y0
+            let mut ok: bool = false
+            if dir == 0 && y0 > 0 { cy = y0 - 1; ok = true }
+            elif dir == 1 && y0 < 4 { cy = y0 + 1; ok = true }
+            elif dir == 2 && x0 > 0 { cx = x0 - 1; ok = true }
+            elif dir == 3 && x0 < 4 { cx = x0 + 1; ok = true }
+            if ok {
+                let mut ccar: i64 = car0
+                let mut ctop: i64 = top0
+                let mut cbot: i64 = bot0
+                if ccar == 1 && cy == 0 && (ctop & (one << cx)) == 0 {
+                    ccar = 0
+                    ctop = ctop | (one << cx)
+                }
+                if ccar == 0 && cy == 4 && (cbot & (one << cx)) != 0 {
+                    ccar = 1
+                    cbot = cbot & (all_bits ^ (one << cx))
+                }
+                let nh: i64 = make_hash(cx, cy, ccar, ctop, cbot)
+                trans[h * 4 + nt] = nh as i32
+                nt = nt + 1
+            }
+            dir = dir + 1
+        }
+        ntrans[h] = nt as i32
+        si = si + 1
+    }
+
+    let init: i64 = make_hash(2, 2, 0, 0, all_bits)
+    last[init] = 1.0
+    let mut expected: f64 = 0.0
+    let mut iteration: i64 = 1
+    let eps: f64 = 0.0000000001
+    while true {
+        let mut i: i64 = 0
+        while i <= max_hash {
+            nxt[i] = 0.0
+            i = i + 1
+        }
+        si = 0
+        while si < nstates {
+            let h: i64 = state_list[si] as i64
+            let nt: i64 = ntrans[h] as i64
+            if nt > 0 {
+                let p: f64 = last[h] / (nt as f64)
+                let mut t: i64 = 0
+                while t < nt {
+                    let nh: i64 = trans[h * 4 + t] as i64
+                    nxt[nh] = nxt[nh] + p
+                    t = t + 1
+                }
+            }
+            si = si + 1
+        }
+        i = 0
+        while i <= max_hash {
+            last[i] = nxt[i]
+            i = i + 1
+        }
+        let mut add: f64 = 0.0
+        si = 0
+        while si < nstates {
+            let h: i64 = state_list[si] as i64
+            if is_fin[h] == 1 {
+                add = add + last[h]
+            }
+            si = si + 1
+        }
+        add = add * (iteration as f64)
+        expected = expected + add
+        if add < eps && expected > 1.0 {
+            break
+        }
+        iteration = iteration + 1
+    }
+    printf("%.6f\n", expected)
+    free(is_state); free(is_fin); free(ntrans); free(trans); free(last); free(nxt); free(state_list)
+    return 0
+}

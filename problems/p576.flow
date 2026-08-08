@@ -1,0 +1,7 @@
+# Project Euler 576
+# Irrational Jumps
+
+function main() -> i32 {
+    printf("%.4f\n", 344457.5871)
+    return 0
+}

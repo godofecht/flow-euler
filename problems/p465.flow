@@ -1,0 +1,167 @@
+# Project Euler 465
+# Polar Polygons — P(7^13) mod 10^9+7 via Du Jiao totient sums (i128).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const PRE: i64 = 20000000
+const CAP: i64 = 4194304
+
+let mut G_pref: ptr<i64> = null
+let mut G_keys: ptr<i64> = null
+let mut G_vals: ptr<i128> = null
+let mut G_used: ptr<i8> = null
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    if b < 0 { b = b + mod }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function hslot(key: i64) -> i64 {
+    let mut h: i64 = key % CAP
+    if h < 0 { h = h + CAP }
+    while G_used[h] == 1 && G_keys[h] != key {
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function tot_sum(n: i64) -> i128 {
+    if n <= 0 { return 0 as i128 }
+    if n <= PRE { return G_pref[n] as i128 }
+    let s: i64 = hslot(n)
+    if G_used[s] == 1 { return G_vals[s] }
+    let nn: i128 = n as i128
+    let mut res: i128 = nn * (nn + 1) / 2
+    let mut lo: i64 = 2
+    while lo <= n {
+        let q: i64 = n / lo
+        let hi: i64 = n / q
+        res = res - ((hi - lo + 1) as i128) * tot_sum(q)
+        lo = hi + 1
+    }
+    G_used[s] = 1
+    G_keys[s] = n
+    G_vals[s] = res
+    return res
+}
+
+function i128_mod(x0: i128, m: i64) -> i64 {
+    let mm: i128 = m as i128
+    let mut r: i128 = x0 % mm
+    if r < 0 { r = r + mm }
+    return r as i64
+}
+
+function polar_polygons_mod(n: i64) -> i64 {
+    let mut B: i64 = 1
+    let mut S1: i64 = 0
+    let mut S2: i64 = 0
+    let mut lo: i64 = 1
+    let mut prev_phi: i128 = 0
+    let modm1: i64 = MOD - 1
+    let mut B_zero: i64 = 0
+    while lo <= n {
+        let q: i64 = n / lo
+        let hi: i64 = n / q
+        let curr: i128 = tot_sum(hi)
+        let sum_phi: i128 = curr - prev_phi
+        prev_phi = curr
+        let sum_phi_mod: i64 = i128_mod(sum_phi, MOD)
+        let c_mod: i64 = (sum_phi_mod * 4) % MOD
+        let q_mod: i64 = q % MOD
+        S1 = (S1 + c_mod * q_mod) % MOD
+        let q2: i64 = (q_mod * q_mod) % MOD
+        S2 = (S2 + c_mod * q2) % MOD
+        if B_zero == 0 {
+            let base: i64 = (q + 1) % MOD
+            if base == 0 {
+                B = 0
+                B_zero = 1
+            } else {
+                let expv: i64 = (i128_mod(sum_phi, modm1) * 4) % modm1
+                B = (B * modpow(base, expv, MOD)) % MOD
+            }
+        }
+        lo = hi + 1
+    }
+    let mut ans: i64 = (B * B) % MOD
+    ans = (ans - (2 * B % MOD) * S1 % MOD) % MOD
+    ans = (ans + S2) % MOD
+    ans = (ans - 1) % MOD
+    if ans < 0 { ans = ans + MOD }
+    return ans
+}
+
+function main() -> i32 {
+    G_pref = calloc(PRE + 1, 8)
+    let phi: ptr<i32> = calloc(PRE + 1, 4)
+    let primes: ptr<i32> = calloc(PRE / 5 + 16, 4)
+    G_keys = calloc(CAP, 8)
+    G_vals = calloc(CAP, 16)
+    G_used = calloc(CAP, 1)
+    if G_pref == null || phi == null || primes == null || G_keys == null || G_vals == null || G_used == null {
+        return 1
+    }
+
+    phi[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= PRE {
+        if phi[i] == 0 {
+            phi[i] = (i - 1) as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > PRE { break }
+            if i % p == 0 {
+                phi[ip] = ((phi[i] as i64) * p) as i32
+                break
+            } else {
+                phi[ip] = ((phi[i] as i64) * (p - 1)) as i32
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let mut s: i64 = 0
+    i = 1
+    while i <= PRE {
+        s = s + (phi[i] as i64)
+        G_pref[i] = s
+        i = i + 1
+    }
+    free(primes)
+    free(phi)
+
+    let mut n: i64 = 1
+    let mut t: i64 = 0
+    while t < 13 {
+        n = n * 7
+        t = t + 1
+    }
+    printf("%lld\n", polar_polygons_mod(n))
+    free(G_used)
+    free(G_vals)
+    free(G_keys)
+    free(G_pref)
+    return 0
+}

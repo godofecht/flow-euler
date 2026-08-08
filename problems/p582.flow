@@ -1,0 +1,131 @@
+# Project Euler 582
+# Nearly Isosceles 120 Degree Triangles
+# Count (a,b,c) with 120° angle, a<=b<=c, b-a<=100, c<=10^100
+# via orbits of x^2 - 3y^2 = k^2 with x=2c, y=2a+k, b=a+k.
+
+extern {
+    function log(x: f64) -> f64
+    function sqrt(x: f64) -> f64
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function is_square(n: i64) -> i64 {
+    if n < 0 { return -1 }
+    let r: i64 = isqrt(n)
+    if r * r == n { return r }
+    return -1
+}
+
+function count_orbit(x0: i64, y0: i64, k: i64, even_k: bool, limit_log: f64) -> i64 {
+    let mut x: i64 = x0
+    let mut y: i64 = y0
+    let mut total: i64 = 0
+    let max_safe: i64 = 2000000000000000000
+    let mut growth: f64 = 2.0 + sqrt(3.0)
+    if not even_k {
+        growth = 7.0 + 4.0 * sqrt(3.0)
+    }
+    let log_g: f64 = log(growth)
+
+    while true {
+        let mut nx: i64 = 0
+        let mut ny: i64 = 0
+        let mut overflow: bool = false
+        if even_k {
+            if x > max_safe / 2 {
+                overflow = true
+            } else {
+                nx = 2 * x + 3 * y
+                ny = x + 2 * y
+                if nx < x { overflow = true }
+            }
+        } else {
+            if x > max_safe / 7 {
+                overflow = true
+            } else {
+                nx = 7 * x + 12 * y
+                ny = 4 * x + 7 * y
+                if nx < x { overflow = true }
+            }
+        }
+
+        if overflow {
+            let mut lx: f64 = log(x as f64)
+            while lx <= limit_log + 0.000000000001 {
+                if y > k {
+                    total = total + 1
+                }
+                y = k + 1
+                x = max_safe
+                lx = lx + log_g
+            }
+            break
+        }
+
+        let lx: f64 = log(x as f64)
+        if lx > limit_log + 0.000000000001 {
+            break
+        }
+        if y > k {
+            total = total + 1
+        }
+        x = nx
+        y = ny
+    }
+    return total
+}
+
+function count_triangles() -> i64 {
+    let limit_log: f64 = log(2.0) + 100.0 * log(10.0)
+    let mut total: i64 = 0
+    let y_max: i64 = 2000
+    let mut k: i64 = 1
+    while k <= 100 {
+        let k2: i64 = k * k
+        let even_k: bool = (k % 2) == 0
+        let mut y: i64 = 0
+        while y <= y_max {
+            if ((y - k) & 1) == 0 {
+                let x: i64 = is_square(3 * y * y + k2)
+                if x >= 0 && (x & 1) == 0 {
+                    let mut xp: i64 = 0
+                    let mut yp: i64 = 0
+                    if even_k {
+                        xp = 2 * x - 3 * y
+                        yp = 2 * y - x
+                    } else {
+                        xp = 7 * x - 12 * y
+                        yp = 7 * y - 4 * x
+                    }
+                    let mut is_seed: bool = true
+                    if xp > 0 && yp >= 0 && ((yp - k) & 1) == 0 && (xp & 1) == 0 {
+                        if xp * xp - 3 * yp * yp == k2 {
+                            is_seed = false
+                        }
+                    }
+                    if is_seed {
+                        total = total + count_orbit(x, y, k, even_k, limit_log)
+                    }
+                }
+            }
+            y = y + 1
+        }
+        k = k + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", count_triangles())
+    return 0
+}

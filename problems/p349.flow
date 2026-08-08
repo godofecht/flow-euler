@@ -1,0 +1,70 @@
+# Project Euler 349
+# Langton's ant: black cells after 10^18 steps (detect period 104).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000000000000000
+    let size: i64 = 128
+    let grid: ptr<i8> = calloc(size * size, 1)
+    if grid == null { return 1 }
+    let mut x: i64 = size / 2
+    let mut y: i64 = size / 2
+    let dx: ptr<i64> = calloc(4, 8)
+    let dy: ptr<i64> = calloc(4, 8)
+    dx[0] = 0; dx[1] = 1; dx[2] = 0; dx[3] = -1
+    dy[0] = 1; dy[1] = 0; dy[2] = -1; dy[3] = 0
+    let mut direction: i64 = 0
+    let cycle: i64 = 104
+    let remainder: i64 = limit % cycle
+    let mut count: i64 = 0
+    let mut last: i64 = 0
+    let last_deltas: ptr<i64> = calloc(64, 8)
+    let mut ldc: i64 = 1
+    last_deltas[0] = 0
+    let stop_if_same: i64 = 10
+    let mut steps: i64 = 0
+    while steps < limit {
+        if steps % cycle == remainder {
+            let diff: i64 = count - last
+            last_deltas[ldc] = diff
+            ldc = ldc + 1
+            last = count
+            if ldc >= stop_if_same {
+                let mut samesame: bool = true
+                let mut scan: i64 = ldc - stop_if_same
+                while scan < ldc {
+                    if last_deltas[scan] != diff {
+                        samesame = false
+                        break
+                    }
+                    scan = scan + 1
+                }
+                if samesame {
+                    let remaining: i64 = (limit - steps) / cycle
+                    count = count + remaining * diff
+                    break
+                }
+            }
+        }
+        let pos: i64 = y * size + x
+        if grid[pos] == 0 {
+            grid[pos] = 1
+            count = count + 1
+            direction = (direction + 1) % 4
+        } else {
+            grid[pos] = 0
+            count = count - 1
+            direction = (direction + 3) % 4
+        }
+        x = x + dx[direction]
+        y = y + dy[direction]
+        steps = steps + 1
+    }
+    printf("%lld\n", count)
+    free(grid); free(dx); free(dy); free(last_deltas)
+    return 0
+}

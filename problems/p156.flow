@@ -1,0 +1,85 @@
+# Project Euler 156
+# Sum of n where f(n,d)=n for digits d=1..9.
+
+function count_single(digit: i64, value0: i64) -> i64 {
+    if value0 == 0 && digit == 0 { return 1 }
+    let mut result: i64 = 0
+    let mut value: i64 = value0
+    while value > 0 {
+        if value % 10 == digit { result = result + 1 }
+        value = value / 10
+    }
+    return result
+}
+
+function count_digit(digit: i64, value: i64) -> i64 {
+    if value < 10 {
+        if value < digit { return 0 }
+        return 1
+    }
+    let mut shift: i64 = 1
+    let mut multiplier: i64 = 0
+    while shift * 10 <= value {
+        shift = shift * 10
+        multiplier = multiplier + 1
+    }
+    multiplier = multiplier * (shift / 10)
+
+    let first: i64 = value / shift
+    let remainder: i64 = value % shift
+    let mut result: i64 = first * multiplier + count_digit(digit, remainder)
+    if digit == first {
+        result = result + remainder + 1
+    }
+    if digit < first && digit > 0 {
+        result = result + shift
+    }
+    return result
+}
+
+function find_all(digit: i64, start0: i64, end0: i64) -> i64 {
+    let mut start: i64 = start0
+    let end: i64 = end0
+    let center0: i64 = (start + end) / 2
+    if start == center0 {
+        let current: i64 = count_digit(digit, start)
+        if current == start { return start }
+        return 0
+    }
+
+    let mut result: i64 = 0
+    let mut count_from: i64 = count_digit(digit, start)
+
+    while count_from == start && start < end {
+        result = result + start
+        start = start + 1
+        count_from = count_from + count_single(digit, start)
+    }
+    if start >= end + 1 {
+        return result
+    }
+
+    let center: i64 = (start + end) / 2
+    let count_center: i64 = count_digit(digit, center)
+    let count_to: i64 = count_digit(digit, end)
+
+    if count_center >= start && center >= count_from && center > start {
+        result = result + find_all(digit, start, center)
+    }
+    if count_to >= center && end >= count_center && center < end {
+        result = result + find_all(digit, center, end)
+    }
+    return result
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000000000
+    let mut total: i64 = 0
+    let mut d: i64 = 1
+    while d <= 9 {
+        total = total + find_all(d, 0, limit)
+        d = d + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

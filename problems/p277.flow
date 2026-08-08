@@ -1,0 +1,68 @@
+# Project Euler 277
+# Smallest a1 > 10^15 beginning with given modified-Collatz prefix.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function is_good(x0: i64, seq: ptr<i8>, length: i64) -> bool {
+    let mut x: i64 = x0
+    let mut i: i64 = 0
+    while i < length {
+        let s: i32 = seq[i] as i32
+        let mod: i64 = x % 3
+        if mod == 0 {
+            if s != 68 { return false }
+            x = x / 3
+        } elif mod == 1 {
+            if s != 85 { return false }
+            x = (4 * x + 2) / 3
+        } else {
+            if s != 100 { return false }
+            x = (2 * x - 1) / 3
+        }
+        i = i + 1
+    }
+    return true
+}
+
+function main() -> i32 {
+    # UDDDUdddDDUDDddDdDddDDUDDdUUDd
+    let n: i64 = 30
+    let seq: ptr<i8> = calloc(n, 1)
+    if seq == null { return 1 }
+    let codes: ptr<i8> = calloc(n, 1)
+    # fill via integer ASCII
+    let src: ptr<i32> = calloc(n, 4)
+    src[0]=85; src[1]=68; src[2]=68; src[3]=68; src[4]=85
+    src[5]=100; src[6]=100; src[7]=100; src[8]=68; src[9]=68
+    src[10]=85; src[11]=68; src[12]=68; src[13]=100; src[14]=100
+    src[15]=68; src[16]=100; src[17]=68; src[18]=100; src[19]=100
+    src[20]=68; src[21]=68; src[22]=85; src[23]=68; src[24]=68
+    src[25]=100; src[26]=85; src[27]=85; src[28]=68; src[29]=100
+    let mut i: i64 = 0
+    while i < n {
+        seq[i] = src[i] as i8
+        i = i + 1
+    }
+    let mut current: i64 = 1000000000000000
+    let mut step: i64 = 1
+    let mut length: i64 = 1
+    while length <= n {
+        let mut iterations: i64 = 0
+        while !is_good(current, seq, length) {
+            current = current + step
+            iterations = iterations + 1
+            if iterations > 100 {
+                free(seq); free(src); free(codes)
+                return 1
+            }
+        }
+        step = step * 3
+        length = length + 1
+    }
+    printf("%lld\n", current)
+    free(seq); free(src); free(codes)
+    return 0
+}

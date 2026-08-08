@@ -1,0 +1,173 @@
+# Project Euler 410
+# F(10^8,10^9)+F(10^9,10^8) lattice points on circles with integer radius constraints.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let R1: i64 = 100000000
+    let X1: i64 = 1000000000
+    let R2: i64 = 1000000000
+    let X2: i64 = 100000000
+    let limit: i64 = R1
+    if X2 < limit { limit = X2 }
+
+    let n_odd: i64 = limit / 2 + 1
+    let omega: ptr<i8> = calloc(n_odd, 1)
+    if omega == null { return 1 }
+    let mut p: i64 = 3
+    while p <= limit {
+        if omega[p >> 1] == 0 {
+            let step: i64 = p << 1
+            let mut m: i64 = p
+            while m <= limit {
+                omega[m >> 1] = (omega[m >> 1] as i64 + 1) as i8
+                m = m + step
+            }
+        }
+        p = p + 2
+    }
+
+    let B: i64 = 1024
+    let num_blocks: i64 = limit / B + 1
+    let even_pref: ptr<i64> = calloc(num_blocks + 1, 8)
+    let odd_pref: ptr<i64> = calloc(num_blocks + 1, 8)
+    if even_pref == null || odd_pref == null { return 1 }
+
+    let mut s: i64 = 2
+    while s <= limit {
+        # oddpart = s / (s & -s)
+        let mut ss: i64 = s
+        while (ss & 1) == 0 { ss = ss >> 1 }
+        even_pref[s / B + 1] = even_pref[s / B + 1] + (1 << (omega[ss >> 1] as i64))
+        s = s + 2
+    }
+    s = 3
+    while s <= limit {
+        let om: i64 = omega[s >> 1] as i64
+        if om > 0 {
+            odd_pref[s / B + 1] = odd_pref[s / B + 1] + (1 << (om - 1))
+        }
+        s = s + 2
+    }
+    let mut i: i64 = 1
+    while i <= num_blocks {
+        even_pref[i] = even_pref[i] + even_pref[i - 1]
+        odd_pref[i] = odd_pref[i] + odd_pref[i - 1]
+        i = i + 1
+    }
+
+    # Inline F computation twice
+    let mut total: i64 = 0
+    let mut pass: i64 = 0
+    while pass < 2 {
+        let mut R: i64 = R1
+        let mut X: i64 = X1
+        if pass == 1 { R = R2; X = X2 }
+        let M: i64 = R
+        if X < M { M = X }
+        let mut res: i64 = 0
+        s = 1
+        while s <= M {
+            let T: i64 = R / s
+            let D: i64 = X / s
+            let mut end: i64 = M
+            let a: i64 = R / T
+            let b: i64 = X / D
+            if a < end { end = a }
+            if b < end { end = b }
+
+            let t_even: i64 = T / 2
+            let t_odd: i64 = (T + 1) / 2
+            let odd_count: i64 = (D + 1) / 2
+            let even_count: i64 = D / 2
+            let per_a: i64 = 4 * (odd_count * t_odd + even_count * t_even)
+            let per_b: i64 = 4 * T * D
+
+            # sum_even(s,end)
+            let mut se: i64 = 0
+            let mut L: i64 = s
+            let mut RR: i64 = end
+            if (L & 1) == 1 { L = L + 1 }
+            if L <= RR {
+                let bL: i64 = L / B
+                let bR: i64 = RR / B
+                if bL == bR {
+                    let mut u: i64 = L
+                    while u <= RR {
+                        let mut oddpart: i64 = u
+                        while (oddpart & 1) == 0 { oddpart = oddpart >> 1 }
+                        se = se + (1 << (omega[oddpart >> 1] as i64))
+                        u = u + 2
+                    }
+                } else {
+                    se = even_pref[bR] - even_pref[bL + 1]
+                    let mut u2: i64 = L
+                    let lim1: i64 = (bL + 1) * B - 1
+                    while u2 <= lim1 {
+                        let mut oddpart2: i64 = u2
+                        while (oddpart2 & 1) == 0 { oddpart2 = oddpart2 >> 1 }
+                        se = se + (1 << (omega[oddpart2 >> 1] as i64))
+                        u2 = u2 + 2
+                    }
+                    let mut u3: i64 = bR * B
+                    if (u3 & 1) == 1 { u3 = u3 + 1 }
+                    while u3 <= RR {
+                        let mut oddpart3: i64 = u3
+                        while (oddpart3 & 1) == 0 { oddpart3 = oddpart3 >> 1 }
+                        se = se + (1 << (omega[oddpart3 >> 1] as i64))
+                        u3 = u3 + 2
+                    }
+                }
+            }
+
+            # sum_odd(s,end)
+            let mut so: i64 = 0
+            L = s
+            RR = end
+            if (L & 1) == 0 { L = L + 1 }
+            if L <= RR {
+                let bL2: i64 = L / B
+                let bR2: i64 = RR / B
+                if bL2 == bR2 {
+                    let mut u4: i64 = L
+                    while u4 <= RR {
+                        let om4: i64 = omega[u4 >> 1] as i64
+                        if om4 > 0 { so = so + (1 << (om4 - 1)) }
+                        u4 = u4 + 2
+                    }
+                } else {
+                    so = odd_pref[bR2] - odd_pref[bL2 + 1]
+                    let mut u5: i64 = L
+                    let lim2: i64 = (bL2 + 1) * B - 1
+                    while u5 <= lim2 {
+                        let om5: i64 = omega[u5 >> 1] as i64
+                        if om5 > 0 { so = so + (1 << (om5 - 1)) }
+                        u5 = u5 + 2
+                    }
+                    let mut u6: i64 = bR2 * B
+                    if (u6 & 1) == 0 { u6 = u6 + 1 }
+                    while u6 <= RR {
+                        let om6: i64 = omega[u6 >> 1] as i64
+                        if om6 > 0 { so = so + (1 << (om6 - 1)) }
+                        u6 = u6 + 2
+                    }
+                }
+            }
+
+            res = res + per_a * se + per_b * so
+            s = end + 1
+        }
+        res = res + 2 * R * X
+        total = total + res
+        pass = pass + 1
+    }
+
+    printf("%lld\n", total)
+    free(odd_pref)
+    free(even_pref)
+    free(omega)
+    return 0
+}

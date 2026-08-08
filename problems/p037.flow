@@ -1,0 +1,51 @@
+# Project Euler 037
+# Sum of the eleven primes that are truncatable from left to right and
+# right to left (not counting single-digit primes).
+
+function is_prime(n: i64) -> bool {
+    if n < 2 { return false }
+    if n < 4 { return true }
+    if n % 2 == 0 || n % 3 == 0 { return false }
+    let mut i: i64 = 5
+    while i * i <= n {
+        if n % i == 0 || n % (i + 2) == 0 { return false }
+        i = i + 6
+    }
+    return true
+}
+
+function truncatable(n0: i64) -> bool {
+    # right truncate
+    let mut n: i64 = n0
+    while n > 0 {
+        if !is_prime(n) { return false }
+        n = n / 10
+    }
+    # left truncate
+    let mut p: i64 = 1
+    while p * 10 <= n0 {
+        p = p * 10
+    }
+    n = n0
+    while p > 1 {
+        n = n % p
+        p = p / 10
+        if !is_prime(n) { return false }
+    }
+    return true
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut found: i64 = 0
+    let mut n: i64 = 11
+    while found < 11 {
+        if truncatable(n) {
+            total = total + n
+            found = found + 1
+        }
+        n = n + 2
+    }
+    printf("%lld\n", total)
+    return 0
+}

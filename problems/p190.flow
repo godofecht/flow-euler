@@ -1,0 +1,31 @@
+# Project Euler 190
+# Sum floor(P_m) for m=2..15 maximizing prod x_k^k with sum x_i = m.
+# Optimum: x_k = 2k/(m+1).
+
+extern {
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+function floor_Pm(m: i64) -> i64 {
+    let mut s: f64 = 0.0
+    let mut k: i64 = 1
+    while k <= m {
+        let xk: f64 = (2.0 * (k as f64)) / ((m + 1) as f64)
+        s = s + (k as f64) * log(xk)
+        k = k + 1
+    }
+    return floor(exp(s)) as i64
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut m: i64 = 2
+    while m <= 15 {
+        total = total + floor_Pm(m)
+        m = m + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

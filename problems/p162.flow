@@ -1,0 +1,26 @@
+# Project Euler 162
+# Hex numbers of length 1..16 containing 0, 1 and A at least once.
+# Print decimal value of the hex answer string.
+
+function ipow(base: i64, exp0: i64) -> i64 {
+    let mut exp: i64 = exp0
+    let mut r: i64 = 1
+    let mut b: i64 = base
+    while exp > 0 {
+        if (exp & 1) == 1 { r = r * b }
+        b = b * b
+        exp = exp >> 1
+    }
+    return r
+}
+
+function main() -> i32 {
+    let mut ans: i64 = 0
+    let mut n: i64 = 1
+    while n <= 16 {
+        ans = ans + 15 * ipow(16, n - 1) - 43 * ipow(15, n - 1) + 41 * ipow(14, n - 1) - ipow(13, n)
+        n = n + 1
+    }
+    printf("%lld\n", ans)
+    return 0
+}

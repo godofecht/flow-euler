@@ -1,0 +1,148 @@
+# Project Euler 530
+# GCD of Divisors — F(10^15) via Dirichlet hyperbola.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const CAP: i64 = 2097152
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function divisor_summatory(n: i64) -> i64 {
+    let s: i64 = isqrt(n)
+    let mut acc: i64 = 0
+    let mut i: i64 = 1
+    while i <= s {
+        acc = acc + n / i
+        i = i + 1
+    }
+    return 2 * acc - s * s
+}
+
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
+    let mut h: i64 = key % CAP
+    if h < 0 { h = h + CAP }
+    while used[h] == 1 && keys[h] != key {
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function D_cached(x: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>) -> i64 {
+    let s: i64 = hslot(x, keys, used)
+    if used[s] == 1 { return vals[s] }
+    let v: i64 = divisor_summatory(x)
+    used[s] = 1
+    keys[s] = x
+    vals[s] = v
+    return v
+}
+
+function main() -> i32 {
+    let N: i64 = 1000000000000000
+    let k: i64 = isqrt(N)
+    let l: i64 = N / k
+    let tmax: i64 = isqrt(l)
+
+    let phi: ptr<i32> = calloc(k + 1, 4)
+    let tau: ptr<i16> = calloc(k + 1, 2)
+    let lp: ptr<i32> = calloc(k + 1, 4)
+    let expv: ptr<i8> = calloc(k + 1, 1)
+    let primes: ptr<i32> = calloc(k / 5 + 10, 4)
+    let Phi: ptr<i64> = calloc(k + 1, 8)
+    if phi == null || tau == null || lp == null || expv == null || primes == null || Phi == null {
+        return 1
+    }
+    phi[1] = 1
+    tau[1] = 1
+    let mut pn: i64 = 0
+    let mut i: i64 = 2
+    while i <= k {
+        if lp[i] == 0 {
+            lp[i] = i as i32
+            primes[pn] = i as i32
+            pn = pn + 1
+            phi[i] = (i - 1) as i32
+            tau[i] = 2
+            expv[i] = 1
+        }
+        let mut pi: i64 = 0
+        while pi < pn {
+            let p: i64 = primes[pi] as i64
+            let ip: i64 = i * p
+            if ip > k { break }
+            lp[ip] = p as i32
+            if i % p == 0 {
+                phi[ip] = (phi[i] as i64 * p) as i32
+                let e: i64 = (expv[i] as i64) + 1
+                expv[ip] = e as i8
+                tau[ip] = ((tau[i] as i64) / ((expv[i] as i64) + 1) * (e + 1)) as i16
+                break
+            } else {
+                phi[ip] = (phi[i] as i64 * (p - 1)) as i32
+                expv[ip] = 1
+                tau[ip] = ((tau[i] as i64) * 2) as i16
+            }
+            pi = pi + 1
+        }
+        i = i + 1
+    }
+    let mut running: i64 = 0
+    i = 1
+    while i <= k {
+        running = running + (phi[i] as i64)
+        Phi[i] = running
+        i = i + 1
+    }
+    let phi_small: ptr<i32> = calloc(tmax + 1, 4)
+    if phi_small == null { return 1 }
+    i = 1
+    while i <= tmax {
+        phi_small[i] = phi[i]
+        i = i + 1
+    }
+
+    let mut sum1: i64 = 0
+    let mut sum_tau: i64 = 0
+    i = 1
+    while i <= k {
+        let ti: i64 = tau[i] as i64
+        sum_tau = sum_tau + ti
+        let m: i64 = isqrt(N / i)
+        sum1 = sum1 + ti * Phi[m]
+        i = i + 1
+    }
+
+    let keys: ptr<i64> = calloc(CAP, 8)
+    let vals: ptr<i64> = calloc(CAP, 8)
+    let used: ptr<i8> = calloc(CAP, 1)
+    if keys == null || vals == null || used == null { return 1 }
+    let s0: i64 = hslot(k, keys, used)
+    used[s0] = 1
+    keys[s0] = k
+    vals[s0] = sum_tau
+
+    let mut sum2: i64 = 0
+    let mut t: i64 = 1
+    while t <= tmax {
+        sum2 = sum2 + (phi_small[t] as i64) * D_cached(N / (t * t), keys, vals, used)
+        t = t + 1
+    }
+    let result: i64 = sum1 + sum2 - sum_tau * Phi[tmax]
+    printf("%lld\n", result)
+    free(phi); free(tau); free(lp); free(expv); free(primes); free(Phi)
+    free(phi_small); free(keys); free(vals); free(used)
+    return 0
+}

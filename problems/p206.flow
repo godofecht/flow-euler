@@ -1,0 +1,27 @@
+# Project Euler 206
+# Concealed Square: find n where n^2 = 1_2_3_4_5_6_7_8_9_0.
+
+function form_ok(x: i64) -> bool {
+    let mut square: i64 = x * x
+    if square % 10 != 0 { return false }
+    square = square / 100
+    let mut want: i64 = 9
+    while want >= 1 {
+        if square % 10 != want { return false }
+        square = square / 100
+        want = want - 1
+    }
+    return true
+}
+
+function main() -> i32 {
+    let mut x: i64 = 1389026620
+    while x >= 1010101010 {
+        if form_ok(x) {
+            printf("%lld\n", x)
+            return 0
+        }
+        x = x - 10
+    }
+    return 1
+}

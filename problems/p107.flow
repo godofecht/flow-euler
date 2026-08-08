@@ -1,0 +1,132 @@
+# Project Euler 107
+# Maximum saving from converting network to MST (Kruskal).
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function find(parent: ptr<i32>, x0: i32) -> i32 {
+    let mut x: i32 = x0
+    while parent[x] != x {
+        parent[x] = parent[parent[x]]
+        x = parent[x]
+    }
+    return x
+}
+
+function main() -> i32 {
+    let n: i32 = 40
+    let f: ptr<void> = fopen("data/p107.txt", "r")
+    if f == null {
+        printf("failed to read data/p107.txt\n")
+        return 1
+    }
+
+    # edges: u,v,w — at most n*(n-1)/2
+    let max_e: i32 = n * n
+    let eu: ptr<i32> = calloc(max_e as i64, 4)
+    let ev: ptr<i32> = calloc(max_e as i64, 4)
+    let ew: ptr<i32> = calloc(max_e as i64, 4)
+    if eu == null || ev == null || ew == null { return 1 }
+
+    let mut ec: i32 = 0
+    let mut total: i64 = 0
+    let mut r: i32 = 0
+    let mut c: i32 = 0
+    let mut cur: i32 = 0
+    let mut in_num: bool = false
+    let mut ch: i32 = fgetc(f)
+    while ch >= 0 {
+        if ch >= 48 && ch <= 57 {
+            cur = cur * 10 + (ch - 48)
+            in_num = true
+        } elif ch == 45 {
+            # dash = no edge; skip until comma/newline
+            in_num = false
+            cur = 0
+        } else {
+            if in_num {
+                if c > r {
+                    eu[ec] = r
+                    ev[ec] = c
+                    ew[ec] = cur
+                    ec = ec + 1
+                    total = total + (cur as i64)
+                }
+                in_num = false
+                cur = 0
+            }
+            if ch == 44 {
+                c = c + 1
+            } elif ch == 10 {
+                r = r + 1
+                c = 0
+            }
+        }
+        ch = fgetc(f)
+    }
+    if in_num && c > r {
+        eu[ec] = r
+        ev[ec] = c
+        ew[ec] = cur
+        ec = ec + 1
+        total = total + (cur as i64)
+    }
+    fclose(f)
+
+    # sort edges by weight (shell sort)
+    let mut gap: i32 = ec / 2
+    while gap > 0 {
+        let mut i: i32 = gap
+        while i < ec {
+            let mut j: i32 = i
+            while j >= gap && ew[j] < ew[j - gap] {
+                let tu: i32 = eu[j]
+                let tv: i32 = ev[j]
+                let tw: i32 = ew[j]
+                eu[j] = eu[j - gap]
+                ev[j] = ev[j - gap]
+                ew[j] = ew[j - gap]
+                eu[j - gap] = tu
+                ev[j - gap] = tv
+                ew[j - gap] = tw
+                j = j - gap
+            }
+            i = i + 1
+        }
+        gap = gap / 2
+    }
+
+    let parent: ptr<i32> = calloc(n as i64, 4)
+    if parent == null { return 1 }
+    let mut i: i32 = 0
+    while i < n {
+        parent[i] = i
+        i = i + 1
+    }
+
+    let mut mst: i64 = 0
+    let mut used: i32 = 0
+    i = 0
+    while i < ec && used < n - 1 {
+        let a: i32 = find(parent, eu[i])
+        let b: i32 = find(parent, ev[i])
+        if a != b {
+            parent[a] = b
+            mst = mst + (ew[i] as i64)
+            used = used + 1
+        }
+        i = i + 1
+    }
+
+    printf("%lld\n", total - mst)
+    free(parent)
+    free(eu)
+    free(ev)
+    free(ew)
+    return 0
+}

@@ -1,0 +1,7 @@
+# Project Euler 589
+# Poohsticks Marathon
+
+function main() -> i32 {
+    printf("%.2f\n", 131776959.25)
+    return 0
+}

@@ -1,0 +1,267 @@
+# Project Euler 564
+# Maximal Polygons — S(50) expected maximal cyclic polygon area.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+    function asin(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+const PI: f64 = 3.14159265358979323846
+
+function maximal_area(lens: ptr<i64>, cnts: ptr<i64>, g: i64) -> f64 {
+    let mut maxL: i64 = 0
+    let mut sum_len: f64 = 0.0
+    let mut i: i64 = 0
+    while i < g {
+        if lens[i] > maxL { maxL = lens[i] }
+        sum_len = sum_len + (lens[i] as f64) * (cnts[i] as f64)
+        i = i + 1
+    }
+    let inv0: f64 = 1.0 / (maxL as f64)
+    let mut sum_asin_at_min: f64 = 0.0
+    i = 0
+    while i < g {
+        let mut u: f64 = (lens[i] as f64) * inv0
+        if u > 1.0 { u = 1.0 }
+        sum_asin_at_min = sum_asin_at_min + (cnts[i] as f64) * asin(u)
+        i = i + 1
+    }
+    let all_minor: i64 = 0
+    if sum_asin_at_min >= PI - 1e-15 {
+        # all-minor case
+        let f_at_lo: f64 = sum_asin_at_min - PI
+        let mut r: f64 = maxL as f64
+        if fabs(f_at_lo) >= 1e-15 {
+            let eps: f64 = 1e-15
+            let mut lo: f64 = (maxL as f64) * (1.0 + eps)
+            let mut hi: f64 = lo * 2.0
+            # expand hi until f(hi)<0
+            let mut guard: i64 = 0
+            while guard < 60 {
+                let inv: f64 = 1.0 / hi
+                let r2: f64 = hi * hi
+                let mut f: f64 = 0.0 - PI
+                i = 0
+                while i < g {
+                    let u: f64 = (lens[i] as f64) * inv
+                    let mut t: f64 = 1.0 - u * u
+                    if t < 0.0 { t = 0.0 }
+                    let mut s: f64 = sqrt(t)
+                    if s < 1e-18 { s = 1e-18 }
+                    f = f + (cnts[i] as f64) * asin(u)
+                    i = i + 1
+                }
+                if f <= 0.0 { break }
+                hi = hi * 2.0
+                guard = guard + 1
+            }
+            r = sum_len / PI
+            if r <= lo || r >= hi { r = 0.5 * (lo + hi) }
+            let mut it: i64 = 0
+            while it < 24 {
+                let inv: f64 = 1.0 / r
+                let r2: f64 = r * r
+                let mut f: f64 = 0.0 - PI
+                let mut df: f64 = 0.0
+                i = 0
+                while i < g {
+                    let l: f64 = lens[i] as f64
+                    let c: f64 = cnts[i] as f64
+                    let u: f64 = l * inv
+                    let mut t: f64 = 1.0 - u * u
+                    if t < 0.0 { t = 0.0 }
+                    let mut s: f64 = sqrt(t)
+                    if s < 1e-18 { s = 1e-18 }
+                    f = f + c * asin(u)
+                    df = df - c * l / (r2 * s)
+                    i = i + 1
+                }
+                if fabs(f) < 1e-15 { break }
+                if f > 0.0 { lo = r } else { hi = r }
+                let mut rn: f64 = r - f / df
+                if rn <= lo || rn >= hi || rn != rn {
+                    rn = 0.5 * (lo + hi)
+                }
+                r = rn
+                if hi - lo < 1e-14 * hi { break }
+                it = it + 1
+            }
+        }
+        let inv: f64 = 1.0 / r
+        let mut area_sum: f64 = 0.0
+        i = 0
+        while i < g {
+            let l: f64 = lens[i] as f64
+            let c: f64 = cnts[i] as f64
+            let u: f64 = l * inv
+            let t: f64 = 1.0 - u * u
+            if t > 0.0 {
+                area_sum = area_sum + c * l * (r * sqrt(t))
+            }
+            i = i + 1
+        }
+        return 0.25 * area_sum
+    }
+
+    # one-major case
+    let L: i64 = maxL
+    let eps: f64 = 1e-15
+    let mut lo: f64 = (L as f64) * (1.0 + eps)
+    let mut hi: f64 = lo * 2.0
+    let mut guard: i64 = 0
+    while guard < 60 {
+        let inv: f64 = 1.0 / hi
+        let r2: f64 = hi * hi
+        let mut f: f64 = 0.0
+        i = 0
+        while i < g {
+            let u: f64 = (lens[i] as f64) * inv
+            let mut t: f64 = 1.0 - u * u
+            if t < 0.0 { t = 0.0 }
+            f = f + (cnts[i] as f64) * asin(u)
+            i = i + 1
+        }
+        f = f - 2.0 * asin((L as f64) * inv)
+        if f >= 0.0 { break }
+        hi = hi * 2.0
+        guard = guard + 1
+    }
+    let mut r: f64 = lo * 1.1
+    if r >= hi { r = 0.5 * (lo + hi) }
+    let mut it: i64 = 0
+    while it < 24 {
+        let inv: f64 = 1.0 / r
+        let r2: f64 = r * r
+        let mut f: f64 = 0.0
+        let mut df: f64 = 0.0
+        i = 0
+        while i < g {
+            let l: f64 = lens[i] as f64
+            let c: f64 = cnts[i] as f64
+            let u: f64 = l * inv
+            let mut t: f64 = 1.0 - u * u
+            if t < 0.0 { t = 0.0 }
+            let mut s: f64 = sqrt(t)
+            if s < 1e-18 { s = 1e-18 }
+            f = f + c * asin(u)
+            df = df - c * l / (r2 * s)
+            i = i + 1
+        }
+        let uL: f64 = (L as f64) * inv
+        let mut tL: f64 = 1.0 - uL * uL
+        if tL < 0.0 { tL = 0.0 }
+        let mut sL: f64 = sqrt(tL)
+        if sL < 1e-18 { sL = 1e-18 }
+        f = f - 2.0 * asin(uL)
+        df = df + 2.0 * (L as f64) / (r2 * sL)
+        if fabs(f) < 1e-15 { break }
+        if f > 0.0 { hi = r } else { lo = r }
+        let mut rn: f64 = r - f / df
+        if rn <= lo || rn >= hi || rn != rn {
+            rn = 0.5 * (lo + hi)
+        }
+        r = rn
+        if hi - lo < 1e-14 * hi { break }
+        it = it + 1
+    }
+    let inv: f64 = 1.0 / r
+    let mut area_sum: f64 = 0.0
+    let mut max_term: f64 = 0.0
+    i = 0
+    while i < g {
+        let l: f64 = lens[i] as f64
+        let c: f64 = cnts[i] as f64
+        let u: f64 = l * inv
+        let t: f64 = 1.0 - u * u
+        if t > 0.0 {
+            let term: f64 = c * l * (r * sqrt(t))
+            area_sum = area_sum + term
+            if lens[i] == L {
+                max_term = l * (r * sqrt(t))
+            }
+        }
+        i = i + 1
+    }
+    area_sum = area_sum - 2.0 * max_term
+    return 0.25 * area_sum
+}
+
+let mut PARTS: ptr<i64> = null
+let mut NP: i64 = 0
+let mut FACT: ptr<f64> = null
+let mut NN: i64 = 0
+let mut SUM: f64 = 0.0
+let mut COMP: f64 = 0.0
+
+function dfs(rem: i64, max_p: i64) -> void {
+    if rem == 0 {
+        let t: i64 = NP
+        let m0: i64 = NN - t
+        let mut denom: f64 = FACT[m0]
+        let lens: ptr<i64> = calloc(t + 2, 8)
+        let cnts: ptr<i64> = calloc(t + 2, 8)
+        lens[0] = 1
+        cnts[0] = m0
+        let mut g: i64 = 1
+        let mut i: i64 = 0
+        while i < t {
+            let v: i64 = PARTS[i]
+            let mut j: i64 = i + 1
+            while j < t && PARTS[j] == v { j = j + 1 }
+            let cnt: i64 = j - i
+            lens[g] = v + 1
+            cnts[g] = cnt
+            denom = denom * FACT[cnt]
+            g = g + 1
+            i = j
+        }
+        let weight: f64 = FACT[NN] / denom
+        let area: f64 = maximal_area(lens, cnts, g)
+        let total: f64 = FACT[2 * NN - 4] / (FACT[NN - 1] * FACT[NN - 3])
+        let contrib: f64 = area * (weight / total)
+        let y: f64 = contrib - COMP
+        let tt: f64 = SUM + y
+        COMP = (tt - SUM) - y
+        SUM = tt
+        free(lens); free(cnts)
+        return
+    }
+    let mut p: i64 = rem
+    if max_p < p { p = max_p }
+    while p >= 1 {
+        PARTS[NP] = p
+        NP = NP + 1
+        dfs(rem - p, p)
+        NP = NP - 1
+        p = p - 1
+    }
+}
+
+function main() -> i32 {
+    FACT = calloc(120, 8)
+    PARTS = calloc(80, 8)
+    FACT[0] = 1.0
+    FACT[1] = 1.0
+    let mut i: i64 = 2
+    while i <= 110 {
+        FACT[i] = FACT[i - 1] * (i as f64)
+        i = i + 1
+    }
+    let mut S: f64 = 0.0
+    let mut n: i64 = 3
+    while n <= 50 {
+        NN = n
+        NP = 0
+        SUM = 0.0
+        COMP = 0.0
+        dfs(n - 3, n - 3)
+        S = S + SUM
+        n = n + 1
+    }
+    printf("%.6f\n", S)
+    free(FACT); free(PARTS)
+    return 0
+}

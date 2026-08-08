@@ -1,0 +1,48 @@
+# Project Euler 099
+# Line number of maximal base^exp (compare via exp*log(base)).
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function log(x: f64) -> f64
+}
+
+function read_int(f: ptr<void>) -> i64 {
+    let mut c: i32 = fgetc(f)
+    while c >= 0 && (c < 48 || c > 57) {
+        c = fgetc(f)
+    }
+    if c < 0 { return 0 - 1 }
+    let mut v: i64 = 0
+    while c >= 48 && c <= 57 {
+        v = v * 10 + ((c - 48) as i64)
+        c = fgetc(f)
+    }
+    return v
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p099.txt", "r")
+    if f == null {
+        printf("failed to read data/p099.txt\n")
+        return 1
+    }
+    let mut best: f64 = 0.0 - 1.0
+    let mut best_line: i64 = 0
+    let mut line: i64 = 1
+    while line <= 1000 {
+        let base: i64 = read_int(f)
+        let exp: i64 = read_int(f)
+        if base < 0 { break }
+        let score: f64 = (exp as f64) * log(base as f64)
+        if score > best {
+            best = score
+            best_line = line
+        }
+        line = line + 1
+    }
+    fclose(f)
+    printf("%lld\n", best_line)
+    return 0
+}

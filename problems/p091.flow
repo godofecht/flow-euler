@@ -1,0 +1,35 @@
+# Project Euler 091
+# Right triangles with integer coordinates on 0..50 grid, right angle at any vertex.
+
+function main() -> i32 {
+    let lim: i32 = 50
+    let mut count: i64 = 0
+    let mut x1: i32 = 0
+    while x1 <= lim {
+        let mut y1: i32 = 0
+        while y1 <= lim {
+            let mut x2: i32 = 0
+            while x2 <= lim {
+                let mut y2: i32 = 0
+                while y2 <= lim {
+                    if !(x1 == 0 && y1 == 0) && !(x2 == 0 && y2 == 0) && !(x1 == x2 && y1 == y2) {
+                        # vectors OP1, OP2, P1P2
+                        let a2: i32 = x1 * x1 + y1 * y1
+                        let b2: i32 = x2 * x2 + y2 * y2
+                        let c2: i32 = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2)
+                        if a2 + b2 == c2 || a2 + c2 == b2 || b2 + c2 == a2 {
+                            count = count + 1
+                        }
+                    }
+                    y2 = y2 + 1
+                }
+                x2 = x2 + 1
+            }
+            y1 = y1 + 1
+        }
+        x1 = x1 + 1
+    }
+    # each triangle counted twice (order of P1,P2)
+    printf("%lld\n", count / 2)
+    return 0
+}

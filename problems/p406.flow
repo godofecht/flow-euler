@@ -1,0 +1,93 @@
+# Project Euler 406
+# Sum C(10^12, sqrt(k), sqrt(F_k)) for k=1..30, 8 decimals.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+function max_numbers(t: f64, a: f64, b: f64, cap: i64, memo: ptr<i64>, stride: i64, maxi: i64, maxj: i64) -> i64 {
+    # iterative DP bottom-up: dp[i][j] for i=0..maxi, j=0..maxj
+    # Fill from large i+j downward
+    let mut i: i64 = maxi
+    while i >= 0 {
+        let mut j: i64 = maxj
+        while j >= 0 {
+            let rem: f64 = t - (i as f64) * a - (j as f64) * b
+            if rem < 0.0 {
+                memo[i * stride + j] = 0
+            } else {
+                let mut n: i64 = 1
+                if i + 1 <= maxi {
+                    n = n + memo[(i + 1) * stride + j]
+                }
+                if j + 1 <= maxj {
+                    n = n + memo[i * stride + (j + 1)]
+                }
+                if n > cap { n = cap }
+                memo[i * stride + j] = n
+            }
+            j = j - 1
+        }
+        i = i - 1
+    }
+    return memo[0]
+}
+
+function min_cost(n: i64, a: f64, b: f64) -> f64 {
+    if n <= 1 { return 0.0 }
+    let mut hi: f64 = 1.0
+    let stride: i64 = 5000
+    let memo: ptr<i64> = calloc(5000 * 5000, 8)
+    if memo == null { return -1.0 }
+    while true {
+        let mut maxi: i64 = (hi / a) as i64 + 2
+        let mut maxj: i64 = (hi / b) as i64 + 2
+        if maxi >= 4990 { maxi = 4990 }
+        if maxj >= 4990 { maxj = 4990 }
+        if max_numbers(hi, a, b, n, memo, stride, maxi, maxj) >= n {
+            break
+        }
+        hi = hi * 2.0
+        if hi > 1.0e7 {
+            break
+        }
+    }
+    let mut lo: f64 = 0.0
+    let mut it: i32 = 0
+    while it < 80 {
+        let mid: f64 = (lo + hi) / 2.0
+        let mut maxi: i64 = (mid / a) as i64 + 2
+        let mut maxj: i64 = (mid / b) as i64 + 2
+        if maxi >= 4990 { maxi = 4990 }
+        if maxj >= 4990 { maxj = 4990 }
+        if max_numbers(mid, a, b, n, memo, stride, maxi, maxj) >= n {
+            hi = mid
+        } else {
+            lo = mid
+        }
+        it = it + 1
+    }
+    free(memo)
+    return hi
+}
+
+function main() -> i32 {
+    let fib: array<i64, 31> = [
+        0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610,
+        987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025,
+        121393, 196418, 317811, 514229, 832040
+    ]
+    let N: i64 = 1000000000000
+    let mut total: f64 = 0.0
+    let mut k: i32 = 1
+    while k <= 30 {
+        let a: f64 = sqrt(k as f64)
+        let b: f64 = sqrt(fib[k] as f64)
+        total = total + min_cost(N, a, b)
+        k = k + 1
+    }
+    printf("%.8f\n", total)
+    return 0
+}

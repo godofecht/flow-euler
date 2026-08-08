@@ -1,0 +1,36 @@
+# Project Euler 182
+# Sum of encryption exponents e with minimal unconcealed messages.
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function main() -> i32 {
+    let p: i64 = 1009
+    let q: i64 = 3643
+    let phi: i64 = (p - 1) * (q - 1)
+    let mut best: i64 = 1000000000000000000
+    let mut sum: i64 = 0
+    let mut e: i64 = 2
+    while e < phi {
+        if gcd(e, phi) == 1 {
+            let unc: i64 = (1 + gcd(e - 1, p - 1)) * (1 + gcd(e - 1, q - 1))
+            if unc < best {
+                best = unc
+                sum = e
+            } elif unc == best {
+                sum = sum + e
+            }
+        }
+        e = e + 1
+    }
+    printf("%lld\n", sum)
+    return 0
+}

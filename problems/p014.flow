@@ -1,0 +1,53 @@
+# Project Euler 014
+# Starting number under one million that produces the longest Collatz chain.
+# Memoized in a heap buffer — Flow malloc → same C performance.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function collatz_len(n0: i64, memo: ptr<i32>, limit: i64) -> i32 {
+    let mut n: i64 = n0
+    let mut steps: i32 = 0
+    while n != 1 {
+        if n < limit && memo[n] != 0 {
+            return steps + memo[n]
+        }
+        if n % 2 == 0 {
+            n = n / 2
+        } else {
+            n = 3 * n + 1
+        }
+        steps = steps + 1
+    }
+    return steps + 1
+}
+
+function solve(limit: i64) -> i64 {
+    let memo: ptr<i32> = calloc(limit, 4)
+    if memo == null {
+        return -1
+    }
+    memo[1] = 1
+
+    let mut best_n: i64 = 1
+    let mut best_len: i32 = 1
+    let mut n: i64 = 2
+    while n < limit {
+        let len: i32 = collatz_len(n, memo, limit)
+        memo[n] = len
+        if len > best_len {
+            best_len = len
+            best_n = n
+        }
+        n = n + 1
+    }
+    free(memo)
+    return best_n
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(1000000))
+    return 0
+}

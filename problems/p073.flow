@@ -1,0 +1,33 @@
+# Project Euler 073
+# How many fractions lie between 1/3 and 1/2 for d ≤ 12,000?
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function main() -> i32 {
+    let limit: i64 = 12000
+    let mut count: i64 = 0
+    let mut d: i64 = 1
+    while d <= limit {
+        # 1/3 < n/d < 1/2 => d/3 < n < d/2
+        let mut n: i64 = d / 3 + 1
+        let hi: i64 = (d - 1) / 2
+        while n <= hi {
+            if gcd(n, d) == 1 {
+                count = count + 1
+            }
+            n = n + 1
+        }
+        d = d + 1
+    }
+    printf("%lld\n", count)
+    return 0
+}

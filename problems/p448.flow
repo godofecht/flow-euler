@@ -1,0 +1,158 @@
+# Project Euler 448
+# S(99999999019) mod 999999017 via Du Jiao sieve.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function hget(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64) -> i64 {
+    let mut h: i64 = key % cap
+    while used[h] != 0 {
+        if keys[h] == key { return vals[h] }
+        h = h + 1
+        if h >= cap { h = 0 }
+    }
+    return -1
+}
+
+function hput(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, val: i64) -> void {
+    let mut h: i64 = key % cap
+    while used[h] != 0 {
+        if keys[h] == key {
+            vals[h] = val
+            return
+        }
+        h = h + 1
+        if h >= cap { h = 0 }
+    }
+    used[h] = 1
+    keys[h] = key
+    vals[h] = val
+}
+
+function sumF(
+    n: i64, LIMIT: i64, MOD: i64, inv2: i64, inv6: i64,
+    prefF: ptr<i32>,
+    keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, HCAP: i64
+) -> i64 {
+    if n <= LIMIT {
+        return prefF[n] as i64
+    }
+    let cached: i64 = hget(keys, vals, used, HCAP, n)
+    if cached >= 0 { return cached }
+
+    let a: i64 = n % MOD
+    let mut res: i64 = (a * ((n + 1) % MOD) % MOD) * ((2 * n + 1) % MOD) % MOD
+    res = (res * inv6) % MOD
+
+    let mut i: i64 = 2
+    while i <= n {
+        let q: i64 = n / i
+        let j: i64 = n / q
+        let sum_ij: i64 = ((i + j) % MOD) * ((j - i + 1) % MOD) % MOD
+        sum_ij = (sum_ij * inv2) % MOD
+        let fq: i64 = sumF(q, LIMIT, MOD, inv2, inv6, prefF, keys, vals, used, HCAP)
+        res = (res - sum_ij * fq) % MOD
+        if res < 0 { res = res + MOD }
+        i = j + 1
+    }
+    hput(keys, vals, used, HCAP, n, res)
+    return res
+}
+
+function prefixJ(
+    n: i64, LIMIT: i64, MOD: i64, inv2: i64, inv6: i64,
+    prefF: ptr<i32>,
+    keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, HCAP: i64
+) -> i64 {
+    return ((sumF(n, LIMIT, MOD, inv2, inv6, prefF, keys, vals, used, HCAP) + 1) % MOD) * inv2 % MOD
+}
+
+function main() -> i32 {
+    let MOD: i64 = 999999017
+    let N: i64 = 99999999019
+    let LIMIT: i64 = 5000000
+    let inv2: i64 = modpow(2, MOD - 2, MOD)
+    let inv6: i64 = modpow(6, MOD - 2, MOD)
+
+    let phi: ptr<i32> = calloc(LIMIT + 1, 4)
+    let sieve: ptr<i8> = calloc(LIMIT + 1, 1)
+    let primes: ptr<i32> = calloc(LIMIT / 5, 4)
+    let prefF: ptr<i32> = calloc(LIMIT + 1, 4)
+    if phi == null || sieve == null || primes == null || prefF == null { return 1 }
+
+    phi[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= LIMIT {
+        if sieve[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            phi[i] = (i - 1) as i32
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > LIMIT { break }
+            sieve[ip] = 1
+            if i % p == 0 {
+                phi[ip] = ((phi[i] as i64) * p) as i32
+                break
+            } else {
+                phi[ip] = ((phi[i] as i64) * (p - 1)) as i32
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let mut s: i64 = 0
+    i = 1
+    while i <= LIMIT {
+        s = (s + ((i % MOD) * ((phi[i] as i64) % MOD)) % MOD) % MOD
+        prefF[i] = s as i32
+        i = i + 1
+    }
+
+    let HCAP: i64 = 4000003
+    let keys: ptr<i64> = calloc(HCAP, 8)
+    let vals: ptr<i64> = calloc(HCAP, 8)
+    let used: ptr<i8> = calloc(HCAP, 1)
+    if keys == null || vals == null || used == null { return 1 }
+
+    let mut ans: i64 = 0
+    let mut k: i64 = 1
+    while k <= N {
+        let q: i64 = N / k
+        let r: i64 = N / q
+        let cnt: i64 = (r - k + 1) % MOD
+        let pj: i64 = prefixJ(q, LIMIT, MOD, inv2, inv6, prefF, keys, vals, used, HCAP)
+        ans = (ans + cnt * pj) % MOD
+        k = r + 1
+    }
+    printf("%lld\n", ans)
+
+    free(used)
+    free(vals)
+    free(keys)
+    free(prefF)
+    free(primes)
+    free(sieve)
+    free(phi)
+    return 0
+}

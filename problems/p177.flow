@@ -1,0 +1,194 @@
+# Project Euler 177
+# Count non-similar integer-angled convex quadrilaterals.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sin(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+function pack8(a1: i32, a2: i32, b1: i32, b2: i32, c1: i32, c2: i32, d1: i32, d2: i32) -> i64 {
+    # pack into i64 with 8 bits each (angles < 180)
+    let mut v: i64 = a1 as i64
+    v = (v << 8) | (a2 as i64)
+    v = (v << 8) | (b1 as i64)
+    v = (v << 8) | (b2 as i64)
+    v = (v << 8) | (c1 as i64)
+    v = (v << 8) | (c2 as i64)
+    v = (v << 8) | (d1 as i64)
+    v = (v << 8) | (d2 as i64)
+    return v
+}
+
+function canon(a1: i32, a2: i32, b1: i32, b2: i32, c1: i32, c2: i32, d1: i32, d2: i32) -> i64 {
+    let r0: i64 = pack8(a1,a2,b1,b2,c1,c2,d1,d2)
+    let r1: i64 = pack8(b1,b2,c1,c2,d1,d2,a1,a2)
+    let r2: i64 = pack8(c1,c2,d1,d2,a1,a2,b1,b2)
+    let r3: i64 = pack8(d1,d2,a1,a2,b1,b2,c1,c2)
+    let f0: i64 = pack8(a2,a1,d2,d1,c2,c1,b2,b1)
+    let f1: i64 = pack8(b2,b1,a2,a1,d2,d1,c2,c1)
+    let f2: i64 = pack8(c2,c1,b2,b1,a2,a1,d2,d1)
+    let f3: i64 = pack8(d2,d1,c2,c1,b2,b1,a2,a1)
+    let mut m: i64 = r0
+    if r1 < m { m = r1 }
+    if r2 < m { m = r2 }
+    if r3 < m { m = r3 }
+    if f0 < m { m = f0 }
+    if f1 < m { m = f1 }
+    if f2 < m { m = f2 }
+    if f3 < m { m = f3 }
+    return m
+}
+
+function main() -> i32 {
+    let PI: f64 = 3.141592653589793
+    let sinv: ptr<f64> = calloc(181, 8)
+    if sinv == null { return 1 }
+    let mut i: i32 = 0
+    while i <= 180 {
+        sinv[i] = sin((i as f64) * PI / 180.0)
+        i = i + 1
+    }
+
+    let SCALE: f64 = 100000000000.0
+    let tol: f64 = 0.000000000001
+
+    # hash set for canon keys
+    let HS: i64 = 1 << 21
+    let hkey: ptr<i64> = calloc(HS, 8)
+    let hused: ptr<i8> = calloc(HS, 1)
+    if hkey == null || hused == null { return 1 }
+    let mut count: i64 = 0
+
+    # M_map: for each key store list of c2; use parallel arrays with chaining via next
+    # Simpler: for each a2,b1 rebuild map as open arrays
+    let map_key: ptr<i64> = calloc(400, 8)
+    let map_c2: ptr<i32> = calloc(400, 4)
+    let map_n: ptr<i32> = calloc(400, 4)  # unused
+    let L_b2: ptr<i32> = calloc(200, 4)
+    let L_c1: ptr<i32> = calloc(200, 4)
+    let L_inv: ptr<f64> = calloc(200, 8)
+    let L_sb2: ptr<f64> = calloc(200, 8)
+    let L_sc1: ptr<f64> = calloc(200, 8)
+
+    let mut a2: i32 = 1
+    while a2 < 179 {
+        let sin_a2: f64 = sinv[a2]
+        let mut b1: i32 = 1
+        while b1 < 179 - a2 {
+            let sin_b1: f64 = sinv[b1]
+            let max_b2: i32 = 179 - a2 - b1
+            if max_b2 <= 0 {
+                b1 = b1 + 1
+                continue
+            }
+            let max_c2: i32 = a2 + b1 - 1
+            if max_c2 <= 0 {
+                b1 = b1 + 1
+                continue
+            }
+
+            # build M_map as list of (key, c2), then sort by key for binary search groups
+            let mut mc: i32 = 0
+            let mut c2: i32 = 1
+            while c2 <= max_c2 {
+                let d1: i32 = a2 + b1 - c2
+                let key: i64 = ((sinv[d1] / sinv[c2]) * SCALE + 0.5) as i64
+                map_key[mc] = key
+                map_c2[mc] = c2
+                mc = mc + 1
+                c2 = c2 + 1
+            }
+            # sort by key (insertion sort - mc < 360)
+            let mut ii: i32 = 1
+            while ii < mc {
+                let ktmp: i64 = map_key[ii]
+                let ctmp: i32 = map_c2[ii]
+                let mut jj: i32 = ii
+                while jj > 0 && map_key[jj - 1] > ktmp {
+                    map_key[jj] = map_key[jj - 1]
+                    map_c2[jj] = map_c2[jj - 1]
+                    jj = jj - 1
+                }
+                map_key[jj] = ktmp
+                map_c2[jj] = ctmp
+                ii = ii + 1
+            }
+
+            let mut lc: i32 = 0
+            let mut b2: i32 = 1
+            while b2 <= max_b2 {
+                let c1: i32 = 180 - a2 - b1 - b2
+                L_b2[lc] = b2
+                L_c1[lc] = c1
+                L_inv[lc] = sinv[b2] / sinv[c1]
+                L_sb2[lc] = sinv[b2]
+                L_sc1[lc] = sinv[c1]
+                lc = lc + 1
+                b2 = b2 + 1
+            }
+
+            let max_a1: i32 = 179 - a2 - b1
+            let mut a1: i32 = 1
+            while a1 <= max_a1 {
+                let sin_a1: f64 = sinv[a1]
+                let d2: i32 = 180 - a1 - a2 - b1
+                let sin_d2: f64 = sinv[d2]
+                let R_scaled: f64 = (sin_a2 * sin_d2) / (sin_a1 * sin_b1) * SCALE
+
+                let mut li: i32 = 0
+                while li < lc {
+                    let needed: i64 = (R_scaled * L_inv[li] + 0.5) as i64
+                    # binary search for needed in map_key
+                    let mut lo: i32 = 0
+                    let mut hi: i32 = mc
+                    while lo < hi {
+                        let mid: i32 = (lo + hi) / 2
+                        if map_key[mid] < needed { lo = mid + 1 }
+                        else { hi = mid }
+                    }
+                    let mut k: i32 = lo
+                    while k < mc && map_key[k] == needed {
+                        c2 = map_c2[k]
+                        if a1 + c2 < 180 {
+                            let d1: i32 = a2 + b1 - c2
+                            let b2v: i32 = L_b2[li]
+                            let c1v: i32 = L_c1[li]
+                            let lhs: f64 = L_sc1[li] * sinv[d1] * sin_a1 * sin_b1
+                            let rhs: f64 = sin_a2 * L_sb2[li] * sinv[c2] * sin_d2
+                            if fabs(lhs - rhs) <= tol {
+                                if a1 + a2 < 180 && b1 + b2v < 180 && c1v + c2 < 180 && d1 + d2 < 180 {
+                                    let keyc: i64 = canon(a1, a2, b1, b2v, c1v, c2, d1, d2)
+                                    let mut h: i64 = keyc % HS
+                                    if h < 0 { h = 0 - h }
+                                    let mut found: bool = false
+                                    while hused[h] == 1 {
+                                        if hkey[h] == keyc { found = true; break }
+                                        h = h + 1
+                                        if h >= HS { h = 0 }
+                                    }
+                                    if !found {
+                                        hused[h] = 1
+                                        hkey[h] = keyc
+                                        count = count + 1
+                                    }
+                                }
+                            }
+                        }
+                        k = k + 1
+                    }
+                    li = li + 1
+                }
+                a1 = a1 + 1
+            }
+            b1 = b1 + 1
+        }
+        a2 = a2 + 1
+    }
+    printf("%lld\n", count)
+    free(sinv); free(hkey); free(hused)
+    free(map_key); free(map_c2); free(map_n)
+    free(L_b2); free(L_c1); free(L_inv); free(L_sb2); free(L_sc1)
+    return 0
+}

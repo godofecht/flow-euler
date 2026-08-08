@@ -1,0 +1,216 @@
+# Project Euler 343
+# Sum f(n^3) for n=1..2e6; f(n)=LPF(n+1)-1 style via max LPF of factors of n^3+1.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function tonelli(a0: i64, p: i64) -> i64 {
+    let a: i64 = a0 % p
+    if a == 0 { return 0 }
+    if p % 4 == 3 {
+        return modpow(a, (p + 1) / 4, p)
+    }
+    let mut q: i64 = p - 1
+    let mut s: i64 = 0
+    while q % 2 == 0 {
+        q = q / 2
+        s = s + 1
+    }
+    let mut z: i64 = 2
+    while modpow(z, (p - 1) / 2, p) != p - 1 {
+        z = z + 1
+    }
+    let mut m: i64 = s
+    let mut c: i64 = modpow(z, q, p)
+    let mut t: i64 = modpow(a, q, p)
+    let mut r: i64 = modpow(a, (q + 1) / 2, p)
+    while t != 1 {
+        let mut i: i64 = 1
+        let mut t2: i64 = (t * t) % p
+        while t2 != 1 {
+            t2 = (t2 * t2) % p
+            i = i + 1
+        }
+        # b = c^(2^(m-i-1))
+        let mut expb: i64 = 1
+        let mut j: i64 = 0
+        while j < m - i - 1 {
+            expb = expb * 2
+            j = j + 1
+        }
+        let b: i64 = modpow(c, expb, p)
+        r = (r * b) % p
+        t = (((t * b) % p) * b) % p
+        c = (b * b) % p
+        m = i
+    }
+    return r
+}
+
+function strip(p: i64, root: i64, limit: i64, rem: ptr<i64>, lpfq: ptr<i64>) -> i32 {
+    let mut start: i64 = root
+    if start == 0 { start = p }
+    let mut k: i64 = start
+    while k <= limit {
+        let mut v: i64 = rem[k]
+        if v % p == 0 {
+            while v % p == 0 { v = v / p }
+            rem[k] = v
+            lpfq[k] = p
+        }
+        k = k + p
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let limit: i64 = 2000000
+    let lpf: ptr<i32> = calloc(limit + 2, 4)
+    if lpf == null { return 1 }
+    # sieve for primes, then mark largest prime factor
+    let sieve: ptr<i8> = calloc(limit + 2, 1)
+    let mut i: i64 = 0
+    while i <= limit + 1 {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0; sieve[1] = 0
+    i = 2
+    while i * i <= limit + 1 {
+        if sieve[i] == 1 {
+            let mut j: i64 = i * i
+            while j <= limit + 1 {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut pc: i64 = 0
+    i = 2
+    while i <= limit + 1 {
+        if sieve[i] == 1 { pc = pc + 1 }
+        i = i + 1
+    }
+    let primes: ptr<i64> = calloc(pc, 8)
+    let mut idx: i64 = 0
+    i = 2
+    while i <= limit + 1 {
+        if sieve[i] == 1 {
+            primes[idx] = i
+            idx = idx + 1
+        }
+        i = i + 1
+    }
+    # largest prime factor: overwrite with increasing primes
+    i = 0
+    while i <= limit + 1 {
+        lpf[i] = 0
+        i = i + 1
+    }
+    idx = 0
+    while idx < pc {
+        let p: i64 = primes[idx]
+        let mut m: i64 = p
+        while m <= limit + 1 {
+            lpf[m] = p as i32
+            m = m + p
+        }
+        idx = idx + 1
+    }
+    free(sieve)
+
+    let rem: ptr<i64> = calloc(limit + 1, 8)
+    let lpfq: ptr<i64> = calloc(limit + 1, 8)
+    i = 1
+    while i <= limit {
+        rem[i] = i * i - i + 1
+        lpfq[i] = 1
+        i = i + 1
+    }
+
+    idx = 0
+    while idx < pc {
+        let p: i64 = primes[idx]
+        if p == 2 {
+            idx = idx + 1
+            continue
+        }
+        if p == 3 {
+            strip(3, 2, limit, rem, lpfq)
+            idx = idx + 1
+            continue
+        }
+        if p % 3 != 1 {
+            idx = idx + 1
+            continue
+        }
+        let sqrt_disc: i64 = tonelli(p - 3, p)
+        let inv2: i64 = (p + 1) / 2
+        let mut d1: i64 = (1 + sqrt_disc) % p
+        if d1 < 0 { d1 = d1 + p }
+        let mut root1: i64 = (d1 * inv2) % p
+        if root1 < 0 { root1 = root1 + p }
+        let mut d2: i64 = (1 - sqrt_disc) % p
+        if d2 < 0 { d2 = d2 + p }
+        let mut root2: i64 = (d2 * inv2) % p
+        if root2 < 0 { root2 = root2 + p }
+        # Verify roots; if broken, brute-force residues
+        let chk1: i64 = (root1 * root1 - root1 + 1) % p
+        let chk2: i64 = (root2 * root2 - root2 + 1) % p
+        let c1: i64 = chk1
+        if c1 < 0 { c1 = c1 + p }
+        let c2: i64 = chk2
+        if c2 < 0 { c2 = c2 + p }
+        if c1 != 0 || c2 != 0 {
+            root1 = -1
+            root2 = -1
+            let mut rr: i64 = 0
+            while rr < p {
+                let mut v: i64 = (rr * rr - rr + 1) % p
+                if v < 0 { v = v + p }
+                if v == 0 {
+                    if root1 < 0 { root1 = rr }
+                    elif root2 < 0 { root2 = rr; break }
+                }
+                rr = rr + 1
+            }
+        }
+        if root1 >= 0 {
+            strip(p, root1, limit, rem, lpfq)
+        }
+        if root2 >= 0 && root2 != root1 {
+            strip(p, root2, limit, rem, lpfq)
+        }
+        idx = idx + 1
+    }
+
+    let mut total: i64 = 0
+    let mut k: i64 = 1
+    while k <= limit {
+        if rem[k] > 1 { lpfq[k] = rem[k] }
+        let a: i64 = lpf[k + 1] as i64
+        let b: i64 = lpfq[k]
+        let m: i64 = a
+        if b > m { m = b }
+        total = total + m - 1
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    free(lpf); free(primes); free(rem); free(lpfq)
+    return 0
+}

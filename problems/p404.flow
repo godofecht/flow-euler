@@ -1,0 +1,90 @@
+# Project Euler 404
+# C(10^17): count of (a,b,c) from ellipse intersections.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = 0 - a }
+    if b < 0 { b = 0 - b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function mod_euclid(a: i64, m: i64) -> i64 {
+    let mut r: i64 = a % m
+    if r < 0 { r = r + m }
+    return r
+}
+
+function is_odd(n: i64) -> bool {
+    return mod_euclid(n, 2) == 1
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 100000000000000000
+    let m_max: i64 = isqrt(isqrt(2 * LIMIT)) + 1
+    let mut total: i64 = 0
+    let mut m: i64 = 1
+    while m <= m_max {
+        let m2: i64 = m * m
+        let mut n_start: i64 = 0 - (m / 3)
+        if m % 3 == 0 {
+            n_start = n_start + 1
+        }
+        let mut n: i64 = n_start
+        while n < 0 {
+            if !(is_odd(m) && is_odd(n)) {
+                if mod_euclid(m - 2 * n, 5) != 0 {
+                    if gcd(m, 0 - n) == 1 {
+                        let n2: i64 = n * n
+                        let mn: i64 = m * n
+                        let p: i64 = m2 - n2 - 4 * mn
+                        let r: i64 = m2 - n2 + mn
+                        let a0: i128 = (p as i128) * (r as i128)
+                        if a0 > (0 as i128) && a0 <= (LIMIT as i128) {
+                            total = total + ((LIMIT as i128) / a0) as i64
+                        }
+                    }
+                }
+            }
+            n = n + 1
+        }
+
+        n = m / 2 + 1
+        while n < m {
+            if !(is_odd(m) && is_odd(n)) {
+                if mod_euclid(m - 2 * n, 5) != 0 {
+                    if gcd(m, n) == 1 {
+                        let n2: i64 = n * n
+                        let mn: i64 = m * n
+                        let p: i64 = n2 + 4 * mn - m2
+                        let r: i64 = m2 - n2 + mn
+                        let a0: i128 = (p as i128) * (r as i128)
+                        if a0 > (0 as i128) && a0 <= (LIMIT as i128) {
+                            total = total + ((LIMIT as i128) / a0) as i64
+                        }
+                    }
+                }
+            }
+            n = n + 1
+        }
+        m = m + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

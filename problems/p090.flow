@@ -1,0 +1,68 @@
+# Project Euler 090
+# Distinct cube digit pairs (sets of 6 faces) that display all square numbers.
+
+function has_digit(mask: i32, d: i32) -> bool {
+    return (mask & (1 << d)) != 0
+}
+
+function can_form(a: i32, b: i32, x: i32, y: i32) -> bool {
+    # 6 and 9 are interchangeable
+    let mut ax: bool = has_digit(a, x)
+    let mut ay: bool = has_digit(a, y)
+    let mut bx: bool = has_digit(b, x)
+    let mut by: bool = has_digit(b, y)
+    if x == 6 || x == 9 {
+        ax = ax || has_digit(a, 6) || has_digit(a, 9)
+        bx = bx || has_digit(b, 6) || has_digit(b, 9)
+    }
+    if y == 6 || y == 9 {
+        ay = ay || has_digit(a, 6) || has_digit(a, 9)
+        by = by || has_digit(b, 6) || has_digit(b, 9)
+    }
+    return (ax && by) || (ay && bx)
+}
+
+function valid_pair(a: i32, b: i32) -> bool {
+    # squares: 01,04,09,16,25,36,49,64,81
+    if !can_form(a, b, 0, 1) { return false }
+    if !can_form(a, b, 0, 4) { return false }
+    if !can_form(a, b, 0, 9) { return false }
+    if !can_form(a, b, 1, 6) { return false }
+    if !can_form(a, b, 2, 5) { return false }
+    if !can_form(a, b, 3, 6) { return false }
+    if !can_form(a, b, 4, 9) { return false }
+    if !can_form(a, b, 6, 4) { return false }
+    if !can_form(a, b, 8, 1) { return false }
+    return true
+}
+
+function popcount(x: i32) -> i32 {
+    let mut n: i32 = 0
+    let mut v: i32 = x
+    while v > 0 {
+        n = n + (v & 1)
+        v = v / 2
+    }
+    return n
+}
+
+function main() -> i32 {
+    let mut count: i64 = 0
+    let mut a: i32 = 0
+    while a < 1024 {
+        if popcount(a) == 6 {
+            let mut b: i32 = a
+            while b < 1024 {
+                if popcount(b) == 6 {
+                    if valid_pair(a, b) {
+                        count = count + 1
+                    }
+                }
+                b = b + 1
+            }
+        }
+        a = a + 1
+    }
+    printf("%lld\n", count)
+    return 0
+}

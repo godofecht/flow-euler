@@ -1,0 +1,13 @@
+# Project Euler 394
+# Expected pie-cutting repetitions E(40) = 7/9 + (2/3)ln(40) + 2/(9*40^3).
+
+extern {
+    function log(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let x: f64 = 40.0
+    let ans: f64 = 7.0 / 9.0 + (2.0 / 3.0) * log(x) + 2.0 / (9.0 * x * x * x)
+    printf("%.10f\n", ans)
+    return 0
+}

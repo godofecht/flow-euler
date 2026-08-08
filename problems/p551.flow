@@ -1,0 +1,261 @@
+# Project Euler 551
+# Sum of Digits Sequence — memoized block jumps (PE forum / TheAlgorithms).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function realloc(p: ptr<void>, size: i64) -> ptr<void>
+}
+
+const KMAX: i64 = 20
+const MCAP: i64 = 8000009
+const JMAX: i64 = 32
+
+let mut D: ptr<i64> = null
+let mut DLEN: i64 = 0
+let mut DCAP: i64 = 0
+let mut BASE: ptr<i128> = null
+
+let mut MU: ptr<i8> = null
+let mut MDS: ptr<i64> = null
+let mut MC: ptr<i128> = null
+let mut MNJ: ptr<i32> = null
+let mut MDIFF: ptr<i128> = null
+let mut MDN: ptr<i64> = null
+let mut MK: ptr<i32> = null
+
+let mut LAST_DIFF: ptr<i128> = null
+
+function set_last_diff(d: i128) -> void {
+    LAST_DIFF[0] = d
+}
+
+function get_last_diff() -> i128 {
+    return LAST_DIFF[0]
+}
+
+function ensure(n: i64) -> void {
+    if n <= DCAP { return }
+    let mut cap: i64 = DCAP
+    if cap < 64 { cap = 64 }
+    while cap < n { cap = cap * 2 }
+    D = realloc(D, cap * 8)
+    let mut i: i64 = DCAP
+    while i < cap {
+        D[i] = 0
+        i = i + 1
+    }
+    DCAP = cap
+}
+
+function add_digits(k: i64, addend0: i128) -> void {
+    let mut addend: i128 = addend0
+    let mut j: i64 = k
+    while addend > 0 {
+        ensure(j + 1)
+        if j >= DLEN { DLEN = j + 1 }
+        let s: i128 = (D[j] as i128) + addend
+        D[j] = (s % 10) as i64
+        addend = s / 10
+        j = j + 1
+    }
+}
+
+function hash_kc(ds: i64, c: i128) -> i64 {
+    let mut x: i64 = ds * 1315423911
+    x = x ^ (c as i64)
+    x = x ^ ((c >> 32) as i64) * 2654435761
+    x = x ^ ((c >> 64) as i64)
+    if x < 0 { x = -x }
+    return x % MCAP
+}
+
+function memo_slot(ds: i64, c: i128) -> i64 {
+    let mut idx: i64 = hash_kc(ds, c)
+    let mut p: i64 = 0
+    while p < 10000 {
+        if MU[idx] == 0 {
+            MU[idx] = 1
+            MDS[idx] = ds
+            MC[idx] = c
+            MNJ[idx] = 0
+            return idx
+        }
+        if MDS[idx] == ds && MC[idx] == c {
+            return idx
+        }
+        idx = idx + 1
+        if idx >= MCAP { idx = 0 }
+        p = p + 1
+    }
+    return idx
+}
+
+function compute(k: i64, i0: i64, n: i64) -> i64 {
+    if i0 >= n {
+        set_last_diff(0)
+        return 0
+    }
+    ensure(k)
+    if DLEN < k { DLEN = k }
+    let mut i: i64 = i0
+    let mut ds_b: i64 = 0
+    let mut ds_c: i64 = 0
+    let mut j: i64 = 0
+    while j < DLEN {
+        if j >= k { ds_b = ds_b + D[j] } else { ds_c = ds_c + D[j] }
+        j = j + 1
+    }
+    let mut diff: i128 = 0
+    while i < n {
+        i = i + 1
+        let add0: i64 = ds_c + ds_b
+        diff = diff + (add0 as i128)
+        ds_c = 0
+        let mut addend: i64 = add0
+        j = 0
+        while j < k {
+            let s: i64 = D[j] + addend
+            D[j] = s % 10
+            addend = s / 10
+            ds_c = ds_c + D[j]
+            j = j + 1
+        }
+        if addend > 0 {
+            add_digits(k, addend as i128)
+            set_last_diff(diff)
+            return i - i0
+        }
+    }
+    set_last_diff(diff)
+    return i - i0
+}
+
+function next_term(k: i64, i0: i64, n: i64) -> i64 {
+    let mut ds_b: i64 = 0
+    let mut j: i64 = k
+    while j < DLEN {
+        ds_b = ds_b + D[j]
+        j = j + 1
+    }
+    let mut c: i128 = 0
+    j = 0
+    let lim: i64 = k
+    if lim > DLEN { lim = DLEN }
+    while j < lim {
+        c = c + (D[j] as i128) * BASE[j]
+        j = j + 1
+    }
+    let mut diff: i128 = 0
+    let mut dn: i64 = 0
+    let max_dn: i64 = n - i0
+    let slot: i64 = memo_slot(ds_b, c)
+    let nj0: i64 = MNJ[slot] as i64
+    let mut mj: i64 = -1
+    let mut t: i64 = nj0 - 1
+    while t >= 0 {
+        let bi: i64 = slot * JMAX + t
+        if (MK[bi] as i64) <= k && MDN[bi] <= max_dn {
+            mj = t
+            break
+        }
+        t = t - 1
+    }
+    if mj >= 0 {
+        let bi: i64 = slot * JMAX + mj
+        diff = MDIFF[bi]
+        dn = MDN[bi]
+        let mut new_c: i128 = diff + c
+        j = 0
+        while j < k {
+            ensure(j + 1)
+            if j >= DLEN { DLEN = j + 1 }
+            D[j] = (new_c % 10) as i64
+            new_c = new_c / 10
+            j = j + 1
+        }
+        if new_c > 0 {
+            add_digits(k, new_c)
+        }
+    }
+    if dn >= max_dn || c + diff >= BASE[k] {
+        set_last_diff(diff)
+        return dn
+    }
+    if k > 2 {
+        while true {
+            let terms: i64 = next_term(k - 1, i0 + dn, n)
+            diff = diff + get_last_diff()
+            dn = dn + terms
+            if dn >= max_dn || c + diff >= BASE[k] { break }
+        }
+    } else {
+        let terms: i64 = compute(k, i0 + dn, n)
+        diff = diff + get_last_diff()
+        dn = dn + terms
+    }
+    let mut nj: i64 = MNJ[slot] as i64
+    if nj < JMAX {
+        let mut jpos: i64 = 0
+        while jpos < nj {
+            if MDN[slot * JMAX + jpos] > dn { break }
+            jpos = jpos + 1
+        }
+        let mut u: i64 = nj
+        while u > jpos {
+            MDIFF[slot * JMAX + u] = MDIFF[slot * JMAX + u - 1]
+            MDN[slot * JMAX + u] = MDN[slot * JMAX + u - 1]
+            MK[slot * JMAX + u] = MK[slot * JMAX + u - 1]
+            u = u - 1
+        }
+        MDIFF[slot * JMAX + jpos] = diff
+        MDN[slot * JMAX + jpos] = dn
+        MK[slot * JMAX + jpos] = k as i32
+        MNJ[slot] = (nj + 1) as i32
+    }
+    set_last_diff(diff)
+    return dn
+}
+
+function solve(n: i64) -> i64 {
+    LAST_DIFF = calloc(1, 16)
+    BASE = calloc(KMAX + 2, 16)
+    BASE[0] = 1
+    let mut b: i64 = 1
+    while b <= KMAX {
+        BASE[b] = BASE[b - 1] * 10
+        b = b + 1
+    }
+    MU = calloc(MCAP, 1)
+    MDS = calloc(MCAP, 8)
+    MC = calloc(MCAP, 16)
+    MNJ = calloc(MCAP, 4)
+    MDIFF = calloc(MCAP * JMAX, 16)
+    MDN = calloc(MCAP * JMAX, 8)
+    MK = calloc(MCAP * JMAX, 4)
+    DCAP = 64
+    D = calloc(DCAP, 8)
+    D[0] = 1
+    DLEN = 1
+    let i0: i64 = 1
+    let mut dn: i64 = 0
+    while true {
+        let terms: i64 = next_term(KMAX, i0 + dn, n)
+        dn = dn + terms
+        if dn == n - i0 { break }
+    }
+    let mut ans: i64 = 0
+    let mut p: i64 = 1
+    let mut j: i64 = 0
+    while j < DLEN {
+        ans = ans + D[j] * p
+        p = p * 10
+        j = j + 1
+    }
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(1000000000000000))
+    return 0
+}

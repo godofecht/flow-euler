@@ -1,0 +1,95 @@
+# Project Euler 247
+# Least square index with >=3 below and >=3 left on xy=1 hyperbola packing.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+# Max-heap of candidates by side length; store parallel arrays
+const CAP: i64 = 5000000
+
+let mut HX: ptr<f64> = null
+let mut HY: ptr<f64> = null
+let mut HL: ptr<i32> = null
+let mut HB: ptr<i32> = null
+let mut HS: ptr<f64> = null
+let mut HN: i64 = 0
+
+function side_of(x: f64, y: f64) -> f64 {
+    return 0.5 * (sqrt((x - y) * (x - y) + 4.0) - x - y)
+}
+
+function heap_swap(i: i64, j: i64) -> void {
+    let tx: f64 = HX[i]; HX[i] = HX[j]; HX[j] = tx
+    let ty: f64 = HY[i]; HY[i] = HY[j]; HY[j] = ty
+    let tl: i32 = HL[i]; HL[i] = HL[j]; HL[j] = tl
+    let tb: i32 = HB[i]; HB[i] = HB[j]; HB[j] = tb
+    let ts: f64 = HS[i]; HS[i] = HS[j]; HS[j] = ts
+}
+
+function heap_up(i0: i64) -> void {
+    let mut i: i64 = i0
+    while i > 0 {
+        let p: i64 = (i - 1) / 2
+        if HS[p] >= HS[i] { break }
+        heap_swap(p, i)
+        i = p
+    }
+}
+
+function heap_down(i0: i64) -> void {
+    let mut i: i64 = i0
+    while true {
+        let l: i64 = 2 * i + 1
+        let r: i64 = 2 * i + 2
+        let mut best: i64 = i
+        if l < HN && HS[l] > HS[best] { best = l }
+        if r < HN && HS[r] > HS[best] { best = r }
+        if best == i { break }
+        heap_swap(i, best)
+        i = best
+    }
+}
+
+function heap_push(x: f64, y: f64, left: i32, below: i32) -> void {
+    let s: f64 = side_of(x, y)
+    HX[HN] = x; HY[HN] = y; HL[HN] = left; HB[HN] = below; HS[HN] = s
+    heap_up(HN)
+    HN = HN + 1
+}
+
+function main() -> i32 {
+    let IL: i32 = 3
+    let IB: i32 = 3
+    HX = calloc(CAP, 8); HY = calloc(CAP, 8); HS = calloc(CAP, 8)
+    HL = calloc(CAP, 4); HB = calloc(CAP, 4)
+    if HX == null || HY == null { return 1 }
+    heap_push(1.0, 0.0, 0, 0)
+    let mut candidates: i32 = 1
+    let mut result: i64 = 0
+    while candidates > 0 {
+        result = result + 1
+        # pop max
+        let x: f64 = HX[0]
+        let y: f64 = HY[0]
+        let left: i32 = HL[0]
+        let below: i32 = HB[0]
+        let s: f64 = HS[0]
+        HN = HN - 1
+        if HN > 0 {
+            HX[0] = HX[HN]; HY[0] = HY[HN]; HL[0] = HL[HN]; HB[0] = HB[HN]; HS[0] = HS[HN]
+            heap_down(0)
+        }
+        let top_y: f64 = y + s
+        let right_x: f64 = x + s
+        heap_push(x, top_y, left, below + 1)
+        heap_push(right_x, y, left + 1, below)
+        if left <= IL && (below + 1) <= IB { candidates = candidates + 1 }
+        if (left + 1) <= IL && below <= IB { candidates = candidates + 1 }
+        if left <= IL && below <= IB { candidates = candidates - 1 }
+    }
+    printf("%lld\n", result)
+    return 0
+}

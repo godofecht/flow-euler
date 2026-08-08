@@ -1,0 +1,193 @@
+# Project Euler 060
+# Lowest sum for a set of five primes with pairwise prime concatenations.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mul_mod(a0: i64, b0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    let mut b: i64 = b0
+    let mut r: i64 = 0
+    if a < 0 { a = a + m }
+    while b > 0 {
+        if b % 2 == 1 {
+            r = r + a
+            if r >= m { r = r - m }
+        }
+        a = a + a
+        if a >= m { a = a - m }
+        b = b / 2
+    }
+    return r
+}
+
+function pow_mod(a0: i64, e0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    let mut e: i64 = e0
+    let mut r: i64 = 1
+    while e > 0 {
+        if e % 2 == 1 {
+            r = mul_mod(r, a, m)
+        }
+        a = mul_mod(a, a, m)
+        e = e / 2
+    }
+    return r
+}
+
+function mr_check(n: i64, a: i64) -> bool {
+    # write n-1 = d * 2^s
+    let mut d: i64 = n - 1
+    let mut s: i32 = 0
+    while d % 2 == 0 {
+        d = d / 2
+        s = s + 1
+    }
+    let mut x: i64 = pow_mod(a, d, n)
+    if x == 1 || x == n - 1 { return true }
+    let mut r: i32 = 1
+    while r < s {
+        x = mul_mod(x, x, n)
+        if x == n - 1 { return true }
+        r = r + 1
+    }
+    return false
+}
+
+function is_prime(n: i64) -> bool {
+    if n < 2 { return false }
+    if n < 4 { return true }
+    if n % 2 == 0 || n % 3 == 0 { return false }
+    if n < 1000000 {
+        let mut i: i64 = 5
+        while i * i <= n {
+            if n % i == 0 || n % (i + 2) == 0 { return false }
+            i = i + 6
+        }
+        return true
+    }
+    # deterministic MR for n < 3e9+ suffices with these witnesses
+    if !mr_check(n, 2) { return false }
+    if !mr_check(n, 3) { return false }
+    if !mr_check(n, 5) { return false }
+    if !mr_check(n, 7) { return false }
+    if !mr_check(n, 11) { return false }
+    if !mr_check(n, 13) { return false }
+    if !mr_check(n, 23) { return false }
+    return true
+}
+
+function concat(a: i64, b: i64) -> i64 {
+    let mut p: i64 = 1
+    let mut x: i64 = b
+    while x > 0 {
+        p = p * 10
+        x = x / 10
+    }
+    return a * p + b
+}
+
+function pair_ok(a: i64, b: i64) -> bool {
+    return is_prime(concat(a, b)) && is_prime(concat(b, a))
+}
+
+function dfs(depth: i32, start: i32, pc: i32, primes: ptr<i64>, ok: ptr<i8>, choose: ptr<i32>, best: ptr<i64>) -> void {
+    if depth == 5 {
+        let mut s: i64 = 0
+        let mut i: i32 = 0
+        while i < 5 {
+            s = s + primes[choose[i]]
+            i = i + 1
+        }
+        if best[0] == 0 || s < best[0] {
+            best[0] = s
+        }
+        return
+    }
+    let mut i: i32 = start
+    while i < pc {
+        # prune if partial sum already worse
+        let mut ok_all: bool = true
+        let mut j: i32 = 0
+        while j < depth {
+            if ok[choose[j] * pc + i] == 0 {
+                ok_all = false
+                break
+            }
+            j = j + 1
+        }
+        if ok_all {
+            choose[depth] = i
+            # if we have a best, prune by lower bound (remaining min primes)
+            let mut partial: i64 = 0
+            j = 0
+            while j <= depth {
+                partial = partial + primes[choose[j]]
+                j = j + 1
+            }
+            if best[0] == 0 || partial < best[0] {
+                dfs(depth + 1, i + 1, pc, primes, ok, choose, best)
+            }
+        }
+        i = i + 1
+    }
+}
+
+function main() -> i32 {
+    let limit: i64 = 9000
+    let sieve: ptr<i8> = calloc(limit, 1)
+    let primes: ptr<i64> = calloc(2000, 8)
+    if sieve == null || primes == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut pc: i32 = 0
+    p = 3
+    while p < limit {
+        if sieve[p] == 0 {
+            primes[pc] = p
+            pc = pc + 1
+        }
+        p = p + 2
+    }
+
+    let ok: ptr<i8> = calloc((pc * pc) as i64, 1)
+    if ok == null { return 1 }
+    let mut i: i32 = 0
+    while i < pc {
+        let mut j: i32 = i + 1
+        while j < pc {
+            if pair_ok(primes[i], primes[j]) {
+                ok[i * pc + j] = 1
+                ok[j * pc + i] = 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let choose: ptr<i32> = calloc(5, 4)
+    let best: ptr<i64> = calloc(1, 8)
+    if choose == null || best == null { return 1 }
+    best[0] = 0
+    dfs(0, 0, pc, primes, ok, choose, best)
+    printf("%lld\n", best[0])
+    free(best)
+    free(choose)
+    free(ok)
+    free(primes)
+    free(sieve)
+    return 0
+}

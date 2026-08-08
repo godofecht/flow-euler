@@ -1,0 +1,65 @@
+# Project Euler 124
+# E(10000) where E is rad(n) sorted, then n — the 10000th.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i32 = 100000
+    let rad: ptr<i32> = calloc((limit + 1) as i64, 4)
+    let idx: ptr<i32> = calloc((limit + 1) as i64, 4)
+    if rad == null || idx == null { return 1 }
+
+    let mut i: i32 = 1
+    while i <= limit {
+        rad[i] = 1
+        idx[i] = i
+        i = i + 1
+    }
+
+    let mut p: i32 = 2
+    while p <= limit {
+        if rad[p] == 1 {
+            # p is prime (rad still 1 means not yet marked — actually we set rad=1 initially for all)
+            # Better sieve: if we only multiply primes once
+            let mut m: i32 = p
+            while m <= limit {
+                rad[m] = rad[m] * p
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    # Wait — the above multiplies every multiple of p, but also composites start at 1
+    # and get product of distinct primes only if we visit each prime once.
+    # Detection "rad[p]==1" works for primes since smaller primes would have multiplied them.
+    # For p=4: rad[4] was multiplied by 2 when p=2, so rad[4]=2 ≠ 1. Good.
+
+    # shell sort by (rad, n)
+    let mut gap: i32 = limit / 2
+    while gap > 0 {
+        let mut i2: i32 = gap + 1
+        while i2 <= limit {
+            let mut j: i32 = i2
+            while j - gap >= 1 {
+                let a: i32 = idx[j]
+                let b: i32 = idx[j - gap]
+                if rad[a] > rad[b] || (rad[a] == rad[b] && a > b) {
+                    break
+                }
+                idx[j] = b
+                idx[j - gap] = a
+                j = j - gap
+            }
+            i2 = i2 + 1
+        }
+        gap = gap / 2
+    }
+
+    printf("%lld\n", idx[10000] as i64)
+    free(rad)
+    free(idx)
+    return 0
+}

@@ -1,0 +1,12 @@
+# Project Euler 469
+# Empty Chairs — E(10^18) → jamming limit (1 + e^{-2}) / 2.
+
+extern {
+    function exp(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let ans: f64 = (1.0 + exp(-2.0)) / 2.0
+    printf("%.14f\n", ans)
+    return 0
+}

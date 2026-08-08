@@ -1,0 +1,95 @@
+# Project Euler 571
+# Super Pandigital Numbers
+# Sum of the first 10 12-super-pandigital numbers (pandigital in bases 2..12).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const BASE: i64 = 12
+const NEED: i64 = 10
+
+let mut DIGITS: ptr<i64> = null
+let mut USED: ptr<i8> = null
+let mut FOUND: i64 = 0
+let mut TOTAL: i64 = 0
+
+function is_pandigital(number0: i64, base: i64, all_bits: i64) -> i32 {
+    let mut number: i64 = number0
+    let mut used: i64 = 0
+    while number > 0 {
+        let digit: i64 = number % base
+        used = used | (1 << digit)
+        if used == all_bits { return 1 }
+        number = number / base
+    }
+    if used == all_bits { return 1 }
+    return 0
+}
+
+function is_pandigital_base8(number0: i64) -> i32 {
+    let mut number: i64 = number0
+    let mut used: i64 = 0
+    while number > 0 {
+        used = used | (1 << (number & 7))
+        if used == 255 { return 1 }
+        number = number >> 3
+    }
+    if used == 255 { return 1 }
+    return 0
+}
+
+function check(current: i64) -> i32 {
+    if is_pandigital_base8(current) == 0 { return 0 }
+    let mut b: i64 = 11
+    while b >= 2 {
+        if b != 8 {
+            let all_bits: i64 = (1 << b) - 1
+            if is_pandigital(current, b, all_bits) == 0 { return 0 }
+        }
+        b = b - 1
+    }
+    return 1
+}
+
+function dfs(pos: i64, current: i64) -> void {
+    if FOUND >= NEED { return }
+    if pos == BASE {
+        if check(current) != 0 {
+            TOTAL = TOTAL + current
+            FOUND = FOUND + 1
+        }
+        return
+    }
+    let mut d: i64 = 0
+    while d < BASE {
+        if USED[d] == 0 {
+            USED[d] = 1
+            dfs(pos + 1, current * BASE + d)
+            USED[d] = 0
+            if FOUND >= NEED { return }
+        }
+        d = d + 1
+    }
+}
+
+function main() -> i32 {
+    DIGITS = calloc(BASE, 8)
+    USED = calloc(BASE, 1)
+    if DIGITS == null || USED == null { return 1 }
+
+    let mut first: i64 = 1
+    while first < BASE {
+        if FOUND >= NEED { break }
+        USED[first] = 1
+        dfs(1, first)
+        USED[first] = 0
+        first = first + 1
+    }
+
+    printf("%lld\n", TOTAL)
+    free(DIGITS)
+    free(USED)
+    return 0
+}

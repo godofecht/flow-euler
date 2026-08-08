@@ -1,0 +1,35 @@
+# Project Euler 334
+# Spilling the beans: moves = (S2_final - S2_init)/2 for 1500 bowls.
+
+function main() -> i32 {
+    let mut t: i64 = 123456
+    let mut N: i64 = 0
+    let mut S1: i64 = 0
+    let mut S2_init: i64 = 0
+    let mut i: i64 = 0
+    while i < 1500 {
+        if t % 2 == 0 {
+            t = t / 2
+        } else {
+            t = (t / 2) ^ 926252
+        }
+        let b: i64 = (t % 2048) + 1
+        N = N + b
+        S1 = S1 + i * b
+        S2_init = S2_init + i * i * b
+        i = i + 1
+    }
+
+    let sumk: i64 = N * (N + 1) / 2
+    let sumk2: i64 = N * (N + 1) * (2 * N + 1) / 6
+    let mut L: i64 = (S1 - sumk) / N
+    let mut H: i64 = (N + 1) * L + sumk - S1
+    if H < L || H > L + N {
+        L = L + 1
+        H = (N + 1) * L + sumk - S1
+    }
+    let interval_S2: i64 = (N + 1) * (L * L) + 2 * L * sumk + sumk2
+    let S2_final: i64 = interval_S2 - H * H
+    printf("%lld\n", (S2_final - S2_init) / 2)
+    return 0
+}

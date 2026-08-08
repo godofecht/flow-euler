@@ -1,0 +1,72 @@
+# Project Euler 460
+# An Ant on the Move — minimal excess climb DP + cruise at height h=d/2.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log(x: f64) -> f64
+    function sqrt(x: f64) -> f64
+    function hypot(x: f64, y: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+function min_step_excess(y0: i64, y1: i64, h: i64, logs: ptr<f64>) -> f64 {
+    let dy: f64 = (y1 - y0) as f64
+    let v: f64 = dy / (logs[y1] - logs[y0])
+    let hh: f64 = h as f64
+    let denom: f64 = sqrt(hh * hh - v * v)
+    let dx_star: f64 = dy * v / denom
+    let k0: i64 = floor(dx_star) as i64
+    let mut best: f64 = 1.0e300
+    let mut t: i64 = 0
+    while t < 2 {
+        let dx: i64 = k0 + t
+        if dx >= 0 {
+            let val: f64 = hypot(dx as f64, dy) / v - (dx as f64) / hh
+            if val < best { best = val }
+        }
+        t = t + 1
+    }
+    return best
+}
+
+function best_climb_excess(h: i64) -> f64 {
+    let logs: ptr<f64> = calloc(h + 1, 8)
+    let dp: ptr<f64> = calloc(h + 1, 8)
+    if logs == null || dp == null { return 0.0 }
+    let mut y: i64 = 1
+    while y <= h {
+        logs[y] = log(y as f64)
+        dp[y] = 1.0e300
+        y = y + 1
+    }
+    dp[1] = 0.0
+    y = 2
+    while y <= h {
+        let M: i64 = (64 * h) / y + 2
+        let mut y0_min: i64 = y - M
+        if y0_min < 1 { y0_min = 1 }
+        let mut best: f64 = 1.0e300
+        let mut y0: i64 = y0_min
+        while y0 < y {
+            let cand: f64 = dp[y0] + min_step_excess(y0, y, h, logs)
+            if cand < best { best = cand }
+            y0 = y0 + 1
+        }
+        dp[y] = best
+        y = y + 1
+    }
+    let ans: f64 = dp[h]
+    free(dp)
+    free(logs)
+    return ans
+}
+
+function main() -> i32 {
+    let d: i64 = 10000
+    let h: i64 = d / 2
+    let E: f64 = best_climb_excess(h)
+    let ans: f64 = 2.0 * E + (d as f64) / (h as f64)
+    printf("%.9f\n", ans)
+    return 0
+}

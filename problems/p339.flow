@@ -1,0 +1,36 @@
+# Project Euler 339
+# Expected black sheep E(10000), 6 decimal places.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let n: i64 = 10000
+    let B: ptr<f64> = calloc(n + 1, 8)
+    if B == null { return 1 }
+    B[0] = 0.0
+    let mut p: f64 = 1.0
+    let mut b: i64 = 1
+    while b <= n {
+        let r: f64 = (2.0 * p) / (1.0 + p)
+        let m: f64 = (2 * b - 1) as f64
+        B[b] = B[b - 1] + (m - B[b - 1]) * r
+        p = p * ((2.0 * (b as f64) - 1.0) / (2.0 * (b as f64)))
+        b = b + 1
+    }
+    let mut q: f64 = 0.5
+    let mut t: i64 = 1
+    while t < n {
+        q = q * ((2.0 * (t as f64) + 1.0) / (2.0 * (t as f64) + 2.0))
+        t = t + 1
+    }
+    let r2: f64 = 2.0 * q
+    let m2: f64 = (2 * n) as f64
+    let S: f64 = B[n] + (m2 - B[n]) * r2
+    let ans: f64 = 0.5 * (B[n - 1] + S)
+    printf("%.6f\n", ans)
+    free(B)
+    return 0
+}

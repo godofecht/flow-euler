@@ -1,0 +1,28 @@
+# Project Euler 318
+# Sum of ceil(-2011 / log10(p+q-2*sqrt(pq))) for 0 < that < 1.
+
+extern {
+    function sqrt(x: f64) -> f64
+    function log(x: f64) -> f64
+    function ceil(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let limit: i64 = 2011
+    let mut total: i64 = 0
+    let mut p: i64 = 1
+    while p < limit {
+        let mut q: i64 = p + 1
+        while q <= limit - p {
+            let t: f64 = (p as f64) + (q as f64) - 2.0 * sqrt((p * q) as f64)
+            if t > 0.0 && t < 1.0 {
+                let v: f64 = -(limit as f64) / (log(t) / log(10.0))
+                total = total + (ceil(v) as i64)
+            }
+            q = q + 1
+        }
+        p = p + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

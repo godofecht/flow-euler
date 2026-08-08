@@ -1,0 +1,130 @@
+# Project Euler 319
+# t(10^10) mod 10^9 via Möbius / Mertens + geometric G.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function icbrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = 1
+    while x * x * x <= n { x = x * 2 }
+    let mut lo: i64 = 0
+    let mut hi: i64 = x
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if mid * mid * mid <= n { lo = mid } else { hi = mid }
+    }
+    return lo
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = ((base % mod) + mod) % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function slot(n: i64, keys: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    let mut h: i64 = n % cap
+    if h < 0 { h = h + cap }
+    while used[h] == 1 && keys[h] != n {
+        h = h + 1
+        if h == cap { h = 0 }
+    }
+    return h
+}
+
+function M(n: i64, pref: ptr<i32>, lim: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64) -> i64
+function M(n: i64, pref: ptr<i32>, lim: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    if n <= 0 { return 0 }
+    if n <= lim { return pref[n] as i64 }
+    let s: i64 = slot(n, keys, used, cap)
+    if used[s] == 1 { return vals[s] }
+    let mut res: i64 = 1
+    let mut i: i64 = 2
+    while i <= n {
+        let q: i64 = n / i
+        let j: i64 = n / q
+        res = res - (j - i + 1) * M(q, pref, lim, keys, vals, used, cap)
+        i = j + 1
+    }
+    used[s] = 1
+    keys[s] = n
+    vals[s] = res
+    return res
+}
+
+function G_mod(m: i64, mod: i64) -> i64 {
+    if m <= 0 { return 0 }
+    let mod2: i64 = 2 * mod
+    let num: i64 = (modpow(3, m + 1, mod2) - 3 + mod2) % mod2
+    let sum3: i64 = (num / 2) % mod
+    let sum2: i64 = (modpow(2, m + 1, mod) - 2 + mod) % mod
+    return (sum3 - sum2 - (m % mod) + 2 * mod) % mod
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000000
+    let mod: i64 = 1000000000
+    let c: i64 = icbrt(N)
+    let lim: i64 = c * c
+    let is_comp: ptr<i8> = calloc(lim + 1, 1)
+    let mu: ptr<i8> = calloc(lim + 1, 1)
+    let primes: ptr<i32> = calloc(lim / 5 + 10, 4)
+    mu[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= lim {
+        if is_comp[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            mu[i] = -1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > lim { break }
+            is_comp[ip] = 1
+            if i % p == 0 {
+                mu[ip] = 0
+                break
+            }
+            mu[ip] = (0 - (mu[i] as i64)) as i8
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let pref: ptr<i32> = calloc(lim + 1, 4)
+    let mut s: i64 = 0
+    i = 1
+    while i <= lim {
+        s = s + (mu[i] as i64)
+        pref[i] = s as i32
+        i = i + 1
+    }
+    let cap: i64 = 2097152
+    let keys: ptr<i64> = calloc(cap, 8)
+    let vals: ptr<i64> = calloc(cap, 8)
+    let used: ptr<i8> = calloc(cap, 1)
+
+    let mut ans: i64 = 0
+    i = 1
+    while i <= N {
+        let q: i64 = N / i
+        let j: i64 = N / q
+        let mu_sum: i64 = M(j, pref, lim, keys, vals, used, cap) - M(i - 1, pref, lim, keys, vals, used, cap)
+        ans = (ans + (mu_sum % mod + mod) % mod * G_mod(q, mod)) % mod
+        i = j + 1
+    }
+    printf("%lld\n", (ans + 1) % mod)
+    free(is_comp); free(mu); free(primes); free(pref); free(keys); free(vals); free(used)
+    return 0
+}

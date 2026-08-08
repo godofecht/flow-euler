@@ -1,0 +1,26 @@
+# Project Euler 561
+# Divisor Pairs
+# Q(N) counts 2-adic valuations of S((p_m#)^n) for n<=N, m=904961.
+# Closed form via bit counts on floor(N/4) ranges.
+
+function popcount(n0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut c: i64 = 0
+    while n > 0 {
+        c = c + (n & 1)
+        n = n >> 1
+    }
+    return c
+}
+
+function Q(n: i64) -> i64 {
+    let m: i64 = 904961
+    let c: i64 = (n - 3) / 4 + 1
+    let a: i64 = n / 4
+    return (2 * a - popcount(a)) + m * (2 * c - popcount(c))
+}
+
+function main() -> i32 {
+    printf("%lld\n", Q(1000000000000))
+    return 0
+}

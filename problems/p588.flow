@@ -1,0 +1,114 @@
+# Project Euler 588
+# Quintinomial Coefficients
+# Q(k) = # odd coeffs in (1+x+x^2+x^3+x^4)^k; sum Q(10^m) for m=1..18.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function build_trans(active: bool, trans: ptr<i64>) -> void {
+    let mut bit: i64 = 0
+    while bit < 2 {
+        let mut state: i64 = 0
+        while state < 16 {
+            let mut next_state: i64 = 0
+            let mut c: i64 = 0
+            while c < 4 {
+                if ((state >> c) & 1) != 0 {
+                    let mut d: i64 = 0
+                    let mut d_hi: i64 = 0
+                    if active { d_hi = 4 }
+                    while d <= d_hi {
+                        let s: i64 = c + d
+                        if (s & 1) == bit {
+                            let nc: i64 = s >> 1
+                            next_state = next_state ^ (1 << nc)
+                        }
+                        d = d + 1
+                    }
+                }
+                c = c + 1
+            }
+            trans[bit * 16 + state] = next_state
+            state = state + 1
+        }
+        bit = bit + 1
+    }
+}
+
+function bit_length(k0: i64) -> i64 {
+    let mut k: i64 = k0
+    let mut n: i64 = 0
+    while k > 0 {
+        n = n + 1
+        k = k >> 1
+    }
+    return n
+}
+
+function Q(k: i64, t_active: ptr<i64>, t_inactive: ptr<i64>) -> i64 {
+    let L: i64 = bit_length(k) + 3
+    let dp: ptr<i64> = calloc(16, 8)
+    let ndp: ptr<i64> = calloc(16, 8)
+    if dp == null || ndp == null { return -1 }
+    dp[1] = 1
+    let mut i: i64 = 0
+    while i < L {
+        let mut trans: ptr<i64> = t_inactive
+        if ((k >> i) & 1) != 0 {
+            trans = t_active
+        }
+        let mut s: i64 = 0
+        while s < 16 {
+            ndp[s] = 0
+            s = s + 1
+        }
+        s = 0
+        while s < 16 {
+            let cnt: i64 = dp[s]
+            if cnt != 0 {
+                ndp[trans[s]] = ndp[trans[s]] + cnt
+                ndp[trans[16 + s]] = ndp[trans[16 + s]] + cnt
+            }
+            s = s + 1
+        }
+        s = 0
+        while s < 16 {
+            dp[s] = ndp[s]
+            s = s + 1
+        }
+        i = i + 1
+    }
+    let mut ans: i64 = 0
+    let mut s2: i64 = 0
+    while s2 < 16 {
+        if (s2 & 1) != 0 {
+            ans = ans + dp[s2]
+        }
+        s2 = s2 + 1
+    }
+    free(dp)
+    free(ndp)
+    return ans
+}
+
+function main() -> i32 {
+    let t_active: ptr<i64> = calloc(32, 8)
+    let t_inactive: ptr<i64> = calloc(32, 8)
+    if t_active == null || t_inactive == null { return 1 }
+    build_trans(true, t_active)
+    build_trans(false, t_inactive)
+    let mut total: i64 = 0
+    let mut k: i64 = 10
+    let mut m: i64 = 0
+    while m < 18 {
+        total = total + Q(k, t_active, t_inactive)
+        k = k * 10
+        m = m + 1
+    }
+    printf("%lld\n", total)
+    free(t_active)
+    free(t_inactive)
+    return 0
+}

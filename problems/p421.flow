@@ -1,0 +1,129 @@
+# Project Euler 421
+# sum_{n=1..10^11} s(n,10^8) where s sums prime factors of n^15+1 <= 10^8.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function is_order_15(g: i64, p: i64) -> i64 {
+    if g == 1 { return 0 }
+    let g2: i64 = ((g as i128) * (g as i128) % (p as i128)) as i64
+    let g3: i64 = ((g2 as i128) * (g as i128) % (p as i128)) as i64
+    if g3 == 1 { return 0 }
+    let g5: i64 = ((g2 as i128) * (g3 as i128) % (p as i128)) as i64
+    if g5 == 1 { return 0 }
+    return 1
+}
+
+function find_gen(p: i64, d: i64) -> i64 {
+    let exp: i64 = (p - 1) / d
+    let bases: ptr<i64> = calloc(30, 8)
+    let nb: i64 = 25
+    bases[0]=2; bases[1]=3; bases[2]=5; bases[3]=7; bases[4]=11
+    bases[5]=13; bases[6]=17; bases[7]=19; bases[8]=23; bases[9]=29
+    bases[10]=31; bases[11]=37; bases[12]=41; bases[13]=43; bases[14]=47
+    bases[15]=53; bases[16]=59; bases[17]=61; bases[18]=67; bases[19]=71
+    bases[20]=73; bases[21]=79; bases[22]=83; bases[23]=89; bases[24]=97
+    let mut i: i64 = 0
+    while i < nb {
+        let a: i64 = bases[i]
+        if a >= p { break }
+        let g: i64 = modpow(a, exp, p)
+        if d == 3 || d == 5 {
+            if g != 1 { free(bases); return g }
+        } else {
+            if is_order_15(g, p) == 1 { free(bases); return g }
+        }
+        i = i + 1
+    }
+    let mut a2: i64 = 2
+    while a2 < p && a2 < 500 {
+        let g2: i64 = modpow(a2, exp, p)
+        if d == 3 || d == 5 {
+            if g2 != 1 { free(bases); return g2 }
+        } else {
+            if is_order_15(g2, p) == 1 { free(bases); return g2 }
+        }
+        a2 = a2 + 1
+    }
+    free(bases)
+    return 1
+}
+
+function main() -> i32 {
+    let L: i64 = 100000000000
+    let M: i64 = 100000000
+    let size: i64 = M / 2 + 1
+    let odd: ptr<i8> = calloc(size, 1)
+    if odd == null { return 1 }
+    let mut i: i64 = 0
+    while i < size { odd[i] = 1; i = i + 1 }
+    odd[0] = 0
+    let mut p: i64 = 3
+    while p * p <= M {
+        if odd[p >> 1] != 0 {
+            let mut cur: i64 = (p * p) >> 1
+            while cur < size {
+                odd[cur] = 0
+                cur = cur + p
+            }
+        }
+        p = p + 2
+    }
+
+    let d_table: ptr<i32> = calloc(30, 4)
+    i = 0
+    while i < 30 { d_table[i] = 1; i = i + 1 }
+    d_table[1] = 15
+    d_table[11] = 5
+    d_table[7] = 3
+    d_table[13] = 3
+    d_table[19] = 3
+
+    let mut ans: i64 = 2 * ((L + 1) / 2)
+    p = 3
+    while p <= M {
+        if odd[p >> 1] != 0 {
+            let d: i64 = d_table[p % 30] as i64
+            let q: i64 = L / p
+            let t: i64 = L % p
+            if d == 1 {
+                let mut cnt: i64 = q
+                if t == p - 1 { cnt = cnt + 1 }
+                ans = ans + p * cnt
+            } else {
+                let g: i64 = find_gen(p, d)
+                let threshold: i64 = p - t
+                let mut u: i64 = 1
+                let mut extra: i64 = 0
+                let mut k: i64 = 0
+                while k < d {
+                    if u >= threshold { extra = extra + 1 }
+                    u = ((u as i128) * (g as i128) % (p as i128)) as i64
+                    k = k + 1
+                }
+                ans = ans + p * (d * q + extra)
+            }
+        }
+        p = p + 2
+    }
+    printf("%lld\n", ans)
+    free(d_table)
+    free(odd)
+    return 0
+}

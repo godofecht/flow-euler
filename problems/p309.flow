@@ -1,0 +1,106 @@
+# Project Euler 309
+# Integer crossing ladders with x,y < 10^6.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let counts: ptr<i32> = calloc(limit, 4)
+    if counts == null { return 1 }
+
+    let mut m: i64 = 2
+    while m * m < limit {
+        let mut n: i64 = (m & 1) + 1
+        while n < m {
+            if gcd(m, n) == 1 {
+                let a: i64 = m * m - n * n
+                let b: i64 = 2 * m * n
+                let c: i64 = m * m + n * n
+                let mut k: i64 = 1
+                while k * c < limit {
+                    counts[k * a] = counts[k * a] + 1
+                    counts[k * b] = counts[k * b] + 1
+                    k = k + 1
+                }
+            }
+            n = n + 2
+        }
+        m = m + 1
+    }
+
+    let offs: ptr<i64> = calloc(limit + 1, 8)
+    let mut total: i64 = 0
+    let mut h: i64 = 0
+    while h < limit {
+        offs[h] = total
+        total = total + (counts[h] as i64)
+        h = h + 1
+    }
+    offs[limit] = total
+
+    let partners: ptr<i32> = calloc(total, 4)
+    let fill: ptr<i32> = calloc(limit, 4)
+    if partners == null || fill == null { return 1 }
+
+    m = 2
+    while m * m < limit {
+        let mut n: i64 = (m & 1) + 1
+        while n < m {
+            if gcd(m, n) == 1 {
+                let a: i64 = m * m - n * n
+                let b: i64 = 2 * m * n
+                let c: i64 = m * m + n * n
+                let mut k: i64 = 1
+                while k * c < limit {
+                    let aa: i64 = k * a
+                    let bb: i64 = k * b
+                    partners[offs[aa] + (fill[aa] as i64)] = bb as i32
+                    fill[aa] = fill[aa] + 1
+                    partners[offs[bb] + (fill[bb] as i64)] = aa as i32
+                    fill[bb] = fill[bb] + 1
+                    k = k + 1
+                }
+            }
+            n = n + 2
+        }
+        m = m + 1
+    }
+
+    let mut count: i64 = 0
+    h = 1
+    while h < limit {
+        let start: i64 = offs[h]
+        let end: i64 = offs[h + 1]
+        let mut left: i64 = start
+        while left < end {
+            let mut right: i64 = left + 1
+            while right < end {
+                let x: i64 = partners[left] as i64
+                let y: i64 = partners[right] as i64
+                if (x * y) % (x + y) == 0 {
+                    count = count + 1
+                }
+                right = right + 1
+            }
+            left = left + 1
+        }
+        h = h + 1
+    }
+    printf("%lld\n", count)
+    free(counts); free(offs); free(partners); free(fill)
+    return 0
+}

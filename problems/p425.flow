@@ -1,0 +1,153 @@
+# Project Euler 425
+# Relatives of 2 among primes < 10^7 (Dijkstra on digit connections).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 10000000
+    let isprime: ptr<i8> = calloc(LIMIT, 1)
+    let pathmax: ptr<i32> = calloc(LIMIT, 4)
+    if isprime == null || pathmax == null { return 1 }
+
+    # 0 = prime candidate; sieve marks composites as 1
+    isprime[0] = 1
+    isprime[1] = 1
+    let mut p: i64 = 2
+    while p * p < LIMIT {
+        if isprime[p] == 0 {
+            let mut m: i64 = p * p
+            while m < LIMIT {
+                isprime[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let mut i: i64 = 0
+    while i < LIMIT {
+        pathmax[i] = -1
+        i = i + 1
+    }
+
+    # binary heap of (pmax, n) as parallel arrays
+    let heap_p: ptr<i32> = calloc(LIMIT * 4, 4)
+    let heap_n: ptr<i32> = calloc(LIMIT * 4, 4)
+    if heap_p == null || heap_n == null { return 1 }
+    let mut hs: i64 = 0
+
+    heap_p[0] = 2
+    heap_n[0] = 2
+    hs = 1
+
+    while hs > 0 {
+        # pop min pmax
+        let pmax: i64 = heap_p[0] as i64
+        let n: i64 = heap_n[0] as i64
+        hs = hs - 1
+        if hs > 0 {
+            heap_p[0] = heap_p[hs]
+            heap_n[0] = heap_n[hs]
+            # sift down
+            let mut idx: i64 = 0
+            while true {
+                let l: i64 = 2 * idx + 1
+                let r: i64 = l + 1
+                let mut smallest: i64 = idx
+                if l < hs && (heap_p[l] as i64) < (heap_p[smallest] as i64) { smallest = l }
+                if r < hs && (heap_p[r] as i64) < (heap_p[smallest] as i64) { smallest = r }
+                if smallest == idx { break }
+                let tp: i32 = heap_p[idx]
+                let tn: i32 = heap_n[idx]
+                heap_p[idx] = heap_p[smallest]
+                heap_n[idx] = heap_n[smallest]
+                heap_p[smallest] = tp
+                heap_n[smallest] = tn
+                idx = smallest
+            }
+        }
+        if pathmax[n] >= 0 && pmax >= (pathmax[n] as i64) {
+            continue
+        }
+        pathmax[n] = pmax as i32
+
+        # digit array with leading zero
+        let digits: array<i32, 8> = [0, 0, 0, 0, 0, 0, 0, 0]
+        let mut tmp: i64 = n
+        let mut len: i32 = 0
+        let tmpd: array<i32, 8> = [0, 0, 0, 0, 0, 0, 0, 0]
+        while true {
+            tmpd[len] = (tmp % 10) as i32
+            tmp = tmp / 10
+            len = len + 1
+            if tmp == 0 { break }
+        }
+        digits[0] = 0
+        let mut di: i32 = 0
+        while di < len {
+            digits[di + 1] = tmpd[len - 1 - di]
+            di = di + 1
+        }
+        let dlen: i32 = len + 1
+
+        let mut pos: i32 = 0
+        while pos < dlen {
+            let old: i32 = digits[pos]
+            let mut dig: i32 = 0
+            while dig < 10 {
+                digits[pos] = dig
+                let mut m: i64 = 0
+                let mut k: i32 = 0
+                while k < dlen {
+                    m = m * 10 + (digits[k] as i64)
+                    k = k + 1
+                }
+                let nextp: i64 = m
+                if nextp < pmax { nextp = pmax }
+                if m > 0 && m < LIMIT && isprime[m] == 0 {
+                    if pathmax[m] < 0 || nextp < (pathmax[m] as i64) {
+                        # push
+                        let mut idx: i64 = hs
+                        heap_p[idx] = nextp as i32
+                        heap_n[idx] = m as i32
+                        hs = hs + 1
+                        while idx > 0 {
+                            let parent: i64 = (idx - 1) / 2
+                            if (heap_p[parent] as i64) <= (heap_p[idx] as i64) { break }
+                            let tp: i32 = heap_p[idx]
+                            let tn: i32 = heap_n[idx]
+                            heap_p[idx] = heap_p[parent]
+                            heap_n[idx] = heap_n[parent]
+                            heap_p[parent] = tp
+                            heap_n[parent] = tn
+                            idx = parent
+                        }
+                    }
+                }
+                dig = dig + 1
+            }
+            digits[pos] = old
+            pos = pos + 1
+        }
+    }
+
+    let mut ans: i64 = 0
+    i = 2
+    while i < LIMIT {
+        if isprime[i] == 0 {
+            if pathmax[i] < 0 || (pathmax[i] as i64) > i {
+                ans = ans + i
+            }
+        }
+        i = i + 1
+    }
+    printf("%lld\n", ans)
+    free(heap_n)
+    free(heap_p)
+    free(pathmax)
+    free(isprime)
+    return 0
+}

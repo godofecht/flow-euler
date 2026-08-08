@@ -1,0 +1,402 @@
+# Project Euler 262
+# Shortest mosquito path over mountain terrain at minimum pass elevation.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+    function exp(x: f64) -> f64
+}
+
+let mut L: f64 = 1600.0
+let mut AX: f64 = 200.0
+let mut AY: f64 = 200.0
+let mut BX: f64 = 1400.0
+let mut BY: f64 = 1400.0
+
+function h_only(x: f64, y: f64) -> f64 {
+    let xx: f64 = x * x
+    let yy: f64 = y * y
+    let P: f64 = 5000.0 - 0.005 * (xx + yy + x * y) + 12.5 * (x + y)
+    let Q: f64 = 0.000001 * (xx + yy) - 0.0015 * (x + y) + 0.7
+    let absQ: f64 = Q
+    if absQ < 0.0 { absQ = -absQ }
+    return P * exp(-absQ)
+}
+
+function h_and_grad(x: f64, y: f64, out_h: ptr<f64>, out_hx: ptr<f64>, out_hy: ptr<f64>) -> void {
+    let xx: f64 = x * x
+    let yy: f64 = y * y
+    let P: f64 = 5000.0 - 0.005 * (xx + yy + x * y) + 12.5 * (x + y)
+    let Q: f64 = 0.000001 * (xx + yy) - 0.0015 * (x + y) + 0.7
+    let absQ: f64 = Q
+    let mut sign: f64 = 1.0
+    if Q < 0.0 { absQ = -Q; sign = -1.0 }
+    let E: f64 = exp(-absQ)
+    out_h[0] = P * E
+    let Px: f64 = 12.5 - 0.01 * x - 0.005 * y
+    let Py: f64 = 12.5 - 0.01 * y - 0.005 * x
+    let Qx: f64 = 0.000002 * x - 0.0015
+    let Qy: f64 = 0.000002 * y - 0.0015
+    out_hx[0] = E * (Px - P * sign * Qx)
+    out_hy[0] = E * (Py - P * sign * Qy)
+}
+
+function golden_max(lo: f64, hi: f64) -> f64 {
+    let phi: f64 = 0.6180339887498949
+    let mut a: f64 = lo
+    let mut b: f64 = hi
+    let mut c: f64 = b - phi * (b - a)
+    let mut d: f64 = a + phi * (b - a)
+    let mut fc: f64 = h_only(0.0, c)
+    let mut fd: f64 = h_only(0.0, d)
+    let mut it: i64 = 0
+    while it < 200 {
+        if b - a < 0.0000000000001 { break }
+        if fc < fd {
+            a = c
+            c = d
+            fc = fd
+            d = a + phi * (b - a)
+            fd = h_only(0.0, d)
+        } else {
+            b = d
+            d = c
+            fd = fc
+            c = b - phi * (b - a)
+            fc = h_only(0.0, c)
+        }
+        it = it + 1
+    }
+    return h_only(0.0, (a + b) * 0.5)
+}
+
+function segment_clear(ox: f64, oy: f64, px: f64, py: f64, fmin: f64) -> bool {
+    let mut i: i64 = 1
+    while i < 200 {
+        let t: f64 = (i as f64) / 200.0
+        let x: f64 = ox + (px - ox) * t
+        let y: f64 = oy + (py - oy) * t
+        if h_only(x, y) > fmin + 0.000001 { return false }
+        i = i + 1
+    }
+    return true
+}
+
+function newton_tangent(ox: f64, oy: f64, fmin: f64, x0: f64, y0: f64, out_x: ptr<f64>, out_y: ptr<f64>) -> void {
+    let mut x: f64 = x0
+    let mut y: f64 = y0
+    let hh: ptr<f64> = calloc(1, 8)
+    let hx: ptr<f64> = calloc(1, 8)
+    let hy: ptr<f64> = calloc(1, 8)
+    let mut it: i64 = 0
+    while it < 120 {
+        h_and_grad(x, y, hh, hx, hy)
+        let f1: f64 = hh[0] - fmin
+        let f2: f64 = hx[0] * (ox - x) + hy[0] * (oy - y)
+        if f1 < 0.0 { if f1 > -0.0000000001 { f1 = 0.0 } }
+        if f1 > 0.0 { if f1 < 0.0000000001 { f1 = 0.0 } }
+        if f2 < 0.0 { if f2 > -0.00000001 { f2 = 0.0 } }
+        if f2 > 0.0 { if f2 < 0.00000001 { f2 = 0.0 } }
+        if f1 == 0.0 && f2 == 0.0 { break }
+
+        let mut epsx: f64 = 0.000001 * x
+        if epsx < 0.0 { epsx = -epsx }
+        if epsx < 0.000001 { epsx = 0.000001 }
+        let mut epsy: f64 = 0.000001 * y
+        if epsy < 0.0 { epsy = -epsy }
+        if epsy < 0.000001 { epsy = 0.000001 }
+
+        h_and_grad(x + epsx, y, hh, hx, hy)
+        let fpx1: f64 = hh[0] - fmin
+        let fpx2: f64 = hx[0] * (ox - (x + epsx)) + hy[0] * (oy - y)
+        h_and_grad(x - epsx, y, hh, hx, hy)
+        let fmx1: f64 = hh[0] - fmin
+        let fmx2: f64 = hx[0] * (ox - (x - epsx)) + hy[0] * (oy - y)
+        let dF1dx: f64 = (fpx1 - fmx1) / (2.0 * epsx)
+        let dF2dx: f64 = (fpx2 - fmx2) / (2.0 * epsx)
+
+        h_and_grad(x, y + epsy, hh, hx, hy)
+        let fpy1: f64 = hh[0] - fmin
+        let fpy2: f64 = hx[0] * (ox - x) + hy[0] * (oy - (y + epsy))
+        h_and_grad(x, y - epsy, hh, hx, hy)
+        let fmy1: f64 = hh[0] - fmin
+        let fmy2: f64 = hx[0] * (ox - x) + hy[0] * (oy - (y - epsy))
+        let dF1dy: f64 = (fpy1 - fmy1) / (2.0 * epsy)
+        let dF2dy: f64 = (fpy2 - fmy2) / (2.0 * epsy)
+
+        let det: f64 = dF1dx * dF2dy - dF1dy * dF2dx
+        if det > -0.000000000000000001 && det < 0.000000000000000001 {
+            x = x + 0.0003
+            y = y - 0.0002
+            it = it + 1
+            continue
+        }
+        let dx: f64 = (-f1 * dF2dy + f2 * dF1dy) / det
+        let dy: f64 = (-dF1dx * f2 + dF2dx * f1) / det
+        let base: f64 = f1
+        if f1 < 0.0 { let t: f64 = -f1; } else {}
+        let mut lam: f64 = 1.0
+        let mut accepted: bool = false
+        let mut ls: i64 = 0
+        while ls < 25 {
+            let xn: f64 = x + lam * dx
+            let yn: f64 = y + lam * dy
+            if xn >= 0.0 && xn <= L && yn >= 0.0 && yn <= L {
+                h_and_grad(xn, yn, hh, hx, hy)
+                let nf1: f64 = hh[0] - fmin
+                let nf2: f64 = hx[0] * (ox - xn) + hy[0] * (oy - yn)
+                let mut af1: f64 = nf1
+                let mut af2: f64 = nf2
+                if af1 < 0.0 { af1 = -af1 }
+                if af2 < 0.0 { af2 = -af2 }
+                let mut bf1: f64 = f1
+                let mut bf2: f64 = f2
+                if bf1 < 0.0 { bf1 = -bf1 }
+                if bf2 < 0.0 { bf2 = -bf2 }
+                if af1 + af2 < bf1 + bf2 {
+                    x = xn
+                    y = yn
+                    accepted = true
+                    break
+                }
+            }
+            lam = lam * 0.5
+            ls = ls + 1
+        }
+        if !accepted {
+            x = x + dx
+            y = y + dy
+        }
+        it = it + 1
+    }
+    out_x[0] = x
+    out_y[0] = y
+    free(hh); free(hx); free(hy)
+}
+
+function project_to_level(x0: f64, y0: f64, fmin: f64, out_x: ptr<f64>, out_y: ptr<f64>) -> void {
+    let mut x: f64 = x0
+    let mut y: f64 = y0
+    let hh: ptr<f64> = calloc(1, 8)
+    let hx: ptr<f64> = calloc(1, 8)
+    let hy: ptr<f64> = calloc(1, 8)
+    let mut i: i64 = 0
+    while i < 3 {
+        h_and_grad(x, y, hh, hx, hy)
+        let F: f64 = hh[0] - fmin
+        let denom: f64 = hx[0] * hx[0] + hy[0] * hy[0]
+        if denom == 0.0 { break }
+        x = x - F * hx[0] / denom
+        y = y - F * hy[0] / denom
+        i = i + 1
+    }
+    out_x[0] = x
+    out_y[0] = y
+    free(hh); free(hx); free(hy)
+}
+
+function walk_to_target(sx: f64, sy: f64, tx: f64, ty: f64, fmin: f64, direction: f64) -> f64 {
+    let px: ptr<f64> = calloc(1, 8)
+    let py: ptr<f64> = calloc(1, 8)
+    project_to_level(sx, sy, fmin, px, py)
+    let mut x: f64 = px[0]
+    let mut y: f64 = py[0]
+    let hh: ptr<f64> = calloc(1, 8)
+    let hx: ptr<f64> = calloc(1, 8)
+    let hy: ptr<f64> = calloc(1, 8)
+    let mut s: f64 = 0.0
+    let mut ds: f64 = 0.1
+    let mut step: i64 = 0
+    while step < 2000000 {
+        let dx: f64 = x - tx
+        let dy: f64 = y - ty
+        let d: f64 = sqrt(dx * dx + dy * dy)
+        if d < 0.0000000001 { break }
+        if ds > d * 0.5 { ds = d * 0.5 }
+        if ds < 0.0000000001 { ds = 0.0000000001 }
+
+        h_and_grad(x, y, hh, hx, hy)
+        let nrm: f64 = sqrt(hx[0] * hx[0] + hy[0] * hy[0])
+        let k1x: f64 = (-hy[0] / nrm) * direction
+        let k1y: f64 = (hx[0] / nrm) * direction
+
+        h_and_grad(x + 0.5 * ds * k1x, y + 0.5 * ds * k1y, hh, hx, hy)
+        let n2: f64 = sqrt(hx[0] * hx[0] + hy[0] * hy[0])
+        let k2x: f64 = (-hy[0] / n2) * direction
+        let k2y: f64 = (hx[0] / n2) * direction
+
+        h_and_grad(x + 0.5 * ds * k2x, y + 0.5 * ds * k2y, hh, hx, hy)
+        let n3: f64 = sqrt(hx[0] * hx[0] + hy[0] * hy[0])
+        let k3x: f64 = (-hy[0] / n3) * direction
+        let k3y: f64 = (hx[0] / n3) * direction
+
+        h_and_grad(x + ds * k3x, y + ds * k3y, hh, hx, hy)
+        let n4: f64 = sqrt(hx[0] * hx[0] + hy[0] * hy[0])
+        let k4x: f64 = (-hy[0] / n4) * direction
+        let k4y: f64 = (hx[0] / n4) * direction
+
+        let xn: f64 = x + ds * (k1x + 2.0 * k2x + 2.0 * k3x + k4x) / 6.0
+        let yn: f64 = y + ds * (k1y + 2.0 * k2y + 2.0 * k3y + k4y) / 6.0
+        project_to_level(xn, yn, fmin, px, py)
+        let dxn: f64 = px[0] - tx
+        let dyn: f64 = py[0] - ty
+        let dn: f64 = sqrt(dxn * dxn + dyn * dyn)
+        if d < 1.0 && dn > d {
+            ds = ds * 0.5
+            if ds < 0.000000000000001 { break }
+            step = step + 1
+            continue
+        }
+        x = px[0]
+        y = py[0]
+        s = s + ds
+        if s > 20000.0 { break }
+        step = step + 1
+    }
+    free(px); free(py); free(hh); free(hx); free(hy)
+    return s
+}
+
+function main() -> i32 {
+    let mut best_y: f64 = 0.0
+    let mut best_h: f64 = -1000000000000.0
+    let mut yi: i64 = 0
+    while yi <= 1600 {
+        let v: f64 = h_only(0.0, yi as f64)
+        if v > best_h {
+            best_h = v
+            best_y = yi as f64
+        }
+        yi = yi + 1
+    }
+    let lo: f64 = best_y - 5.0
+    let hi: f64 = best_y + 5.0
+    let fmin: f64 = golden_max(lo, hi)
+
+    let tx: ptr<f64> = calloc(16, 8)
+    let ty: ptr<f64> = calloc(16, 8)
+    let mut tc: i64 = 0
+
+    let hh: ptr<f64> = calloc(1, 8)
+    let hx: ptr<f64> = calloc(1, 8)
+    let hy: ptr<f64> = calloc(1, 8)
+    let ox: ptr<f64> = calloc(1, 8)
+    let oy: ptr<f64> = calloc(1, 8)
+
+    let mut xi: i64 = 0
+    while xi <= 1600 {
+        let x: f64 = xi as f64
+        let mut yj: i64 = 0
+        while yj <= 1600 {
+            let y: f64 = yj as f64
+            h_and_grad(x, y, hh, hx, hy)
+            let mut dh: f64 = hh[0] - fmin
+            if dh < 0.0 { dh = -dh }
+            if dh < 300.0 {
+                let tang: f64 = hx[0] * (AX - x) + hy[0] * (AY - y)
+                let mut at: f64 = tang
+                if at < 0.0 { at = -at }
+                if at < 400.0 {
+                    ox[0] = x
+                    oy[0] = y
+                    newton_tangent(AX, AY, fmin, x, y, ox, oy)
+                    let rx: f64 = ox[0]
+                    let ry: f64 = oy[0]
+                    let mut dup: bool = false
+                    let mut k: i64 = 0
+                    while k < tc {
+                        let ddx: f64 = rx - tx[k]
+                        let ddy: f64 = ry - ty[k]
+                        if ddx * ddx + ddy * ddy < 0.000001 {
+                            dup = true
+                            break
+                        }
+                        k = k + 1
+                    }
+                    if !dup && segment_clear(AX, AY, rx, ry, fmin) {
+                        tx[tc] = rx
+                        ty[tc] = ry
+                        tc = tc + 1
+                    }
+                }
+            }
+            yj = yj + 10
+        }
+        xi = xi + 10
+    }
+
+    let bx: ptr<f64> = calloc(16, 8)
+    let by: ptr<f64> = calloc(16, 8)
+    let mut bc: i64 = 0
+    xi = 0
+    while xi <= 1600 {
+        let x: f64 = xi as f64
+        let mut yj: i64 = 0
+        while yj <= 1600 {
+            let y: f64 = yj as f64
+            h_and_grad(x, y, hh, hx, hy)
+            let mut dh: f64 = hh[0] - fmin
+            if dh < 0.0 { dh = -dh }
+            if dh < 300.0 {
+                let tang: f64 = hx[0] * (BX - x) + hy[0] * (BY - y)
+                let mut at: f64 = tang
+                if at < 0.0 { at = -at }
+                if at < 400.0 {
+                    ox[0] = x
+                    oy[0] = y
+                    newton_tangent(BX, BY, fmin, x, y, ox, oy)
+                    let rx: f64 = ox[0]
+                    let ry: f64 = oy[0]
+                    let mut dup: bool = false
+                    let mut k: i64 = 0
+                    while k < bc {
+                        let ddx: f64 = rx - bx[k]
+                        let ddy: f64 = ry - by[k]
+                        if ddx * ddx + ddy * ddy < 0.000001 {
+                            dup = true
+                            break
+                        }
+                        k = k + 1
+                    }
+                    if !dup && segment_clear(BX, BY, rx, ry, fmin) {
+                        bx[bc] = rx
+                        by[bc] = ry
+                        bc = bc + 1
+                    }
+                }
+            }
+            yj = yj + 10
+        }
+        xi = xi + 10
+    }
+
+    let mut best: f64 = 1000000000000.0
+    let mut i: i64 = 0
+    while i < tc {
+        let mut j: i64 = 0
+        while j < bc {
+            let px: f64 = tx[i]
+            let py: f64 = ty[i]
+            let qx: f64 = bx[j]
+            let qy: f64 = by[j]
+            let arc1: f64 = walk_to_target(px, py, qx, qy, fmin, 1.0)
+            let arc2: f64 = walk_to_target(px, py, qx, qy, fmin, -1.0)
+            let arc: f64 = arc1
+            let mut use_arc: f64 = arc1
+            if arc2 < use_arc { use_arc = arc2 }
+            let dax: f64 = px - AX
+            let day: f64 = py - AY
+            let dbx: f64 = qx - BX
+            let dby: f64 = qy - BY
+            let total: f64 = sqrt(dax * dax + day * day) + use_arc + sqrt(dbx * dbx + dby * dby)
+            if total < best { best = total }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    free(tx); free(ty); free(bx); free(by); free(hh); free(hx); free(hy); free(ox); free(oy)
+    printf("%.3f\n", best)
+    return 0
+}

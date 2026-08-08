@@ -1,0 +1,220 @@
+# Project Euler 143
+# Sum of distinct p+q+r ≤ 120000 for Torricelli triangles.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let limit: i64 = 120000
+    let emax: i64 = 500000
+    let eu: ptr<i64> = calloc(emax, 8)
+    let ev: ptr<i64> = calloc(emax, 8)
+    if eu == null || ev == null { return 1 }
+    let mut ec: i64 = 0
+
+    let M: i64 = isqrt(limit) + 2
+    let mut m: i64 = 2
+    while m <= M {
+        let mm: i64 = m * m
+        let mut n: i64 = 1
+        while n < m {
+            if gcd(m, n) == 1 && (m - n) % 3 != 0 {
+                let nn: i64 = n * n
+                let x0: i64 = mm - nn
+                let y0: i64 = 2 * m * n + nn
+                let mut max0: i64 = x0
+                if y0 > max0 { max0 = y0 }
+                if max0 > 0 {
+                    let kmax: i64 = limit / max0
+                    let mut k: i64 = 1
+                    while k <= kmax {
+                        let a: i64 = x0 * k
+                        let b: i64 = y0 * k
+                        if a != b && ec + 2 < emax {
+                            eu[ec] = a
+                            ev[ec] = b
+                            ec = ec + 1
+                            eu[ec] = b
+                            ev[ec] = a
+                            ec = ec + 1
+                        }
+                        k = k + 1
+                    }
+                }
+            }
+            n = n + 1
+        }
+        m = m + 1
+    }
+
+    # sort edges by (u,v) - shell sort
+    let mut gap: i64 = ec / 2
+    while gap > 0 {
+        let mut i: i64 = gap
+        while i < ec {
+            let ku: i64 = eu[i]
+            let kv: i64 = ev[i]
+            let mut j: i64 = i
+            while j >= gap && (eu[j - gap] > ku || (eu[j - gap] == ku && ev[j - gap] > kv)) {
+                eu[j] = eu[j - gap]
+                ev[j] = ev[j - gap]
+                j = j - gap
+            }
+            eu[j] = ku
+            ev[j] = kv
+            i = i + 1
+        }
+        gap = gap / 2
+    }
+
+    # unique edges
+    let mut wri: i64 = 0
+    let mut i: i64 = 0
+    while i < ec {
+        if wri == 0 || eu[i] != eu[wri - 1] || ev[i] != ev[wri - 1] {
+            eu[wri] = eu[i]
+            ev[wri] = ev[i]
+            wri = wri + 1
+        }
+        i = i + 1
+    }
+    ec = wri
+
+    # CSR: nodes are values 1..limit; degree then offsets
+    let deg: ptr<i32> = calloc(limit + 1, 4)
+    if deg == null { return 1 }
+    i = 0
+    while i < ec {
+        deg[eu[i]] = deg[eu[i]] + 1
+        i = i + 1
+    }
+    let off: ptr<i64> = calloc(limit + 2, 8)
+    if off == null { return 1 }
+    off[0] = 0
+    let mut u: i64 = 0
+    while u <= limit {
+        off[u + 1] = off[u] + (deg[u] as i64)
+        u = u + 1
+    }
+    let adj: ptr<i64> = calloc(ec + 1, 8)
+    let fill: ptr<i64> = calloc(limit + 1, 8)
+    if adj == null || fill == null { return 1 }
+    i = 0
+    while i <= limit {
+        fill[i] = off[i]
+        i = i + 1
+    }
+    i = 0
+    while i < ec {
+        let uu: i64 = eu[i]
+        let pos: i64 = fill[uu]
+        adj[pos] = ev[i]
+        fill[uu] = pos + 1
+        i = i + 1
+    }
+    # sort each adjacency list
+    u = 1
+    while u <= limit {
+        let lo: i64 = off[u]
+        let hi: i64 = off[u + 1]
+        let len: i64 = hi - lo
+        if len > 1 {
+            let mut g: i64 = len / 2
+            while g > 0 {
+                let mut ii: i64 = g
+                while ii < len {
+                    let v: i64 = adj[lo + ii]
+                    let mut jj: i64 = ii
+                    while jj >= g && adj[lo + jj - g] > v {
+                        adj[lo + jj] = adj[lo + jj - g]
+                        jj = jj - g
+                    }
+                    adj[lo + jj] = v
+                    ii = ii + 1
+                }
+                g = g / 2
+            }
+        }
+        u = u + 1
+    }
+
+    # mark sums with a byte array
+    let seen: ptr<i8> = calloc(limit + 1, 1)
+    if seen == null { return 1 }
+    let mut total: i64 = 0
+
+    u = 1
+    while u <= limit {
+        let lo: i64 = off[u]
+        let hi: i64 = off[u + 1]
+        let mut a: i64 = lo
+        while a < hi {
+            let q: i64 = adj[a]
+            if q > u {
+                let pq: i64 = u + q
+                if pq < limit {
+                    # intersect neighbors of u (from a+1) with neighbors of q
+                    let qlo: i64 = off[q]
+                    let qhi: i64 = off[q + 1]
+                    let mut i1: i64 = a + 1
+                    let mut i2: i64 = qlo
+                    while i1 < hi && i2 < qhi {
+                        let r1: i64 = adj[i1]
+                        let r2: i64 = adj[i2]
+                        if r1 == r2 {
+                            let s: i64 = pq + r1
+                            if s <= limit && r1 > q {
+                                if seen[s] == 0 {
+                                    seen[s] = 1
+                                    total = total + s
+                                }
+                            }
+                            i1 = i1 + 1
+                            i2 = i2 + 1
+                        } elif r1 < r2 {
+                            i1 = i1 + 1
+                        } else {
+                            i2 = i2 + 1
+                        }
+                    }
+                }
+            }
+            a = a + 1
+        }
+        u = u + 1
+    }
+
+    printf("%lld\n", total)
+    free(seen)
+    free(fill)
+    free(adj)
+    free(off)
+    free(deg)
+    free(ev)
+    free(eu)
+    return 0
+}

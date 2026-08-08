@@ -1,0 +1,187 @@
+# Project Euler 546
+# The Floor's Revenge — sum f_k(10^14) mod 10^9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const N: i64 = 100000000000000
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            result = ((result as i128) * (base as i128) % (mod as i128)) as i64
+        }
+        base = ((base as i128) * (base as i128) % (mod as i128)) as i64
+        exp = exp >> 1
+    }
+    return result
+}
+
+function nCk(n: i64, r: i64, fact: ptr<i64>, invfact: ptr<i64>) -> i64 {
+    if r < 0 || r > n { return 0 }
+    let a: i128 = (fact[n] as i128) * (invfact[r] as i128) % (MOD as i128)
+    return (a * (invfact[n - r] as i128) % (MOD as i128)) as i64
+}
+
+function fk_mod(k: i64, N0: i64, fact: ptr<i64>, invfact: ptr<i64>,
+                coeffs: ptr<i64>, max_depth: i64) -> i64 {
+    let ns: ptr<i64> = calloc(20, 8)
+    if ns == null { return 0 }
+    ns[0] = N0
+    let mut depth: i64 = 0
+    while ns[depth] >= k {
+        depth = depth + 1
+        ns[depth] = ns[depth - 1] / k
+    }
+    let d: i64 = depth
+    let base: i64 = ns[d]
+    let state: ptr<i64> = calloc(d + 2, 8)
+    if state == null { free(ns); return 0 }
+    let mut j: i64 = 0
+    while j <= d {
+        state[j] = nCk(base + j + 1, j + 1, fact, invfact)
+        j = j + 1
+    }
+    let mut i: i64 = d - 1
+    while i >= 0 {
+        let r: i64 = ns[i] % k
+        let new_len: i64 = i + 1
+        let newv: ptr<i64> = calloc(new_len + 1, 8)
+        if newv == null { free(state); free(ns); return 0 }
+        let mut jj: i64 = 0
+        while jj <= i {
+            let co_off: i64 = (jj * k + r) * (max_depth + 2)
+            let mut s: i64 = 0
+            let mut p: i64 = 0
+            while p <= jj + 1 {
+                s = (s + coeffs[co_off + p] * state[p]) % MOD
+                p = p + 1
+            }
+            newv[jj] = s
+            jj = jj + 1
+        }
+        j = 0
+        while j <= i {
+            state[j] = newv[j]
+            j = j + 1
+        }
+        free(newv)
+        i = i - 1
+    }
+    let ans: i64 = state[0]
+    free(state)
+    free(ns)
+    return ans
+}
+
+function build_coeffs(k: i64, max_j: i64, coeffs: ptr<i64>, max_depth: i64) -> void {
+    let stride: i64 = max_depth + 2
+    let mut r: i64 = 0
+    while r < k {
+        coeffs[r * stride + 0] = (r + 1 - k) % MOD
+        coeffs[r * stride + 1] = k % MOD
+        r = r + 1
+    }
+    let mut j: i64 = 1
+    while j <= max_j {
+        let mut u: i64 = 0
+        while u < k {
+            let totals: ptr<i64> = calloc(j + 1, 8)
+            let prefix: ptr<i64> = calloc(k * (j + 1), 8)
+            if totals == null || prefix == null {
+                if totals != null { free(totals) }
+                if prefix != null { free(prefix) }
+                return
+            }
+            let mut uu: i64 = 0
+            while uu < k {
+                let prev_off: i64 = ((j - 1) * k + uu) * stride
+                let mut p: i64 = 0
+                while p <= j {
+                    totals[p] = (totals[p] + coeffs[prev_off + p]) % MOD
+                    p = p + 1
+                }
+                uu = uu + 1
+            }
+            uu = 0
+            let run: ptr<i64> = calloc(j + 1, 8)
+            while uu < k {
+                let prev_off: i64 = ((j - 1) * k + uu) * stride
+                let mut p: i64 = 0
+                while p <= j {
+                    run[p] = (run[p] + coeffs[prev_off + p]) % MOD
+                    prefix[uu * (j + 1) + p] = run[p]
+                    p = p + 1
+                }
+                uu = uu + 1
+            }
+            free(run)
+            let mut rr: i64 = 0
+            while rr < k {
+                let out_off: i64 = (j * k + rr) * stride
+                let mut p: i64 = 0
+                while p <= j + 1 {
+                    coeffs[out_off + p] = 0
+                    p = p + 1
+                }
+                coeffs[out_off + 0] = (prefix[rr * (j + 1) + 0] - totals[0]) % MOD
+                if coeffs[out_off + 0] < 0 { coeffs[out_off + 0] = coeffs[out_off + 0] + MOD }
+                p = 1
+                while p <= j {
+                    let mut v: i64 = prefix[rr * (j + 1) + p] - totals[p] + totals[p - 1]
+                    v = v % MOD
+                    if v < 0 { v = v + MOD }
+                    coeffs[out_off + p] = v
+                    p = p + 1
+                }
+                coeffs[out_off + j + 1] = totals[j] % MOD
+                rr = rr + 1
+            }
+            free(totals)
+            free(prefix)
+            u = u + 1
+        }
+        j = j + 1
+    }
+}
+
+function main() -> i32 {
+    let max_depth: i64 = 15
+    let stride: i64 = max_depth + 2
+    let fact_max: i64 = 200
+    let fact: ptr<i64> = calloc(fact_max + 1, 8)
+    let invfact: ptr<i64> = calloc(fact_max + 1, 8)
+    if fact == null || invfact == null { return 1 }
+    fact[0] = 1
+    let mut i: i64 = 1
+    while i <= fact_max {
+        fact[i] = ((fact[i - 1] as i128) * (i as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+    invfact[fact_max] = modpow(fact[fact_max], MOD - 2, MOD)
+    i = fact_max
+    while i > 0 {
+        invfact[i - 1] = ((invfact[i] as i128) * (i as i128) % (MOD as i128)) as i64
+        i = i - 1
+    }
+    let mut ans: i64 = 0
+    let mut k: i64 = 2
+    while k <= 10 {
+        let coeffs: ptr<i64> = calloc(11 * k * stride, 8)
+        if coeffs == null { break }
+        build_coeffs(k, max_depth, coeffs, max_depth)
+        ans = (ans + fk_mod(k, N, fact, invfact, coeffs, max_depth)) % MOD
+        free(coeffs)
+        k = k + 1
+    }
+    printf("%lld\n", ans)
+    free(fact)
+    free(invfact)
+    return 0
+}

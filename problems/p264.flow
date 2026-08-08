@@ -1,0 +1,223 @@
+# Project Euler 264
+# Sum perimeters of lattice triangles with circumcenter O and orthocenter (5,0).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x { x = y; y = (x + n / x) / 2 }
+    return x
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function mod_inverse(a0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    if a < 0 { a = a + m }
+    let mut b: i64 = m
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = a % b
+        a = b
+        b = t
+        let tx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = tx
+    }
+    if x0 < 0 { x0 = x0 + m }
+    return x0
+}
+
+function hypot_f(ax: i64, ay: i64, bx: i64, by: i64) -> f64 {
+    let dx: f64 = (ax - bx) as f64
+    let dy: f64 = (ay - by) as f64
+    return sqrt(dx * dx + dy * dy)
+}
+
+function tri_key(ax: i64, ay: i64, bx: i64, by: i64, cx: i64, cy: i64) -> i64 {
+    # pack sorted coords into hash (simple dedup key)
+    let mut a: i64 = ax * 1000003 + ay
+    let mut b: i64 = bx * 1000003 + by
+    let mut c: i64 = cx * 1000003 + cy
+    if a > b { let t: i64 = a; a = b; b = t }
+    if b > c { let t2: i64 = b; b = c; c = t2 }
+    if a > b { let t3: i64 = a; a = b; b = t3 }
+    return a * 1000000007 + b * 1000003 + c
+}
+
+function main() -> i32 {
+    let limit_p: i64 = 100000
+    let HX: i64 = 5
+    let HY: i64 = 0
+    let d_max: f64 = (limit_p as f64) / 2.0
+    let m_limit: i64 = (40.0 * d_max + 100.0) as i64
+    let pq_limit: i64 = isqrt(m_limit) + 1
+    let r_max: f64 = (limit_p as f64) / 4.0
+    let r2_max: f64 = r_max * r_max
+
+    let max_tri: i64 = 500000
+    let seen: ptr<i64> = calloc(max_tri, 8)
+    let seen_cnt: ptr<i64> = calloc(1, 8)
+    let mut total: f64 = 0.0
+
+    # d=0 special case: H=(5,0), b=-c on circle radius 5
+    let n0: i64 = 25
+    let mut x: i64 = -5
+    while x <= 5 {
+        let y2: i64 = n0 - x * x
+        if y2 >= 0 {
+            let y: i64 = isqrt(y2)
+            if y * y == y2 {
+                let mut yv: i64 = -y
+                while yv <= y {
+                    if yv != 0 {
+                        let bx: i64 = x
+                        let by: i64 = yv
+                        let cx: i64 = -x
+                        let cy: i64 = -yv
+                        if !(bx == cx && by == cy) {
+                            let per: f64 = hypot_f(HX, HY, bx, by) + hypot_f(bx, by, cx, cy) + hypot_f(cx, cy, HX, HY)
+                            if per <= (limit_p as f64) + 0.000000001 {
+                                let key: i64 = tri_key(HX, HY, bx, by, cx, cy)
+                                let mut found: bool = false
+                                let sc: i64 = seen_cnt[0]
+                                let mut si: i64 = 0
+                                while si < sc {
+                                    if seen[si] == key { found = true; break }
+                                    si = si + 1
+                                }
+                                if !found {
+                                    seen[sc] = key
+                                    seen_cnt[0] = sc + 1
+                                    total = total + per
+                                }
+                            }
+                        }
+                    }
+                    if yv == y { break }
+                    if yv == -y { yv = y } else { yv = yv + 1 }
+                }
+            }
+        }
+        x = x + 1
+    }
+
+    let mut p: i64 = 0
+    while p <= pq_limit {
+        let p2: i64 = p * p
+        if p2 > m_limit { break }
+        let q_max: i64 = isqrt(m_limit - p2)
+        let mut q: i64 = -q_max
+        while q <= q_max {
+            if p == 0 {
+                if q != 1 { q = q + 1; continue }
+            }
+            if p == 0 && q == 0 { q = q + 1; continue }
+            if gcd(p, q) != 1 { q = q + 1; continue }
+            let m: i64 = p2 + q * q
+            if m == 0 || m > m_limit { q = q + 1; continue }
+
+            let a40: i64 = (40 * p) % m
+            let b100: i64 = 100 % m
+            let d0: i64 = gcd(a40, m)
+            if b100 % d0 != 0 { q = q + 1; continue }
+            let m1: i64 = m / d0
+            let a1: i64 = a40 / d0
+            let b1: i64 = b100 / d0
+            let mut g0: i64 = 0
+            if m1 > 1 {
+                let inv: i64 = mod_inverse(a1 % m1, m1)
+                g0 = (b1 * inv) % m1
+            }
+
+            let g_abs_max: i64 = (d_max / sqrt(m as f64)) as i64 + 2
+            if g_abs_max <= 0 { q = q + 1; continue }
+
+            let mut g_abs_min: i64 = 1
+            if p > 0 {
+                if m > 100 {
+                    g_abs_min = (m - 100 + 40 * p - 1) / (40 * p)
+                    if g_abs_min < 1 { g_abs_min = 1 }
+                }
+            }
+            if g_abs_min > g_abs_max { q = q + 1; continue }
+
+            let k_min: i64 = (-g_abs_max - g0 + m1 - 1) / m1
+            let k_max: i64 = (g_abs_max - g0) / m1
+
+            let mut k: i64 = k_min
+            while k <= k_max {
+                let g: i64 = g0 + k * m1
+                if g != 0 {
+                    let ag: i64 = g
+                    if ag < 0 { ag = -ag }
+                    if ag >= g_abs_min && ag <= g_abs_max {
+                    let gg: i64 = g
+                    let M: i64 = 3 * gg * gg * m - 40 * gg * p + 100
+                    if M > 0 && M % m == 0 {
+                        let t2: i64 = M / m
+                        let t: i64 = isqrt(t2)
+                        if t * t == t2 {
+                            if ((g * p + t * q) & 1) == 0 && ((g * q - t * p) & 1) == 0 {
+                                let ax: i64 = HX - g * p
+                                let ay: i64 = HY - g * q
+                                let bx: i64 = (g * p + t * q) / 2
+                                let by: i64 = (g * q - t * p) / 2
+                                let cx: i64 = (g * p - t * q) / 2
+                                let cy: i64 = (g * q + t * p) / 2
+                                if !((ax == bx && ay == by) || (ax == cx && ay == cy) || (bx == cx && by == cy)) {
+                                    let n: i64 = ax * ax + ay * ay
+                                    if (n as f64) <= r2_max + 0.000000001 {
+                                        let per: f64 = hypot_f(ax, ay, bx, by) + hypot_f(bx, by, cx, cy) + hypot_f(cx, cy, ax, ay)
+                                        if per <= (limit_p as f64) + 0.000000001 {
+                                            let key: i64 = tri_key(ax, ay, bx, by, cx, cy)
+                                            let mut found: bool = false
+                                            let sc: i64 = seen_cnt[0]
+                                            let mut si: i64 = 0
+                                            while si < sc {
+                                                if seen[si] == key { found = true; break }
+                                                si = si + 1
+                                            }
+                                            if !found {
+                                                seen[sc] = key
+                                                seen_cnt[0] = sc + 1
+                                                total = total + per
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    }
+                }
+                k = k + 1
+            }
+            q = q + 1
+        }
+        p = p + 1
+    }
+
+    free(seen); free(seen_cnt)
+    printf("%.4f\n", total)
+    return 0
+}

@@ -1,0 +1,224 @@
+# Project Euler 537
+# Counting Tuples — T(20000,20000) via NTT polynomial powering.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1004535809
+const ROOT: i64 = 3
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function ntt(a: ptr<i64>, n: i64, invert: i32) -> void {
+    let mut j: i64 = 0
+    let mut i: i64 = 1
+    while i < n {
+        let mut bit: i64 = n >> 1
+        while (j & bit) != 0 {
+            j = j ^ bit
+            bit = bit >> 1
+        }
+        j = j ^ bit
+        if i < j {
+            let tmp: i64 = a[i]
+            a[i] = a[j]
+            a[j] = tmp
+        }
+        i = i + 1
+    }
+    let mut length: i64 = 2
+    while length <= n {
+        let wlen: i64 = modpow(ROOT, (MOD - 1) / length, MOD)
+        let mut wl: i64 = wlen
+        if invert == 1 { wl = modpow(wlen, MOD - 2, MOD) }
+        let half: i64 = length >> 1
+        i = 0
+        while i < n {
+            let mut w: i64 = 1
+            let mut jj: i64 = 0
+            while jj < half {
+                let u: i64 = a[i + jj]
+                let v: i64 = ((a[i + jj + half] as i128) * (w as i128) % (MOD as i128)) as i64
+                let mut x: i64 = u + v
+                if x >= MOD { x = x - MOD }
+                let mut y: i64 = u - v
+                if y < 0 { y = y + MOD }
+                a[i + jj] = x
+                a[i + jj + half] = y
+                w = ((w as i128) * (wl as i128) % (MOD as i128)) as i64
+                jj = jj + 1
+            }
+            i = i + length
+        }
+        length = length << 1
+    }
+    if invert == 1 {
+        let inv_n: i64 = modpow(n, MOD - 2, MOD)
+        i = 0
+        while i < n {
+            a[i] = ((a[i] as i128) * (inv_n as i128) % (MOD as i128)) as i64
+            i = i + 1
+        }
+    }
+}
+
+function multiply(a: ptr<i64>, alen: i64, b: ptr<i64>, blen: i64, degree: i64,
+                  out: ptr<i64>, out_len: ptr<i64>,
+                  fa: ptr<i64>, fb: ptr<i64>) -> void {
+    if alen == 1 {
+        let factor: i64 = a[0]
+        let mut lim: i64 = blen
+        if lim > degree + 1 { lim = degree + 1 }
+        let mut i: i64 = 0
+        while i < lim {
+            out[i] = ((factor as i128) * (b[i] as i128) % (MOD as i128)) as i64
+            i = i + 1
+        }
+        out_len[0] = lim
+        return
+    }
+    if blen == 1 {
+        let factor2: i64 = b[0]
+        let mut lim2: i64 = alen
+        if lim2 > degree + 1 { lim2 = degree + 1 }
+        let mut i2: i64 = 0
+        while i2 < lim2 {
+            out[i2] = ((factor2 as i128) * (a[i2] as i128) % (MOD as i128)) as i64
+            i2 = i2 + 1
+        }
+        out_len[0] = lim2
+        return
+    }
+    let mut result_len: i64 = alen + blen - 1
+    if result_len > degree + 1 { result_len = degree + 1 }
+    let full_len: i64 = alen + blen - 1
+    let mut size: i64 = 1
+    while size < full_len { size = size << 1 }
+    let mut i: i64 = 0
+    while i < size {
+        fa[i] = 0
+        fb[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i < alen { fa[i] = a[i]; i = i + 1 }
+    i = 0
+    while i < blen { fb[i] = b[i]; i = i + 1 }
+    ntt(fa, size, 0)
+    ntt(fb, size, 0)
+    i = 0
+    while i < size {
+        fa[i] = ((fa[i] as i128) * (fb[i] as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+    ntt(fa, size, 1)
+    i = 0
+    while i < result_len {
+        out[i] = fa[i]
+        i = i + 1
+    }
+    out_len[0] = result_len
+}
+
+function main() -> i32 {
+    let n: i64 = 20000
+    let k0: i64 = 20000
+    # sieve first n+1 primes
+    let mut limit: i64 = 300000
+    let sieve: ptr<i8> = calloc(limit + 1, 1)
+    let primes: ptr<i32> = calloc(n + 5, 4)
+    if sieve == null || primes == null { return 1 }
+    let mut pn: i64 = 0
+    while pn < n + 1 {
+        let mut i: i64 = 0
+        while i <= limit { sieve[i] = 1; i = i + 1 }
+        sieve[0] = 0; sieve[1] = 0
+        i = 2
+        while i * i <= limit {
+            if sieve[i] == 1 {
+                let mut j: i64 = i * i
+                while j <= limit { sieve[j] = 0; j = j + i }
+            }
+            i = i + 1
+        }
+        pn = 0
+        i = 2
+        while i <= limit && pn < n + 1 {
+            if sieve[i] == 1 {
+                primes[pn] = i as i32
+                pn = pn + 1
+            }
+            i = i + 1
+        }
+        if pn < n + 1 { limit = limit * 2 }
+    }
+    let degree: i64 = n
+    let max_size: i64 = 1
+    while max_size < 2 * (degree + 1) { max_size = max_size << 1 }
+    let base: ptr<i64> = calloc(degree + 2, 8)
+    let result: ptr<i64> = calloc(degree + 2, 8)
+    let tmp: ptr<i64> = calloc(degree + 2, 8)
+    let fa: ptr<i64> = calloc(max_size, 8)
+    let fb: ptr<i64> = calloc(max_size, 8)
+    let olen: ptr<i64> = calloc(1, 8)
+    if base == null || result == null || tmp == null || fa == null || fb == null || olen == null {
+        return 1
+    }
+    base[0] = 1
+    let mut r: i64 = 1
+    while r <= n {
+        base[r] = (primes[r] as i64) - (primes[r - 1] as i64)
+        r = r + 1
+    }
+    let mut blen: i64 = n + 1
+    result[0] = 1
+    let mut rlen: i64 = 1
+    let mut k: i64 = k0
+    while k > 0 {
+        if (k & 1) == 1 {
+            multiply(result, rlen, base, blen, degree, tmp, olen, fa, fb)
+            rlen = olen[0]
+            let mut i: i64 = 0
+            while i < rlen { result[i] = tmp[i]; i = i + 1 }
+        }
+        k = k >> 1
+        if k > 0 {
+            multiply(base, blen, base, blen, degree, tmp, olen, fa, fb)
+            blen = olen[0]
+            let mut i2: i64 = 0
+            while i2 < blen { base[i2] = tmp[i2]; i2 = i2 + 1 }
+        }
+    }
+    let ans: i64 = 0
+    if n < rlen { ans = result[n] }
+    printf("%lld\n", ans)
+    free(sieve); free(primes); free(base); free(result); free(tmp); free(fa); free(fb); free(olen)
+    return 0
+}

@@ -1,0 +1,48 @@
+# Project Euler 024
+# Millionth lexicographic permutation of the digits 0..9.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function factorial(n: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i64 = 2
+    while i <= n {
+        r = r * i
+        i = i + 1
+    }
+    return r
+}
+
+function main() -> i32 {
+    let digits: ptr<i32> = calloc(10, 4)
+    let mut i: i32 = 0
+    while i < 10 {
+        digits[i] = i
+        i = i + 1
+    }
+
+    let mut remaining: i64 = 999999  # zero-based index of the millionth
+    let mut result: i64 = 0
+    let mut n: i32 = 10
+    while n > 0 {
+        let f: i64 = factorial((n - 1) as i64)
+        let idx: i32 = (remaining / f) as i32
+        remaining = remaining % f
+        result = result * 10 + (digits[idx] as i64)
+
+        # remove used digit
+        let mut j: i32 = idx
+        while j < n - 1 {
+            digits[j] = digits[j + 1]
+            j = j + 1
+        }
+        n = n - 1
+    }
+
+    printf("%lld\n", result)
+    free(digits)
+    return 0
+}

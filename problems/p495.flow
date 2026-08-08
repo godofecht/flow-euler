@@ -1,0 +1,293 @@
+# Project Euler 495
+# Writing n as Product of k Squarefree Integers
+# W(10000!, 30) mod 1_000_000_007 via cycle-index generating functions.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const K: i64 = 30
+const NFACT: i64 = 10000
+
+let mut MAX_E: i64 = 0
+let mut NEXP: i64 = 0
+let mut EXP_LIST: ptr<i64> = null
+let mut EXP_CNT: ptr<i64> = null
+let mut FREQ1: i64 = 0
+let mut BASE: ptr<i64> = null
+let mut STRIDE: i64 = 0
+let mut R2MAX: i64 = 0
+let mut INV_FACT: ptr<i64> = null
+let mut INV_POW: ptr<i64> = null
+let mut PARTS: ptr<i64> = null
+let mut BPART: i64 = 0
+let mut TOTAL: i64 = 0
+let mut DP_TMP: ptr<i64> = null
+
+function modpow(base0: i64, exp0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % MOD
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = (r * b) % MOD
+        }
+        b = (b * b) % MOD
+        e = e / 2
+    }
+    return r
+}
+
+function base_off(r1: i64, r2: i64) -> i64 {
+    return (r1 * R2MAX + r2) * STRIDE
+}
+
+function apply_parts() -> void {
+    let mut r1: i64 = 0
+    let mut r2: i64 = 0
+    let mut i: i64 = BPART - 1
+    while i >= 0 {
+        if PARTS[i] != 1 { break }
+        r1 = r1 + 1
+        i = i - 1
+    }
+    while i >= 0 {
+        if PARTS[i] != 2 { break }
+        r2 = r2 + 1
+        i = i - 1
+    }
+    if r1 == 0 {
+        if FREQ1 != 0 { return }
+    }
+    let off: i64 = base_off(r1, r2)
+    let mut t: i64 = 0
+    while t <= MAX_E {
+        DP_TMP[t] = BASE[off + t]
+        t = t + 1
+    }
+    let mut j: i64 = 0
+    while j <= i {
+        let m: i64 = PARTS[j]
+        t = m
+        while t <= MAX_E {
+            let x: i64 = DP_TMP[t] + DP_TMP[t - m]
+            if x >= MOD {
+                DP_TMP[t] = x - MOD
+            } else {
+                DP_TMP[t] = x
+            }
+            t = t + 1
+        }
+        j = j + 1
+    }
+    let mut fval: i64 = 1
+    j = 0
+    while j < NEXP {
+        let c: i64 = DP_TMP[EXP_LIST[j]]
+        if c == 0 {
+            fval = 0
+            break
+        }
+        let fe: i64 = EXP_CNT[j]
+        if fe == 1 {
+            fval = (fval * c) % MOD
+        } else {
+            if c != 1 {
+                fval = (fval * modpow(c, fe)) % MOD
+            }
+        }
+        j = j + 1
+    }
+    if fval == 0 { return }
+    let mut w: i64 = 1
+    j = 0
+    while j < BPART {
+        let s: i64 = PARTS[j]
+        let mut jj: i64 = j + 1
+        while jj < BPART {
+            if PARTS[jj] != s { break }
+            jj = jj + 1
+        }
+        let cnt: i64 = jj - j
+        w = (w * INV_POW[s * (K + 1) + cnt]) % MOD
+        w = (w * INV_FACT[cnt]) % MOD
+        j = jj
+    }
+    if ((K - BPART) & 1) != 0 {
+        w = MOD - w
+    }
+    TOTAL = (TOTAL + w * fval) % MOD
+}
+
+function gen(rem: i64, maxp0: i64) -> void {
+    if rem == 0 {
+        apply_parts()
+        return
+    }
+    let mut maxp: i64 = maxp0
+    if maxp > rem { maxp = rem }
+    let mut first: i64 = maxp
+    while first >= 1 {
+        PARTS[BPART] = first
+        BPART = BPART + 1
+        gen(rem - first, first)
+        BPART = BPART - 1
+        first = first - 1
+    }
+}
+
+function main() -> i32 {
+    let freq_arr: ptr<i64> = calloc(NFACT + 1, 8)
+    let sieve: ptr<i8> = calloc(NFACT + 1, 1)
+    if freq_arr == null || sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i <= NFACT {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    i = 2
+    while i * i <= NFACT {
+        if sieve[i] != 0 {
+            let mut j: i64 = i * i
+            while j <= NFACT {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    MAX_E = 0
+    let mut p: i64 = 2
+    while p <= NFACT {
+        if sieve[p] != 0 {
+            let mut e: i64 = 0
+            let mut nn: i64 = NFACT
+            while nn > 0 {
+                nn = nn / p
+                e = e + nn
+            }
+            freq_arr[e] = freq_arr[e] + 1
+            if e > MAX_E { MAX_E = e }
+        }
+        p = p + 1
+    }
+    free(sieve)
+    FREQ1 = freq_arr[1]
+    EXP_LIST = calloc(MAX_E + 1, 8)
+    EXP_CNT = calloc(MAX_E + 1, 8)
+    if EXP_LIST == null || EXP_CNT == null { return 1 }
+    NEXP = 0
+    let mut e2: i64 = 1
+    while e2 <= MAX_E {
+        if freq_arr[e2] != 0 {
+            EXP_LIST[NEXP] = e2
+            EXP_CNT[NEXP] = freq_arr[e2]
+            NEXP = NEXP + 1
+        }
+        e2 = e2 + 1
+    }
+    free(freq_arr)
+
+    STRIDE = MAX_E + 1
+    R2MAX = K / 2 + 1
+    let nbase: i64 = (K + 1) * R2MAX * STRIDE
+    BASE = calloc(nbase, 8)
+    if BASE == null { return 1 }
+    let inv: ptr<i64> = calloc(MAX_E + 1, 8)
+    if inv == null { return 1 }
+    if MAX_E >= 1 { inv[1] = 1 }
+    i = 2
+    while i <= MAX_E {
+        inv[i] = (MOD - (MOD / i) * inv[MOD % i] % MOD) % MOD
+        i = i + 1
+    }
+    let mut r1: i64 = 0
+    while r1 <= K {
+        let off0: i64 = base_off(r1, 0)
+        BASE[off0] = 1
+        if r1 > 0 {
+            let mut t: i64 = 1
+            while t <= MAX_E {
+                BASE[off0 + t] = ((BASE[off0 + t - 1] * (r1 + t - 1)) % MOD * inv[t]) % MOD
+                t = t + 1
+            }
+        }
+        let mut r2: i64 = 1
+        while r2 <= K / 2 {
+            let off: i64 = base_off(r1, r2)
+            let prev: i64 = base_off(r1, r2 - 1)
+            let mut t2: i64 = 0
+            while t2 <= MAX_E {
+                BASE[off + t2] = BASE[prev + t2]
+                t2 = t2 + 1
+            }
+            t2 = 2
+            while t2 <= MAX_E {
+                let x: i64 = BASE[off + t2] + BASE[off + t2 - 2]
+                if x >= MOD {
+                    BASE[off + t2] = x - MOD
+                } else {
+                    BASE[off + t2] = x
+                }
+                t2 = t2 + 1
+            }
+            r2 = r2 + 1
+        }
+        r1 = r1 + 1
+    }
+    free(inv)
+
+    INV_FACT = calloc(K + 1, 8)
+    INV_POW = calloc((K + 1) * (K + 1), 8)
+    PARTS = calloc(K + 1, 8)
+    DP_TMP = calloc(MAX_E + 1, 8)
+    if INV_FACT == null || INV_POW == null || PARTS == null || DP_TMP == null { return 1 }
+
+    let fact: ptr<i64> = calloc(K + 1, 8)
+    if fact == null { return 1 }
+    fact[0] = 1
+    i = 1
+    while i <= K {
+        fact[i] = (fact[i - 1] * i) % MOD
+        i = i + 1
+    }
+    INV_FACT[K] = modpow(fact[K], MOD - 2)
+    i = K
+    while i >= 1 {
+        INV_FACT[i - 1] = (INV_FACT[i] * i) % MOD
+        i = i - 1
+    }
+    free(fact)
+
+    let mut s: i64 = 1
+    while s <= K {
+        let invs: i64 = modpow(s, MOD - 2)
+        let mut acc: i64 = 1
+        INV_POW[s * (K + 1) + 0] = 1
+        let mut c: i64 = 1
+        while c <= K {
+            acc = (acc * invs) % MOD
+            INV_POW[s * (K + 1) + c] = acc
+            c = c + 1
+        }
+        s = s + 1
+    }
+
+    TOTAL = 0
+    BPART = 0
+    gen(K, K)
+    printf("%lld\n", TOTAL)
+
+    free(DP_TMP)
+    free(PARTS)
+    free(INV_POW)
+    free(INV_FACT)
+    free(BASE)
+    free(EXP_CNT)
+    free(EXP_LIST)
+    return 0
+}

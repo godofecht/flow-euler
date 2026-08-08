@@ -1,0 +1,328 @@
+# Project Euler 399
+# 1e8-th squarefree Fibonacci: last 16 digits + scientific notation.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log(x: f64) -> f64
+    function pow(x: f64, y: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+function flog10(x: f64) -> f64 {
+    return log(x) / log(10.0)
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = 0 - a }
+    if b < 0 { b = 0 - b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut aa: i64 = a0 % mod
+    if aa < 0 { aa = aa + mod }
+    let mut bb: i64 = b0 % mod
+    if bb < 0 { bb = bb + mod }
+    return (((aa as i128) * (bb as i128)) % (mod as i128)) as i64
+}
+
+function fib_mod(n: i64, mod: i64) -> i64 {
+    let mut a: i64 = 0
+    let mut b: i64 = 1
+    if n == 0 { return 0 }
+    let mut bit: i64 = 63
+    while bit >= 0 {
+        if ((n >> bit) & 1) == 1 { break }
+        bit = bit - 1
+    }
+    while bit >= 0 {
+        let two_b_minus_a: i64 = (2 * b - a) % mod
+        if two_b_minus_a < 0 { two_b_minus_a = two_b_minus_a + mod }
+        let c: i64 = mulmod(a, two_b_minus_a, mod)
+        let d: i64 = (mulmod(a, a, mod) + mulmod(b, b, mod)) % mod
+        if ((n >> bit) & 1) == 1 {
+            a = d
+            b = (c + d) % mod
+        } else {
+            a = c
+            b = d
+        }
+        bit = bit - 1
+    }
+    return a
+}
+
+function legendre5(p: i64) -> i64 {
+    let r: i64 = modpow(5, (p - 1) / 2, p)
+    if r == 1 { return 1 }
+    return 0 - 1
+}
+
+function main() -> i32 {
+    let KTH: i64 = 100000000
+    let NMAX: i64 = 200000000
+    let LAST16: i64 = 10000000000000000
+
+    # Prime upper bound for moduli: scan small fib like Python
+    let mut a: i64 = 0
+    let mut b: i64 = 1
+    let mut best: i64 = 0
+    let mut kk: i64 = 1
+    while kk < 200 {
+        let tmp: i64 = a + b
+        a = b
+        b = tmp
+        let fk: i64 = a
+        let mut cand: i64 = NMAX / kk
+        if fk < cand { cand = fk }
+        if cand > best { best = cand }
+        if kk > 60 && (NMAX / kk) <= best { break }
+        kk = kk + 1
+    }
+    let pmax: i64 = best
+
+    let sieve: ptr<i8> = calloc(pmax + 1, 1)
+    let primes: ptr<i32> = calloc(pmax / 5 + 10, 4)
+    let mut pc: i64 = 0
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut i: i64 = 2
+    while i <= pmax {
+        if sieve[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            let mut j: i64 = i * i
+            while j <= pmax {
+                sieve[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let sroot: i64 = isqrt(pmax) + 1
+    let small_primes: ptr<i32> = calloc(sroot / 2 + 10, 4)
+    let mut spc: i64 = 0
+    i = 0
+    while i < pc {
+        let p: i64 = primes[i] as i64
+        if p > sroot { break }
+        small_primes[spc] = p as i32
+        spc = spc + 1
+        i = i + 1
+    }
+
+    let mods: ptr<i64> = calloc(pc + 1, 8)
+    let mut mc: i64 = 0
+    i = 0
+    while i < pc {
+        let p: i64 = primes[i] as i64
+        let mut zp: i64 = 0
+        if p == 2 { zp = 3 }
+        elif p == 5 { zp = 5 }
+        else {
+            let s: i64 = legendre5(p)
+            let mut cand: i64 = p + 1
+            if s == 1 { cand = p - 1 }
+            let mut d: i64 = cand
+            # unique prime factors of cand
+            let mut x: i64 = cand
+            let mut fi: i64 = 0
+            while fi < spc {
+                let q: i64 = small_primes[fi] as i64
+                if q * q > x { break }
+                if x % q == 0 {
+                    while d % q == 0 && fib_mod(d / q, p) == 0 {
+                        d = d / q
+                    }
+                    while x % q == 0 { x = x / q }
+                }
+                fi = fi + 1
+            }
+            if x > 1 {
+                while d % x == 0 && fib_mod(d / x, p) == 0 {
+                    d = d / x
+                }
+            }
+            zp = d
+        }
+        let m: i64 = p * zp
+        if m <= NMAX {
+            mods[mc] = m
+            mc = mc + 1
+        }
+        i = i + 1
+    }
+
+    # sort mods
+    i = 1
+    while i < mc {
+        let key: i64 = mods[i]
+        let mut j: i64 = i - 1
+        while j >= 0 && mods[j] > key {
+            mods[j + 1] = mods[j]
+            j = j - 1
+        }
+        mods[j + 1] = key
+        i = i + 1
+    }
+
+    # filter redundant
+    let filtered: ptr<i64> = calloc(mc + 1, 8)
+    let mut fc: i64 = 0
+    i = 0
+    while i < mc {
+        let m: i64 = mods[i]
+        let mut redundant: i64 = 0
+        let mut j: i64 = 0
+        while j < fc {
+            if m % filtered[j] == 0 {
+                redundant = 1
+                break
+            }
+            j = j + 1
+        }
+        if redundant == 0 {
+            filtered[fc] = m
+            fc = fc + 1
+        }
+        i = i + 1
+    }
+
+    # Inclusion-exclusion coefficients via DFS; store in open-addressing map
+    let CAP: i64 = 1 << 20
+    let keys: ptr<i64> = calloc(CAP, 8)
+    let vals: ptr<i64> = calloc(CAP, 8)
+    let used: ptr<i8> = calloc(CAP, 1)
+
+    # put helper as inline loops
+    # seed coeff[1]=1
+    let mut slot: i64 = 1 & (CAP - 1)
+    used[slot] = 1
+    keys[slot] = 1
+    vals[slot] = 1
+
+    # iterative DFS stack: (start, lcm, sign)
+    let STMAX: i64 = 100000
+    let st_start: ptr<i32> = calloc(STMAX, 4)
+    let st_lcm: ptr<i64> = calloc(STMAX, 8)
+    let st_sign: ptr<i8> = calloc(STMAX, 1)
+    st_start[0] = 0
+    st_lcm[0] = 1
+    st_sign[0] = 1
+    let mut sp: i64 = 1
+    while sp > 0 {
+        sp = sp - 1
+        let start: i64 = st_start[sp] as i64
+        let lcm_val: i64 = st_lcm[sp]
+        let sign: i64 = st_sign[sp] as i64
+        let mut idx: i64 = start
+        while idx < fc {
+            let m: i64 = filtered[idx]
+            if lcm_val % m != 0 {
+                let g: i64 = gcd(lcm_val, m)
+                let nl: i64 = (lcm_val / g) * m
+                if nl <= NMAX {
+                    let s: i64 = 0 - sign
+                    # map add
+                    let mut h: i64 = nl
+                    if h < 0 { h = 0 - h }
+                    slot = h & (CAP - 1)
+                    while used[slot] != 0 && keys[slot] != nl {
+                        slot = (slot + 1) & (CAP - 1)
+                    }
+                    if used[slot] == 0 {
+                        used[slot] = 1
+                        keys[slot] = nl
+                        vals[slot] = s
+                    } else {
+                        vals[slot] = vals[slot] + s
+                    }
+                    # push dfs
+                    st_start[sp] = (idx + 1) as i32
+                    st_lcm[sp] = nl
+                    st_sign[sp] = s as i8
+                    sp = sp + 1
+                }
+            }
+            idx = idx + 1
+        }
+    }
+
+    # collect nonzero coeffs
+    let lcms: ptr<i64> = calloc(CAP, 8)
+    let coeffs: ptr<i64> = calloc(CAP, 8)
+    let mut lc: i64 = 0
+    i = 0
+    while i < CAP {
+        if used[i] != 0 && vals[i] != 0 {
+            lcms[lc] = keys[i]
+            coeffs[lc] = vals[i]
+            lc = lc + 1
+        }
+        i = i + 1
+    }
+
+    # binary search for kth index
+    let mut lo: i64 = 1
+    let mut hi: i64 = NMAX
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        let mut total: i64 = 0
+        i = 0
+        while i < lc {
+            total = total + coeffs[i] * (mid / lcms[i])
+            i = i + 1
+        }
+        if total >= KTH {
+            hi = mid
+        } else {
+            lo = mid + 1
+        }
+    }
+    let n: i64 = lo
+
+    let last16: i64 = fib_mod(n, LAST16)
+    let phi: f64 = (1.0 + pow(5.0, 0.5)) / 2.0
+    let log10F: f64 = (n as f64) * flog10(phi) - 0.5 * flog10(5.0)
+    let mut expv: i64 = floor(log10F) as i64
+    let mut mant: f64 = pow(10.0, log10F - (expv as f64))
+    let mut mant_r: f64 = floor(mant * 10.0 + 0.5) / 10.0
+    if mant_r >= 10.0 {
+        mant_r = 1.0
+        expv = expv + 1
+    }
+    printf("%lld,%.1fe%lld\n", last16, mant_r, expv)
+    return 0
+}

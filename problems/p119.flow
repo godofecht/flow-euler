@@ -1,0 +1,77 @@
+# Project Euler 119
+# The 30th number that is a power a^b (b≥2) equal to the sum of its digits raised to some power.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digit_sum(n0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut s: i64 = 0
+    while n > 0 {
+        s = s + n % 10
+        n = n / 10
+    }
+    return s
+}
+
+function ipow(base: i64, exp: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            # overflow guard
+            if r > 9223372036854775807 / b { return -1 }
+            r = r * b
+        }
+        e = e / 2
+        if e > 0 {
+            if b > 9223372036854775807 / b { return -1 }
+            b = b * b
+        }
+    }
+    return r
+}
+
+function insert_sorted(arr: ptr<i64>, n: i32, v: i64) -> i32 {
+    # insert unique sorted
+    let mut i: i32 = 0
+    while i < n {
+        if arr[i] == v { return n }
+        if arr[i] > v { break }
+        i = i + 1
+    }
+    let mut j: i32 = n
+    while j > i {
+        arr[j] = arr[j - 1]
+        j = j - 1
+    }
+    arr[i] = v
+    return n + 1
+}
+
+function main() -> i32 {
+    let arr: ptr<i64> = calloc(2000, 8)
+    if arr == null { return 1 }
+    let mut count: i32 = 0
+    let mut base: i64 = 2
+    while base <= 200 {
+        let mut exp: i64 = 2
+        while exp <= 50 {
+            let p: i64 = ipow(base, exp)
+            if p < 0 { break }
+            if p >= 10 && digit_sum(p) == base {
+                count = insert_sorted(arr, count, p)
+            }
+            exp = exp + 1
+        }
+        base = base + 1
+    }
+    # Also bases that are digit sums may be > 9*digits; base up to 9*20=180 for ~20 digits ok
+    # 30th term (1-indexed)
+    printf("%lld\n", arr[29])
+    free(arr)
+    return 0
+}

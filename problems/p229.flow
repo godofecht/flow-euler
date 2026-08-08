@@ -1,0 +1,86 @@
+# Project Euler 229
+# Numbers representable as a^2+b^2, a^2+2b^2, a^2+3b^2, a^2+7b^2 below 2e9.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 2000000000
+    let SLICE: i64 = 1000000
+    let ONE: i32 = 1
+    let TWO: i32 = 2
+    let THREE: i32 = 4
+    let SEVEN: i32 = 8
+    let ALL: i32 = 15
+    let used: ptr<i8> = calloc(SLICE, 1)
+    if used == null { return 1 }
+    let max_a: i64 = isqrt(LIMIT)
+    let b1: ptr<i32> = calloc(max_a + 1, 4)
+    let b2: ptr<i32> = calloc(max_a + 1, 4)
+    let b3: ptr<i32> = calloc(max_a + 1, 4)
+    let b7: ptr<i32> = calloc(max_a + 1, 4)
+    if b1 == null || b2 == null || b3 == null || b7 == null { return 1 }
+    let mut a: i64 = 1
+    while a <= max_a {
+        b1[a] = 1; b2[a] = 1; b3[a] = 1; b7[a] = 1
+        a = a + 1
+    }
+    let mut count: i64 = 0
+    let mut start: i64 = 0
+    while start < LIMIT {
+        let mut end: i64 = start + SLICE
+        if end > LIMIT { end = LIMIT }
+        a = 1
+        while a <= max_a {
+            if a * a + (b1[a] as i64) * (b1[a] as i64) >= end { break }
+            let mut b: i64 = b1[a] as i64
+            while a * a + b * b < end {
+                used[a * a + b * b - start] = (used[a * a + b * b - start] as i32 | ONE) as i8
+                b = b + 1
+            }
+            b1[a] = b as i32
+            b = b2[a] as i64
+            while a * a + 2 * b * b < end {
+                used[a * a + 2 * b * b - start] = (used[a * a + 2 * b * b - start] as i32 | TWO) as i8
+                b = b + 1
+            }
+            b2[a] = b as i32
+            b = b3[a] as i64
+            while a * a + 3 * b * b < end {
+                used[a * a + 3 * b * b - start] = (used[a * a + 3 * b * b - start] as i32 | THREE) as i8
+                b = b + 1
+            }
+            b3[a] = b as i32
+            b = b7[a] as i64
+            while a * a + 7 * b * b < end {
+                used[a * a + 7 * b * b - start] = (used[a * a + 7 * b * b - start] as i32 | SEVEN) as i8
+                b = b + 1
+            }
+            b7[a] = b as i32
+            a = a + 1
+        }
+        let mut i: i64 = 0
+        while i < end - start {
+            if (used[i] as i32) == ALL { count = count + 1 }
+            used[i] = 0
+            i = i + 1
+        }
+        start = end
+    }
+    printf("%lld\n", count)
+    free(used); free(b1); free(b2); free(b3); free(b7)
+    return 0
+}

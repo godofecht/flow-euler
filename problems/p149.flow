@@ -1,0 +1,91 @@
+# Project Euler 149
+# Maximum-sum subsequence in a 2000×2000 lagged-Fibonacci matrix.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function max_sum(data: ptr<i64>, first: i64, last: i64, increment: i64) -> i64 {
+    let mut result: i64 = data[first]
+    let mut current: i64 = 0
+    let mut i: i64 = first
+    while i <= last {
+        current = current + data[i]
+        if current < 0 { current = 0 }
+        if result < current { result = current }
+        i = i + increment
+    }
+    return result
+}
+
+function main() -> i32 {
+    let size: i64 = 2000
+    let length: i64 = size * size
+    let data: ptr<i64> = calloc(length, 8)
+    if data == null { return 1 }
+
+    let mut k: i64 = 1
+    let mut idx: i64 = 0
+    while idx < 55 && idx < length {
+        let val: i64 = (100003 - 200003 * k + 300007 * k * k * k) % 1000000 - 500000
+        # fix negative mod
+        let mut v: i64 = (100003 - 200003 * k + 300007 * k * k * k) % 1000000
+        if v < 0 { v = v + 1000000 }
+        data[idx] = v - 500000
+        k = k + 1
+        idx = idx + 1
+    }
+    idx = 55
+    while idx < length {
+        let mut s: i64 = data[idx - 24] + data[idx - 55] + 1000000
+        s = s % 1000000
+        if s < 0 { s = s + 1000000 }
+        data[idx] = s - 500000
+        idx = idx + 1
+    }
+
+    let last: i64 = size - 1
+    let mut result: i64 = data[0]
+
+    let mut y: i64 = 0
+    while y < size {
+        let current: i64 = max_sum(data, y * size, y * size + last, 1)
+        if result < current { result = current }
+        y = y + 1
+    }
+    let mut x: i64 = 0
+    while x < size {
+        let current: i64 = max_sum(data, x, last * size + x, size)
+        if result < current { result = current }
+        x = x + 1
+    }
+    x = 0
+    while x < size {
+        let current: i64 = max_sum(data, x, (last - x) * size + last, size + 1)
+        if result < current { result = current }
+        x = x + 1
+    }
+    y = 1
+    while y < size {
+        let current: i64 = max_sum(data, y * size, last * size + (y), size + 1)
+        if result < current { result = current }
+        y = y + 1
+    }
+    x = 0
+    while x < size {
+        let current: i64 = max_sum(data, x, x * size, size - 1)
+        if result < current { result = current }
+        x = x + 1
+    }
+    y = 1
+    while y < size {
+        let current: i64 = max_sum(data, y * size + last, last * size + y, size - 1)
+        if result < current { result = current }
+        y = y + 1
+    }
+
+    printf("%lld\n", result)
+    free(data)
+    return 0
+}

@@ -1,0 +1,119 @@
+# Project Euler 105
+# Sum of elements of special sum sets in data/p105.txt.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function sort_arr(a: ptr<i32>, n: i32) -> void {
+    let mut i: i32 = 0
+    while i < n {
+        let mut j: i32 = i + 1
+        while j < n {
+            if a[j] < a[i] {
+                let t: i32 = a[i]
+                a[i] = a[j]
+                a[j] = t
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function is_special(a: ptr<i32>, n: i32) -> bool {
+    let mut k: i32 = 1
+    while 2 * k <= n {
+        let mut small: i32 = 0
+        let mut i: i32 = 0
+        while i <= k {
+            small = small + a[i]
+            i = i + 1
+        }
+        let mut large: i32 = 0
+        i = n - k
+        while i < n {
+            large = large + a[i]
+            i = i + 1
+        }
+        if small <= large { return false }
+        k = k + 1
+    }
+    let mut seen: ptr<i8> = calloc(30000, 1)
+    if seen == null { return false }
+    let lim: i32 = 1 << n
+    let mut mask: i32 = 1
+    while mask < lim {
+        let mut s: i32 = 0
+        let mut i: i32 = 0
+        while i < n {
+            if ((mask >> i) & 1) == 1 {
+                s = s + a[i]
+            }
+            i = i + 1
+        }
+        if seen[s] != 0 {
+            free(seen)
+            return false
+        }
+        seen[s] = 1
+        mask = mask + 1
+    }
+    free(seen)
+    return true
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p105.txt", "r")
+    if f == null {
+        printf("failed to read data/p105.txt\n")
+        return 1
+    }
+    let a: ptr<i32> = calloc(20, 4)
+    if a == null { return 1 }
+
+    let mut total: i64 = 0
+    let mut n: i32 = 0
+    let mut cur: i32 = 0
+    let mut in_num: bool = false
+    let mut c: i32 = fgetc(f)
+    while true {
+        if c >= 48 && c <= 57 {
+            cur = cur * 10 + (c - 48)
+            in_num = true
+        } else {
+            if in_num {
+                a[n] = cur
+                n = n + 1
+                cur = 0
+                in_num = false
+            }
+            if c == 10 || c < 0 {
+                if n > 0 {
+                    sort_arr(a, n)
+                    if is_special(a, n) {
+                        let mut s: i32 = 0
+                        let mut i: i32 = 0
+                        while i < n {
+                            s = s + a[i]
+                            i = i + 1
+                        }
+                        total = total + (s as i64)
+                    }
+                    n = 0
+                }
+                if c < 0 { break }
+            }
+        }
+        if c < 0 { break }
+        c = fgetc(f)
+    }
+    fclose(f)
+    free(a)
+    printf("%lld\n", total)
+    return 0
+}

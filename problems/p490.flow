@@ -1,0 +1,352 @@
+# Project Euler 490
+# Jumping Frog — S(10^14) = sum f(n)^3 mod 10^9 via companion matrix + tensor doubling.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+const DIM: i32 = 8
+const TSIZE: i32 = 512
+
+function mod_mul(a: i64, b: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (MOD as i128)) as i64
+}
+
+function mod_add(a: i64, b: i64) -> i64 {
+    let mut s: i64 = a + b
+    if s >= MOD { s = s - MOD }
+    if s < 0 { s = s + MOD }
+    return s
+}
+
+function mat_mul8(A: ptr<i64>, B: ptr<i64>, out: ptr<i64>) -> void {
+    let mut i: i32 = 0
+    while i < DIM {
+        let mut j: i32 = 0
+        while j < DIM {
+            let mut s: i128 = 0
+            let mut k: i32 = 0
+            while k < DIM {
+                s = s + (A[(i * DIM + k) as i64] as i128) * (B[(k * DIM + j) as i64] as i128)
+                k = k + 1
+            }
+            out[(i * DIM + j) as i64] = (s % (MOD as i128)) as i64
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function tensor_from_vec(v: ptr<i64>, T: ptr<i64>) -> void {
+    let mut i: i32 = 0
+    while i < DIM {
+        let vi: i64 = v[i as i64] % MOD
+        let mut j: i32 = 0
+        while j < DIM {
+            let vij: i64 = mod_mul(vi, v[j as i64] % MOD)
+            let base: i32 = i * 64 + j * 8
+            let mut k: i32 = 0
+            while k < DIM {
+                T[(base + k) as i64] = mod_mul(vij, v[k as i64] % MOD)
+                k = k + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function tensor_transform(M: ptr<i64>, T: ptr<i64>, W: ptr<i64>, U: ptr<i64>, V: ptr<i64>) -> void {
+    # mode-1
+    let mut j: i32 = 0
+    while j < DIM {
+        let mut k: i32 = 0
+        while k < DIM {
+            let base_jk: i32 = j * 8 + k
+            let mut i: i32 = 0
+            while i < DIM {
+                let mut s: i128 = 0
+                let mut p: i32 = 0
+                while p < DIM {
+                    s = s + (M[(i * DIM + p) as i64] as i128) * (T[(p * 64 + base_jk) as i64] as i128)
+                    p = p + 1
+                }
+                U[(i * 64 + base_jk) as i64] = (s % (MOD as i128)) as i64
+                i = i + 1
+            }
+            k = k + 1
+        }
+        j = j + 1
+    }
+    # mode-2
+    let mut i2: i32 = 0
+    while i2 < DIM {
+        let ioff: i32 = i2 * 64
+        let mut k2: i32 = 0
+        while k2 < DIM {
+            let mut j2: i32 = 0
+            while j2 < DIM {
+                let mut s2: i128 = 0
+                let mut q: i32 = 0
+                while q < DIM {
+                    s2 = s2 + (M[(j2 * DIM + q) as i64] as i128) * (U[(ioff + q * 8 + k2) as i64] as i128)
+                    q = q + 1
+                }
+                V[(ioff + j2 * 8 + k2) as i64] = (s2 % (MOD as i128)) as i64
+                j2 = j2 + 1
+            }
+            k2 = k2 + 1
+        }
+        i2 = i2 + 1
+    }
+    # mode-3
+    let mut i3: i32 = 0
+    while i3 < DIM {
+        let ioff3: i32 = i3 * 64
+        let mut j3: i32 = 0
+        while j3 < DIM {
+            let joff: i32 = ioff3 + j3 * 8
+            let mut k3: i32 = 0
+            while k3 < DIM {
+                let mut s3: i128 = 0
+                let mut r: i32 = 0
+                while r < DIM {
+                    s3 = s3 + (M[(k3 * DIM + r) as i64] as i128) * (V[(joff + r) as i64] as i128)
+                    r = r + 1
+                }
+                W[(joff + k3) as i64] = (s3 % (MOD as i128)) as i64
+                k3 = k3 + 1
+            }
+            j3 = j3 + 1
+        }
+        i3 = i3 + 1
+    }
+}
+
+function copy_n(src: ptr<i64>, src_off: i64, dst: ptr<i64>, dst_off: i64, n: i32) -> void {
+    let mut i: i32 = 0
+    while i < n {
+        dst[dst_off + (i as i64)] = src[src_off + (i as i64)]
+        i = i + 1
+    }
+}
+
+function mat_mul8_off(A: ptr<i64>, Aoff: i64, B: ptr<i64>, Boff: i64, out: ptr<i64>, ooff: i64) -> void {
+    let mut i: i32 = 0
+    while i < DIM {
+        let mut j: i32 = 0
+        while j < DIM {
+            let mut s: i128 = 0
+            let mut k: i32 = 0
+            while k < DIM {
+                s = s + (A[Aoff + (i * DIM + k) as i64] as i128) * (B[Boff + (k * DIM + j) as i64] as i128)
+                k = k + 1
+            }
+            out[ooff + (i * DIM + j) as i64] = (s % (MOD as i128)) as i64
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function tensor_transform_off(M: ptr<i64>, Moff: i64, T: ptr<i64>, Toff: i64, W: ptr<i64>, U: ptr<i64>, V: ptr<i64>) -> void {
+    let mut j: i32 = 0
+    while j < DIM {
+        let mut k: i32 = 0
+        while k < DIM {
+            let base_jk: i32 = j * 8 + k
+            let mut i: i32 = 0
+            while i < DIM {
+                let mut s: i128 = 0
+                let mut p: i32 = 0
+                while p < DIM {
+                    s = s + (M[Moff + (i * DIM + p) as i64] as i128) * (T[Toff + (p * 64 + base_jk) as i64] as i128)
+                    p = p + 1
+                }
+                U[(i * 64 + base_jk) as i64] = (s % (MOD as i128)) as i64
+                i = i + 1
+            }
+            k = k + 1
+        }
+        j = j + 1
+    }
+    let mut i2: i32 = 0
+    while i2 < DIM {
+        let ioff: i32 = i2 * 64
+        let mut k2: i32 = 0
+        while k2 < DIM {
+            let mut j2: i32 = 0
+            while j2 < DIM {
+                let mut s2: i128 = 0
+                let mut q: i32 = 0
+                while q < DIM {
+                    s2 = s2 + (M[Moff + (j2 * DIM + q) as i64] as i128) * (U[(ioff + q * 8 + k2) as i64] as i128)
+                    q = q + 1
+                }
+                V[(ioff + j2 * 8 + k2) as i64] = (s2 % (MOD as i128)) as i64
+                j2 = j2 + 1
+            }
+            k2 = k2 + 1
+        }
+        i2 = i2 + 1
+    }
+    let mut i3: i32 = 0
+    while i3 < DIM {
+        let ioff3: i32 = i3 * 64
+        let mut j3: i32 = 0
+        while j3 < DIM {
+            let joff: i32 = ioff3 + j3 * 8
+            let mut k3: i32 = 0
+            while k3 < DIM {
+                let mut s3: i128 = 0
+                let mut r: i32 = 0
+                while r < DIM {
+                    s3 = s3 + (M[Moff + (k3 * DIM + r) as i64] as i128) * (V[(joff + r) as i64] as i128)
+                    r = r + 1
+                }
+                W[(joff + k3) as i64] = (s3 % (MOD as i128)) as i64
+                k3 = k3 + 1
+            }
+            j3 = j3 + 1
+        }
+        i3 = i3 + 1
+    }
+}
+
+function sum_cubes_from_state(u: ptr<i64>, length0: i64, A: ptr<i64>) -> i64 {
+    if length0 <= 0 { return 0 }
+
+    let blocksP: ptr<i64> = calloc(64 * 64, 8)
+    let blocksT: ptr<i64> = calloc(64 * 512, 8)
+    let P: ptr<i64> = calloc(64, 8)
+    let T: ptr<i64> = calloc(512, 8)
+    let PT: ptr<i64> = calloc(512, 8)
+    let tmpP: ptr<i64> = calloc(64, 8)
+    let Utmp: ptr<i64> = calloc(512, 8)
+    let Vtmp: ptr<i64> = calloc(512, 8)
+    if blocksP == null || blocksT == null || P == null || T == null { return 0 }
+
+    copy_n(A, 0, P, 0, 64)
+    tensor_from_vec(u, T)
+
+    let mut nblocks: i32 = 0
+    let mut m: i64 = 1
+    while m <= length0 {
+        copy_n(P, 0, blocksP, (nblocks * 64) as i64, 64)
+        copy_n(T, 0, blocksT, (nblocks * 512) as i64, 512)
+        tensor_transform(P, T, PT, Utmp, Vtmp)
+        let mut i: i32 = 0
+        while i < TSIZE {
+            T[i as i64] = mod_add(T[i as i64], PT[i as i64])
+            i = i + 1
+        }
+        mat_mul8(P, P, tmpP)
+        copy_n(tmpP, 0, P, 0, 64)
+        m = m << 1
+        nblocks = nblocks + 1
+    }
+
+    let Q: ptr<i64> = calloc(64, 8)
+    let acc: ptr<i64> = calloc(512, 8)
+    let contrib: ptr<i64> = calloc(512, 8)
+    if Q == null || acc == null { return 0 }
+    let mut di: i32 = 0
+    while di < DIM {
+        Q[(di * DIM + di) as i64] = 1
+        di = di + 1
+    }
+
+    let mut rem: i64 = length0
+    let mut bit: i32 = 0
+    while rem > 0 {
+        if (rem & 1) != 0 {
+            tensor_transform_off(Q, 0, blocksT, (bit * 512) as i64, contrib, Utmp, Vtmp)
+            let mut t: i32 = 0
+            while t < TSIZE {
+                acc[t as i64] = mod_add(acc[t as i64], contrib[t as i64])
+                t = t + 1
+            }
+            mat_mul8_off(Q, 0, blocksP, (bit * 64) as i64, tmpP, 0)
+            copy_n(tmpP, 0, Q, 0, 64)
+        }
+        rem = rem >> 1
+        bit = bit + 1
+    }
+
+    let ans: i64 = acc[0]
+    free(contrib)
+    free(acc)
+    free(Q)
+    free(Vtmp)
+    free(Utmp)
+    free(tmpP)
+    free(PT)
+    free(T)
+    free(P)
+    free(blocksT)
+    free(blocksP)
+    return ans
+}
+
+function S_mod(L: i64) -> i64 {
+    let F: array<i64, 8> = [1, 1, 1, 2, 6, 14, 28, 56]
+    if L <= 0 { return 0 }
+    if L <= 8 {
+        let mut s: i64 = 0
+        let mut i: i64 = 0
+        while i < L {
+            let c: i64 = F[i as i32]
+            s = mod_add(s, mod_mul(mod_mul(c, c), c))
+            i = i + 1
+        }
+        return s
+    }
+
+    let mut prefix: i64 = 0
+    let mut i2: i32 = 0
+    while i2 < 7 {
+        let c: i64 = F[i2]
+        prefix = mod_add(prefix, mod_mul(mod_mul(c, c), c))
+        i2 = i2 + 1
+    }
+
+    let u: ptr<i64> = calloc(8, 8)
+    let A: ptr<i64> = calloc(64, 8)
+    if u == null || A == null { return 0 }
+    u[0] = F[7]
+    u[1] = F[6]
+    u[2] = F[5]
+    u[3] = F[4]
+    u[4] = F[3]
+    u[5] = F[2]
+    u[6] = F[1]
+    u[7] = F[0]
+
+    # companion: f(n+1) = 2f(n) - f(n-1) + 2f(n-2) + f(n-3) + f(n-4) - f(n-6) - f(n-7)
+    let coeffs: array<i64, 8> = [2, -1, 2, 1, 1, 0, -1, -1]
+    let mut c: i32 = 0
+    while c < DIM {
+        let mut v: i64 = coeffs[c] % MOD
+        if v < 0 { v = v + MOD }
+        A[c as i64] = v
+        c = c + 1
+    }
+    let mut r: i32 = 1
+    while r < DIM {
+        A[(r * DIM + (r - 1)) as i64] = 1
+        r = r + 1
+    }
+
+    let tail: i64 = sum_cubes_from_state(u, L - 7, A)
+    free(A)
+    free(u)
+    return mod_add(prefix, tail)
+}
+
+function main() -> i32 {
+    let ans: i64 = S_mod(100000000000000)
+    printf("%lld\n", ans)
+    return 0
+}

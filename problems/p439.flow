@@ -1,0 +1,163 @@
+# Project Euler 439
+# S(10^11) mod 10^9 where S(N)=sum_{i,j<=N} sigma(i*j).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function hget(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64) -> i64 {
+    let mut h: i64 = key % cap
+    if h < 0 { h = h + cap }
+    while used[h] != 0 {
+        if keys[h] == key { return vals[h] }
+        h = h + 1
+        if h >= cap { h = 0 }
+    }
+    return -1
+}
+
+function hput(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, val: i64) -> void {
+    let mut h: i64 = key % cap
+    if h < 0 { h = h + cap }
+    while used[h] != 0 {
+        if keys[h] == key { vals[h] = val; return }
+        h = h + 1
+        if h >= cap { h = 0 }
+    }
+    used[h] = 1
+    keys[h] = key
+    vals[h] = val
+}
+
+function imu(
+    x: i64, LIMIT: i64, MOD: i64, pre: ptr<i64>,
+    keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, HCAP: i64
+) -> i64 {
+    if x <= LIMIT { return pre[x] }
+    let cached: i64 = hget(keys, vals, used, HCAP, x)
+    if cached >= 0 { return cached }
+    let mut res: i64 = 1 % MOD
+    let mut i: i64 = 2
+    while i <= x {
+        let v: i64 = x / i
+        let j: i64 = x / v
+        let cnt: i64 = j - i + 1
+        let mut sum_i: i64 = ((((i + j) as i128) * (cnt as i128) / (2 as i128)) % (MOD as i128)) as i64
+        if sum_i < 0 { sum_i = sum_i + MOD }
+        res = (res - sum_i * imu(v, LIMIT, MOD, pre, keys, vals, used, HCAP)) % MOD
+        if res < 0 { res = res + MOD }
+        i = j + 1
+    }
+    hput(keys, vals, used, HCAP, x, res)
+    return res
+}
+
+function Hval(x: i64, sqrtN: i64, MOD: i64, Hsmall: ptr<i64>) -> i64 {
+    if x <= sqrtN { return Hsmall[x] }
+    let mut res: i64 = 0
+    let mut i: i64 = 1
+    while i <= x {
+        let v: i64 = x / i
+        let j: i64 = x / v
+        let cnt: i64 = j - i + 1
+        let mut sum_i: i64 = ((((i + j) as i128) * (cnt as i128) / (2 as i128)) % (MOD as i128)) as i64
+        if sum_i < 0 { sum_i = sum_i + MOD }
+        res = (res + (v % MOD) * sum_i) % MOD
+        i = j + 1
+    }
+    return res
+}
+
+function main() -> i32 {
+    let N: i64 = 100000000000
+    let MOD: i64 = 1000000000
+    let mut sqrtN: i64 = 0
+    while (sqrtN + 1) * (sqrtN + 1) <= N { sqrtN = sqrtN + 1 }
+
+    let mut sieve_limit: i64 = 3000000
+    # N^(2/3) approx for 1e11 is ~2154434, use 3e6
+    if sieve_limit < sqrtN { sieve_limit = sqrtN }
+
+    let mu: ptr<i8> = calloc(sieve_limit + 1, 1)
+    let is_comp: ptr<i8> = calloc(sieve_limit + 1, 1)
+    let primes: ptr<i32> = calloc(sieve_limit / 5 + 10, 4)
+    let pre: ptr<i64> = calloc(sieve_limit + 1, 8)
+    if mu == null || pre == null { return 1 }
+    mu[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= sieve_limit {
+        if is_comp[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            mu[i] = -1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > sieve_limit { break }
+            is_comp[ip] = 1
+            if i % p == 0 {
+                mu[ip] = 0
+                break
+            } else {
+                mu[ip] = (0 - (mu[i] as i64)) as i8
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let mut acc: i64 = 0
+    i = 1
+    while i <= sieve_limit {
+        acc = (acc + i * (mu[i] as i64)) % MOD
+        if acc < 0 { acc = acc + MOD }
+        pre[i] = acc
+        i = i + 1
+    }
+
+    let sigma: ptr<i32> = calloc(sqrtN + 1, 4)
+    let Hsmall: ptr<i64> = calloc(sqrtN + 1, 8)
+    if sigma == null || Hsmall == null { return 1 }
+    let mut d: i64 = 1
+    while d <= sqrtN {
+        let mut m2: i64 = d
+        while m2 <= sqrtN {
+            sigma[m2] = (sigma[m2] as i64 + d) as i32
+            m2 = m2 + d
+        }
+        d = d + 1
+    }
+    acc = 0
+    i = 1
+    while i <= sqrtN {
+        acc = (acc + (sigma[i] as i64)) % MOD
+        Hsmall[i] = acc
+        i = i + 1
+    }
+
+    let HCAP: i64 = 4000003
+    let keys: ptr<i64> = calloc(HCAP, 8)
+    let vals: ptr<i64> = calloc(HCAP, 8)
+    let used: ptr<i8> = calloc(HCAP, 1)
+    if keys == null { return 1 }
+
+    let mut ans: i64 = 0
+    let mut k: i64 = 1
+    let mut prev_imu: i64 = 0
+    while k <= N {
+        let q: i64 = N / k
+        let r: i64 = N / q
+        let cur_imu: i64 = imu(r, sieve_limit, MOD, pre, keys, vals, used, HCAP)
+        let seg: i64 = (cur_imu - prev_imu) % MOD
+        if seg < 0 { seg = seg + MOD }
+        prev_imu = cur_imu
+        let hq: i64 = Hval(q, sqrtN, MOD, Hsmall)
+        ans = (ans + seg * ((hq * hq) % MOD)) % MOD
+        k = r + 1
+    }
+    printf("%lld\n", ans)
+    return 0
+}

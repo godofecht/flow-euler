@@ -1,0 +1,120 @@
+# Project Euler 324
+# f(10^10000) mod 100000007 via Berlekamp-Massey + Kitamasa on a(m)=f(2m).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mul_poly(p: ptr<i64>, q: ptr<i64>, rec: ptr<i64>, k: i64, mod: i64, out: ptr<i64>) -> i32 {
+    let tmp: ptr<i64> = calloc(2 * k, 8)
+    let mut i: i64 = 0
+    while i < k {
+        let pi: i64 = p[i]
+        if pi != 0 {
+            let mut j: i64 = 0
+            while j < k {
+                let qj: i64 = q[j]
+                if qj != 0 {
+                    tmp[i + j] = (tmp[i + j] + pi * qj) % mod
+                }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    let mut d: i64 = 2 * k - 2
+    while d >= k {
+        let val: i64 = tmp[d]
+        if val != 0 {
+            let mut t: i64 = 1
+            while t <= k {
+                tmp[d - t] = (tmp[d - t] + val * rec[t - 1]) % mod
+                t = t + 1
+            }
+        }
+        d = d - 1
+    }
+    i = 0
+    while i < k {
+        out[i] = tmp[i]
+        i = i + 1
+    }
+    free(tmp)
+    return 0
+}
+
+function big_halve(digits: ptr<i8>, n: i64) -> i64 {
+    # divide decimal digit array (MSB at 0) by 2; return old LSB parity
+    let mut rem: i64 = 0
+    let mut i: i64 = 0
+    while i < n {
+        let cur: i64 = rem * 10 + (digits[i] as i64)
+        digits[i] = (cur / 2) as i8
+        rem = cur % 2
+        i = i + 1
+    }
+    return rem
+}
+
+function big_is_zero(digits: ptr<i8>, n: i64) -> i64 {
+    let mut i: i64 = 0
+    while i < n {
+        if digits[i] != 0 { return 0 }
+        i = i + 1
+    }
+    return 1
+}
+
+function main() -> i32 {
+    let mod: i64 = 100000007
+    let k: i64 = 19
+    let rec: ptr<i64> = calloc(k, 8)
+    let init: ptr<i64> = calloc(k, 8)
+    # recurrence for a(m)=f(2m)
+    rec[0] = 675; rec[1] = 99926536; rec[2] = 3221189; rec[3] = 27416735; rec[4] = 25908201
+    rec[5] = 28897274; rec[6] = 23056067; rec[7] = 28479264; rec[8] = 4524104; rec[9] = 95475903
+    rec[10] = 71520743; rec[11] = 76943940; rec[12] = 71102733; rec[13] = 74091806; rec[14] = 72583272
+    rec[15] = 96778818; rec[16] = 73471; rec[17] = 99999332; rec[18] = 1
+    init[0] = 1; init[1] = 229; init[2] = 117805; init[3] = 64647289; init[4] = 69563725
+    init[5] = 96149360; init[6] = 40041351; init[7] = 13625499; init[8] = 49444743; init[9] = 7047816
+    init[10] = 63444149; init[11] = 71774943; init[12] = 18904145; init[13] = 72062; init[14] = 58262981
+    init[15] = 68125412; init[16] = 64015488; init[17] = 12253197; init[18] = 9101639
+
+    # exponent m = 5 * 10^9999 as decimal digits
+    let nd: i64 = 10000
+    let digits: ptr<i8> = calloc(nd, 1)
+    digits[0] = 5
+    # rest already 0 => 5 followed by 9999 zeros = 5*10^9999
+
+    let res: ptr<i64> = calloc(k, 8)
+    let base: ptr<i64> = calloc(k, 8)
+    let tmp: ptr<i64> = calloc(k, 8)
+    res[0] = 1
+    base[1] = 1
+
+    while big_is_zero(digits, nd) == 0 {
+        # skip leading zeros length shrink optional
+        let odd: i64 = big_halve(digits, nd)
+        if odd == 1 {
+            mul_poly(res, base, rec, k, mod, tmp)
+            let mut i: i64 = 0
+            while i < k { res[i] = tmp[i]; i = i + 1 }
+        }
+        if big_is_zero(digits, nd) == 0 {
+            mul_poly(base, base, rec, k, mod, tmp)
+            let mut j: i64 = 0
+            while j < k { base[j] = tmp[j]; j = j + 1 }
+        }
+    }
+
+    let mut ans: i64 = 0
+    let mut i: i64 = 0
+    while i < k {
+        ans = (ans + res[i] * init[i]) % mod
+        i = i + 1
+    }
+    printf("%lld\n", ans)
+    free(rec); free(init); free(digits); free(res); free(base); free(tmp)
+    return 0
+}

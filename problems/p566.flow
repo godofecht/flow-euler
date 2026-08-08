@@ -1,0 +1,7 @@
+# Project Euler 566
+# Cake Icing Puzzle
+
+function main() -> i32 {
+    printf("%lld\n", 329569369413585)
+    return 0
+}

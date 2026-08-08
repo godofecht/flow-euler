@@ -1,0 +1,79 @@
+# Project Euler 221
+# 150000th Alexandrian integer.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function mul_ok(a: i64, b: i64) -> bool {
+    if a == 0 || b == 0 { return true }
+    let MAX: i64 = 9223372036854775807
+    return a <= MAX / b
+}
+
+function main() -> i32 {
+    let K: i64 = 150000
+    let heap: ptr<i64> = calloc(K, 8)
+    if heap == null { return 1 }
+    let mut hn: i64 = 0
+    let mut p: i64 = 1
+    while true {
+        let n: i64 = p * p + 1
+        let root: i64 = isqrt(n)
+        let mut d: i64 = 1
+        while d <= root {
+            if n % d == 0 {
+                let e: i64 = n / d
+                if mul_ok(p, p + d) && mul_ok(p * (p + d), p + e) {
+                    let value: i64 = p * (p + d) * (p + e)
+                    if hn < K {
+                        let mut i: i64 = hn
+                        heap[i] = value
+                        while i > 0 {
+                            let par: i64 = (i - 1) / 2
+                            if heap[par] >= heap[i] { break }
+                            let t: i64 = heap[par]; heap[par] = heap[i]; heap[i] = t
+                            i = par
+                        }
+                        hn = hn + 1
+                    } elif value < heap[0] {
+                        heap[0] = value
+                        let mut i: i64 = 0
+                        while true {
+                            let l: i64 = 2 * i + 1
+                            let r: i64 = 2 * i + 2
+                            let mut best: i64 = i
+                            if l < hn && heap[l] > heap[best] { best = l }
+                            if r < hn && heap[r] > heap[best] { best = r }
+                            if best == i { break }
+                            let t: i64 = heap[i]; heap[i] = heap[best]; heap[best] = t
+                            i = best
+                        }
+                    }
+                }
+            }
+            d = d + 1
+        }
+        p = p + 1
+        if hn == K {
+            if !mul_ok(p, p + 1) || !mul_ok(p * (p + 1), p + 1) || p * (p + 1) * (p + 1) > heap[0] {
+                printf("%lld\n", heap[0])
+                free(heap)
+                return 0
+            }
+        }
+    }
+    return 1
+}

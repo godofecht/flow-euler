@@ -1,0 +1,57 @@
+# Fair Flow twin of bench/c_p010.c — same sieve, in-process multi-round timing.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function clock() -> i64
+}
+
+function sum_primes_below(limit: i64) -> i64 {
+    let sieve: ptr<i8> = calloc(limit, 1)
+    if sieve == null {
+        return -1
+    }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut total: i64 = 0
+    let mut i: i64 = 2
+    while i < limit {
+        if sieve[i] == 0 {
+            total = total + i
+        }
+        i = i + 1
+    }
+    free(sieve)
+    return total
+}
+
+function main() -> i32 {
+    let rounds: i32 = 200
+    let limit: i64 = 2000000
+    let mut sink: i64 = sum_primes_below(limit)
+
+    let t0: i64 = clock()
+    let mut r: i32 = 0
+    while r < rounds {
+        sink = sum_primes_below(limit)
+        r = r + 1
+    }
+    let t1: i64 = clock()
+
+    printf("%lld\n", sink)
+    let elapsed_us: i64 = t1 - t0
+    let us_each: i64 = elapsed_us / (rounds as i64)
+    printf("flow: %lld us total / %d rounds (%lld us/run)\n", elapsed_us, rounds, us_each)
+    return 0
+}

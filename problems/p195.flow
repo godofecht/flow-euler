@@ -1,0 +1,103 @@
+# Project Euler 195
+# Count 60-degree integer triangles with inradius r <= 1053779.
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function T(N: i64) -> i64 {
+    let N2: i64 = N * N
+    let p1_max: i64 = isqrt((4 * N2) / 3)
+    let p2_max: i64 = isqrt(12 * N2)
+    let num1: i64 = 4 * N2
+    let num2: i64 = 12 * N2
+    let mut total: i64 = 0
+
+    let mut m: i64 = 2
+    while m <= p1_max {
+        let mut n_lim: i64 = p1_max / m
+        if n_lim >= m { n_lim = m - 1 }
+        let mut n: i64 = 1
+        while n <= n_lim {
+            if (m - n) % 3 != 0 && gcd(m, n) == 1 {
+                let p: i64 = m * n
+                total = total + isqrt(num1 / (3 * p * p))
+            }
+            n = n + 1
+        }
+        m = m + 1
+    }
+
+    let m_max2: i64 = (p2_max + 2) / 3
+    m = 2
+    while m <= m_max2 {
+        let D: i64 = 9 * m * m - 8 * p2_max
+        let mut lo1: i64 = 1
+        let mut hi1: i64 = m - 1
+        let mut lo2: i64 = 0
+        let mut hi2: i64 = -1
+        if D > 0 {
+            let s: i64 = isqrt(D)
+            let r1: i64 = (3 * m - s) / 4
+            let r2: i64 = (3 * m + s + 3) / 4
+            if r2 > r1 + 1 {
+                hi1 = r1
+                if hi1 > m - 1 { hi1 = m - 1 }
+                if r1 < 1 { hi1 = 0; lo1 = 1 }
+                lo2 = r2
+                hi2 = m - 1
+                if lo2 > hi2 { lo2 = 0; hi2 = -1 }
+            }
+        }
+        # range 1
+        if lo1 <= hi1 {
+            let mut d: i64 = lo1
+            while d <= hi1 {
+                if d % 3 != 0 && gcd(m, d) == 1 {
+                    let p: i64 = d * (3 * m - 2 * d)
+                    if p > 0 {
+                        total = total + isqrt(num2 / (p * p))
+                    }
+                }
+                d = d + 1
+            }
+        }
+        if lo2 <= hi2 {
+            let mut d: i64 = lo2
+            while d <= hi2 {
+                if d % 3 != 0 && gcd(m, d) == 1 {
+                    let p: i64 = d * (3 * m - 2 * d)
+                    if p > 0 {
+                        total = total + isqrt(num2 / (p * p))
+                    }
+                }
+                d = d + 1
+            }
+        }
+        m = m + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", T(1053779))
+    return 0
+}

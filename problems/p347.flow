@@ -1,0 +1,79 @@
+# Project Euler 347
+# Sum of largest n≤10^7 of form p^a q^b for each prime pair {p,q}.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 10000000
+    let sieve: ptr<i8> = calloc(limit + 1, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i <= limit {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0; sieve[1] = 0
+    let mut p: i64 = 2
+    while p * p <= limit {
+        if sieve[p] == 1 {
+            let mut m: i64 = p * p
+            while m <= limit {
+                sieve[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut pc: i64 = 0
+    i = 2
+    while i <= limit / 2 {
+        if sieve[i] == 1 { pc = pc + 1 }
+        i = i + 1
+    }
+    let primes: ptr<i64> = calloc(pc, 8)
+    let mut idx: i64 = 0
+    i = 2
+    while i <= limit / 2 {
+        if sieve[i] == 1 {
+            primes[idx] = i
+            idx = idx + 1
+        }
+        i = i + 1
+    }
+
+    let mut ans: i64 = 0
+    # use set via sort+unique of candidates — count each pair once
+    let mut ii: i64 = 0
+    while ii < pc {
+        let pp: i64 = primes[ii]
+        if pp * pp > limit { break }
+        let mut jj: i64 = ii + 1
+        while jj < pc {
+            let qq: i64 = primes[jj]
+            let lcm: i64 = pp * qq
+            if lcm > limit { break }
+            let multlimit: i64 = limit / lcm
+            let mut multiplier: i64 = 1
+            while multiplier <= multlimit / pp {
+                multiplier = multiplier * pp
+            }
+            let mut maxmult: i64 = multiplier
+            while multiplier % pp == 0 {
+                multiplier = multiplier / pp
+                while multiplier <= multlimit / qq {
+                    multiplier = multiplier * qq
+                }
+                if multiplier > maxmult { maxmult = multiplier }
+            }
+            ans = ans + maxmult * lcm
+            jj = jj + 1
+        }
+        ii = ii + 1
+    }
+    printf("%lld\n", ans)
+    free(sieve); free(primes)
+    return 0
+}

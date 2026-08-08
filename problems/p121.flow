@@ -1,0 +1,58 @@
+# Project Euler 121
+# Disc game: turn k has 1 blue / k red. 15 turns. Max prize fund so expected profit.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let turns: i32 = 15
+    # dp[b] = number of ways to get b blues (unnormalized product of disc counts)
+    # After turn t (1..turns), total discs = t+1, blue=1, red=t
+    let dp: ptr<i64> = calloc((turns + 1) as i64, 8)
+    let ndp: ptr<i64> = calloc((turns + 1) as i64, 8)
+    if dp == null || ndp == null { return 1 }
+    dp[0] = 1
+    let mut t: i32 = 1
+    while t <= turns {
+        let mut j: i32 = 0
+        while j <= turns {
+            ndp[j] = 0
+            j = j + 1
+        }
+        let mut b: i32 = 0
+        while b < t {
+            # draw red: factor t
+            ndp[b] = ndp[b] + dp[b] * (t as i64)
+            # draw blue: factor 1
+            ndp[b + 1] = ndp[b + 1] + dp[b]
+            b = b + 1
+        }
+        j = 0
+        while j <= turns {
+            dp[j] = ndp[j]
+            j = j + 1
+        }
+        t = t + 1
+    }
+    let mut win: i64 = 0
+    let mut total: i64 = 1
+    let mut i: i32 = 1
+    while i <= turns + 1 {
+        total = total * (i as i64)
+        i = i + 1
+    }
+    # total outcomes = (turns+1)!
+    let need: i32 = turns / 2 + 1
+    i = need
+    while i <= turns {
+        win = win + dp[i]
+        i = i + 1
+    }
+    # max prize = floor(total/win)
+    printf("%lld\n", total / win)
+    free(dp)
+    free(ndp)
+    return 0
+}

@@ -1,0 +1,226 @@
+# Project Euler 472
+# Comfortable Distance II — sum f(N) for N<=10^12, last 8 digits.
+# Recursive bit-block prefix sums with open-address hash memo.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 100000000
+const BASE: i64 = 64
+const MEMO_CAP: i64 = 200003
+
+let mut G_fbase: ptr<i64> = null
+let mut G_pref: ptr<i64> = null
+let mut G_memo_k: ptr<i64> = null
+let mut G_memo_v: ptr<i64> = null
+let mut G_memo_u: ptr<i8> = null
+
+function bit_length(n0: i64) -> i32 {
+    let mut n: i64 = n0
+    let mut b: i32 = 0
+    while n > 0 {
+        b = b + 1
+        n = n / 2
+    }
+    if b == 0 { return 1 }
+    return b
+}
+
+function A_seg(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let t: i64 = n + 1
+    let p: i64 = (1 as i64) << (bit_length(t) - 1)
+    let a: i64 = p >> 1
+    let b: i64 = t - p
+    if a > b { return a }
+    return b
+}
+
+function brute_f(N: i64) -> i64 {
+    if N == 1 { return 1 }
+    if N == 2 { return 2 }
+    let edge: i64 = A_seg(N - 2)
+    let M: i64 = N - 3
+    let mut best: i64 = -1
+    let mut cnt: i64 = 0
+    let mut x: i64 = 0
+    while x <= M {
+        let val: i64 = A_seg(x) + A_seg(M - x)
+        if val > best {
+            best = val
+            cnt = 1
+        } else {
+            if val == best {
+                cnt = cnt + 1
+            }
+        }
+        x = x + 1
+    }
+    let mut mx: i64 = best
+    if edge > mx { mx = edge }
+    let mut ans: i64 = 0
+    if edge == mx { ans = ans + 2 }
+    if best == mx { ans = ans + cnt }
+    return ans
+}
+
+function mod_norm(x: i128) -> i64 {
+    let mut r: i64 = (x % (MOD as i128)) as i64
+    if r < 0 { r = r + MOD }
+    return r
+}
+
+function prefix_sum_11_block(half: i64, length0: i64) -> i64 {
+    if length0 <= 0 { return 0 }
+    let k: i32 = bit_length(half) - 1
+    if k < 3 {
+        let mut s: i64 = 0
+        let start: i64 = 3 * half
+        let mut n: i64 = 0
+        while n < length0 {
+            s = s + brute_f(start + n)
+            n = n + 1
+        }
+        return s % MOD
+    }
+    let m: i64 = half >> 1
+    let mut length: i64 = length0
+    let mut s: i128 = 0
+    let mut j: i64 = 0
+
+    s = s + 4
+    length = length - 1
+    if length == 0 { return mod_norm(s) }
+
+    let mut take: i64 = m
+    if length < take { take = length }
+    s = s + (take as i128) * ((take + 1) as i128)
+    length = length - take
+    j = j + take
+    if length == 0 { return mod_norm(s) }
+
+    if j == m {
+        s = s + (3 * m + 3) as i128
+        length = length - 1
+        j = j + 1
+        if length == 0 { return mod_norm(s) }
+    }
+
+    let a1: i64 = m + 2
+    let cnt: i64 = length
+    s = s + (cnt as i128) * ((2 * a1 - (cnt - 1)) as i128) / 2
+    return mod_norm(s)
+}
+
+function memo_get(N: i64, out: ptr<i64>) -> bool {
+    let mut slot: i64 = (N % MEMO_CAP + MEMO_CAP) % MEMO_CAP
+    while G_memo_u[slot] != 0 {
+        if G_memo_k[slot] == N {
+            out[0] = G_memo_v[slot]
+            return true
+        }
+        slot = slot + 1
+        if slot == MEMO_CAP { slot = 0 }
+    }
+    out[0] = slot
+    return false
+}
+
+function memo_put(N: i64, slot: i64, val: i64) -> void {
+    G_memo_u[slot] = 1
+    G_memo_k[slot] = N
+    G_memo_v[slot] = val
+}
+
+function sum_upto(N: i64) -> i64 {
+    if N <= 0 { return 0 }
+    if N <= BASE { return G_pref[N] % MOD }
+
+    let slot_or_val: ptr<i64> = calloc(1, 8)
+    if slot_or_val == null { return 0 }
+    if memo_get(N, slot_or_val) {
+        let v: i64 = slot_or_val[0]
+        free(slot_or_val)
+        return v
+    }
+    let slot: i64 = slot_or_val[0]
+    free(slot_or_val)
+
+    let pow2: i64 = (1 as i64) << (bit_length(N) - 1)
+    let half: i64 = pow2 >> 1
+    let split: i64 = pow2 + half
+
+    let mut res: i64 = sum_upto(pow2 - 1)
+
+    if N < split {
+        let u_max: i64 = N - pow2
+        let mut mapped_sum: i64 = sum_upto(half + u_max) - sum_upto(half - 1)
+        mapped_sum = mapped_sum % MOD
+        if mapped_sum < 0 { mapped_sum = mapped_sum + MOD }
+
+        let k: i32 = bit_length(half) - 1
+        if k >= 4 {
+            let u0: i64 = half - (half >> 2) + 1
+            if u_max >= u0 {
+                let a: i64 = u0
+                let b: i64 = u_max
+                let cnt: i64 = b - a + 1
+                let corr: i128 = (cnt as i128) * (half as i128) - ((a + b) as i128) * (cnt as i128) / 2
+                mapped_sum = mod_norm((mapped_sum as i128) + corr)
+            }
+        }
+        res = (res + mapped_sum) % MOD
+        memo_put(N, slot, res)
+        return res
+    }
+
+    let mut sum_small: i64 = sum_upto(pow2 - 1) - sum_upto(half - 1)
+    sum_small = sum_small % MOD
+    if sum_small < 0 { sum_small = sum_small + MOD }
+
+    let k2: i32 = bit_length(half) - 1
+    let mut sum10: i64 = 0
+    if k2 >= 4 {
+        let tail_len: i64 = (half >> 2) - 1
+        let corr_full: i128 = (tail_len as i128) * ((tail_len + 1) as i128) / 2
+        sum10 = mod_norm((sum_small as i128) + corr_full)
+    } else {
+        let mut n: i64 = pow2
+        while n < split {
+            sum10 = sum10 + brute_f(n)
+            n = n + 1
+        }
+        sum10 = sum10 % MOD
+    }
+    res = (res + sum10) % MOD
+
+    let len11: i64 = N - split + 1
+    res = (res + prefix_sum_11_block(half, len11)) % MOD
+    memo_put(N, slot, res)
+    return res
+}
+
+function main() -> i32 {
+    G_fbase = calloc(BASE + 1, 8)
+    G_pref = calloc(BASE + 1, 8)
+    G_memo_k = calloc(MEMO_CAP, 8)
+    G_memo_v = calloc(MEMO_CAP, 8)
+    G_memo_u = calloc(MEMO_CAP, 1)
+    if G_fbase == null || G_pref == null || G_memo_k == null || G_memo_v == null || G_memo_u == null {
+        return 1
+    }
+
+    let mut n: i64 = 1
+    while n <= BASE {
+        G_fbase[n] = brute_f(n)
+        G_pref[n] = G_pref[n - 1] + G_fbase[n]
+        n = n + 1
+    }
+
+    let LIMIT: i64 = 1000000000000
+    let ans: i64 = sum_upto(LIMIT) % MOD
+    printf("%lld\n", ans)
+    return 0
+}

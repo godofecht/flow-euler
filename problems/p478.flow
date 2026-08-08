@@ -1,0 +1,134 @@
+# Project Euler 478
+# Mixtures
+# E(10^7) mod 11^8 via Möbius / Mertens direction counts.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 214358881
+const PHI_MOD: i64 = 389743420
+const N: i64 = 10000000
+
+let mut MERTENS: ptr<i32> = null
+
+function modpow(base0: i64, exp0: i64, m: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % m
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = (r * b) % m
+        }
+        b = (b * b) % m
+        e = e / 2
+    }
+    return r
+}
+
+function F(s: i64, n: i64) -> i64 {
+    let mut ret: i64 = 0
+    let mut i: i64 = 1
+    while i * s <= n {
+        let j: i64 = n / (n / i) + 1
+        let t: i64 = n / i
+        let d: i64 = t / s
+        let mut expr: i64 = (2 * (t % PHI_MOD) % PHI_MOD + 2 - s * (1 + d)) % PHI_MOD
+        if expr < 0 { expr = expr + PHI_MOD }
+        let g: i64 = expr * d % PHI_MOD / 2
+        let dm: i64 = (MERTENS[j - 1] as i64) - (MERTENS[i - 1] as i64)
+        ret = ret + g * dm % PHI_MOD
+        i = j
+    }
+    ret = ret % PHI_MOD
+    if ret < 0 { ret = ret + PHI_MOD }
+    return ret
+}
+
+function main() -> i32 {
+    let lp: ptr<i32> = calloc(N + 1, 4)
+    let mu: ptr<i32> = calloc(N + 1, 4)
+    let phi: ptr<i32> = calloc(N + 1, 4)
+    MERTENS = calloc(N + 1, 4)
+    let primes: ptr<i32> = calloc(N / 5 + 10, 4)
+    if lp == null || mu == null || phi == null || MERTENS == null || primes == null { return 1 }
+
+    mu[1] = 1
+    phi[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= N {
+        if lp[i] == 0 {
+            lp[i] = i as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+            mu[i] = -1
+            phi[i] = (i - 1) as i32
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            if p > (lp[i] as i64) { break }
+            if i * p > N { break }
+            lp[i * p] = p as i32
+            if p == (lp[i] as i64) {
+                mu[i * p] = 0
+                phi[i * p] = (phi[i] as i64 * p) as i32
+                break
+            } else {
+                mu[i * p] = (0 - (mu[i] as i64)) as i32
+                phi[i * p] = (phi[i] as i64 * (p - 1)) as i32
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    i = 1
+    while i <= N {
+        MERTENS[i] = (MERTENS[i - 1] as i64 + mu[i] as i64) as i32
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    i = 1
+    while i <= N {
+        let x: i64 = N / i + 1
+        let cube: i64 = x * x % PHI_MOD * x % PHI_MOD
+        let mut term: i64 = (cube - 1) % PHI_MOD
+        if term < 0 { term = term + PHI_MOD }
+        total = total + (mu[i] as i64) * term % PHI_MOD
+        i = i + 1
+    }
+    total = total % PHI_MOD
+    if total < 0 { total = total + PHI_MOD }
+
+    let mut ans: i64 = modpow(2, total, MOD)
+    let e1: i64 = (total - 1) / 2
+    let pow_e1: i64 = modpow(2, e1, MOD)
+    let mut b: i64 = 1
+    while b <= N {
+        let M: i64 = 6 * (phi[b] as i64)
+        let f: i64 = F(b, N)
+        let e2: i64 = e1 - f + PHI_MOD
+        let mut term2: i64 = (pow_e1 - modpow(2, e2, MOD)) % MOD
+        if term2 < 0 { term2 = term2 + MOD }
+        ans = ans - (M % MOD) * term2 % MOD
+        ans = ans % MOD
+        if ans < 0 { ans = ans + MOD }
+        b = b + 1
+    }
+    ans = ans - 1
+    ans = ans % MOD
+    if ans < 0 { ans = ans + MOD }
+    printf("%lld\n", ans)
+
+    free(primes)
+    free(MERTENS)
+    MERTENS = null
+    free(phi)
+    free(mu)
+    free(lp)
+    return 0
+}

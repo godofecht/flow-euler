@@ -1,0 +1,102 @@
+# Project Euler 213
+# Expected empty squares after 50 flea jumps on 30x30.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function idx(x: i32, y: i32, h: i32) -> i64 {
+    return (x as i64) * (h as i64) + (y as i64)
+}
+
+function main() -> i32 {
+    let W: i32 = 30
+    let H: i32 = 30
+    let R: i32 = 50
+    let N: i64 = (W as i64) * (H as i64)
+    let empty: ptr<f64> = calloc(N, 8)
+    let cur: ptr<f64> = calloc(N, 8)
+    let nxt: ptr<f64> = calloc(N, 8)
+    if empty == null || cur == null || nxt == null { return 1 }
+    let mut i: i64 = 0
+    while i < N {
+        empty[i] = 1.0
+        i = i + 1
+    }
+
+    let max_x: i32 = W / 2
+    let max_y: i32 = H / 2
+    let mut sx: i32 = 0
+    while sx < max_x {
+        let mut sy: i32 = 0
+        while sy < max_y {
+            i = 0
+            while i < N {
+                cur[i] = 0.0
+                i = i + 1
+            }
+            cur[idx(sx, sy, H)] = 1.0
+
+            let mut r: i32 = 0
+            while r < R {
+                i = 0
+                while i < N {
+                    nxt[i] = 0.0
+                    i = i + 1
+                }
+                let mut x: i32 = 0
+                while x < W {
+                    let mut y: i32 = 0
+                    while y < H {
+                        let p: f64 = cur[idx(x, y, H)]
+                        if p != 0.0 {
+                            let mut dirs: i32 = 4
+                            if x == 0 || x == W - 1 { dirs = dirs - 1 }
+                            if y == 0 || y == H - 1 { dirs = dirs - 1 }
+                            let prob: f64 = p / (dirs as f64)
+                            if x > 0 { nxt[idx(x - 1, y, H)] = nxt[idx(x - 1, y, H)] + prob }
+                            if x < W - 1 { nxt[idx(x + 1, y, H)] = nxt[idx(x + 1, y, H)] + prob }
+                            if y > 0 { nxt[idx(x, y - 1, H)] = nxt[idx(x, y - 1, H)] + prob }
+                            if y < H - 1 { nxt[idx(x, y + 1, H)] = nxt[idx(x, y + 1, H)] + prob }
+                        }
+                        y = y + 1
+                    }
+                    x = x + 1
+                }
+                i = 0
+                while i < N {
+                    cur[i] = nxt[i]
+                    i = i + 1
+                }
+                r = r + 1
+            }
+
+            let mut x2: i32 = 0
+            while x2 < W {
+                let mut y2: i32 = 0
+                while y2 < H {
+                    let e: i64 = idx(x2, y2, H)
+                    empty[e] = empty[e] * (1.0 - cur[e])
+                    empty[e] = empty[e] * (1.0 - cur[idx(W - 1 - x2, y2, H)])
+                    empty[e] = empty[e] * (1.0 - cur[idx(x2, H - 1 - y2, H)])
+                    empty[e] = empty[e] * (1.0 - cur[idx(W - 1 - x2, H - 1 - y2, H)])
+                    y2 = y2 + 1
+                }
+                x2 = x2 + 1
+            }
+            sy = sy + 1
+        }
+        sx = sx + 1
+    }
+
+    let mut result: f64 = 0.0
+    i = 0
+    while i < N {
+        result = result + empty[i]
+        i = i + 1
+    }
+    printf("%.6f\n", result)
+    free(empty); free(cur); free(nxt)
+    return 0
+}

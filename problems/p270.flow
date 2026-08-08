@@ -1,0 +1,182 @@
+# Project Euler 270
+# C(30) mod 10^8 for square cuttings.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut G_i: i64 = 0
+let mut G_j: i64 = 0
+let mut G_dp: ptr<i64> = null
+let mut G_n: i64 = 0
+let mut G_types: ptr<i32> = null
+let mut G_masks: ptr<i32> = null
+let mut G_allowed: ptr<i8> = null
+let mut G_compat: ptr<i32> = null
+let mut G_memo_v: ptr<i64> = null
+let mut G_memo_k: ptr<i32> = null
+let mut G_mod: i64 = 100000000
+
+function f(p: i64, R: i64) -> i64 {
+    let key: i32 = ((p as i32) << 8) | (R as i32)
+    let mut h: i64 = (key as i64) % 200003
+    if h < 0 { h = -h }
+    while G_memo_k[h] != 0 {
+        if G_memo_k[h] == key + 1 {
+            return G_memo_v[h]
+        }
+        h = h + 1
+        if h == 200003 { h = 0 }
+    }
+    let mut total: i64 = 0
+    let mut q: i64 = p + 1
+    while q <= G_j {
+        if !(p == G_i && q == G_j) {
+            let tq: i64 = G_types[q] as i64
+            if ((R >> tq) & 1) != 0 {
+                let ok_edge: bool = (q == p + 1) || (G_allowed[p * G_n + q] != 0)
+                if ok_edge {
+                    let mut ok: bool = true
+                    if p != G_i && q != G_j && (G_masks[q] & G_masks[G_i]) == 0 {
+                        ok = false
+                    }
+                    if ok && q != G_j && p != G_i && (G_masks[p] & G_masks[G_j]) == 0 {
+                        ok = false
+                    }
+                    if ok {
+                        let w: i64 = G_dp[p * G_n + q]
+                        if w != 0 {
+                            if q == G_j {
+                                total = total + w
+                            } else {
+                                let mut Rn: i64 = R
+                                if p != G_i {
+                                    Rn = R & (G_compat[G_types[p] as i64] as i64)
+                                }
+                                total = total + w * f(q, Rn)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        q = q + 1
+    }
+    total = total % G_mod
+    G_memo_k[h] = key + 1
+    G_memo_v[h] = total
+    return total
+}
+
+function main() -> i32 {
+    let N: i64 = 30
+    let MOD: i64 = 100000000
+    G_mod = MOD
+    let n: i64 = 4 * N
+    G_n = n
+    let pts_x: ptr<i64> = calloc(n, 8)
+    let pts_y: ptr<i64> = calloc(n, 8)
+    let mut k: i64 = 0
+    let mut x: i64 = 0
+    while x <= N {
+        pts_x[k] = x; pts_y[k] = 0; k = k + 1
+        x = x + 1
+    }
+    let mut y: i64 = 1
+    while y <= N {
+        pts_x[k] = N; pts_y[k] = y; k = k + 1
+        y = y + 1
+    }
+    x = N - 1
+    while x >= 0 {
+        pts_x[k] = x; pts_y[k] = N; k = k + 1
+        x = x - 1
+    }
+    y = N - 1
+    while y >= 1 {
+        pts_x[k] = 0; pts_y[k] = y; k = k + 1
+        y = y - 1
+    }
+    G_masks = calloc(n, 4)
+    G_types = calloc(n, 4)
+    let mut i: i64 = 0
+    while i < n {
+        let xx: i64 = pts_x[i]
+        let yy: i64 = pts_y[i]
+        let mut mask: i32 = 0
+        if yy == 0 { mask = mask | 1 }
+        if xx == N { mask = mask | 2 }
+        if yy == N { mask = mask | 4 }
+        if xx == 0 { mask = mask | 8 }
+        G_masks[i] = mask
+        let mut t: i32 = 0
+        if mask == 1 { t = 0 }
+        elif mask == 2 { t = 1 }
+        elif mask == 4 { t = 2 }
+        elif mask == 8 { t = 3 }
+        elif mask == 3 { t = 4 }
+        elif mask == 6 { t = 5 }
+        elif mask == 12 { t = 6 }
+        elif mask == 9 { t = 7 }
+        G_types[i] = t
+        i = i + 1
+    }
+    let masks_by_type: ptr<i32> = calloc(8, 4)
+    masks_by_type[0] = 1; masks_by_type[1] = 2; masks_by_type[2] = 4; masks_by_type[3] = 8
+    masks_by_type[4] = 3; masks_by_type[5] = 6; masks_by_type[6] = 12; masks_by_type[7] = 9
+    G_compat = calloc(8, 4)
+    let mut t: i64 = 0
+    while t < 8 {
+        let mut bit: i32 = 0
+        let mut u: i64 = 0
+        while u < 8 {
+            if (masks_by_type[t] & masks_by_type[u]) != 0 {
+                bit = bit | (1 << u)
+            }
+            u = u + 1
+        }
+        G_compat[t] = bit
+        t = t + 1
+    }
+    G_allowed = calloc(n * n, 1)
+    i = 0
+    while i < n {
+        let mut j: i64 = i + 2
+        while j < n {
+            if (G_masks[i] & G_masks[j]) == 0 {
+                G_allowed[i * n + j] = 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    G_dp = calloc(n * n, 8)
+    i = 0
+    while i < n - 1 {
+        G_dp[i * n + (i + 1)] = 1
+        i = i + 1
+    }
+    G_memo_v = calloc(200003, 8)
+    G_memo_k = calloc(200003, 4)
+    let mut length: i64 = 2
+    while length < n {
+        i = 0
+        while i + length < n {
+            let j: i64 = i + length
+            G_i = i
+            G_j = j
+            # clear memo
+            let mut h: i64 = 0
+            while h < 200003 {
+                G_memo_k[h] = 0
+                h = h + 1
+            }
+            G_dp[i * n + j] = f(i, 255) % MOD
+            i = i + 1
+        }
+        length = length + 1
+    }
+    printf("%lld\n", G_dp[0 * n + (n - 1)] % MOD)
+    return 0
+}

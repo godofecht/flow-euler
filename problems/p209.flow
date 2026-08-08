@@ -1,0 +1,74 @@
+# Project Euler 209
+# Circular Logic: count truth assignments via cycle Lucas numbers.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let N: i32 = 64
+    let conn: ptr<i32> = calloc(N as i64, 4)
+    let used: ptr<i8> = calloc(N as i64, 1)
+    let lucas: ptr<i64> = calloc(N as i64 + 1, 8)
+    if conn == null || used == null || lucas == null { return 1 }
+
+    let mut from_state: i32 = 0
+    while from_state < N {
+        let mut left: ptr<i32> = calloc(6, 4)
+        let mut i: i32 = 0
+        while i < 6 {
+            left[i] = (from_state >> i) & 1
+            i = i + 1
+        }
+        let mut right0: i32 = left[1]
+        let mut right1: i32 = left[2]
+        let mut right2: i32 = left[3]
+        let mut right3: i32 = left[4]
+        let mut right4: i32 = left[5]
+        let mut right5: i32 = left[0] ^ (left[1] & left[2])
+        let mut to_state: i32 = 0
+        to_state = to_state | (right0 << 0)
+        to_state = to_state | (right1 << 1)
+        to_state = to_state | (right2 << 2)
+        to_state = to_state | (right3 << 3)
+        to_state = to_state | (right4 << 4)
+        to_state = to_state | (right5 << 5)
+        conn[from_state] = to_state
+        free(left)
+        from_state = from_state + 1
+    }
+
+    lucas[0] = 2
+    lucas[1] = 1
+    let mut i: i32 = 2
+    while i <= N {
+        lucas[i] = lucas[i - 2] + lucas[i - 1]
+        i = i + 1
+    }
+
+    let mut result: i64 = 1
+    let mut all_used: bool = false
+    while !all_used {
+        let mut start: i32 = 0
+        while start < N && used[start] == 1 {
+            start = start + 1
+        }
+        if start >= N {
+            all_used = true
+            continue
+        }
+        let mut current: i32 = start
+        let mut cycle_len: i32 = 0
+        while true {
+            used[current] = 1
+            cycle_len = cycle_len + 1
+            current = conn[current]
+            if current == start { break }
+        }
+        result = result * lucas[cycle_len]
+    }
+    printf("%lld\n", result)
+    free(conn); free(used); free(lucas)
+    return 0
+}

@@ -1,0 +1,235 @@
+# Project Euler 322
+# T(10^18, 10^12-10): binomial coeffs divisible by 10.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digits_base(x0: i64, base: i64, out: ptr<i64>) -> i64 {
+    let mut x: i64 = x0
+    if x == 0 {
+        out[0] = 0
+        return 1
+    }
+    let mut n: i64 = 0
+    while x > 0 {
+        out[n] = x % base
+        x = x / base
+        n = n + 1
+    }
+    return n
+}
+
+function count_supermask_lt(limit: i64, mask: i64) -> i64 {
+    if limit <= 0 { return 0 }
+    let mut bits: i64 = 0
+    let mut t: i64 = limit
+    while t > 0 {
+        bits = bits + 1
+        t = t / 2
+    }
+    let mut dp_tight: i64 = 1
+    let mut dp_loose: i64 = 0
+    let mut p: i64 = bits - 1
+    while p >= 0 {
+        let lim_bit: i64 = (limit >> p) & 1
+        let forced: i64 = (mask >> p) & 1
+        let mut new_tight: i64 = 0
+        let mut new_loose: i64 = 0
+        if dp_loose != 0 {
+            if forced == 1 { new_loose = new_loose + dp_loose }
+            else { new_loose = new_loose + dp_loose * 2 }
+        }
+        if dp_tight != 0 {
+            if forced == 1 {
+                if lim_bit == 1 { new_tight = new_tight + dp_tight }
+            } else {
+                if lim_bit == 0 { new_tight = new_tight + dp_tight }
+                else {
+                    new_loose = new_loose + dp_tight
+                    new_tight = new_tight + dp_tight
+                }
+            }
+        }
+        dp_tight = new_tight
+        dp_loose = new_loose
+        p = p - 1
+    }
+    return dp_loose
+}
+
+function lucas_dp(pos: i64, tight: i64, L: i64, lim_msb: ptr<i64>, n_msb: ptr<i64>, base: i64, memo: ptr<i64>) -> i64 {
+    if pos == L { return 1 }
+    let key: i64 = pos * 2 + tight
+    if memo[key] >= 0 { return memo[key] }
+    let limd: i64 = lim_msb[pos]
+    let mind: i64 = n_msb[pos]
+    let mut maxd: i64 = base - 1
+    if tight == 1 { maxd = limd }
+    let mut total: i64 = 0
+    let mut d: i64 = mind
+    while d <= maxd {
+        let nt: i64 = 0
+        if tight == 1 && d == limd { nt = 1 }
+        total = total + lucas_dp(pos + 1, nt, L, lim_msb, n_msb, base, memo)
+        d = d + 1
+    }
+    memo[key] = total
+    return total
+}
+
+function count_lucas_not_div_lt(limit: i64, n: i64, base: i64) -> i64 {
+    if limit <= 0 { return 0 }
+    let upper: i64 = limit - 1
+    let lim_d: ptr<i64> = calloc(80, 8)
+    let n_d: ptr<i64> = calloc(80, 8)
+    let ld: i64 = digits_base(upper, base, lim_d)
+    let nd: i64 = digits_base(n, base, n_d)
+    let mut L: i64 = ld
+    if nd > L { L = nd }
+    let lim_msb: ptr<i64> = calloc(L, 8)
+    let n_msb: ptr<i64> = calloc(L, 8)
+    let mut i: i64 = 0
+    while i < L {
+        let li: i64 = 0
+        if L - 1 - i < ld { li = lim_d[L - 1 - i] }
+        let ni: i64 = 0
+        if L - 1 - i < nd { ni = n_d[L - 1 - i] }
+        lim_msb[i] = li
+        n_msb[i] = ni
+        i = i + 1
+    }
+    let memo: ptr<i64> = calloc(2 * L + 2, 8)
+    i = 0
+    while i < 2 * L + 2 {
+        memo[i] = -1
+        i = i + 1
+    }
+    let ans: i64 = lucas_dp(0, 1, L, lim_msb, n_msb, base, memo)
+    free(lim_d); free(n_d); free(lim_msb); free(n_msb); free(memo)
+    return ans
+}
+
+function mod_inverse_odd(a0: i64, mod: i64) -> i64 {
+    # mod is power of two; a odd. Use Hensel / binary extended.
+    let mut a: i64 = a0 % mod
+    let mut x: i64 = 1
+    # Newton: x <- x*(2-a*x) mod mod
+    let mut i: i64 = 0
+    while i < 6 {
+        let ax: i64 = (a * x) % mod
+        x = (x * ((2 - ax) % mod + mod) % mod) % mod
+        i = i + 1
+    }
+    return x % mod
+}
+
+function count_not_div10_lt(m: i64, n: i64) -> i64 {
+    if m <= 0 { return 0 }
+    let n_digits: ptr<i64> = calloc(40, 8)
+    let nd: i64 = digits_base(n, 5, n_digits)
+    # generate lows iteratively
+    let mut lows: ptr<i64> = calloc(1, 8)
+    lows[0] = 0
+    let mut lc: i64 = 1
+    let mut pow5: i64 = 1
+    let mut di: i64 = 0
+    while di < nd {
+        let dmin: i64 = n_digits[di]
+        let newc: i64 = lc * (5 - dmin)
+        let newlows: ptr<i64> = calloc(newc, 8)
+        let mut k: i64 = 0
+        let mut i: i64 = 0
+        while i < lc {
+            let mut d: i64 = dmin
+            while d < 5 {
+                newlows[k] = lows[i] + d * pow5
+                k = k + 1
+                d = d + 1
+            }
+            i = i + 1
+        }
+        free(lows)
+        lows = newlows
+        lc = newc
+        pow5 = pow5 * 5
+        di = di + 1
+    }
+    let B: i64 = pow5
+    let max_h: i64 = (m - 1) / B
+    let mut kk: i64 = 1
+    let mut tmp: i64 = max_h
+    while tmp > 0 {
+        kk = kk + 1
+        tmp = tmp / 2
+    }
+    if kk < 1 { kk = 1 }
+    let mod: i64 = 1 << kk
+    let invB: i64 = mod_inverse_odd(B % mod, mod)
+    let required_low: i64 = n & (mod - 1)
+    let free_pos: ptr<i64> = calloc(64, 8)
+    let mut fc: i64 = 0
+    let mut b: i64 = 0
+    while b < kk {
+        if ((required_low >> b) & 1) == 0 {
+            free_pos[fc] = b
+            fc = fc + 1
+        }
+        b = b + 1
+    }
+    let imods: ptr<i64> = calloc(1 << fc, 8)
+    let mut subset: i64 = 0
+    while subset < (1 << fc) {
+        let mut val: i64 = required_low
+        let mut j: i64 = 0
+        while j < fc {
+            if ((subset >> j) & 1) == 1 {
+                val = val | (1 << free_pos[j])
+            }
+            j = j + 1
+        }
+        imods[subset] = val
+        subset = subset + 1
+    }
+    let mut out: i64 = 0
+    let mut li: i64 = 0
+    while li < lc {
+        let low: i64 = lows[li]
+        if low < m {
+            let h_max: i64 = (m - 1 - low) / B
+            if h_max >= 0 {
+                let low_mod: i64 = low & (mod - 1)
+                subset = 0
+                while subset < (1 << fc) {
+                    let i_mod: i64 = imods[subset]
+                    let h: i64 = ((i_mod - low_mod) * invB) & (mod - 1)
+                    if h <= h_max {
+                        let ii: i64 = low + B * h
+                        if ii < m && (ii & n) == n {
+                            out = out + 1
+                        }
+                    }
+                    subset = subset + 1
+                }
+            }
+        }
+        li = li + 1
+    }
+    free(n_digits); free(lows); free(free_pos); free(imods)
+    return out
+}
+
+function T(m: i64, n: i64) -> i64 {
+    if m <= n { return 0 }
+    let total: i64 = m - n
+    let not2: i64 = count_supermask_lt(m, n)
+    let not5: i64 = count_lucas_not_div_lt(m, n, 5)
+    let not10: i64 = count_not_div10_lt(m, n)
+    return total - not2 - not5 + not10
+}
+
+function main() -> i32 {
+    printf("%lld\n", T(1000000000000000000, 1000000000000 - 10))
+    return 0
+}

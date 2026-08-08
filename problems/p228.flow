@@ -1,0 +1,42 @@
+# Project Euler 228
+# Sides of Minkowski sum S_1864+...+S_1909.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let L: i64 = 1864
+    let R: i64 = 1909
+    let phi: ptr<i32> = calloc(R + 1, 4)
+    if phi == null { return 1 }
+    let mut i: i64 = 0
+    while i <= R {
+        phi[i] = i as i32
+        i = i + 1
+    }
+    i = 2
+    while i <= R {
+        if phi[i] == i as i32 {
+            let mut j: i64 = i
+            while j <= R {
+                phi[j] = phi[j] - phi[j] / (i as i32)
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut total: i64 = 0
+    let mut d: i64 = 1
+    while d <= R {
+        let first: i64 = ((L + d - 1) / d) * d
+        if first <= R {
+            total = total + (phi[d] as i64)
+        }
+        d = d + 1
+    }
+    printf("%lld\n", total)
+    free(phi)
+    return 0
+}

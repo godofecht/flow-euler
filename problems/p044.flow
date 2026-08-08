@@ -1,0 +1,49 @@
+# Project Euler 044
+# Minimize |Pj − Pk| for pentagonal numbers where Pj+Pk and |Pj−Pk|
+# are also pentagonal.
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function is_pent(x: i64) -> bool {
+    let target: i64 = 24 * x + 1
+    let s: i64 = isqrt(target)
+    if s * s != target { return false }
+    return (s + 1) % 6 == 0
+}
+
+function pent(n: i64) -> i64 {
+    return n * (3 * n - 1) / 2
+}
+
+function main() -> i32 {
+    let mut best: i64 = 0
+    let mut found: bool = false
+    let mut k: i64 = 2
+    while !found && k < 3000 {
+        let pk: i64 = pent(k)
+        let mut j: i64 = 1
+        while j < k {
+            let pj: i64 = pent(j)
+            let diff: i64 = pk - pj
+            let sum: i64 = pk + pj
+            if is_pent(diff) && is_pent(sum) {
+                best = diff
+                found = true
+                break
+            }
+            j = j + 1
+        }
+        k = k + 1
+    }
+    printf("%lld\n", best)
+    return 0
+}

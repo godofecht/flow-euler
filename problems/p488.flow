@@ -1,0 +1,168 @@
+# Project Euler 488
+# Unbalanced Nim — F(10^18) last 9 digits via XOR digit-DP.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function bit_length(n0: i64) -> i32 {
+    let mut n: i64 = n0
+    let mut b: i32 = 0
+    while n > 0 {
+        b = b + 1
+        n = n / 2
+    }
+    if b == 0 { return 1 }
+    return b
+}
+
+function dp_count_sum(A: i64, B: i64, C: i64, out: ptr<i64>, MOD6: i64) -> void {
+    if A < 0 || B < 0 || C < 0 {
+        out[0] = 0
+        out[1] = 0
+        return
+    }
+    let mut maxbits: i32 = bit_length(A)
+    let bb: i32 = bit_length(B)
+    let bc: i32 = bit_length(C)
+    if bb > maxbits { maxbits = bb }
+    if bc > maxbits { maxbits = bc }
+
+    let counts: ptr<i64> = calloc(8, 8)
+    let sumA: ptr<i64> = calloc(8, 8)
+    let sumB: ptr<i64> = calloc(8, 8)
+    let sumC: ptr<i64> = calloc(8, 8)
+    let ncounts: ptr<i64> = calloc(8, 8)
+    let nsumA: ptr<i64> = calloc(8, 8)
+    let nsumB: ptr<i64> = calloc(8, 8)
+    let nsumC: ptr<i64> = calloc(8, 8)
+    if counts == null { return }
+    counts[7] = 1
+
+    let mut p: i32 = maxbits - 1
+    while p >= 0 {
+        let bitA: i64 = (A >> p) & 1
+        let bitB: i64 = (B >> p) & 1
+        let bitC: i64 = (C >> p) & 1
+        let val: i64 = (1 as i64) << p
+        let mut s: i32 = 0
+        while s < 8 {
+            ncounts[s] = 0
+            nsumA[s] = 0
+            nsumB[s] = 0
+            nsumC[s] = 0
+            s = s + 1
+        }
+        s = 0
+        while s < 8 {
+            let cnt: i64 = counts[s]
+            if cnt != 0 {
+                let ta: i32 = (s >> 2) & 1
+                let tb: i32 = (s >> 1) & 1
+                let tc: i32 = s & 1
+                let mut abit: i64 = 0
+                while abit <= 1 {
+                    let mut ok_a: bool = true
+                    if ta == 1 && abit > bitA { ok_a = false }
+                    if ok_a {
+                        let mut nta: i32 = 0
+                        if ta == 1 && abit == bitA { nta = 1 }
+                        let mut bbit: i64 = 0
+                        while bbit <= 1 {
+                            let mut ok_b: bool = true
+                            if tb == 1 && bbit > bitB { ok_b = false }
+                            if ok_b {
+                                let mut ntb: i32 = 0
+                                if tb == 1 && bbit == bitB { ntb = 1 }
+                                let cbit: i64 = abit ^ bbit
+                                let mut ok_c: bool = true
+                                if tc == 1 && cbit > bitC { ok_c = false }
+                                if ok_c {
+                                    let mut ntc: i32 = 0
+                                    if tc == 1 && cbit == bitC { ntc = 1 }
+                                    let nstate: i32 = (nta << 2) | (ntb << 1) | ntc
+                                    ncounts[nstate] = (ncounts[nstate] + cnt) % MOD6
+                                    let addA: i64 = (((cnt as i128) * (abit as i128) * (val as i128)) % (MOD6 as i128)) as i64
+                                    let addB: i64 = (((cnt as i128) * (bbit as i128) * (val as i128)) % (MOD6 as i128)) as i64
+                                    let addC: i64 = (((cnt as i128) * (cbit as i128) * (val as i128)) % (MOD6 as i128)) as i64
+                                    nsumA[nstate] = (nsumA[nstate] + sumA[s] + addA) % MOD6
+                                    nsumB[nstate] = (nsumB[nstate] + sumB[s] + addB) % MOD6
+                                    nsumC[nstate] = (nsumC[nstate] + sumC[s] + addC) % MOD6
+                                }
+                            }
+                            bbit = bbit + 1
+                        }
+                    }
+                    abit = abit + 1
+                }
+            }
+            s = s + 1
+        }
+        s = 0
+        while s < 8 {
+            counts[s] = ncounts[s]
+            sumA[s] = nsumA[s]
+            sumB[s] = nsumB[s]
+            sumC[s] = nsumC[s]
+            s = s + 1
+        }
+        p = p - 1
+    }
+    let mut total_count: i64 = 0
+    let mut total_sum: i64 = 0
+    let mut s2: i32 = 0
+    while s2 < 8 {
+        total_count = (total_count + counts[s2]) % MOD6
+        total_sum = (total_sum + sumA[s2] + sumB[s2] + sumC[s2]) % MOD6
+        s2 = s2 + 1
+    }
+    out[0] = total_count
+    out[1] = total_sum
+    free(nsumC); free(nsumB); free(nsumA); free(ncounts)
+    free(sumC); free(sumB); free(sumA); free(counts)
+}
+
+function popcount8(m: i32) -> i32 {
+    let mut x: i32 = m
+    let mut c: i32 = 0
+    while x > 0 {
+        c = c + (x & 1)
+        x = x >> 1
+    }
+    return c
+}
+
+function main() -> i32 {
+    let L: i64 = 1000000000000000000
+    let MOD: i64 = 1000000000
+    let MOD6: i64 = 6000000000
+    let out: ptr<i64> = calloc(2, 8)
+    if out == null { return 1 }
+    let mut ordered_count: i64 = 0
+    let mut ordered_sum: i64 = 0
+    let mut mask: i32 = 0
+    while mask < 8 {
+        let mut A: i64 = L
+        let mut B: i64 = L
+        let mut C: i64 = L
+        if (mask & 1) != 0 { A = 1 }
+        if (mask & 2) != 0 { B = 1 }
+        if (mask & 4) != 0 { C = 1 }
+        dp_count_sum(A, B, C, out, MOD6)
+        if (popcount8(mask) & 1) == 0 {
+            ordered_count = (ordered_count + out[0]) % MOD6
+            ordered_sum = (ordered_sum + out[1]) % MOD6
+        } else {
+            ordered_count = (ordered_count - out[0] % MOD6 + MOD6) % MOD6
+            ordered_sum = (ordered_sum - out[1] % MOD6 + MOD6) % MOD6
+        }
+        mask = mask + 1
+    }
+    let mut diff: i64 = (ordered_sum - (3 * ordered_count) % MOD6 + MOD6) % MOD6
+    # divide by 6 exactly in Z/(6*10^9), result mod 10^9
+    let ans: i64 = (diff / 6) % MOD
+    printf("%lld\n", ans)
+    free(out)
+    return 0
+}

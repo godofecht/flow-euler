@@ -1,0 +1,268 @@
+# Project Euler 276
+# Primitive integer triangles with perimeter <= 10^7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function bi_mul_small(L: ptr<i64>, n: i64, f: i64, B: i64) -> void {
+    let mut carry: i64 = 0
+    let mut i: i64 = 0
+    while i < n {
+        let cur: i64 = L[i] * f + carry
+        L[i] = cur % B
+        carry = cur / B
+        i = i + 1
+    }
+}
+
+function bi_div_small(L: ptr<i64>, n: i64, d: i64, B: i64) -> void {
+    let mut rem: i64 = 0
+    let mut i: i64 = n - 1
+    while i >= 0 {
+        let cur: i64 = rem * B + L[i]
+        L[i] = cur / d
+        rem = cur % d
+        i = i - 1
+    }
+}
+
+function bi_add_small(L: ptr<i64>, n: i64, v: i64, B: i64) -> void {
+    let mut cur: i64 = L[0] + v
+    let mut i: i64 = 0
+    while true {
+        if cur >= 0 {
+            L[i] = cur % B
+            let carry: i64 = cur / B
+            if carry == 0 { break }
+            i = i + 1
+            if i >= n { break }
+            cur = L[i] + carry
+        } else {
+            # borrow
+            while cur < 0 {
+                cur = cur + B
+                i = i + 1
+                if i >= n { break }
+                cur = L[i] - 1
+                L[i - 1] = 0
+            }
+            # simpler path unused for S
+            break
+        }
+    }
+}
+
+function bi_to_i64(L: ptr<i64>, n: i64, B: i64) -> i64 {
+    let mut ans: i64 = 0
+    let mut i: i64 = n - 1
+    while i >= 0 {
+        ans = ans * B + L[i]
+        i = i - 1
+    }
+    return ans
+}
+
+# S(m) = sum_{k=1..m} floor((k^2+6)/12) = (sum k^2 + 6m - sum_rem(m)) / 12
+function S(m: i64) -> i64 {
+    if m <= 0 { return 0 }
+    let B: i64 = 1000000000
+    let n: i64 = 6
+    let L: ptr<i64> = calloc(n, 8)
+    L[0] = 1
+    bi_mul_small(L, n, m, B)
+    bi_mul_small(L, n, m + 1, B)
+    bi_mul_small(L, n, 2 * m + 1, B)
+    bi_div_small(L, n, 6, B)
+    # + 6m
+    let mut addv: i64 = 6 * m
+    let mut carry: i64 = L[0] + addv
+    L[0] = carry % B
+    carry = carry / B
+    let mut i: i64 = 1
+    while carry != 0 && i < n {
+        carry = L[i] + carry
+        L[i] = carry % B
+        carry = carry / B
+        i = i + 1
+    }
+    # - sum_rem(m)
+    let q: i64 = m / 6
+    let r: i64 = m % 6
+    let mut pref: i64 = 0
+    if r == 1 { pref = 7 }
+    elif r == 2 { pref = 17 }
+    elif r == 3 { pref = 20 }
+    elif r == 4 { pref = 30 }
+    elif r == 5 { pref = 37 }
+    elif r == 6 { pref = 43 }
+    let rem_sum: i64 = q * 43 + pref
+    L[0] = L[0] - rem_sum
+    i = 0
+    while i < n - 1 {
+        while L[i] < 0 {
+            L[i] = L[i] + B
+            L[i + 1] = L[i + 1] - 1
+        }
+        if L[i] >= B {
+            L[i + 1] = L[i + 1] + L[i] / B
+            L[i] = L[i] % B
+        }
+        i = i + 1
+    }
+    bi_div_small(L, n, 12, B)
+    let ans: i64 = bi_to_i64(L, n, B)
+    free(L)
+    return ans
+}
+
+function triangles_upto(n: i64) -> i64 {
+    return S(n / 2) + S((n + 1) / 2 + 1)
+}
+
+function main() -> i32 {
+    let n: i64 = 10000000
+    let mu: ptr<i32> = calloc(n + 1, 4)
+    let M: ptr<i32> = calloc(n + 1, 4)
+    let is_comp: ptr<i8> = calloc(n + 1, 1)
+    let primes: ptr<i64> = calloc(700000, 8)
+    if mu == null || M == null || is_comp == null || primes == null { return 1 }
+    mu[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= n {
+        if is_comp[i] == 0 {
+            primes[pc] = i
+            pc = pc + 1
+            mu[i] = -1
+        }
+        let mi: i32 = mu[i]
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j]
+            if p > n / i { break }
+            let ip: i64 = i * p
+            is_comp[ip] = 1
+            if i % p == 0 {
+                mu[ip] = 0
+                break
+            }
+            mu[ip] = 0 - mi
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let mut s: i32 = 0
+    i = 1
+    while i <= n {
+        s = s + mu[i]
+        M[i] = s
+        i = i + 1
+    }
+
+    # P(n) = sum_d mu(d) A(n/d) via Dirichlet blocks:
+    # need bigint for (M[r]-M[l-1]) * A(q) since product may exceed i64.
+    let B: i64 = 1000000000
+    let LN: i64 = 8
+    let mag: ptr<i64> = calloc(LN, 8)
+    let mut sign: i32 = 1
+
+    let mut l: i64 = 1
+    while l <= n {
+        let qv: i64 = n / l
+        let r: i64 = n / qv
+        let delta: i64 = (M[r] as i64) - (M[l - 1] as i64)
+        let a: i64 = triangles_upto(qv)
+        if delta != 0 && a != 0 {
+            # term = delta * a, may need wide mul
+            let mut term_sign: i32 = 1
+            let mut da: i64 = delta
+            if da < 0 {
+                da = -da
+                term_sign = -1
+            }
+            # compute da * a into tmp limbs
+            let tmp: ptr<i64> = calloc(LN, 8)
+            tmp[0] = a
+            # normalize a into limbs
+            let mut k: i64 = 0
+            while k < LN - 1 {
+                if tmp[k] >= B {
+                    tmp[k + 1] = tmp[k + 1] + tmp[k] / B
+                    tmp[k] = tmp[k] % B
+                }
+                k = k + 1
+            }
+            bi_mul_small(tmp, LN, da, B)
+
+            # add/sub tmp into mag with sign
+            if sign == term_sign {
+                k = 0
+                let mut carry: i64 = 0
+                while k < LN {
+                    let cur: i64 = mag[k] + tmp[k] + carry
+                    mag[k] = cur % B
+                    carry = cur / B
+                    k = k + 1
+                }
+            } else {
+                # compare mag vs tmp
+                let mut cmp: i32 = 0
+                k = LN - 1
+                while k >= 0 {
+                    if mag[k] < tmp[k] { cmp = -1; break }
+                    if mag[k] > tmp[k] { cmp = 1; break }
+                    k = k - 1
+                }
+                if cmp == 0 {
+                    k = 0
+                    while k < LN { mag[k] = 0; k = k + 1 }
+                    sign = 1
+                } elif cmp > 0 {
+                    k = 0
+                    while k < LN {
+                        mag[k] = mag[k] - tmp[k]
+                        k = k + 1
+                    }
+                    k = 0
+                    while k < LN - 1 {
+                        while mag[k] < 0 {
+                            mag[k] = mag[k] + B
+                            mag[k + 1] = mag[k + 1] - 1
+                        }
+                        k = k + 1
+                    }
+                } else {
+                    k = 0
+                    while k < LN {
+                        tmp[k] = tmp[k] - mag[k]
+                        k = k + 1
+                    }
+                    k = 0
+                    while k < LN - 1 {
+                        while tmp[k] < 0 {
+                            tmp[k] = tmp[k] + B
+                            tmp[k + 1] = tmp[k + 1] - 1
+                        }
+                        k = k + 1
+                    }
+                    k = 0
+                    while k < LN {
+                        mag[k] = tmp[k]
+                        k = k + 1
+                    }
+                    sign = term_sign
+                }
+            }
+            free(tmp)
+        }
+        l = r + 1
+    }
+
+    let mut ans: i64 = bi_to_i64(mag, LN, B)
+    if sign < 0 { ans = -ans }
+    printf("%lld\n", ans)
+    free(mu); free(M); free(is_comp); free(primes); free(mag)
+    return 0
+}

@@ -1,0 +1,56 @@
+# Project Euler 159
+# Sum of maximum digital root sums of factorisations for n = 2..999999.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digit_root(x0: i64) -> i32 {
+    let mut x: i64 = x0
+    while x >= 10 {
+        let mut s: i64 = 0
+        while x > 0 {
+            s = s + (x % 10)
+            x = x / 10
+        }
+        x = s
+    }
+    return x as i32
+}
+
+function main() -> i32 {
+    let limit: i64 = 999999
+    let mdrs: ptr<i32> = calloc(limit + 1, 4)
+    if mdrs == null { return 1 }
+
+    let mut i: i64 = 2
+    while i <= limit {
+        mdrs[i] = digit_root(i)
+        i = i + 1
+    }
+
+    let mut a: i64 = 2
+    while a <= limit {
+        let mut b: i64 = 2
+        while a * b <= limit && b <= a {
+            let prod: i64 = a * b
+            let cand: i32 = mdrs[a] + mdrs[b]
+            if mdrs[prod] < cand {
+                mdrs[prod] = cand
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let mut total: i64 = 0
+    i = 2
+    while i <= limit {
+        total = total + (mdrs[i] as i64)
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    free(mdrs)
+    return 0
+}

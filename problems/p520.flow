@@ -1,0 +1,178 @@
+# Project Euler 520
+# Simbers — sum Q(2^u) for u=1..39 mod 1000000123.
+
+const MOD: i64 = 1000000123
+const NTERMS: i64 = 21
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function egcd(a0: i64, b0: i64, x: ptr<i64>, y: ptr<i64>) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    let mut x1: i64 = 1
+    let mut y1: i64 = 0
+    let mut x2: i64 = 0
+    let mut y2: i64 = 1
+    while b != 0 {
+        let q: i64 = a / b
+        let tx: i64 = x1 - q * x2
+        let ty: i64 = y1 - q * y2
+        x1 = x2
+        y1 = y2
+        x2 = tx
+        y2 = ty
+        let ta: i64 = a
+        a = b
+        b = ta % b
+    }
+    x[0] = x1
+    y[0] = y1
+    return a
+}
+
+function inv_mod(a0: i64) -> i64 {
+    let mut a: i64 = a0 % MOD
+    if a < 0 { a = a + MOD }
+    let xy: ptr<i64> = calloc(2, 8)
+    if xy == null { return 0 }
+    let g: i64 = egcd(a, MOD, xy, xy + 1)
+    let res: i64 = xy[0] % MOD
+    free(xy)
+    if res < 0 { return res + MOD }
+    return res
+}
+
+function modpow(base0: i64, exp0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % MOD
+    if b < 0 { b = b + MOD }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (b as i128) % (MOD as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (MOD as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function t_mod(exp: i64) -> i64 {
+    let mut t: i64 = exp % MOD
+    if t < 0 { t = t + MOD }
+    return t
+}
+
+function geom_start1(exp: i64, n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let tm: i64 = t_mod(exp)
+    if tm == 1 { return n % MOD }
+    if tm == 0 { return 0 }
+    let num: i64 = (modpow(tm, n + 1) - tm + MOD) % MOD
+    return ((num as i128) * (inv_mod((tm - 1 + MOD) % MOD) as i128) % (MOD as i128)) as i64
+}
+
+function geom_start0(exp: i64, n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let tm: i64 = t_mod(exp)
+    if tm == 1 { return n % MOD }
+    let num: i64 = (modpow(tm, n) - 1 + MOD) % MOD
+    return ((num as i128) * (inv_mod((tm - 1 + MOD) % MOD) as i128) % (MOD as i128)) as i64
+}
+
+function ipow2(u: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut e: i64 = u
+    while e > 0 {
+        r = r * 2
+        e = e - 1
+    }
+    return r
+}
+
+function Q(n: i64, f_exp: ptr<i64>, f_coef: ptr<i64>, g_exp: ptr<i64>, g_coef: ptr<i64>) -> i64 {
+    let mut sum_a: i64 = 0
+    let mut i: i64 = 0
+    while i < NTERMS {
+        if f_coef[i] != 0 {
+            sum_a = (sum_a + ((f_coef[i] as i128) * (geom_start1(f_exp[i], n) as i128) % (MOD as i128)) as i64) % MOD
+        }
+        i = i + 1
+    }
+    let mut sum_c: i64 = 0
+    i = 0
+    while i < NTERMS {
+        if g_coef[i] != 0 {
+            sum_c = (sum_c + ((g_coef[i] as i128) * (geom_start0(g_exp[i], n) as i128) % (MOD as i128)) as i64) % MOD
+        }
+        i = i + 1
+    }
+    return (sum_a - sum_c + MOD) % MOD
+}
+
+function main() -> i32 {
+    let f_exp: ptr<i64> = calloc(NTERMS, 8)
+    let f_coef: ptr<i64> = calloc(NTERMS, 8)
+    let g_exp: ptr<i64> = calloc(NTERMS, 8)
+    let g_coef: ptr<i64> = calloc(NTERMS, 8)
+    if f_exp == null || f_coef == null || g_exp == null || g_coef == null { return 1 }
+
+    # F = cosh(x)^5 * (1+sinh(x))^5
+    f_exp[0] = -10; f_coef[0] = 174804709
+    f_exp[1] = -9; f_coef[1] = 251953156
+    f_exp[2] = -8; f_coef[2] = 992187622
+    f_exp[3] = -7; f_coef[3] = 267578158
+    f_exp[4] = -6; f_coef[4] = 94726574
+    f_exp[5] = -5; f_coef[5] = 445312555
+    f_exp[6] = -4; f_coef[6] = 953125117
+    f_exp[7] = -3; f_coef[7] = 39062505
+    f_exp[8] = -2; f_coef[8] = 716796963
+    f_exp[9] = -1; f_coef[9] = 496093811
+    f_exp[10] = 0; f_coef[10] = 0
+    f_exp[11] = 1; f_coef[11] = 496093811
+    f_exp[12] = 2; f_coef[12] = 283203160
+    f_exp[13] = 3; f_coef[13] = 39062505
+    f_exp[14] = 4; f_coef[14] = 46875006
+    f_exp[15] = 5; f_coef[15] = 445312555
+    f_exp[16] = 6; f_coef[16] = 905273549
+    f_exp[17] = 7; f_coef[17] = 267578158
+    f_exp[18] = 8; f_coef[18] = 7812501
+    f_exp[19] = 9; f_coef[19] = 251953156
+    f_exp[20] = 10; f_coef[20] = 825195414
+
+    g_exp[0] = -10; g_coef[0] = 825195414
+    g_exp[1] = -9; g_coef[1] = 748046967
+    g_exp[2] = -8; g_coef[2] = 357421919
+    g_exp[3] = -7; g_coef[3] = 236328154
+    g_exp[4] = -6; g_coef[4] = 540039129
+    g_exp[5] = -5; g_coef[5] = 585937572
+    g_exp[6] = -4; g_coef[6] = 601562574
+    g_exp[7] = -3; g_coef[7] = 820312601
+    g_exp[8] = -2; g_coef[8] = 634765703
+    g_exp[9] = -1; g_coef[9] = 722656339
+    g_exp[10] = 0; g_coef[10] = 82031260
+    g_exp[11] = 1; g_coef[11] = 277343784
+    g_exp[12] = 2; g_coef[12] = 634765703
+    g_exp[13] = 3; g_coef[13] = 179687522
+    g_exp[14] = 4; g_coef[14] = 601562574
+    g_exp[15] = 5; g_coef[15] = 414062551
+    g_exp[16] = 6; g_coef[16] = 540039129
+    g_exp[17] = 7; g_coef[17] = 763671969
+    g_exp[18] = 8; g_coef[18] = 357421919
+    g_exp[19] = 9; g_coef[19] = 251953156
+    g_exp[20] = 10; g_coef[20] = 825195414
+
+    let mut total: i64 = 0
+    let mut u: i64 = 1
+    while u <= 39 {
+        total = (total + Q(ipow2(u), f_exp, f_coef, g_exp, g_coef)) % MOD
+        u = u + 1
+    }
+
+    printf("%lld\n", total)
+    free(f_exp); free(f_coef); free(g_exp); free(g_coef)
+    return 0
+}

@@ -1,0 +1,126 @@
+# Project Euler 263
+# Sum of first four engineers' paradises (verify practical conditions).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fclose(f: ptr<void>) -> i32
+    function fgetc(f: ptr<void>) -> i32
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function is_practical(n0: i64, primes: ptr<i64>, pc: i64) -> bool {
+    let mut n: i64 = n0
+    if n == 1 { return true }
+    if n < 1 || (n % 2) == 1 { return false }
+    let fac_p: ptr<i64> = calloc(64, 8)
+    let fac_e: ptr<i64> = calloc(64, 8)
+    let mut fc: i64 = 0
+    let mut x: i64 = n
+    let mut i: i64 = 0
+    while i < pc {
+        let p: i64 = primes[i]
+        if p * p > x { break }
+        if x % p == 0 {
+            let mut e: i64 = 0
+            while x % p == 0 {
+                x = x / p
+                e = e + 1
+            }
+            fac_p[fc] = p
+            fac_e[fc] = e
+            fc = fc + 1
+        }
+        i = i + 1
+    }
+    if x > 1 {
+        fac_p[fc] = x
+        fac_e[fc] = 1
+        fc = fc + 1
+    }
+    if fc == 0 || fac_p[0] != 2 {
+        free(fac_p); free(fac_e)
+        return false
+    }
+    let mut sigma_prefix: i64 = (1 << (fac_e[0] + 1)) - 1
+    i = 1
+    while i < fc {
+        let p: i64 = fac_p[i]
+        let a: i64 = fac_e[i]
+        if p > sigma_prefix + 1 {
+            free(fac_p); free(fac_e)
+            return false
+        }
+        let mut pw: i64 = 1
+        let mut t: i64 = 0
+        while t <= a {
+            pw = pw * p
+            t = t + 1
+        }
+        sigma_prefix = sigma_prefix * ((pw - 1) / (p - 1))
+        i = i + 1
+    }
+    free(fac_p); free(fac_e)
+    return true
+}
+
+function read_i64(f: ptr<void>, out: ptr<i64>) -> bool {
+    let mut c: i32 = fgetc(f)
+    while c == 32 || c == 10 || c == 13 || c == 9 {
+        c = fgetc(f)
+    }
+    if c < 0 { return false }
+    let mut v: i64 = 0
+    while c >= 48 && c <= 57 {
+        v = v * 10 + (c - 48)
+        c = fgetc(f)
+    }
+    out[0] = v
+    return true
+}
+
+function main() -> i32 {
+    let small_lim: i64 = 50000
+    let is_comp: ptr<i8> = calloc(small_lim + 1, 1)
+    let primes: ptr<i64> = calloc(10000, 8)
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= small_lim {
+        if is_comp[i] == 0 {
+            primes[pc] = i
+            pc = pc + 1
+            let mut j: i64 = i * i
+            while j <= small_lim {
+                is_comp[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let f: ptr<void> = fopen("data/p263_candidates.txt", "r")
+    let tmp: ptr<i64> = calloc(1, 8)
+    let mut sum: i64 = 0
+    let mut count: i64 = 0
+    while read_i64(f, tmp) {
+        let n: i64 = tmp[0]
+        if n % 4 == 0 && is_practical(n - 8, primes, pc) && is_practical(n - 4, primes, pc) && is_practical(n, primes, pc) && is_practical(n + 4, primes, pc) && is_practical(n + 8, primes, pc) {
+            sum = sum + n
+            count = count + 1
+        }
+    }
+    fclose(f)
+    printf("%lld\n", sum)
+    free(is_comp); free(primes); free(tmp)
+    return 0
+}

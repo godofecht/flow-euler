@@ -1,0 +1,126 @@
+# Project Euler 157
+# Count solutions to 1/a + 1/b = p / 10^n for n=1..9.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function divisor_count(m: i64, s0: i64) -> i64 {
+    let mut a2: i64 = 0
+    let mut a5: i64 = 0
+    let mut mm: i64 = m
+    while mm % 2 == 0 { mm = mm / 2; a2 = a2 + 1 }
+    while mm % 5 == 0 { mm = mm / 5; a5 = a5 + 1 }
+
+    let mut ss: i64 = s0
+    while ss % 2 == 0 { ss = ss / 2; a2 = a2 + 1 }
+    while ss % 5 == 0 { ss = ss / 5; a5 = a5 + 1 }
+
+    let mut d: i64 = (a2 + 1) * (a5 + 1)
+    # factor ss
+    let mut x: i64 = ss
+    let mut p: i64 = 3
+    while p * p <= x {
+        if x % p == 0 {
+            let mut e: i64 = 0
+            while x % p == 0 {
+                x = x / p
+                e = e + 1
+            }
+            d = d * (e + 1)
+        }
+        p = p + 2
+    }
+    if x > 1 { d = d * 2 }
+    return d
+}
+
+function ipow10(n: i32) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i32 = 0
+    while i < n {
+        r = r * 10
+        i = i + 1
+    }
+    return r
+}
+
+function count_for_n(n: i32) -> i64 {
+    let N: i64 = ipow10(n)
+    # divisors of 10^n: 2^i * 5^j
+    let mut divs: array<i64, 100> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    let mut nd: i32 = 0
+    let mut i: i32 = 0
+    while i <= n {
+        let mut j: i32 = 0
+        let mut p2: i64 = 1
+        let mut t: i32 = 0
+        while t < i { p2 = p2 * 2; t = t + 1 }
+        while j <= n {
+            let mut p5: i64 = 1
+            t = 0
+            while t < j { p5 = p5 * 5; t = t + 1 }
+            divs[nd] = p2 * p5
+            nd = nd + 1
+            j = j + 1
+        }
+        i = i + 1
+    }
+    # sort divs (small)
+    let mut a: i32 = 0
+    while a < nd {
+        let mut b: i32 = a + 1
+        while b < nd {
+            if divs[b] < divs[a] {
+                let tmp: i64 = divs[a]
+                divs[a] = divs[b]
+                divs[b] = tmp
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let mut total: i64 = 0
+    let mut xi: i32 = 0
+    while xi < nd {
+        let mut yi: i32 = xi
+        while yi < nd {
+            let x: i64 = divs[xi]
+            let y: i64 = divs[yi]
+            if gcd(x, y) == 1 {
+                let xy: i64 = x * y
+                if xy <= N {
+                    let m: i64 = N / xy
+                    total = total + divisor_count(m, x + y)
+                }
+            }
+            yi = yi + 1
+        }
+        xi = xi + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    let mut ans: i64 = 0
+    let mut n: i32 = 1
+    while n <= 9 {
+        ans = ans + count_for_n(n)
+        n = n + 1
+    }
+    printf("%lld\n", ans)
+    return 0
+}

@@ -1,0 +1,88 @@
+# Project Euler 055
+# How many Lychrel numbers below ten thousand?
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function is_pal(d: ptr<i32>, len: i32) -> bool {
+    let mut i: i32 = 0
+    while i < len / 2 {
+        if d[i] != d[len - 1 - i] { return false }
+        i = i + 1
+    }
+    return true
+}
+
+function reverse_add(d: ptr<i32>, len: i32) -> i32 {
+    # add number to its reverse in-place; returns new length
+    let mut carry: i32 = 0
+    let mut i: i32 = 0
+    while i < len {
+        let v: i32 = d[i] + d[len - 1 - i] + carry
+        # careful: need temp since we overwrite; use second pass with copy
+        i = i + 1
+    }
+    # redo with buffer on stack via temporary array stored after len
+    # Use digits[0..len) as LSD; write to temp then copy
+    return len
+}
+
+function main() -> i32 {
+    let maxd: i32 = 80
+    let d: ptr<i32> = calloc(maxd as i64, 4)
+    let t: ptr<i32> = calloc(maxd as i64, 4)
+    if d == null || t == null { return 1 }
+
+    let mut lychrel: i64 = 0
+    let mut n: i64 = 1
+    while n < 10000 {
+        # load n into digits (LSD first)
+        let mut x: i64 = n
+        let mut len: i32 = 0
+        while x > 0 {
+            d[len] = (x % 10) as i32
+            x = x / 10
+            len = len + 1
+        }
+        let mut found: bool = false
+        let mut iter: i32 = 0
+        while iter < 50 {
+            # t = d + reverse(d)
+            let mut carry: i32 = 0
+            let mut i: i32 = 0
+            while i < len {
+                let v: i32 = d[i] + d[len - 1 - i] + carry
+                t[i] = v % 10
+                carry = v / 10
+                i = i + 1
+            }
+            let mut nlen: i32 = len
+            if carry > 0 {
+                t[nlen] = carry
+                nlen = nlen + 1
+            }
+            # copy t -> d
+            i = 0
+            while i < nlen {
+                d[i] = t[i]
+                i = i + 1
+            }
+            len = nlen
+            if is_pal(d, len) {
+                found = true
+                break
+            }
+            iter = iter + 1
+        }
+        if !found {
+            lychrel = lychrel + 1
+        }
+        n = n + 1
+    }
+    printf("%lld\n", lychrel)
+    free(t)
+    free(d)
+    return 0
+}

@@ -1,0 +1,176 @@
+# Project Euler 579
+# Lattice Points in Lattice Cubes — primary quaternion enumeration + Ehrhart sums.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function igcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function iabs(x: i64) -> i64 {
+    if x < 0 { return -x }
+    return x
+}
+
+function solve_S_mod(n: i64, M: i64) -> i64 {
+    let sums: ptr<i64> = calloc(7 * (n + 1), 8)
+    if sums == null { return -1 }
+    let mut t: i64 = 1
+    while t <= n {
+        sums[0 * (n + 1) + t] = t % M
+        let mut p: i64 = t % M
+        sums[1 * (n + 1) + t] = (sums[1 * (n + 1) + (t - 1)] + p) % M
+        let mut k: i64 = 2
+        while k <= 6 {
+            p = ((p as i128) * (t as i128) % (M as i128)) as i64
+            sums[k * (n + 1) + t] = (sums[k * (n + 1) + (t - 1)] + p) % M
+            k = k + 1
+        }
+        t = t + 1
+    }
+
+    let A: i64 = n + 1
+    let A2: i64 = A * A
+    let A3: i64 = A2 * A
+    let mut totalS: i64 = 0
+    let B: i64 = isqrt(n)
+
+    let mut case_i: i64 = 0
+    while case_i < 2 {
+        let mut a_parity: i64 = 0
+        let mut s_limit: i64 = n
+        let mut start: i64 = -B
+        if case_i == 0 {
+            a_parity = 1
+            s_limit = n - 1
+            if (B & 1) == 0 {
+                start = -B
+            } else {
+                start = -B + 1
+            }
+        } else {
+            a_parity = 0
+            s_limit = n
+            if (B & 1) == 1 {
+                start = -B
+            } else {
+                start = -B + 1
+            }
+        }
+
+        let mut b: i64 = start
+        while b <= B {
+            let bb: i64 = b * b
+            let mut c: i64 = start
+            while c <= B {
+                let cc: i64 = c * c
+                let bc2: i64 = bb + cc
+                let mut d: i64 = start
+                while d <= B {
+                    let dd: i64 = d * d
+                    let s: i64 = bc2 + dd
+                    if s <= s_limit {
+                        let rem: i64 = n - s
+                        let max_a: i64 = isqrt(rem)
+                        let sum_bcd_mod4: i64 = (b + c + d) & 3
+                        let a_res: i64 = (1 - sum_bcd_mod4) & 3
+                        let g_bcd: i64 = igcd(igcd(iabs(b), iabs(c)), iabs(d))
+                        let mut a: i64 = -max_a
+                        while a <= max_a {
+                            if (a & 1) == a_parity && (a & 3) == a_res {
+                                if igcd(g_bcd, iabs(a)) == 1 {
+                                    let aa: i64 = a * a
+                                    let m: i64 = aa + s
+                                    let u0: i64 = aa + bb - cc - dd
+                                    let u1: i64 = 2 * (b * c - a * d)
+                                    let u2: i64 = 2 * (b * d + a * c)
+                                    let v0: i64 = 2 * (b * c + a * d)
+                                    let v1: i64 = aa - bb + cc - dd
+                                    let v2: i64 = 2 * (c * d - a * b)
+                                    let w0: i64 = 2 * (b * d - a * c)
+                                    let w1: i64 = 2 * (c * d + a * b)
+                                    let w2: i64 = aa - bb - cc + dd
+                                    let sx: i64 = iabs(u0) + iabs(v0) + iabs(w0)
+                                    let sy: i64 = iabs(u1) + iabs(v1) + iabs(w1)
+                                    let sz: i64 = iabs(u2) + iabs(v2) + iabs(w2)
+                                    let mut T: i64 = n / sx
+                                    let ty: i64 = n / sy
+                                    if ty < T { T = ty }
+                                    let tz: i64 = n / sz
+                                    if tz < T { T = tz }
+                                    if T > 0 {
+                                        let s1: i64 = sx + sy + sz
+                                        let s2v: i64 = sx * sy + sy * sz + sz * sx
+                                        let s3: i64 = sx * sy * sz
+                                        let t0: i64 = A3 % M
+                                        let t1: i64 = ((-A2 * s1) % M + M) % M
+                                        let t2: i64 = (A * s2v) % M
+                                        let t3: i64 = ((-s3) % M + M) % M
+                                        let gU: i64 = igcd(iabs(u0), igcd(iabs(u1), iabs(u2)))
+                                        let gV: i64 = igcd(iabs(v0), igcd(iabs(v1), iabs(v2)))
+                                        let gW: i64 = igcd(iabs(w0), igcd(iabs(w1), iabs(w2)))
+                                        let G1: i64 = gU + gV + gW
+                                        let p1: i64 = G1 % M
+                                        let p2: i64 = (m * G1) % M
+                                        let mm: i64 = m % M
+                                        let p3: i64 = ((((mm as i128) * (mm as i128) % (M as i128)) * (mm as i128)) % (M as i128)) as i64
+                                        let s0: i64 = T % M
+                                        let S1p: i64 = sums[1 * (n + 1) + T]
+                                        let S2p: i64 = sums[2 * (n + 1) + T]
+                                        let S3p: i64 = sums[3 * (n + 1) + T]
+                                        let S4p: i64 = sums[4 * (n + 1) + T]
+                                        let S5p: i64 = sums[5 * (n + 1) + T]
+                                        let S6p: i64 = sums[6 * (n + 1) + T]
+                                        let D0: i64 = t0
+                                        let D1: i64 = (t0 * p1 + t1) % M
+                                        let D2: i64 = (t0 * p2 + t1 * p1 + t2) % M
+                                        let D3: i64 = (t0 * p3 + t1 * p2 + t2 * p1 + t3) % M
+                                        let D4: i64 = (t1 * p3 + t2 * p2 + t3 * p1) % M
+                                        let D5: i64 = (t2 * p3 + t3 * p2) % M
+                                        let D6: i64 = (t3 * p3) % M
+                                        totalS = (((((((totalS + D0 * s0) % M + D1 * S1p) % M + D2 * S2p) % M + D3 * S3p) % M + D4 * S4p) % M + D5 * S5p) % M + D6 * S6p) % M
+                                    }
+                                }
+                            }
+                            a = a + 1
+                        }
+                    }
+                    d = d + 2
+                }
+                c = c + 2
+            }
+            b = b + 2
+        }
+        case_i = case_i + 1
+    }
+    free(sums)
+    return totalS
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve_S_mod(5000, 1000000000))
+    return 0
+}

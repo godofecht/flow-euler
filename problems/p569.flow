@@ -1,0 +1,164 @@
+# Project Euler 569
+# Prime Mountain Range
+# S(N)=sum of visible earlier peaks; chain property over first N=2.5e6 peaks.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function realloc(p: ptr<void>, size: i64) -> ptr<void>
+    function log(x: f64) -> f64
+}
+
+function upper_bound_nth_prime(n: i64) -> i64 {
+    if n < 6 { return 15 }
+    let nn: f64 = n as f64
+    return (nn * (log(nn) + log(log(nn))) + 10.0) as i64
+}
+
+function solve(n_peaks: i64) -> i64 {
+    let need: i64 = 2 * n_peaks
+    let mut limit: i64 = upper_bound_nth_prime(need) + 1000
+
+    let X: ptr<i64> = calloc(n_peaks, 8)
+    let Y: ptr<i64> = calloc(n_peaks, 8)
+    if X == null || Y == null { return -1 }
+
+    while true {
+        let size: i64 = limit / 2 + 1
+        let is_prime: ptr<i8> = calloc(size, 1)
+        if is_prime == null { return -1 }
+        let mut i: i64 = 0
+        while i < size {
+            is_prime[i] = 1
+            i = i + 1
+        }
+        is_prime[0] = 0
+        let mut rr: i64 = limit
+        let mut yy: i64 = (rr + 1) / 2
+        while yy < rr {
+            rr = yy
+            yy = (rr + limit / rr) / 2
+        }
+        i = 1
+        while i <= rr / 2 {
+            if is_prime[i] != 0 {
+                let p: i64 = 2 * i + 1
+                let mut start: i64 = (p * p) / 2
+                while start < size {
+                    is_prime[start] = 0
+                    start = start + p
+                }
+            }
+            i = i + 1
+        }
+
+        let mut x_base: i64 = 0
+        let mut y_base: i64 = 0
+        let mut count: i64 = 1
+        let mut peak_i: i64 = 0
+        let mut x_peak: i64 = 2
+        let mut y_peak: i64 = 2
+        X[0] = 2
+        Y[0] = 2
+        peak_i = 1
+
+        let mut idx: i64 = 1
+        let mut done: i32 = 0
+        while idx < size {
+            if is_prime[idx] != 0 {
+                let p: i64 = 2 * idx + 1
+                count = count + 1
+                if (count & 1) != 0 {
+                    x_peak = x_base + p
+                    y_peak = y_base + p
+                    X[peak_i] = x_peak
+                    Y[peak_i] = y_peak
+                    peak_i = peak_i + 1
+                } else {
+                    x_base = x_peak + p
+                    y_base = y_peak - p
+                }
+                if count == need {
+                    done = 1
+                    break
+                }
+            }
+            idx = idx + 1
+        }
+        free(is_prime)
+        if done != 0 { break }
+        limit = limit + limit / 10 + 1000
+    }
+
+    # Visibility via chain property
+    let offs: ptr<i64> = calloc(n_peaks, 8)
+    let ln: ptr<i64> = calloc(n_peaks, 8)
+    let mut vis_cap: i64 = n_peaks * 4
+    let mut vis: ptr<i32> = calloc(vis_cap, 4)
+    if offs == null || ln == null || vis == null { return -1 }
+    let mut vis_len: i64 = 0
+    let mut total: i64 = 0
+
+    let mut k: i64 = 1
+    while k < n_peaks {
+        let xk: i64 = X[k]
+        let yk: i64 = Y[k]
+        let start_k: i64 = vis_len
+        offs[k] = start_k
+        if vis_len + 64 >= vis_cap {
+            vis_cap = vis_cap * 2
+            vis = realloc(vis, vis_cap * 4)
+            if vis == null { return -1 }
+        }
+        let mut a: i64 = k - 1
+        vis[vis_len] = a as i32
+        vis_len = vis_len + 1
+        let mut l: i64 = 1
+        let mut m_num: i64 = yk - Y[a]
+        let mut m_den: i64 = xk - X[a]
+
+        while true {
+            let offa: i64 = offs[a]
+            let enda: i64 = offa + ln[a]
+            let mut found: i32 = 0
+            let mut pos: i64 = offa
+            while pos < enda {
+                let cand: i64 = vis[pos] as i64
+                let dy: i64 = yk - Y[cand]
+                let dx: i64 = xk - X[cand]
+                if dy * m_den < m_num * dx {
+                    if vis_len + 8 >= vis_cap {
+                        vis_cap = vis_cap * 2
+                        vis = realloc(vis, vis_cap * 4)
+                        if vis == null { return -1 }
+                    }
+                    vis[vis_len] = cand as i32
+                    vis_len = vis_len + 1
+                    l = l + 1
+                    a = cand
+                    m_num = dy
+                    m_den = dx
+                    found = 1
+                    break
+                }
+                pos = pos + 1
+            }
+            if found == 0 { break }
+        }
+        ln[k] = l
+        total = total + l
+        k = k + 1
+    }
+
+    free(X)
+    free(Y)
+    free(offs)
+    free(ln)
+    free(vis)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(2500000))
+    return 0
+}

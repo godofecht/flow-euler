@@ -1,0 +1,52 @@
+# Project Euler 312
+# C(C(C(10000))) mod 13^8 using period structure of C(n).
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function C(n: i64, mod: i64) -> i64 {
+    if n == 1 || n == 2 { return 1 }
+    if n == 3 { return 8 % mod }
+    # exponent = (3^(n-2) - 3) / 2
+    # Need 12^exponent mod mod. Use Euler when gcd(12,mod)>1 carefully via CRT or direct.
+    # For our mods (6*13^k or 13^8), use recursive C definition with modular mul when n small enough
+    # after reductions n is small.
+    let mut c1: i64 = 13824 % mod
+    if n == 4 { return c1 }
+    let mut i: i64 = 4
+    while i < n {
+        # cn = (3*c1)^3 mod mod
+        let t: i64 = (3 * c1) % mod
+        let t2: i64 = (t * t) % mod
+        c1 = (t2 * t) % mod
+        i = i + 1
+    }
+    return c1
+}
+
+function C_formula(n: i64, mod: i64) -> i64 {
+    if n <= 2 { return 1 }
+    if n == 3 { return 8 % mod }
+    # For larger n after period reduction, recursive definition is fine if n is not huge.
+    # After reductions: n around hundreds to millions — recursive loop OK for n~10^6? 
+    # C(10000) needs 10000 iterations — fine.
+    return C(n, mod)
+}
+
+function main() -> i32 {
+    let x1: i64 = 10000 % (6 * 13 * 13)
+    let x2: i64 = C_formula(x1, 6 * 13 * 13 * 13 * 13)
+    let x3: i64 = C_formula(x2, 6 * 13 * 13 * 13 * 13 * 13 * 13)
+    let x4: i64 = C_formula(x3, 13 * 13 * 13 * 13 * 13 * 13 * 13 * 13)
+    printf("%lld\n", x4)
+    return 0
+}

@@ -1,0 +1,210 @@
+# Project Euler 184
+# Triangles containing the origin with vertices in I_105.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    if x < 0 { x = 0 - x }
+    let mut y: i64 = b
+    if y < 0 { y = 0 - y }
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function comb3(n: i64) -> i64 {
+    if n < 3 { return 0 }
+    return n * (n - 1) * (n - 2) / 6
+}
+
+function half(x: i64, y: i64) -> i32 {
+    if y > 0 || (y == 0 && x > 0) { return 0 }
+    return 1
+}
+
+function angle_lt_pi(ax: i64, ay: i64, bx: i64, by: i64) -> bool {
+    let cross: i64 = ax * by - ay * bx
+    if cross > 0 { return true }
+    if cross < 0 { return false }
+    let dot: i64 = ax * bx + ay * by
+    return dot > 0
+}
+
+function main() -> i32 {
+    let r: i64 = 105
+    let r2: i64 = r * r
+    # Max distinct rays ~ O(r^2)
+    let MAX: i64 = 50000
+    let vx: ptr<i64> = calloc(MAX, 8)
+    let vy: ptr<i64> = calloc(MAX, 8)
+    let vw: ptr<i64> = calloc(MAX, 8)
+    if vx == null || vy == null || vw == null { return 1 }
+
+    # hash map for rays: key = (dx+1000)*2001+(dy+1000)
+    let HS: i64 = 1 << 18
+    let hdx: ptr<i64> = calloc(HS, 8)
+    let hdy: ptr<i64> = calloc(HS, 8)
+    let hw: ptr<i64> = calloc(HS, 8)
+    let hused: ptr<i8> = calloc(HS, 1)
+    if hdx == null || hdy == null || hw == null || hused == null { return 1 }
+
+    let mut total_points: i64 = 0
+    let mut x: i64 = 0 - (r - 1)
+    while x < r {
+        let maxy2: i64 = r2 - 1 - x * x
+        if maxy2 >= 0 {
+            let ylim: i64 = isqrt(maxy2)
+            let mut y: i64 = 0 - ylim
+            while y <= ylim {
+                if !(x == 0 && y == 0) {
+                    let g: i64 = gcd(x, y)
+                    let dx: i64 = x / g
+                    let dy: i64 = y / g
+                    let mut h: i64 = ((dx + 200) * 401 + (dy + 200)) % HS
+                    if h < 0 { h = h + HS }
+                    while hused[h] == 1 && !(hdx[h] == dx && hdy[h] == dy) {
+                        h = h + 1
+                        if h >= HS { h = 0 }
+                    }
+                    if hused[h] == 0 {
+                        hused[h] = 1
+                        hdx[h] = dx
+                        hdy[h] = dy
+                        hw[h] = 1
+                    } else {
+                        hw[h] = hw[h] + 1
+                    }
+                    total_points = total_points + 1
+                }
+                y = y + 1
+            }
+        }
+        x = x + 1
+    }
+
+    let mut m: i64 = 0
+    let mut hi: i64 = 0
+    while hi < HS {
+        if hused[hi] == 1 {
+            vx[m] = hdx[hi]
+            vy[m] = hdy[hi]
+            vw[m] = hw[hi]
+            m = m + 1
+        }
+        hi = hi + 1
+    }
+
+    # polar sort
+    let mut i: i64 = 0
+    while i < m {
+        let mut j: i64 = i + 1
+        while j < m {
+            let ha: i32 = half(vx[i], vy[i])
+            let hb: i32 = half(vx[j], vy[j])
+            let mut swap: bool = false
+            if ha > hb { swap = true }
+            elif ha == hb {
+                let cross: i64 = vx[i] * vy[j] - vy[i] * vx[j]
+                if cross < 0 { swap = true }
+                elif cross == 0 {
+                    let da: i64 = vx[i]*vx[i] + vy[i]*vy[i]
+                    let db: i64 = vx[j]*vx[j] + vy[j]*vy[j]
+                    if da > db { swap = true }
+                }
+            }
+            if swap {
+                let tx: i64 = vx[i]; vx[i] = vx[j]; vx[j] = tx
+                let ty: i64 = vy[i]; vy[i] = vy[j]; vy[j] = ty
+                let tw: i64 = vw[i]; vw[i] = vw[j]; vw[j] = tw
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    # doubled arrays
+    let vx2: ptr<i64> = calloc(2 * m, 8)
+    let vy2: ptr<i64> = calloc(2 * m, 8)
+    let vw2: ptr<i64> = calloc(2 * m, 8)
+    let pref: ptr<i64> = calloc(2 * m + 1, 8)
+    i = 0
+    while i < m {
+        vx2[i] = vx[i]; vy2[i] = vy[i]; vw2[i] = vw[i]
+        vx2[i + m] = vx[i]; vy2[i + m] = vy[i]; vw2[i + m] = vw[i]
+        i = i + 1
+    }
+    i = 0
+    while i < 2 * m {
+        pref[i + 1] = pref[i] + vw2[i]
+        i = i + 1
+    }
+
+    let mut bad_open: i64 = 0
+    let mut jj: i64 = 0
+    i = 0
+    while i < m {
+        if jj < i { jj = i }
+        while jj < i + m && angle_lt_pi(vx[i], vy[i], vx2[jj], vy2[jj]) {
+            jj = jj + 1
+        }
+        let W: i64 = pref[jj] - pref[i]
+        let wi: i64 = vw[i]
+        bad_open = bad_open + comb3(W) - comb3(W - wi)
+        i = i + 1
+    }
+
+    let total: i64 = comb3(total_points)
+
+    # boundary
+    # rebuild line_pos/neg from rays
+    let mut boundary: i64 = 0
+    # For each ray direction in positive half, find opposite
+    i = 0
+    while i < m {
+        let dx: i64 = vx[i]
+        let dy: i64 = vy[i]
+        if dx > 0 || (dx == 0 && dy > 0) {
+            let P: i64 = vw[i]
+            # find opposite -dx,-dy
+            let mut Q: i64 = 0
+            let mut k: i64 = 0
+            while k < m {
+                if vx[k] == 0 - dx && vy[k] == 0 - dy {
+                    Q = vw[k]
+                    break
+                }
+                k = k + 1
+            }
+            if P > 0 && Q > 0 {
+                let S: i64 = P + Q
+                boundary = boundary + P * Q * (total_points - S)
+                boundary = boundary + comb3(S) - comb3(P) - comb3(Q)
+            }
+        }
+        i = i + 1
+    }
+
+    printf("%lld\n", total - bad_open - boundary)
+    free(vx); free(vy); free(vw)
+    free(hdx); free(hdy); free(hw); free(hused)
+    free(vx2); free(vy2); free(vw2); free(pref)
+    return 0
+}

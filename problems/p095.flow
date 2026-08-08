@@ -1,0 +1,65 @@
+# Project Euler 095
+# Smallest member of the longest amicable chain with no element exceeding 1e6.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i32 = 1000000
+    let sigma: ptr<i32> = calloc((limit + 1) as i64, 4)
+    if sigma == null { return 1 }
+    let mut i: i32 = 1
+    while i <= limit {
+        let mut j: i32 = 2 * i
+        while j <= limit {
+            sigma[j] = sigma[j] + i
+            j = j + i
+        }
+        i = i + 1
+    }
+
+    let seen: ptr<i32> = calloc((limit + 1) as i64, 4)
+    if seen == null { return 1 }
+    # seen[x] = visit token; 0 unused
+    let mut best_len: i32 = 0
+    let mut best_min: i32 = 0
+    let mut token: i32 = 1
+    let mut start: i32 = 1
+    while start <= limit {
+        if seen[start] == 0 {
+            let mut x: i32 = start
+            let mut step: i32 = 0
+            # walk until repeat or out of range
+            while x > 0 && x <= limit && seen[x] == 0 {
+                seen[x] = token
+                x = sigma[x]
+                step = step + 1
+                if step > 1000 { break }
+            }
+            if x > 0 && x <= limit && seen[x] == token {
+                # found a cycle in this chain; measure it
+                let mut y: i32 = x
+                let mut clen: i32 = 0
+                let mut cmin: i32 = x
+                while true {
+                    if y < cmin { cmin = y }
+                    y = sigma[y]
+                    clen = clen + 1
+                    if y == x { break }
+                }
+                if clen > best_len {
+                    best_len = clen
+                    best_min = cmin
+                }
+            }
+            token = token + 1
+        }
+        start = start + 1
+    }
+    printf("%lld\n", best_min as i64)
+    free(sigma)
+    free(seen)
+    return 0
+}

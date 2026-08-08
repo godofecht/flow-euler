@@ -1,0 +1,469 @@
+# Project Euler 305
+# sum_{k=1..13} f(3^k) where f(n) is start of n-th occurrence of str(n) in Champernowne.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function ipow10(e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i64 = 0
+    while i < e { r = r * 10; i = i + 1 }
+    return r
+}
+
+function num_digits(n0: i64) -> i64 {
+    let mut n: i64 = n0
+    if n == 0 { return 1 }
+    let mut d: i64 = 0
+    while n > 0 { d = d + 1; n = n / 10 }
+    return d
+}
+
+function digit_at(n0: i64, pos_from_left: i64, nd: i64) -> i64 {
+    # pos 0 = MSD
+    let mut n: i64 = n0
+    let mut p: i64 = nd - 1 - pos_from_left
+    let mut i: i64 = 0
+    while i < p { n = n / 10; i = i + 1 }
+    return n % 10
+}
+
+function build_kmp(pat: ptr<i8>, m: i64, pi: ptr<i32>, trans: ptr<i32>) -> i32 {
+    # trans[state*10+dig] = next_state + (inc<<16)
+    pi[0] = 0
+    let mut j: i64 = 0
+    let mut i: i64 = 1
+    while i < m {
+        while j > 0 && pat[i] != pat[j] { j = pi[j - 1] as i64 }
+        if pat[i] == pat[j] { j = j + 1 }
+        pi[i] = j as i32
+        i = i + 1
+    }
+    let mut state: i64 = 0
+    while state < m {
+        let mut dig: i64 = 0
+        while dig < 10 {
+            let mut s: i64 = state
+            while s > 0 && (pat[s] as i64) != dig { s = pi[s - 1] as i64 }
+            if (pat[s] as i64) == dig { s = s + 1 }
+            let mut inc: i64 = 0
+            if s == m {
+                inc = 1
+                s = pi[m - 1] as i64
+            }
+            trans[state * 10 + dig] = (s + (inc << 16)) as i32
+            dig = dig + 1
+        }
+        state = state + 1
+    }
+    return 0
+}
+
+function step(trans: ptr<i32>, state: i64, dig: i64) -> i64 {
+    return trans[state * 10 + dig] as i64
+}
+
+function count_arith(lo: i64, hi: i64, mod: i64, rem: i64) -> i64 {
+    if hi < lo { return 0 }
+    let mut first: i64 = lo + ((rem - (lo % mod) + mod) % mod)
+    if first > hi { return 0 }
+    return (hi - first) / mod + 1
+}
+
+function prefix_to_N(P: i64, outN: ptr<i64>, outRem: ptr<i64>) -> i32 {
+    if P <= 0 { outN[0] = 0; outRem[0] = 0; return 0 }
+    let mut cum: i64 = 0
+    let mut d: i64 = 1
+    let mut start: i64 = 1
+    while true {
+        let block_count: i64 = 9 * start
+        let block_len: i64 = block_count * d
+        if cum + block_len < P {
+            cum = cum + block_len
+            d = d + 1
+            start = start * 10
+        } else {
+            let need: i64 = P - cum
+            let full: i64 = need / d
+            let rem: i64 = need % d
+            outN[0] = start - 1 + full
+            outRem[0] = rem
+            return 0
+        }
+    }
+    return 0
+}
+
+# For speed/clarity on this problem, compute f(n) using binary search on starts
+# with counting via building S prefixes by scanning numbers (OK for needed ranges).
+# 3^13=1594323, f is ~1e13 so we need the analytic counter.
+# Port PatternCounter essentials below.
+
+function internal_len_d(d: i64, m: i64, trans: ptr<i32>) -> i64 {
+    let dp_count: ptr<i64> = calloc(m, 8)
+    let dp_match: ptr<i64> = calloc(m, 8)
+    let mut dig: i64 = 1
+    while dig <= 9 {
+        let st: i64 = step(trans, 0, dig)
+        let ns: i64 = st & 65535
+        let inc: i64 = st >> 16
+        dp_count[ns] = dp_count[ns] + 1
+        dp_match[ns] = dp_match[ns] + inc
+        dig = dig + 1
+    }
+    let mut pos: i64 = 1
+    while pos < d {
+        let newc: ptr<i64> = calloc(m, 8)
+        let newm: ptr<i64> = calloc(m, 8)
+        let mut st: i64 = 0
+        while st < m {
+            let c: i64 = dp_count[st]
+            if c != 0 {
+                let cm: i64 = dp_match[st]
+                dig = 0
+                while dig < 10 {
+                    let tr: i64 = step(trans, st, dig)
+                    let ns: i64 = tr & 65535
+                    let inc: i64 = tr >> 16
+                    newc[ns] = newc[ns] + c
+                    newm[ns] = newm[ns] + cm + c * inc
+                    dig = dig + 1
+                }
+            }
+            st = st + 1
+        }
+        free(dp_count); free(dp_match)
+        dp_count = newc; dp_match = newm
+        pos = pos + 1
+    }
+    let mut res: i64 = 0
+    let mut st: i64 = 0
+    while st < m { res = res + dp_match[st]; st = st + 1 }
+    free(dp_count); free(dp_match)
+    return res
+}
+
+function internal_upto(N: i64, m: i64, trans: ptr<i32>, ilen: ptr<i64>) -> i64 {
+    if N <= 0 { return 0 }
+    let D: i64 = num_digits(N)
+    let mut res: i64 = 0
+    let mut d: i64 = 1
+    while d < D {
+        res = res + ilen[d]
+        d = d + 1
+    }
+    let dpCt: ptr<i64> = calloc(m, 8)
+    let dpMt: ptr<i64> = calloc(m, 8)
+    let dpCl: ptr<i64> = calloc(m, 8)
+    let dpMl: ptr<i64> = calloc(m, 8)
+    dpCt[0] = 1
+    let mut pos: i64 = 0
+    while pos < D {
+        let lim: i64 = digit_at(N, pos, D)
+        let newCt: ptr<i64> = calloc(m, 8)
+        let newMt: ptr<i64> = calloc(m, 8)
+        let newCl: ptr<i64> = calloc(m, 8)
+        let newMl: ptr<i64> = calloc(m, 8)
+        let mind: i64 = 0
+        if pos == 0 { mind = 1 }
+        let mut st: i64 = 0
+        while st < m {
+            let c: i64 = dpCt[st]
+            if c != 0 {
+                let cm: i64 = dpMt[st]
+                let mut dig: i64 = mind
+                while dig <= lim {
+                    let tr: i64 = step(trans, st, dig)
+                    let ns: i64 = tr & 65535
+                    let inc: i64 = tr >> 16
+                    if dig == lim {
+                        newCt[ns] = newCt[ns] + c
+                        newMt[ns] = newMt[ns] + cm + c * inc
+                    } else {
+                        newCl[ns] = newCl[ns] + c
+                        newMl[ns] = newMl[ns] + cm + c * inc
+                    }
+                    dig = dig + 1
+                }
+            }
+            st = st + 1
+        }
+        st = 0
+        while st < m {
+            let c: i64 = dpCl[st]
+            if c != 0 {
+                let cm: i64 = dpMl[st]
+                let mut dig: i64 = mind
+                if pos != 0 { dig = 0 }
+                while dig <= 9 {
+                    let tr: i64 = step(trans, st, dig)
+                    let ns: i64 = tr & 65535
+                    let inc: i64 = tr >> 16
+                    newCl[ns] = newCl[ns] + c
+                    newMl[ns] = newMl[ns] + cm + c * inc
+                    dig = dig + 1
+                }
+            }
+            st = st + 1
+        }
+        free(dpCt); free(dpMt); free(dpCl); free(dpMl)
+        dpCt = newCt; dpMt = newMt; dpCl = newCl; dpMl = newMl
+        pos = pos + 1
+    }
+    let mut st: i64 = 0
+    while st < m {
+        res = res + dpMt[st] + dpMl[st]
+        st = st + 1
+    }
+    free(dpCt); free(dpMt); free(dpCl); free(dpMl)
+    return res
+}
+
+function fill_pat(n: i64, pat: ptr<i8>, m: i64) -> i32 {
+    let mut i: i64 = 0
+    while i < m {
+        pat[i] = digit_at(n, i, m) as i8
+        i = i + 1
+    }
+    return 0
+}
+
+function boundary_upto(N: i64, m: i64, pat: ptr<i8>) -> i64 {
+    if m <= 1 || N <= 1 { return 0 }
+    let mut total: i64 = 0
+    let max_d: i64 = num_digits(N - 1)
+    let mut k: i64 = 1
+    while k < m {
+        # p1 = pat[0..k), p2 = pat[k..m)
+        if pat[k] == 0 { k = k + 1; continue }
+        let mut suf_val: i64 = 0
+        let mut i: i64 = 0
+        while i < k { suf_val = suf_val * 10 + (pat[i] as i64); i = i + 1 }
+        let L: i64 = m - k
+        let mut pre_val: i64 = 0
+        i = 0
+        while i < L { pre_val = pre_val * 10 + (pat[k + i] as i64); i = i + 1 }
+        let mod: i64 = ipow10(k)
+        let mut d: i64 = 1
+        while d <= max_d {
+            let x_lo: i64 = 1
+            if d > 1 { x_lo = ipow10(d - 1) }
+            let mut x_hi: i64 = ipow10(d) - 2
+            if x_hi > N - 1 { x_hi = N - 1 }
+            if x_hi >= x_lo && d >= L {
+                let y_lo: i64 = pre_val * ipow10(d - L)
+                let y_hi: i64 = (pre_val + 1) * ipow10(d - L) - 1
+                let mut lo: i64 = x_lo
+                if y_lo - 1 > lo { lo = y_lo - 1 }
+                let mut hi: i64 = x_hi
+                if y_hi - 1 < hi { hi = y_hi - 1 }
+                if hi >= lo { total = total + count_arith(lo, hi, mod, suf_val) }
+            }
+            d = d + 1
+        }
+        # digit-increase transitions
+        let mut all9: i64 = 1
+        i = 0
+        while i < k {
+            if pat[i] != 9 { all9 = 0 }
+            i = i + 1
+        }
+        if all9 == 1 {
+            let mut ok: i64 = 1
+            if pat[k] != 1 { ok = 0 }
+            i = 1
+            while i < L {
+                if pat[k + i] != 0 { ok = 0 }
+                i = i + 1
+            }
+            if ok == 1 {
+                let dmax: i64 = num_digits(N) - 1
+                let mut dmin: i64 = 1
+                if L - 1 > dmin { dmin = L - 1 }
+                if dmax >= dmin { total = total + (dmax - dmin + 1) }
+            }
+        }
+        k = k + 1
+    }
+    return total
+}
+
+function brute_count(upto: i64, m: i64, trans: ptr<i32>) -> i64 {
+    let mut state: i64 = 0
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n <= upto {
+        let nd: i64 = num_digits(n)
+        let mut p: i64 = 0
+        while p < nd {
+            let dig: i64 = digit_at(n, p, nd)
+            let tr: i64 = step(trans, state, dig)
+            state = tr & 65535
+            total = total + (tr >> 16)
+            p = p + 1
+        }
+        n = n + 1
+    }
+    return total
+}
+
+function f_of_n(n: i64) -> i64 {
+    let m: i64 = num_digits(n)
+    let pat: ptr<i8> = calloc(m, 1)
+    fill_pat(n, pat, m)
+    let pi: ptr<i32> = calloc(m, 4)
+    let trans: ptr<i32> = calloc(m * 10, 4)
+    build_kmp(pat, m, pi, trans)
+    let A: i64 = 1
+    if m >= 2 { A = ipow10(m - 2) }
+    let ilen: ptr<i64> = calloc(21, 8)
+    let mut d: i64 = 1
+    while d <= 20 {
+        ilen[d] = internal_len_d(d, m, trans)
+        d = d + 1
+    }
+    let brute_A: i64 = brute_count(A, m, trans)
+    let internal_A: i64 = internal_upto(A, m, trans, ilen)
+    let boundary_A: i64 = boundary_upto(A, m, pat)
+
+    # binary search
+    let target: i64 = n
+    let mut lo: i64 = 1
+    let mut hi: i64 = 1
+    while true {
+        # count_starts_leq(hi) = matches in prefix hi+m-1
+        let P: i64 = hi + m - 1
+        let outN: ptr<i64> = calloc(1, 8)
+        let outRem: ptr<i64> = calloc(1, 8)
+        prefix_to_N(P, outN, outRem)
+        let Nf: i64 = outN[0]
+        let rem: i64 = outRem[0]
+        let mut cnt: i64 = 0
+        if Nf <= A { cnt = brute_count(Nf, m, trans) }
+        else { cnt = brute_A + (internal_upto(Nf, m, trans, ilen) - internal_A) + (boundary_upto(Nf, m, pat) - boundary_A) }
+        if rem > 0 {
+            # append rem digits of Nf+1 after matching through tail of length m-1
+            let mut state: i64 = 0
+            # feed last up to m-1 digits of C(Nf)
+            let need: i64 = m - 1
+            let digs: ptr<i8> = calloc(need + rem + 8, 1)
+            let mut dn: i64 = 0
+            let mut x: i64 = Nf
+            while dn < need && x >= 1 {
+                let nd: i64 = num_digits(x)
+                let tmp: ptr<i8> = calloc(nd, 1)
+                let mut p: i64 = 0
+                while p < nd { tmp[p] = digit_at(x, p, nd) as i8; p = p + 1 }
+                # prepend tmp to digs content: shift
+                let mut shift: i64 = dn - 1
+                while shift >= 0 {
+                    digs[shift + nd] = digs[shift]
+                    shift = shift - 1
+                }
+                p = 0
+                while p < nd { digs[p] = tmp[p]; p = p + 1 }
+                dn = dn + nd
+                free(tmp)
+                x = x - 1
+            }
+            if dn > need {
+                # keep last need
+                let mut p: i64 = 0
+                while p < need { digs[p] = digs[dn - need + p]; p = p + 1 }
+                dn = need
+            }
+            let nxt: i64 = Nf + 1
+            let nd2: i64 = num_digits(nxt)
+            let mut p: i64 = 0
+            while p < rem {
+                digs[dn + p] = digit_at(nxt, p, nd2) as i8
+                p = p + 1
+            }
+            let tlen: i64 = dn
+            let total_len: i64 = dn + rem
+            p = 0
+            while p < total_len {
+                let tr: i64 = step(trans, state, digs[p] as i64)
+                state = tr & 65535
+                if (tr >> 16) == 1 && p >= tlen { cnt = cnt + 1 }
+                p = p + 1
+            }
+            free(digs)
+        }
+        free(outN); free(outRem)
+        if cnt >= target { break }
+        hi = hi * 2
+        if hi <= 0 { hi = 9223372036854775807; break }
+    }
+    lo = 1
+    while lo < hi {
+        let mid: i64 = lo + (hi - lo) / 2
+        let P: i64 = mid + m - 1
+        let outN: ptr<i64> = calloc(1, 8)
+        let outRem: ptr<i64> = calloc(1, 8)
+        prefix_to_N(P, outN, outRem)
+        let Nf: i64 = outN[0]
+        let rem: i64 = outRem[0]
+        let mut cnt: i64 = 0
+        if Nf <= A { cnt = brute_count(Nf, m, trans) }
+        else { cnt = brute_A + (internal_upto(Nf, m, trans, ilen) - internal_A) + (boundary_upto(Nf, m, pat) - boundary_A) }
+        if rem > 0 {
+            let mut state: i64 = 0
+            let need: i64 = m - 1
+            let digs: ptr<i8> = calloc(need + rem + 8, 1)
+            let mut dn: i64 = 0
+            let mut x: i64 = Nf
+            while dn < need && x >= 1 {
+                let nd: i64 = num_digits(x)
+                let tmp: ptr<i8> = calloc(nd, 1)
+                let mut p: i64 = 0
+                while p < nd { tmp[p] = digit_at(x, p, nd) as i8; p = p + 1 }
+                let mut shift: i64 = dn - 1
+                while shift >= 0 { digs[shift + nd] = digs[shift]; shift = shift - 1 }
+                p = 0
+                while p < nd { digs[p] = tmp[p]; p = p + 1 }
+                dn = dn + nd
+                free(tmp)
+                x = x - 1
+            }
+            if dn > need {
+                let mut p: i64 = 0
+                while p < need { digs[p] = digs[dn - need + p]; p = p + 1 }
+                dn = need
+            }
+            let nxt: i64 = Nf + 1
+            let nd2: i64 = num_digits(nxt)
+            let mut p: i64 = 0
+            while p < rem { digs[dn + p] = digit_at(nxt, p, nd2) as i8; p = p + 1 }
+            let tlen: i64 = dn
+            let total_len: i64 = dn + rem
+            p = 0
+            while p < total_len {
+                let tr: i64 = step(trans, state, digs[p] as i64)
+                state = tr & 65535
+                if (tr >> 16) == 1 && p >= tlen { cnt = cnt + 1 }
+                p = p + 1
+            }
+            free(digs)
+        }
+        free(outN); free(outRem)
+        if cnt >= target { hi = mid } else { lo = mid + 1 }
+    }
+    free(pat); free(pi); free(trans); free(ilen)
+    return lo
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut k: i64 = 1
+    let mut pw: i64 = 3
+    while k <= 13 {
+        total = total + f_of_n(pw)
+        pw = pw * 3
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

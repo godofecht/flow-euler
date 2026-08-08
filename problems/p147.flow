@@ -1,0 +1,72 @@
+# Project Euler 147
+# Rectangles in cross-hatched grids; sum for 1≤w≤47, 1≤h≤43.
+
+function grid(width: i64, height: i64) -> i64 {
+    return (width * (width + 1) / 2) * (height * (height + 1) / 2)
+}
+
+function capped_descending_sum(cap: i64, start: i64, last_index: i64) -> i64 {
+    let mut first_desc: i64 = last_index
+    if start - cap < first_desc { first_desc = start - cap }
+    let mut total: i64 = 0
+    if first_desc >= 0 {
+        total = total + (first_desc + 1) * cap
+    }
+    if last_index > first_desc {
+        let count: i64 = last_index - first_desc
+        let lo: i64 = first_desc + 1
+        let hi: i64 = last_index
+        total = total + count * start - (lo + hi) * count / 2
+    }
+    return total
+}
+
+function diagonal(width0: i64, height0: i64) -> i64 {
+    let mut a: i64 = width0
+    let mut b: i64 = height0
+    if a < b {
+        let t: i64 = a
+        a = b
+        b = t
+    }
+    let mut count: i64 = 0
+    let mut i: i64 = 0
+    while i < a {
+        let mut j: i64 = 0
+        while j < b {
+            let mut parity: i64 = 0
+            while parity <= 1 {
+                let start_x: i64 = 2 * i + 1 + parity
+                let start_y: i64 = 2 * j + 2 - parity
+                let x_limit: i64 = 2 * a - start_x
+                let y_limit: i64 = 2 * b - start_y
+                let mut cap: i64 = x_limit
+                if y_limit < cap { cap = y_limit }
+                let mut last_width: i64 = start_y - 1
+                if x_limit - 1 < last_width { last_width = x_limit - 1 }
+                if cap > 0 && last_width >= 0 {
+                    count = count + capped_descending_sum(cap, x_limit, last_width)
+                }
+                parity = parity + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return count
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut w: i64 = 1
+    while w <= 47 {
+        let mut h: i64 = 1
+        while h <= 43 {
+            total = total + grid(w, h) + diagonal(w, h)
+            h = h + 1
+        }
+        w = w + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

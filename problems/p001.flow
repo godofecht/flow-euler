@@ -1,0 +1,22 @@
+# Project Euler 001
+# Sum of all multiples of 3 or 5 below 1000.
+#
+# Flow keeps the arithmetic-series idea readable: two stepped ranges,
+# then subtract the double-counted multiples of 15.
+
+function sum_multiples(limit: i64, step: i64) -> i64 {
+    let mut total: i64 = 0
+    for n in 0..limit step step {
+        total = total + n
+    }
+    return total
+}
+
+function solve(limit: i64) -> i64 {
+    return sum_multiples(limit, 3) + sum_multiples(limit, 5) - sum_multiples(limit, 15)
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(1000))
+    return 0
+}

@@ -1,0 +1,159 @@
+# Project Euler 215
+# Crack-free walls 32 x 10.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut ALL_ROWS: ptr<i64> = null
+let mut ROW_LEN: ptr<i32> = null
+let mut ROW_CRACKS: ptr<i32> = null
+let mut NRC: i32 = 0
+let mut WIDTH: i32 = 32
+
+function gen_rows(pos: i32, mask: i64, ncracks: i32) -> void {
+    if pos == WIDTH {
+        ALL_ROWS[NRC] = mask
+        ROW_LEN[NRC] = ncracks
+        # store cracks list packed? use separate array ROW_CRACKS[NRC*40 + k]
+        NRC = NRC + 1
+        return
+    }
+    if pos > WIDTH { return }
+    if pos + 2 <= WIDTH {
+        let mut nmask: i64 = mask
+        let mut nc: i32 = ncracks
+        if pos + 2 < WIDTH {
+            # crack at pos+2
+            ROW_CRACKS[NRC * 40 + nc] = pos + 2  # WRONG - NRC changes
+        }
+        # Better approach: build recursively with temp buffer
+    }
+}
+
+function main() -> i32 {
+    # Implement via bitsets of crack positions
+    let MAXR: i64 = 10000
+    ALL_ROWS = calloc(MAXR, 8)
+    let cracks: ptr<i32> = calloc(MAXR * 40, 4)
+    let ncr: ptr<i32> = calloc(MAXR, 4)
+    let tmp: ptr<i32> = calloc(40, 4)
+    if ALL_ROWS == null || cracks == null || ncr == null || tmp == null { return 1 }
+
+    # iterative stack simulation for generate
+    # Use recursive helper with globals
+    # Actually rewrite cleanly below in a second function via DFS stack arrays
+
+    let stack_pos: ptr<i32> = calloc(40, 4)
+    let stack_choice: ptr<i32> = calloc(40, 4)
+    let stack_n: ptr<i32> = calloc(40, 4)
+    # DFS
+    let mut sp: i32 = 0
+    stack_pos[0] = 0
+    stack_choice[0] = 0  # 0=try2, 1=try3, 2=done
+    stack_n[0] = 0
+    let mut tc: i32 = 0
+
+    while sp >= 0 {
+        let pos: i32 = stack_pos[sp]
+        let ch: i32 = stack_choice[sp]
+        let tn: i32 = stack_n[sp]
+        if pos == WIDTH {
+            # commit
+            let mut mask: i64 = 0
+            let mut k: i32 = 0
+            while k < tn {
+                let c: i32 = tmp[k]
+                cracks[NRC * 40 + k] = c
+                mask = mask | (1 << c)
+                k = k + 1
+            }
+            ncr[NRC] = tn
+            ALL_ROWS[NRC] = mask
+            NRC = NRC + 1
+            sp = sp - 1
+            continue
+        }
+        if ch == 0 {
+            stack_choice[sp] = 1
+            if pos + 2 <= WIDTH {
+                if pos + 2 < WIDTH {
+                    tmp[tn] = pos + 2
+                    stack_n[sp + 1] = tn + 1
+                } else {
+                    stack_n[sp + 1] = tn
+                }
+                stack_pos[sp + 1] = pos + 2
+                stack_choice[sp + 1] = 0
+                sp = sp + 1
+            }
+        } elif ch == 1 {
+            stack_choice[sp] = 2
+            if pos + 3 <= WIDTH {
+                if pos + 3 < WIDTH {
+                    tmp[tn] = pos + 3
+                    stack_n[sp + 1] = tn + 1
+                } else {
+                    stack_n[sp + 1] = tn
+                }
+                stack_pos[sp + 1] = pos + 3
+                stack_choice[sp + 1] = 0
+                sp = sp + 1
+            }
+        } else {
+            sp = sp - 1
+        }
+    }
+
+    # compatibility
+    let compat: ptr<i32> = calloc((NRC as i64) * (NRC as i64), 4)
+    let ncompat: ptr<i32> = calloc(NRC as i64, 4)
+    let mut i: i32 = 0
+    while i < NRC {
+        let mut j: i32 = i + 1
+        while j < NRC {
+            if (ALL_ROWS[i] & ALL_ROWS[j]) == 0 {
+                compat[(i as i64) * (NRC as i64) + (ncompat[i] as i64)] = j
+                ncompat[i] = ncompat[i] + 1
+                compat[(j as i64) * (NRC as i64) + (ncompat[j] as i64)] = i
+                ncompat[j] = ncompat[j] + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let H: i32 = 10
+    let dp: ptr<i64> = calloc((NRC as i64) * ((H + 1) as i64), 8)
+    # dp[row_id][rows_left]
+    i = 0
+    while i < NRC {
+        dp[(i as i64) * ((H + 1) as i64) + 1] = 1
+        i = i + 1
+    }
+    let mut left: i32 = 2
+    while left <= H {
+        i = 0
+        while i < NRC {
+            let mut total: i64 = 0
+            let mut k: i32 = 0
+            while k < ncompat[i] {
+                let j: i32 = compat[(i as i64) * (NRC as i64) + (k as i64)]
+                total = total + dp[(j as i64) * ((H + 1) as i64) + ((left - 1) as i64)]
+                k = k + 1
+            }
+            dp[(i as i64) * ((H + 1) as i64) + (left as i64)] = total
+            i = i + 1
+        }
+        left = left + 1
+    }
+    let mut result: i64 = 0
+    i = 0
+    while i < NRC {
+        result = result + dp[(i as i64) * ((H + 1) as i64) + (H as i64)]
+        i = i + 1
+    }
+    printf("%lld\n", result)
+    return 0
+}

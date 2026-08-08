@@ -1,0 +1,84 @@
+# Project Euler 249
+# Prime subset sums of primes < 5000; last 16 digits.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 5000
+    let MOD: i64 = 10000000000000000
+    let sieve: ptr<i8> = calloc(LIMIT, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i < LIMIT {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    i = 2
+    while i * i < LIMIT {
+        if sieve[i] == 1 {
+            let mut j: i64 = i * i
+            while j < LIMIT {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut max_sum: i64 = 0
+    i = 2
+    while i < LIMIT {
+        if sieve[i] == 1 { max_sum = max_sum + i }
+        i = i + 1
+    }
+    let count: ptr<i64> = calloc(max_sum + 1, 8)
+    let big_sieve: ptr<i8> = calloc(max_sum + 1, 1)
+    if count == null || big_sieve == null { return 1 }
+    count[0] = 1
+    let mut largest: i64 = 0
+    i = 2
+    while i < LIMIT {
+        if sieve[i] == 1 {
+            largest = largest + i
+            let mut j: i64 = largest
+            while j >= i {
+                count[j] = (count[j] + count[j - i]) % MOD
+                j = j - 1
+            }
+        }
+        i = i + 1
+    }
+    i = 0
+    while i <= max_sum {
+        big_sieve[i] = 1
+        i = i + 1
+    }
+    big_sieve[0] = 0
+    big_sieve[1] = 0
+    i = 2
+    while i * i <= max_sum {
+        if big_sieve[i] == 1 {
+            let mut j: i64 = i * i
+            while j <= max_sum {
+                big_sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut result: i64 = 0
+    i = 2
+    while i <= max_sum {
+        if big_sieve[i] == 1 {
+            result = (result + count[i]) % MOD
+        }
+        i = i + 1
+    }
+    printf("%lld\n", result)
+    free(sieve); free(count); free(big_sieve)
+    return 0
+}

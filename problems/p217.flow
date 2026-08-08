@@ -1,0 +1,138 @@
+# Project Euler 217
+# Sum of balanced numbers < 10^47, mod 3^15.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 14348907
+
+function main() -> i32 {
+    let n: i32 = 47
+    let maxL: i32 = n / 2
+    let pow10: ptr<i64> = calloc((n + 2) as i64, 8)
+    if pow10 == null { return 1 }
+    pow10[0] = 1
+    let mut i: i32 = 1
+    while i <= n + 1 {
+        pow10[i] = (pow10[i - 1] * 10) % MOD
+        i = i + 1
+    }
+
+    let max_sum_all: i64 = (9 * maxL + 1) as i64
+    let un_c: ptr<i64> = calloc(((maxL + 1) as i64) * max_sum_all, 8)
+    let un_s: ptr<i64> = calloc(((maxL + 1) as i64) * max_sum_all, 8)
+    let un_len: ptr<i32> = calloc((maxL + 1) as i64, 4)
+    if un_c == null || un_s == null { return 1 }
+    un_c[0] = 1
+    un_s[0] = 0
+    un_len[0] = 1
+
+    let mut L: i32 = 1
+    while L <= maxL {
+        let max_sum: i32 = 9 * L
+        un_len[L] = max_sum + 1
+        let prev_len: i32 = un_len[L - 1]
+        let base: i64 = (L as i64) * max_sum_all
+        let pbase: i64 = ((L - 1) as i64) * max_sum_all
+        let mut sp: i32 = 0
+        while sp < prev_len {
+            let cp: i64 = un_c[pbase + (sp as i64)]
+            let spv: i64 = un_s[pbase + (sp as i64)]
+            if cp != 0 || spv != 0 {
+                let mut d: i32 = 0
+                while d <= 9 {
+                    let idx: i64 = base + ((sp + d) as i64)
+                    un_c[idx] = (un_c[idx] + cp) % MOD
+                    un_s[idx] = (un_s[idx] + (spv * 10 + cp * (d as i64)) % MOD) % MOD
+                    d = d + 1
+                }
+            }
+            sp = sp + 1
+        }
+        L = L + 1
+    }
+
+    let left_c: ptr<i64> = calloc(((maxL + 1) as i64) * max_sum_all, 8)
+    let left_s: ptr<i64> = calloc(((maxL + 1) as i64) * max_sum_all, 8)
+    let left_len: ptr<i32> = calloc((maxL + 1) as i64, 4)
+    left_c[0] = 1
+    left_s[0] = 0
+    left_len[0] = 1
+    L = 1
+    while L <= maxL {
+        let max_sum: i32 = 9 * L
+        left_len[L] = max_sum + 1
+        let base: i64 = (L as i64) * max_sum_all
+        let tbase: i64 = ((L - 1) as i64) * max_sum_all
+        let tlen: i32 = un_len[L - 1]
+        let mut fd: i32 = 1
+        while fd <= 9 {
+            let mut ts: i32 = 0
+            while ts < tlen {
+                let cnt: i64 = un_c[tbase + (ts as i64)]
+                let tsv: i64 = un_s[tbase + (ts as i64)]
+                if cnt != 0 || tsv != 0 {
+                    let ssum: i32 = ts + fd
+                    let idx: i64 = base + (ssum as i64)
+                    left_c[idx] = (left_c[idx] + cnt) % MOD
+                    let add: i64 = ((fd as i64) * pow10[L - 1] % MOD) * cnt % MOD
+                    left_s[idx] = (left_s[idx] + add + tsv) % MOD
+                }
+                ts = ts + 1
+            }
+            fd = fd + 1
+        }
+        L = L + 1
+    }
+
+    let mut total: i64 = 0
+    if n >= 1 {
+        total = 45 % MOD
+    }
+    let mut k: i32 = 2
+    while k <= n {
+        L = k / 2
+        let even: bool = (k % 2 == 0)
+        let max_sum: i32 = 9 * L
+        let base: i64 = (L as i64) * max_sum_all
+        let mut sum_k: i64 = 0
+        if even {
+            let mult_left: i64 = pow10[L]
+            let mut s: i32 = 0
+            while s <= max_sum {
+                let cl: i64 = left_c[base + (s as i64)]
+                let cr: i64 = un_c[base + (s as i64)]
+                let ls: i64 = left_s[base + (s as i64)]
+                let rs: i64 = un_s[base + (s as i64)]
+                if cl != 0 || cr != 0 {
+                    sum_k = (sum_k + ((ls * mult_left) % MOD) * cr % MOD) % MOD
+                    sum_k = (sum_k + cl * rs % MOD) % MOD
+                }
+                s = s + 1
+            }
+        } else {
+            let mult_left: i64 = pow10[L + 1]
+            let mult_mid: i64 = pow10[L]
+            let mut s: i32 = 0
+            while s <= max_sum {
+                let cl: i64 = left_c[base + (s as i64)]
+                let cr: i64 = un_c[base + (s as i64)]
+                let ls: i64 = left_s[base + (s as i64)]
+                let rs: i64 = un_s[base + (s as i64)]
+                if cl != 0 || cr != 0 {
+                    sum_k = (sum_k + ((ls * mult_left) % MOD) * cr % MOD * 10) % MOD
+                    sum_k = (sum_k + ((45 * mult_mid) % MOD) * cl % MOD * cr % MOD) % MOD
+                    sum_k = (sum_k + cl * rs % MOD * 10) % MOD
+                }
+                s = s + 1
+            }
+        }
+        total = (total + sum_k) % MOD
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    free(pow10); free(un_c); free(un_s); free(un_len); free(left_c); free(left_s); free(left_len)
+    return 0
+}

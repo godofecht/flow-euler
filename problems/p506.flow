@@ -1,0 +1,287 @@
+# Project Euler 506
+# Clock Sequence — S(10^14) mod 123454321.
+
+const MOD: i64 = 123454321
+const L: i64 = 6
+const N: i64 = 100000000000000
+
+function modpow10(e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = 10
+    let mut exp: i64 = e
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            r = ((r as i128) * (b as i128) % (MOD as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (MOD as i128)) as i64
+        exp = exp >> 1
+    }
+    return r
+}
+
+function pow_sum(base: i64, n: i64, p_out: ptr<i64>, s_out: ptr<i64>) -> void {
+    if n == 0 {
+        p_out[0] = 1 % MOD
+        s_out[0] = 0
+        return
+    }
+    if n == 1 {
+        p_out[0] = base % MOD
+        s_out[0] = 1
+        return
+    }
+    if (n & 1) == 0 {
+        pow_sum(base, n / 2, p_out, s_out)
+        let p: i64 = p_out[0]
+        let s: i64 = s_out[0]
+        let p2: i64 = ((p as i128) * (p as i128) % (MOD as i128)) as i64
+        let s2: i64 = ((s as i128) * ((1 + p) % MOD) % (MOD as i128)) as i64
+        p_out[0] = p2
+        s_out[0] = s2
+        return
+    }
+    pow_sum(base, n - 1, p_out, s_out)
+    let p3: i64 = p_out[0]
+    let s3: i64 = s_out[0]
+    p_out[0] = ((p3 as i128) * (base as i128) % (MOD as i128)) as i64
+    s_out[0] = (s3 + p3) % MOD
+}
+
+function pow_sum_idx(base: i64, n: i64, p_out: ptr<i64>, s_out: ptr<i64>, t_out: ptr<i64>) -> void {
+    if n == 0 {
+        p_out[0] = 1 % MOD
+        s_out[0] = 0
+        t_out[0] = 0
+        return
+    }
+    if n == 1 {
+        p_out[0] = base % MOD
+        s_out[0] = 1
+        t_out[0] = 0
+        return
+    }
+    if (n & 1) == 0 {
+        let m: i64 = n / 2
+        pow_sum_idx(base, m, p_out, s_out, t_out)
+        let p: i64 = p_out[0]
+        let s: i64 = s_out[0]
+        let t: i64 = t_out[0]
+        let p2: i64 = ((p as i128) * (p as i128) % (MOD as i128)) as i64
+        let s2: i64 = ((s as i128) * ((1 + p) % MOD) % (MOD as i128)) as i64
+        let t2: i64 = ((t as i128) * ((1 + p) % MOD) % (MOD as i128)
+            + ((p as i128) * ((m % MOD) as i128) % (MOD as i128) * (s as i128) % (MOD as i128)) % (MOD as i128)) as i64
+        p_out[0] = p2
+        s_out[0] = s2
+        t_out[0] = t2 % MOD
+        return
+    }
+    pow_sum_idx(base, n - 1, p_out, s_out, t_out)
+    let p3: i64 = p_out[0]
+    let s3: i64 = s_out[0]
+    let t3: i64 = t_out[0]
+    p_out[0] = ((p3 as i128) * (base as i128) % (MOD as i128)) as i64
+    s_out[0] = (s3 + p3) % MOD
+    t_out[0] = (t3 + ((n - 1) % MOD) * p3) % MOD
+}
+
+function digit_at(pos: i64) -> i64 {
+    let r: i64 = pos % L
+    if r == 0 { return 1 }
+    if r == 1 { return 2 }
+    if r == 2 { return 3 }
+    if r == 3 { return 4 }
+    if r == 4 { return 3 }
+    return 2
+}
+
+function brute_prefix(n_max: i64, pos_out: ptr<i64>) -> i64 {
+    let mut pos: i64 = 0
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n <= n_max {
+        let mut s: i64 = 0
+        let mut val: i64 = 0
+        while s < n {
+            let d: i64 = digit_at(pos)
+            pos = (pos + 1) % L
+            s = s + d
+            val = (val * 10 + d) % MOD
+        }
+        total = (total + val) % MOD
+        n = n + 1
+    }
+    pos_out[0] = pos
+    return total
+}
+
+function main() -> i32 {
+    let n0: i64 = 15
+    let small: i64 = N
+    if small > n0 - 1 { small = n0 - 1 }
+    let pos_buf: ptr<i64> = calloc(1, 8)
+    if pos_buf == null { return 1 }
+    let mut ans: i64 = brute_prefix(small, pos_buf)
+    if N <= n0 - 1 {
+        printf("%lld\n", ans)
+        free(pos_buf)
+        return 0
+    }
+    let pos: i64 = pos_buf[0]
+
+    let block: ptr<i64> = calloc(L, 8)
+    let prefix_sum: ptr<i64> = calloc(L * 7, 8)
+    let prefix_int: ptr<i64> = calloc(L * 7, 8)
+    let best_i: ptr<i64> = calloc(L * 15, 8)
+    let best_p: ptr<i64> = calloc(L * 15, 8)
+    if block == null || prefix_sum == null || prefix_int == null
+        || best_i == null || best_p == null { return 1 }
+
+    let mut ppos: i64 = 0
+    while ppos < L {
+        let mut b: i64 = 0
+        let mut s: i64 = 0
+        let mut v: i64 = 0
+        prefix_sum[ppos * 7 + 0] = 0
+        prefix_int[ppos * 7 + 0] = 0
+        let mut i: i64 = 1
+        while i <= L {
+            let d: i64 = digit_at(ppos + i - 1)
+            b = b * 10 + d
+            s = s + d
+            v = (v * 10 + d) % MOD
+            prefix_sum[ppos * 7 + i] = s
+            prefix_int[ppos * 7 + i] = v
+            i = i + 1
+        }
+        block[ppos] = b
+        ppos = ppos + 1
+    }
+
+    ppos = 0
+    while ppos < L {
+        let mut r: i64 = 0
+        while r < 15 {
+            let mut best_len: i64 = -1
+            let mut best_key: i64 = 999999999
+            let mut best_ii: i64 = 0
+            let mut best_pp: i64 = 0
+            let mut ii: i64 = 1
+            while ii <= L {
+                if prefix_sum[ppos * 7 + ii] % 15 == r {
+                    let pp: i64 = prefix_sum[ppos * 7 + ii]
+                    let key: i64 = 5 * ii - 2 * pp
+                    if best_len < 0 || key < best_key || (key == best_key && ii < best_ii) {
+                        best_key = key
+                        best_ii = ii
+                        best_pp = pp
+                        best_len = 1
+                    }
+                }
+                ii = ii + 1
+            }
+            best_i[ppos * 15 + r] = best_ii
+            best_p[ppos * 15 + r] = best_pp
+            r = r + 1
+        }
+        ppos = ppos + 1
+    }
+
+    let seq_n: ptr<i64> = calloc(15, 8)
+    let seq_pos: ptr<i64> = calloc(15, 8)
+    let seq_i: ptr<i64> = calloc(15, 8)
+    let seq_p: ptr<i64> = calloc(15, 8)
+    let seq_b: ptr<i64> = calloc(15, 8)
+    let seq_pre: ptr<i64> = calloc(15, 8)
+    if seq_n == null || seq_pos == null || seq_i == null || seq_p == null
+        || seq_b == null || seq_pre == null { return 1 }
+
+    let mut cur_pos: i64 = pos
+    let mut j: i64 = 0
+    while j < 15 {
+        let n: i64 = n0 + j
+        let rr: i64 = n % 15
+        let ii: i64 = best_i[cur_pos * 15 + rr]
+        let pp: i64 = best_p[cur_pos * 15 + rr]
+        seq_n[j] = n
+        seq_pos[j] = cur_pos
+        seq_i[j] = ii
+        seq_p[j] = pp
+        seq_b[j] = block[cur_pos]
+        seq_pre[j] = prefix_int[cur_pos * 7 + ii]
+        cur_pos = (cur_pos + ii) % L
+        j = j + 1
+    }
+
+    let total_terms: i64 = N - (n0 - 1)
+    let K: i64 = total_terms / 15
+    let rem: i64 = total_terms % 15
+
+    let pow10: ptr<i64> = calloc(7, 8)
+    if pow10 == null { return 1 }
+    pow10[0] = 1
+    let mut pi: i64 = 1
+    while pi <= 6 {
+        pow10[pi] = modpow10(pi)
+        pi = pi + 1
+    }
+
+    let a: i64 = modpow10(6)
+    let tmp: ptr<i64> = calloc(3, 8)
+    if tmp == null { return 1 }
+    let mut H: i64 = 0
+    if K > 1 {
+        pow_sum_idx(a, K - 1, tmp, tmp + 1, tmp + 2)
+        let nn: i64 = K - 1
+        H = (((nn % MOD) * tmp[1] % MOD - tmp[2]) % MOD + MOD) % MOD
+    }
+    pow_sum_idx(a, K, tmp, tmp + 1, tmp + 2)
+    let sum_aK: i64 = tmp[1]
+    let K_mod: i64 = K % MOD
+
+    if K > 0 {
+        j = 0
+        while j < 15 {
+            let nn: i64 = seq_n[j]
+            let ii: i64 = seq_i[j]
+            let pp: i64 = seq_p[j]
+            let bb: i64 = seq_b[j]
+            let pre: i64 = seq_pre[j]
+            let t0: i64 = (nn - pp) / 15
+            pow_sum(a, t0, tmp, tmp + 1)
+            let at0: i64 = tmp[0]
+            let G0: i64 = tmp[1]
+            let sumG: i64 = (K_mod * G0 % MOD + ((at0 as i128) * (H as i128) % (MOD as i128)) as i64) % MOD
+            let mut term_sum: i64 = (((bb * pow10[ii]) % MOD) * sumG) % MOD
+            term_sum = (term_sum + pre * K_mod) % MOD
+            ans = (ans + term_sum) % MOD
+            j = j + 1
+        }
+    }
+
+    if rem > 0 {
+        j = 0
+        while j < rem {
+            let nn2: i64 = seq_n[j]
+            let ii2: i64 = seq_i[j]
+            let pp2: i64 = seq_p[j]
+            let bb2: i64 = seq_b[j]
+            let pre2: i64 = seq_pre[j]
+            let t02: i64 = (nn2 - pp2) / 15
+            pow_sum(a, t02, tmp, tmp + 1)
+            let at02: i64 = tmp[0]
+            let G02: i64 = tmp[1]
+            let G: i64 = (G02 + ((at02 as i128) * (sum_aK as i128) % (MOD as i128)) as i64) % MOD
+            let mut v: i64 = (((bb2 * pow10[ii2]) % MOD) * G) % MOD
+            v = (v + pre2) % MOD
+            ans = (ans + v) % MOD
+            j = j + 1
+        }
+    }
+
+    printf("%lld\n", ans)
+    free(pos_buf); free(block); free(prefix_sum); free(prefix_int)
+    free(best_i); free(best_p)
+    free(seq_n); free(seq_pos); free(seq_i); free(seq_p); free(seq_b); free(seq_pre)
+    free(pow10); free(tmp)
+    return 0
+}

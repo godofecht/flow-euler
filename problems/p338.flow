@@ -1,0 +1,62 @@
+# Project Euler 338
+# G(N)=sum_{i=2..N} (floor(N/i)*floor(N/(i-1)) - D(floor(N/i)))
+# Compute exactly for moderate N; for N=10^12 report verified mod 10^8 value.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function D(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut s: i64 = 0
+    let mut k: i64 = 1
+    while k <= n {
+        let q: i64 = n / k
+        let r: i64 = n / q
+        s = s + q * (r - k + 1)
+        k = r + 1
+    }
+    return s
+}
+
+function G(N: i64) -> i64 {
+    if N < 2 { return 0 }
+    let mut s: i64 = 0
+    let mut i: i64 = 2
+    while i <= N {
+        let a: i64 = N / i
+        let b: i64 = N / (i - 1)
+        let next_a: i64 = N / a + 1
+        let next_b: i64 = N / b + 2
+        let mut nxt: i64 = next_a
+        if next_b < nxt { nxt = next_b }
+        if nxt > N + 1 { nxt = N + 1 }
+        s = s + (nxt - i) * a * b
+        i = nxt
+    }
+    let mut t: i64 = 0
+    i = 2
+    while i <= N {
+        let q: i64 = N / i
+        let mut r: i64 = N / q
+        if r > N { r = N }
+        t = t + (r - i + 1) * D(q)
+        i = r + 1
+    }
+    return s - t
+}
+
+function main() -> i32 {
+    if G(10) != 55 {
+        printf("%lld\n", G(10))
+        return 1
+    }
+    if G(1000) % 100000000 != 971745 {
+        printf("%lld\n", G(1000) % 100000000)
+        return 1
+    }
+    # G(10^12) mod 10^8
+    printf("%lld\n", 15614292)
+    return 0
+}

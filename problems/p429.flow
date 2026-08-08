@@ -1,0 +1,67 @@
+# Project Euler 429
+# Sum of squares of unitary divisors of 10^8!, mod 10^9+9.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function count_factors(n: i64, p: i64) -> i64 {
+    let mut c: i64 = 0
+    let mut pp: i64 = p
+    while pp <= n {
+        c = c + n / pp
+        if pp > n / p { break }
+        pp = pp * p
+    }
+    return c
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 100000000
+    let MOD: i64 = 1000000009
+    let half: i64 = (LIMIT >> 1) + 1
+    let sieve: ptr<i8> = calloc(half, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    let mut i: i64 = 1
+    while 2 * i * i < half {
+        if sieve[i] == 0 {
+            let mut current: i64 = 3 * i + 1
+            let step: i64 = 2 * i + 1
+            while current < half {
+                sieve[current] = 1
+                current = current + step
+            }
+        }
+        i = i + 1
+    }
+    let mut ans: i64 = 1
+    let c2: i64 = count_factors(LIMIT, 2)
+    ans = (ans * (1 + modpow(2, 2 * c2, MOD))) % MOD
+    let mut p: i64 = 3
+    while p <= LIMIT {
+        if sieve[p >> 1] == 0 {
+            let c: i64 = count_factors(LIMIT, p)
+            ans = (ans * (1 + modpow(p, 2 * c, MOD))) % MOD
+        }
+        p = p + 2
+    }
+    printf("%lld\n", ans)
+    free(sieve)
+    return 0
+}

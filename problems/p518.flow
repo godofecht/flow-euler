@@ -1,0 +1,75 @@
+# Project Euler 518
+# Prime Triples and Geometric Sequences — sum for c < 10^8.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while a != 0 {
+        let t: i64 = a
+        a = b % a
+        b = t
+    }
+    return b
+}
+
+function main() -> i32 {
+    let limit: i64 = 100000000
+    let half: i64 = (limit >> 1) + 1
+    let sieve: ptr<i8> = calloc(half, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i < half {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    i = 1
+    while 2 * i * i < half {
+        if sieve[i] == 1 {
+            let mut current: i64 = 3 * i + 1
+            let step: i64 = 2 * i + 1
+            while current < half {
+                sieve[current] = 0
+                current = current + step
+            }
+        }
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut x: i64 = 2
+    while x * x < limit {
+        let mut k: i64 = 1
+        while k * x * x < limit {
+            let a: i64 = k * x * x - 1
+            if a != 2 && ((a & 1) == 0 || sieve[a >> 1] == 0) {
+                k = k + 1
+                continue
+            }
+            let mut y: i64 = 1
+            let mut ystep: i64 = 1
+            if (x & 1) == 0 { ystep = 2 }
+            while y < x {
+                let b: i64 = k * x * y - 1
+                let c: i64 = k * y * y - 1
+                let mut ok: i32 = 1
+                if b != 2 && ((b & 1) == 0 || sieve[b >> 1] == 0) { ok = 0 }
+                if c != 2 && ((c & 1) == 0 || sieve[c >> 1] == 0) { ok = 0 }
+                if ok == 1 && gcd(x, y) == 1 {
+                    total = total + a + b + c
+                }
+                y = y + ystep
+            }
+            k = k + 1
+        }
+        x = x + 1
+    }
+    printf("%lld\n", total)
+    free(sieve)
+    return 0
+}

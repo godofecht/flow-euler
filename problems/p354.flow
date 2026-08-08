@@ -1,0 +1,314 @@
+# Project Euler 354
+# Count L <= 5e11 with B(L)=450 on hexagonal lattice (R(n)=75).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt64(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function isqrt128(n: i128) -> i64 {
+    if n <= 0 { return 0 }
+    if n < 9223372036854775807 {
+        return isqrt64(n as i64)
+    }
+    let mut x: i128 = n
+    let mut y: i128 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x as i64
+}
+
+function ipow128(base: i64, exp: i64) -> i128 {
+    let mut r: i128 = 1
+    let mut b: i128 = base as i128
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = r * b }
+        b = b * b
+        e = e / 2
+    }
+    return r
+}
+
+function nth_root128(n: i128, k: i64) -> i64 {
+    if n < 2 { return n as i64 }
+    if k == 1 {
+        if n > 9223372036854775807 { return 9223372036854775807 }
+        return n as i64
+    }
+    let mut lo: i64 = 1
+    let mut hi: i64 = 2
+    # upper bound
+    while ipow128(hi, k) <= n {
+        if hi > 1000000000 { break }
+        hi = hi * 2
+    }
+    if hi > 100000000 { hi = 100000000 }
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if ipow128(mid, k) <= n {
+            lo = mid
+        } else {
+            hi = mid
+        }
+    }
+    return lo
+}
+
+function lower_bound(arr: ptr<i32>, n: i64, key: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = n
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if (arr[mid] as i64) < key { lo = mid + 1 }
+        else { hi = mid }
+    }
+    return lo
+}
+
+function upper_bound(arr: ptr<i32>, n: i64, key: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = n
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if (arr[mid] as i64) <= key { lo = mid + 1 }
+        else { hi = mid }
+    }
+    return lo
+}
+
+function main() -> i32 {
+    let Lmax: i128 = 500000000000
+    let N: i128 = (Lmax * Lmax) / 3
+    let base_7_13: i128 = ipow128(7, 4) * ipow128(13, 4)
+    let max_prime: i64 = isqrt128(N / base_7_13)
+
+    let sieve: ptr<i8> = calloc(max_prime + 1, 1)
+    let primes: ptr<i32> = calloc(max_prime / 5 + 10, 4)
+    let mut pc: i64 = 0
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut i: i64 = 2
+    while i <= max_prime {
+        if sieve[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            let mut j: i64 = i * i
+            while j <= max_prime {
+                sieve[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let primes1: ptr<i32> = calloc(pc, 4)
+    let mut p1c: i64 = 0
+    i = 0
+    while i < pc {
+        let p: i64 = primes[i] as i64
+        if p % 3 == 1 {
+            primes1[p1c] = p as i32
+            p1c = p1c + 1
+        }
+        i = i + 1
+    }
+
+    let A_min: i128 = base_7_13 * ipow128(19, 2)
+    let Bmax: i64 = isqrt128(N / A_min)
+    let good: ptr<i8> = calloc(Bmax + 1, 1)
+    i = 1
+    while i <= Bmax {
+        good[i] = 1
+        i = i + 1
+    }
+    i = 0
+    while i < pc {
+        let p: i64 = primes[i] as i64
+        if p > Bmax { break }
+        if p == 3 || p % 3 == 1 {
+            let mut j: i64 = p
+            while j <= Bmax {
+                good[j] = 0
+                j = j + p
+            }
+        }
+        i = i + 1
+    }
+    let prefix_B: ptr<i32> = calloc(Bmax + 1, 4)
+    let mut s: i64 = 0
+    i = 1
+    while i <= Bmax {
+        if good[i] != 0 { s = s + 1 }
+        prefix_B[i] = s as i32
+        i = i + 1
+    }
+
+    let GCAP: i64 = 1 << 22
+    let gkeys: ptr<i128> = calloc(GCAP, 16)
+    let gvals: ptr<i64> = calloc(GCAP, 8)
+    let gused: ptr<i8> = calloc(GCAP, 1)
+
+    let mut ans: i64 = 0
+
+    # G helper via repeated open addressing
+    # Pattern (24,2)
+    let p24: i128 = ipow128(7, 24)
+    let qmax: i64 = isqrt128(N / p24)
+    let q_end: i64 = upper_bound(primes1, p1c, qmax)
+    let mut qi: i64 = 0
+    while qi < q_end {
+        let q: i64 = primes1[qi] as i64
+        if q != 7 {
+            let A: i128 = p24 * (q as i128) * (q as i128)
+            let lim: i128 = N / A
+            let mut h: i64 = (lim % (GCAP as i128)) as i64
+            if h < 0 { h = 0 - h }
+            let mut slot: i64 = h
+            while gused[slot] != 0 && gkeys[slot] != lim {
+                slot = (slot + 1) & (GCAP - 1)
+            }
+            let mut g: i64 = 0
+            if gused[slot] != 0 {
+                g = gvals[slot]
+            } else {
+                let mut mm: i128 = lim
+                while mm > 0 {
+                    let r: i64 = isqrt128(mm)
+                    let mut x: i64 = r
+                    if x > Bmax { x = Bmax }
+                    if x > 0 { g = g + (prefix_B[x] as i64) }
+                    mm = mm / 3
+                }
+                gused[slot] = 1
+                gkeys[slot] = lim
+                gvals[slot] = g
+            }
+            ans = ans + g
+        }
+        qi = qi + 1
+    }
+
+    # Pattern (14,4)
+    let mut pi: i64 = 0
+    while pi < p1c {
+        let p: i64 = primes1[pi] as i64
+        let p14: i128 = ipow128(p, 14)
+        if p14 > N { break }
+        let max_q: i64 = nth_root128(N / p14, 4)
+        let qe: i64 = upper_bound(primes1, p1c, max_q)
+        qi = 0
+        while qi < qe {
+            let q: i64 = primes1[qi] as i64
+            if q != p {
+                let q4: i128 = ipow128(q, 4)
+                let lim: i128 = N / (p14 * q4)
+                let mut h: i64 = (lim % (GCAP as i128)) as i64
+                if h < 0 { h = 0 - h }
+                let mut slot: i64 = h
+                while gused[slot] != 0 && gkeys[slot] != lim {
+                    slot = (slot + 1) & (GCAP - 1)
+                }
+                let mut g: i64 = 0
+                if gused[slot] != 0 {
+                    g = gvals[slot]
+                } else {
+                    let mut mm: i128 = lim
+                    while mm > 0 {
+                        let r: i64 = isqrt128(mm)
+                        let mut x: i64 = r
+                        if x > Bmax { x = Bmax }
+                        if x > 0 { g = g + (prefix_B[x] as i64) }
+                        mm = mm / 3
+                    }
+                    gused[slot] = 1
+                    gkeys[slot] = lim
+                    gvals[slot] = g
+                }
+                ans = ans + g
+            }
+            qi = qi + 1
+        }
+        pi = pi + 1
+    }
+
+    # Pattern (4,4,2)
+    let p_max: i64 = nth_root128(N / 49, 8)
+    let p_end: i64 = upper_bound(primes1, p1c, p_max)
+    pi = 0
+    while pi < p_end {
+        let p: i64 = primes1[pi] as i64
+        let p4: i128 = ipow128(p, 4)
+        let rem: i128 = N / (p4 * 49)
+        if rem == 0 { break }
+        let qmax2: i64 = nth_root128(rem, 4)
+        let q_start: i64 = upper_bound(primes1, p1c, p)
+        let qe2: i64 = upper_bound(primes1, p1c, qmax2)
+        qi = q_start
+        while qi < qe2 {
+            let q: i64 = primes1[qi] as i64
+            let base: i128 = p4 * ipow128(q, 4)
+            let C: i128 = N / base
+            if C > 0 {
+                let Rmax: i64 = isqrt128(C)
+                if Rmax >= 7 {
+                    let mut r_low: i64 = 7
+                    while r_low <= Rmax {
+                        let tt: i128 = C / ((r_low as i128) * (r_low as i128))
+                        if tt == 0 { break }
+                        let mut r_high: i64 = isqrt128(C / tt)
+                        if r_high > Rmax { r_high = Rmax }
+                        let mut cnt: i64 = upper_bound(primes1, p1c, r_high) - lower_bound(primes1, p1c, r_low)
+                        if r_low <= p && p <= r_high { cnt = cnt - 1 }
+                        if p != q && r_low <= q && q <= r_high { cnt = cnt - 1 }
+                        if cnt > 0 {
+                            let lim: i128 = tt
+                            let mut h: i64 = (lim % (GCAP as i128)) as i64
+                            if h < 0 { h = 0 - h }
+                            let mut slot: i64 = h
+                            while gused[slot] != 0 && gkeys[slot] != lim {
+                                slot = (slot + 1) & (GCAP - 1)
+                            }
+                            let mut g: i64 = 0
+                            if gused[slot] != 0 {
+                                g = gvals[slot]
+                            } else {
+                                let mut mm: i128 = lim
+                                while mm > 0 {
+                                    let r: i64 = isqrt128(mm)
+                                    let mut x: i64 = r
+                                    if x > Bmax { x = Bmax }
+                                    if x > 0 { g = g + (prefix_B[x] as i64) }
+                                    mm = mm / 3
+                                }
+                                gused[slot] = 1
+                                gkeys[slot] = lim
+                                gvals[slot] = g
+                            }
+                            ans = ans + cnt * g
+                        }
+                        r_low = r_high + 1
+                    }
+                }
+            }
+            qi = qi + 1
+        }
+        pi = pi + 1
+    }
+
+    printf("%lld\n", ans)
+    return 0
+}

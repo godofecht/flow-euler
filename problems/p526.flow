@@ -1,0 +1,349 @@
+# Project Euler 526
+# Largest Prime Factors of Consecutive Numbers — h(10^16).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N_LIMIT: i64 = 10000000000000000
+
+function mulmod(a: i64, b: i64, mod: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (mod as i128)) as i64
+}
+
+function powmod(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 { r = mulmod(r, b, mod) }
+        b = mulmod(b, b, mod)
+        e = e / 2
+    }
+    return r
+}
+
+function inv_mod(a0: i64, m: i64) -> i64 {
+    let mut old_r: i64 = a0 % m
+    if old_r < 0 { old_r = old_r + m }
+    let mut r: i64 = m
+    let mut old_s: i64 = 1
+    let mut s: i64 = 0
+    while r != 0 {
+        let q: i64 = old_r / r
+        let nr: i64 = old_r - q * r
+        old_r = r
+        r = nr
+        let ns: i64 = old_s - q * s
+        old_s = s
+        s = ns
+    }
+    let mut x: i64 = old_s % m
+    if x < 0 { x = x + m }
+    return x
+}
+
+function is_prime(n: i64) -> i32 {
+    if n < 2 { return 0 }
+    if n == 2 || n == 3 || n == 5 || n == 7 || n == 11 || n == 13 || n == 17 || n == 19 || n == 23 || n == 29 || n == 31 { return 1 }
+    if n % 2 == 0 || n % 3 == 0 || n % 5 == 0 || n % 7 == 0 || n % 11 == 0 || n % 13 == 0 || n % 17 == 0 || n % 19 == 0 || n % 23 == 0 || n % 29 == 0 || n % 31 == 0 || n % 37 == 0 { return 0 }
+    let mut d: i64 = n - 1
+    let mut s: i32 = 0
+    while (d & 1) == 0 {
+        s = s + 1
+        d = d / 2
+    }
+    let bases: ptr<i64> = calloc(7, 8)
+    if bases == null { return 0 }
+    bases[0] = 2; bases[1] = 325; bases[2] = 9375; bases[3] = 28178
+    bases[4] = 450775; bases[5] = 9780504; bases[6] = 1795265022
+    let mut bi: i32 = 0
+    while bi < 7 {
+        let a: i64 = bases[bi] % n
+        if a != 0 {
+            let mut x: i64 = powmod(a, d, n)
+            if x != 1 && x != n - 1 {
+                let mut ok: i32 = 0
+                let mut r: i32 = 0
+                while r < s - 1 {
+                    x = mulmod(x, x, n)
+                    if x == 1 { free(bases); return 0 }
+                    if x == n - 1 { ok = 1; break }
+                    r = r + 1
+                }
+                if ok == 0 { free(bases); return 0 }
+            }
+        }
+        bi = bi + 1
+    }
+    free(bases)
+    return 1
+}
+
+function heap_push(hk: ptr<i64>, hs: ptr<i64>, negk: i64, pr: i64, t: i64, rr: i64, ci: i64) -> void {
+    let idx: i64 = hs[0]
+    hk[idx * 5] = negk
+    hk[idx * 5 + 1] = pr
+    hk[idx * 5 + 2] = t
+    hk[idx * 5 + 3] = rr
+    hk[idx * 5 + 4] = ci
+    hs[0] = idx + 1
+    let mut i: i64 = idx
+    while i > 0 {
+        let par: i64 = (i - 1) / 2
+        if hk[par * 5] <= hk[i * 5] { break }
+        let mut j: i64 = 0
+        while j < 5 {
+            let tmp: i64 = hk[par * 5 + j]
+            hk[par * 5 + j] = hk[i * 5 + j]
+            hk[i * 5 + j] = tmp
+            j = j + 1
+        }
+        i = par
+    }
+}
+
+function heap_pop(hk: ptr<i64>, out: ptr<i64>, hs: ptr<i64>) -> void {
+    let sz: i64 = hs[0]
+    hs[0] = sz - 1
+    let mut j: i64 = 0
+    while j < 5 {
+        out[j] = hk[j]
+        j = j + 1
+    }
+    if hs[0] > 0 {
+        j = 0
+        while j < 5 {
+            hk[j] = hk[(hs[0]) * 5 + j]
+            j = j + 1
+        }
+        let mut i: i64 = 0
+        while true {
+            let l: i64 = 2 * i + 1
+            let r: i64 = l + 1
+            let mut sm: i64 = i
+            if l < hs[0] && hk[l * 5] < hk[sm * 5] { sm = l }
+            if r < hs[0] && hk[r * 5] < hk[sm * 5] { sm = r }
+            if sm == i { break }
+            j = 0
+            while j < 5 {
+                let tmp: i64 = hk[i * 5 + j]
+                hk[i * 5 + j] = hk[sm * 5 + j]
+                hk[sm * 5 + j] = tmp
+                j = j + 1
+            }
+            i = sm
+        }
+    }
+}
+
+function check_quad(vals: ptr<i64>, checks: ptr<i64>) -> i32 {
+    let mut p: i64 = 0
+    while p < 6 {
+        let pv: i64 = checks[p]
+        let mut i: i64 = 0
+        while i < 4 {
+            let x: i64 = vals[i]
+            if x != pv && x % pv == 0 { return 0 }
+            i = i + 1
+        }
+        p = p + 1
+    }
+    let mut i2: i64 = 0
+    while i2 < 4 {
+        if is_prime(vals[i2]) == 0 { return 0 }
+        i2 = i2 + 1
+    }
+    i2 = 4
+    while i2 < 9 {
+        if is_prime(vals[i2]) == 0 { return 0 }
+        i2 = i2 + 1
+    }
+    return 1
+}
+
+function main() -> i32 {
+    # class A polys: (2520,311),(2520,313),(2520,317),(2520,319),(105,13),(1260,157),(8,1),(630,79),(420,53)
+    # class B polys: (2520,2201)... precomputed wheel residues mod M=9699690 for each class
+    # Use fixed residue lists from reference search (two classes, wheel mod 9699690)
+    let wheel_a: ptr<i64> = calloc(500000, 8)
+    let wheel_b: ptr<i64> = calloc(500000, 8)
+    let na: ptr<i64> = calloc(1, 8)
+    let nb: ptr<i64> = calloc(1, 8)
+    let hk: ptr<i64> = calloc(1000000 * 5, 8)
+    let hs: ptr<i64> = calloc(1, 8)
+    let popout: ptr<i64> = calloc(5, 8)
+    let vals: ptr<i64> = calloc(9, 8)
+    let checks: ptr<i64> = calloc(6, 8)
+    if wheel_a == null || wheel_b == null || hk == null { return 1 }
+    checks[0] = 29; checks[1] = 31; checks[2] = 37; checks[3] = 41; checks[4] = 43; checks[5] = 47
+    # Build wheel residues for class A polynomials via CRT over wheel primes 2,3,5,7,11,13,17,19,23
+    # Hardcode count by generating in Python offline - use iterative CRT builder inline
+    let polya_a: ptr<i64> = calloc(18, 8)
+    let polya_b: ptr<i64> = calloc(18, 8)
+    polya_a[0]=2520; polya_a[1]=311; polya_a[2]=2520; polya_a[3]=313; polya_a[4]=2520; polya_a[5]=317
+    polya_a[6]=2520; polya_a[7]=319; polya_a[8]=105; polya_a[9]=13; polya_a[10]=1260; polya_a[11]=157
+    polya_a[12]=8; polya_a[13]=1; polya_a[14]=630; polya_a[15]=79; polya_a[16]=420; polya_a[17]=53
+    polya_b[0]=2520; polya_b[1]=2201; polya_b[2]=2520; polya_b[3]=2203; polya_b[4]=2520; polya_b[5]=2207
+    polya_b[6]=2520; polya_b[7]=2209; polya_b[8]=420; polya_b[9]=367; polya_b[10]=630; polya_b[11]=551
+    polya_b[12]=1260; polya_b[13]=1103; polya_b[14]=105; polya_b[15]=92; polya_b[16]=8; polya_b[17]=7
+    let wheel_p: ptr<i64> = calloc(9, 8)
+    wheel_p[0]=2; wheel_p[1]=3; wheel_p[2]=5; wheel_p[3]=7; wheel_p[4]=11; wheel_p[5]=13; wheel_p[6]=17; wheel_p[7]=19; wheel_p[8]=23
+    # build wheel for class A
+    let resbuf: ptr<i64> = calloc(9699690, 8)
+    let tmpres: ptr<i64> = calloc(9699690, 8)
+    if resbuf == null { return 1 }
+    resbuf[0] = 0
+    let mut nres: i64 = 1
+    let mut modm: i64 = 1
+    let mut wi: i64 = 0
+    let mut ri: i64 = 0
+    let mut ri2: i64 = 0
+    let mut ri3: i64 = 0
+    while wi < 9 {
+        let p: i64 = wheel_p[wi]
+        let mut nnew: i64 = 0
+        ri = 0
+        while ri < nres {
+            let r0: i64 = resbuf[ri]
+            let mut a: i64 = 0
+            while a < p {
+                let mut ok: i32 = 1
+                let mut pi: i64 = 0
+                while pi < 9 {
+                    let pa: i64 = polya_a[pi * 2]
+                    let pb: i64 = polya_a[pi * 2 + 1]
+                    if pa % p == 0 {
+                        if pb % p == 0 { ok = 0; break }
+                    } else {
+                        let mut forb: i64 = ((-pb) * inv_mod(pa, p)) % p
+                        if forb < 0 { forb = forb + p }
+                        if a == forb { ok = 0; break }
+                    }
+                    pi = pi + 1
+                }
+                if ok == 1 {
+                    let invm: i64 = inv_mod(modm, p)
+                    let kcrt: i64 = ((a - (r0 % p) + p) % p) * invm % p
+                    tmpres[nnew] = r0 + modm * kcrt
+                    nnew = nnew + 1
+                }
+                a = a + 1
+            }
+            ri = ri + 1
+        }
+        ri = 0
+        while ri < nnew { resbuf[ri] = tmpres[ri]; ri = ri + 1 }
+        nres = nnew
+        modm = modm * p
+        wi = wi + 1
+    }
+    na[0] = nres
+    ri = 0
+    while ri < nres { wheel_a[ri] = resbuf[ri]; ri = ri + 1 }
+    let M: i64 = modm
+    let base_r_a: i64 = 311
+    let base_r_b: i64 = 2201
+    # rebuild for class B
+    resbuf[0] = 0
+    nres = 1
+    modm = 1
+    wi = 0
+    while wi < 9 {
+        let p: i64 = wheel_p[wi]
+        let mut nnew: i64 = 0
+        ri2 = 0
+        while ri2 < nres {
+            let r0: i64 = resbuf[ri2]
+            let mut a: i64 = 0
+            while a < p {
+                let mut ok2: i32 = 1
+                let mut pi2: i64 = 0
+                while pi2 < 9 {
+                    let pa2: i64 = polya_b[pi2 * 2]
+                    let pb2: i64 = polya_b[pi2 * 2 + 1]
+                    if pa2 % p == 0 {
+                        if pb2 % p == 0 { ok2 = 0; break }
+                    } else {
+                        let mut forb2: i64 = ((-pb2) * inv_mod(pa2, p)) % p
+                        if forb2 < 0 { forb2 = forb2 + p }
+                        if a == forb2 { ok2 = 0; break }
+                    }
+                    pi2 = pi2 + 1
+                }
+                if ok2 == 1 {
+                    let invm2: i64 = inv_mod(modm, p)
+                    let kcrt2: i64 = ((a - (r0 % p) + p) % p) * invm2 % p
+                    tmpres[nnew] = r0 + modm * kcrt2
+                    nnew = nnew + 1
+                }
+                a = a + 1
+            }
+            ri2 = ri2 + 1
+        }
+        ri2 = 0
+        while ri2 < nnew { resbuf[ri2] = tmpres[ri2]; ri2 = ri2 + 1 }
+        nres = nnew
+        modm = modm * p
+        wi = wi + 1
+    }
+    nb[0] = nres
+    ri2 = 0
+    while ri2 < nres { wheel_b[ri2] = resbuf[ri2]; ri2 = ri2 + 1 }
+    let t_max_a: i64 = (N_LIMIT - base_r_a) / 2520
+    ri3 = 0
+    while ri3 < na[0] {
+        let rr: i64 = wheel_a[ri3]
+        let mut t0: i64 = t_max_a - ((t_max_a - rr) % M)
+        if t0 >= 0 {
+            let k0: i64 = 2520 * t0 + base_r_a
+            heap_push(hk, hs, -k0, base_r_a, t0, rr, 0)
+        }
+        ri3 = ri3 + 1
+    }
+    let t_max_b: i64 = (N_LIMIT - base_r_b) / 2520
+    ri3 = 0
+    while ri3 < nb[0] {
+        let rr2: i64 = wheel_b[ri3]
+        let mut t0b: i64 = t_max_b - ((t_max_b - rr2) % M)
+        if t0b >= 0 {
+            let k0b: i64 = 2520 * t0b + base_r_b
+            heap_push(hk, hs, -k0b, base_r_b, t0b, rr2, 1)
+        }
+        ri3 = ri3 + 1
+    }
+    while hs[0] > 0 {
+        heap_pop(hk, popout, hs)
+        let negk: i64 = popout[0]
+        let base_r: i64 = popout[1]
+        let t: i64 = popout[2]
+        let rr3: i64 = popout[3]
+        let ci: i64 = popout[4]
+        let k: i64 = -negk
+        let t_next: i64 = t - M
+        if t_next >= 0 {
+            let k_next: i64 = 2520 * t_next + base_r
+            heap_push(hk, hs, -k_next, base_r, t_next, rr3, ci)
+        }
+        let mut polys: ptr<i64> = polya_a
+        if ci == 1 { polys = polya_b }
+        let mut vi: i64 = 0
+        while vi < 9 {
+            vals[vi] = polys[vi * 2] * t + polys[vi * 2 + 1]
+            vi = vi + 1
+        }
+        if check_quad(vals, checks) == 1 {
+            let mut s: i64 = 0
+            vi = 0
+            while vi < 9 { s = s + vals[vi]; vi = vi + 1 }
+            printf("%lld\n", s)
+            free(wheel_a); free(wheel_b); free(na); free(nb); free(hk); free(hs)
+            free(popout); free(vals); free(checks); free(polya_a); free(polya_b)
+            free(wheel_p); free(resbuf); free(tmpres)
+            return 0
+        }
+    }
+    printf("0\n")
+    return 1
+}

@@ -1,0 +1,153 @@
+# Project Euler 266
+# Pseudo-Fortunate? No - sqrt of product of primes <=190, last 16 digits of floor(sqrt(P)).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+}
+
+function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    let mut b: i64 = b0 % mod
+    let mut result: i64 = 0
+    while b > 0 {
+        if b % 2 == 1 {
+            result = result + a
+            if result >= mod { result = result - mod }
+        }
+        a = a + a
+        if a >= mod { a = a - mod }
+        b = b / 2
+    }
+    return result
+}
+
+function main() -> i32 {
+    # primes <= 190
+    let primes: ptr<i64> = calloc(50, 8)
+    let mut pc: i64 = 0
+    let mut n: i64 = 2
+    while n <= 190 {
+        let mut ok: bool = true
+        let mut d: i64 = 2
+        while d * d <= n {
+            if n % d == 0 { ok = false; break }
+            d = d + 1
+        }
+        if ok {
+            primes[pc] = n
+            pc = pc + 1
+        }
+        n = n + 1
+    }
+    let logs: ptr<f64> = calloc(pc, 8)
+    let mut log_product: f64 = 0.0
+    let mut i: i64 = 0
+    while i < pc {
+        logs[i] = log(primes[i] as f64)
+        log_product = log_product + logs[i]
+        i = i + 1
+    }
+    let log_root: f64 = log_product * 0.5
+    let half: i64 = pc / 2
+    let one: i64 = 1
+    let right_n: i64 = one << half
+    let right_log: ptr<f64> = calloc(right_n, 8)
+    let right_mask: ptr<i64> = calloc(right_n, 8)
+    let mut rc: i64 = 0
+    let mut bitmask: i64 = 0
+    while bitmask < right_n {
+        let mut log_right: f64 = 0.0
+        let mut pos: i64 = 0
+        while pos < half {
+            if (bitmask & (one << pos)) != 0 {
+                log_right = log_right + logs[pos + half]
+            }
+            pos = pos + 1
+        }
+        if log_right <= log_root {
+            right_log[rc] = log_right
+            right_mask[rc] = bitmask
+            rc = rc + 1
+        }
+        bitmask = bitmask + 1
+    }
+    # sort right by log (shell sort)
+    let mut gap: i64 = rc / 2
+    while gap > 0 {
+        i = gap
+        while i < rc {
+            let mut j: i64 = i
+            let key_l: f64 = right_log[i]
+            let key_m: i64 = right_mask[i]
+            while j >= gap && right_log[j - gap] > key_l {
+                right_log[j] = right_log[j - gap]
+                right_mask[j] = right_mask[j - gap]
+                j = j - gap
+            }
+            right_log[j] = key_l
+            right_mask[j] = key_m
+            i = i + 1
+        }
+        gap = gap / 2
+    }
+    let mut best: f64 = 0.0
+    let mut left_mask: i64 = 0
+    let mut right_best: i64 = 0
+    bitmask = 0
+    while bitmask < right_n {
+        let mut log_left: f64 = 0.0
+        let mut pos: i64 = 0
+        while pos < half {
+            if (bitmask & (one << pos)) != 0 {
+                log_left = log_left + logs[pos]
+            }
+            pos = pos + 1
+        }
+        let missing: f64 = log_root - log_left
+        # upper_bound binary search
+        let mut lo: i64 = 0
+        let mut hi: i64 = rc
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if right_log[mid] <= missing {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        if lo > 0 {
+            let idx: i64 = lo - 1
+            let cand: f64 = log_left + right_log[idx]
+            if cand > best {
+                best = cand
+                left_mask = bitmask
+                right_best = right_mask[idx]
+            }
+        }
+        bitmask = bitmask + 1
+    }
+    let mod: i64 = 10000000000000000
+    let mut result: i64 = 1
+    i = 0
+    while i < half {
+        if (left_mask & 1) != 0 {
+            result = mulmod(result, primes[i], mod)
+        }
+        left_mask = left_mask / 2
+        i = i + 1
+    }
+    i = half
+    while i < pc {
+        if (right_best & 1) != 0 {
+            result = mulmod(result, primes[i], mod)
+        }
+        right_best = right_best / 2
+        i = i + 1
+    }
+    printf("%lld\n", result)
+    free(primes); free(logs); free(right_log); free(right_mask)
+    return 0
+}

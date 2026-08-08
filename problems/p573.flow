@@ -1,0 +1,18 @@
+# Project Euler 573
+# Unfair Race
+# E_n = expected winner index among n runners; asymptotic for n=10^6.
+
+extern {
+    function sqrt(x: f64) -> f64
+}
+
+function expected_winner(n: i64) -> f64 {
+    let nf: f64 = n as f64
+    let pi: f64 = 3.141592653589793
+    return sqrt(pi * nf / 2.0) - 1.0 / 3.0 + 1.0 / (4.0 * sqrt(2.0 * pi * nf))
+}
+
+function main() -> i32 {
+    printf("%.4f\n", expected_winner(1000000))
+    return 0
+}

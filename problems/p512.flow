@@ -1,0 +1,60 @@
+# Project Euler 512
+# Sums of Totients of Powers — odd-totient prefix G(5e8).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const CAP: i64 = 2097152
+const TARGET: i64 = 500000000
+
+function odd_part_sum(n0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut total: i64 = 0
+    while n > 0 {
+        let odd_count: i64 = (n + 1) / 2
+        total = total + odd_count * odd_count
+        n = n / 2
+    }
+    return total
+}
+
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
+    let mut h: i64 = key % CAP
+    if h < 0 { h = h + CAP }
+    while used[h] == 1 && keys[h] != key {
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function odd_totient(n: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>) -> i64 {
+    if n <= 0 { return 0 }
+    let s: i64 = hslot(n, keys, used)
+    if used[s] == 1 { return vals[s] }
+    let mut total: i64 = odd_part_sum(n)
+    let mut lo: i64 = 2
+    while lo <= n {
+        let q: i64 = n / lo
+        let hi: i64 = n / q
+        total = total - (hi - lo + 1) * odd_totient(q, keys, vals, used)
+        lo = hi + 1
+    }
+    used[s] = 1
+    keys[s] = n
+    vals[s] = total
+    return total
+}
+
+function main() -> i32 {
+    let keys: ptr<i64> = calloc(CAP, 8)
+    let vals: ptr<i64> = calloc(CAP, 8)
+    let used: ptr<i8> = calloc(CAP, 1)
+    if keys == null || vals == null || used == null { return 1 }
+    let ans: i64 = odd_totient(TARGET, keys, vals, used)
+    printf("%lld\n", ans)
+    free(keys); free(vals); free(used)
+    return 0
+}

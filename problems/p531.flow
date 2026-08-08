@@ -1,0 +1,90 @@
+# Project Euler 531
+# Chinese Leftovers — sum f(n,m) for 10^6 <= n < m < 10^6+5000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function egcd(a0: i64, b0: i64, out_s: ptr<i64>, out_t: ptr<i64>) -> i64 {
+    let mut old_r: i64 = a0
+    let mut r: i64 = b0
+    let mut old_s: i64 = 1
+    let mut s: i64 = 0
+    while r != 0 {
+        let q: i64 = old_r / r
+        let nr: i64 = old_r - q * r
+        old_r = r
+        r = nr
+        let ns: i64 = old_s - q * s
+        old_s = s
+        s = ns
+    }
+    let mut bezout_t: i64 = 0
+    if b0 != 0 {
+        bezout_t = (old_r - old_s * a0) / b0
+    }
+    out_s[0] = old_s
+    out_t[0] = bezout_t
+    return old_r
+}
+
+function gen_crt(a1: i64, a2: i64, n1: i64, n2: i64, tmp: ptr<i64>) -> i64 {
+    let g: i64 = egcd(n1, n2, tmp, tmp + 1)
+    let u: i64 = tmp[0]
+    let v: i64 = tmp[1]
+    if g == 1 {
+        let mut x: i64 = a1 * v * n2 + a2 * u * n1
+        let m: i64 = n1 * n2
+        x = x % m
+        if x < 0 { x = x + m }
+        return x
+    }
+    if a1 % g != a2 % g { return 0 }
+    let M: i64 = (n1 * n2) / g
+    # Use i128 for intermediate
+    let t: i128 = ((a1 as i128) * (v as i128) * (n2 as i128)
+        + (a2 as i128) * (u as i128) * (n1 as i128)) / (g as i128)
+    let mut x: i64 = (t % (M as i128)) as i64
+    if x < 0 { x = x + M }
+    return x
+}
+
+function main() -> i32 {
+    let start: i64 = 1000000
+    let limit: i64 = 1005000
+    let phi: ptr<i32> = calloc(limit + 1, 4)
+    let tmp: ptr<i64> = calloc(4, 8)
+    if phi == null || tmp == null { return 1 }
+    let mut i: i64 = 0
+    while i <= limit {
+        phi[i] = i as i32
+        i = i + 1
+    }
+    let mut p: i64 = 2
+    while p <= limit {
+        if (phi[p] as i64) == p {
+            phi[p] = (p - 1) as i32
+            let mut j: i64 = 2 * p
+            while j <= limit {
+                phi[j] = (phi[j] as i64 - (phi[j] as i64) / p) as i32
+                j = j + p
+            }
+        }
+        p = p + 1
+    }
+    let mut total: i64 = 0
+    let mut n: i64 = start
+    while n < limit {
+        let mut m: i64 = n + 1
+        while m < limit {
+            total = total + gen_crt(phi[n] as i64, phi[m] as i64, n, m, tmp)
+            m = m + 1
+        }
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    free(phi)
+    free(tmp)
+    return 0
+}

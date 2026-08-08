@@ -1,0 +1,99 @@
+# Project Euler 257
+# Count triangles with angular-bisector area ratio integer, perimeter <= 1e8.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let N: i64 = 100000000
+    let mut total: i64 = N / 3
+    # k=2
+    let x_max2: i64 = isqrt(N * 2 / 6) + 50
+    let mut x: i64 = 3
+    while x <= x_max2 {
+        let y_max: i64 = isqrt(2 * x * x)
+        let mut y: i64 = x + 1
+        while y <= y_max {
+            if gcd(x, y) == 1 {
+                let mut a: i64 = 0
+                let mut b: i64 = 0
+                let mut c: i64 = 0
+                if y % 2 == 1 {
+                    let g0: i64 = y
+                    a = g0 * x
+                    b = g0 * (x + y)
+                    c = x * (2 * x + y)
+                } else {
+                    let g0: i64 = y / 2
+                    a = g0 * x
+                    b = g0 * (x + y)
+                    c = (x * (2 * x + y)) / 2
+                }
+                let p: i64 = a + b + c
+                if p <= N {
+                    total = total + N / p
+                }
+            }
+            y = y + 1
+        }
+        x = x + 1
+    }
+    # k=3
+    let x_max3: i64 = isqrt(N) + 50
+    x = 2
+    while x <= x_max3 {
+        let y_max: i64 = isqrt(3 * x * x)
+        let x_odd: i64 = x % 2
+        let mut y: i64 = x + 1
+        while y <= y_max {
+            if gcd(x, y) == 1 {
+                let mut denom2: i64 = 0
+                if x_odd == 0 {
+                    if y % 3 == 0 { denom2 = y / 3 } else { denom2 = y }
+                } else {
+                    if y % 2 == 0 {
+                        if y % 3 == 0 { denom2 = (2 * y) / 3 } else { denom2 = 2 * y }
+                    } else {
+                        if y % 3 == 0 { denom2 = y / 3 } else { denom2 = y }
+                    }
+                }
+                let mut g0: i64 = 0
+                if (x + y) % 2 == 0 {
+                    g0 = denom2
+                } else {
+                    if denom2 % 2 == 0 { g0 = denom2 } else { g0 = 2 * denom2 }
+                }
+                let a: i64 = g0 * x
+                let b: i64 = g0 * (x + y) / 2
+                let c: i64 = g0 * x * (3 * x + y) / (2 * y)
+                let p: i64 = a + b + c
+                if p <= N && p > 0 {
+                    total = total + N / p
+                }
+            }
+            y = y + 1
+        }
+        x = x + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

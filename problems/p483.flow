@@ -1,0 +1,231 @@
+# Project Euler 483
+# Repeated Integer Partitions / expected squared LCM of cycle type
+# g(350) via LPF-ordered cycle DP with LCM-state compression.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log10(x: f64) -> f64
+    function floor(x: f64) -> f64
+    function pow(x: f64, y: f64) -> f64
+}
+
+const N: i64 = 350
+const CAP: i64 = 256
+
+let mut KEYS: ptr<i32> = null
+let mut VALS: ptr<f64> = null
+let mut CNT: ptr<i32> = null
+
+function idx(buf: i64, used: i64, i: i64) -> i64 {
+    return ((buf * (N + 1) + used) * CAP) + i
+}
+
+function cnt_at(buf: i64, used: i64) -> i64 {
+    return CNT[buf * (N + 1) + used] as i64
+}
+
+function set_cnt(buf: i64, used: i64, v: i64) -> void {
+    CNT[buf * (N + 1) + used] = v as i32
+}
+
+function find_key(buf: i64, used: i64, key: i64) -> i64 {
+    let n: i64 = cnt_at(buf, used)
+    let mut i: i64 = 0
+    while i < n {
+        if (KEYS[idx(buf, used, i)] as i64) == key { return i }
+        i = i + 1
+    }
+    return -1
+}
+
+function add_to(buf: i64, used: i64, key: i64, v: f64) -> void {
+    let i: i64 = find_key(buf, used, key)
+    if i >= 0 {
+        let p: i64 = idx(buf, used, i)
+        VALS[p] = VALS[p] + v
+    } else {
+        let n: i64 = cnt_at(buf, used)
+        let p: i64 = idx(buf, used, n)
+        KEYS[p] = key as i32
+        VALS[p] = v
+        set_cnt(buf, used, n + 1)
+    }
+}
+
+function igcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function ilcm(a: i64, b: i64) -> i64 {
+    return a / igcd(a, b) * b
+}
+
+function print_sci10(x0: f64) -> void {
+    let mut x: f64 = x0
+    let mut expv: i64 = floor(log10(x)) as i64
+    let mut mant: f64 = x / pow(10.0, expv as f64)
+    while mant >= 10.0 {
+        mant = mant / 10.0
+        expv = expv + 1
+    }
+    while mant < 1.0 {
+        mant = mant * 10.0
+        expv = expv - 1
+    }
+    printf("%.9fe%lld\n", mant, expv)
+}
+
+function main() -> i32 {
+    let lpf: ptr<i32> = calloc(N + 1, 4)
+    let primes: ptr<i32> = calloc(N, 4)
+    let by_lpf: ptr<i32> = calloc((N + 1) * (N + 1), 4)
+    let by_cnt: ptr<i32> = calloc(N + 1, 4)
+    KEYS = calloc(2 * (N + 1) * CAP, 4)
+    VALS = calloc(2 * (N + 1) * CAP, 8)
+    CNT = calloc(2 * (N + 1), 4)
+    let factors: ptr<f64> = calloc(N + 1, 8)
+    if lpf == null || primes == null || KEYS == null || VALS == null || CNT == null { return 1 }
+
+    let mut pc: i64 = 0
+    let mut p: i64 = 2
+    while p <= N {
+        if lpf[p] == 0 {
+            primes[pc] = p as i32
+            pc = pc + 1
+            let mut m: i64 = p
+            while m <= N {
+                lpf[m] = p as i32
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut c: i64 = 2
+    while c <= N {
+        let lp: i64 = lpf[c] as i64
+        let k: i64 = by_cnt[lp] as i64
+        by_lpf[lp * (N + 1) + k] = c as i32
+        by_cnt[lp] = (k + 1) as i32
+        c = c + 1
+    }
+
+    let mut cur: i64 = 0
+    let mut nxt: i64 = 1
+    set_cnt(cur, 0, 1)
+    KEYS[idx(cur, 0, 0)] = 1
+    VALS[idx(cur, 0, 0)] = 1.0
+    let mut fw: f64 = 1.0
+    let mut used: i64 = 1
+    while used <= N {
+        fw = fw / (used as f64)
+        set_cnt(cur, used, 1)
+        KEYS[idx(cur, used, 0)] = 1
+        VALS[idx(cur, used, 0)] = fw
+        used = used + 1
+    }
+
+    let mut pi: i64 = pc - 1
+    while pi >= 0 {
+        let pv: i64 = primes[pi] as i64
+        let mut ci: i64 = 0
+        let bcnt: i64 = by_cnt[pv] as i64
+        while ci < bcnt {
+            let cv: i64 = by_lpf[pv * (N + 1) + ci] as i64
+            # copy cur -> nxt
+            used = 0
+            while used <= N {
+                let n0: i64 = cnt_at(cur, used)
+                set_cnt(nxt, used, n0)
+                let mut i: i64 = 0
+                while i < n0 {
+                    KEYS[idx(nxt, used, i)] = KEYS[idx(cur, used, i)]
+                    VALS[idx(nxt, used, i)] = VALS[idx(cur, used, i)]
+                    i = i + 1
+                }
+                used = used + 1
+            }
+            let mut term: f64 = 1.0
+            let mf: i64 = N / cv
+            let mut m: i64 = 1
+            while m <= mf {
+                term = term / ((cv as f64) * (m as f64))
+                factors[m - 1] = term
+                m = m + 1
+            }
+            used = 0
+            while used <= N - cv {
+                let nc: i64 = cnt_at(cur, used)
+                let mut i2: i64 = 0
+                while i2 < nc {
+                    let L0: i64 = KEYS[idx(cur, used, i2)] as i64
+                    let v0: f64 = VALS[idx(cur, used, i2)]
+                    let L1: i64 = ilcm(L0, cv)
+                    let mut used1: i64 = used
+                    let max_m: i64 = (N - used) / cv
+                    let mut mm: i64 = 0
+                    while mm < max_m {
+                        used1 = used1 + cv
+                        add_to(nxt, used1, L1, v0 * factors[mm])
+                        mm = mm + 1
+                    }
+                    i2 = i2 + 1
+                }
+                used = used + 1
+            }
+            let tmp: i64 = cur
+            cur = nxt
+            nxt = tmp
+            ci = ci + 1
+        }
+        let p2: f64 = (pv as f64) * (pv as f64)
+        used = 0
+        while used <= N {
+            set_cnt(nxt, used, 0)
+            let n0: i64 = cnt_at(cur, used)
+            let mut i3: i64 = 0
+            while i3 < n0 {
+                let mut l: i64 = KEYS[idx(cur, used, i3)] as i64
+                let mut val: f64 = VALS[idx(cur, used, i3)]
+                while l % pv == 0 {
+                    l = l / pv
+                    val = val * p2
+                }
+                add_to(nxt, used, l, val)
+                i3 = i3 + 1
+            }
+            used = used + 1
+        }
+        let tmp2: i64 = cur
+        cur = nxt
+        nxt = tmp2
+        pi = pi - 1
+    }
+
+    let mut ans: f64 = 0.0
+    let nf: i64 = cnt_at(cur, N)
+    let mut i: i64 = 0
+    while i < nf {
+        let L: f64 = KEYS[idx(cur, N, i)] as f64
+        ans = ans + L * L * VALS[idx(cur, N, i)]
+        i = i + 1
+    }
+    print_sci10(ans)
+
+    free(factors)
+    free(CNT)
+    free(VALS)
+    free(KEYS)
+    free(by_cnt)
+    free(by_lpf)
+    free(primes)
+    free(lpf)
+    return 0
+}

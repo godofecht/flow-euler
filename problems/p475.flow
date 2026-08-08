@@ -1,0 +1,140 @@
+# Project Euler 475
+# Music Festival — f(600) mod 1_000_000_007.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut MOD: i64 = 1000000007
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    if b < 0 { b = b + mod }
+    while e > 0 {
+        if e % 2 == 1 {
+            r = (r * b) % mod
+        }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    # f(12n) with n = 50 => f(600)
+    let n: i64 = 50
+    let E: i64 = 4 * n
+    let m: i64 = 3 * n
+    let limit: i64 = 16 * n + 10
+
+    let fact: ptr<i64> = calloc(limit + 1, 8)
+    let invfact: ptr<i64> = calloc(limit + 1, 8)
+    let pow2: ptr<i64> = calloc(E + 1, 8)
+    let pow_neg3: ptr<i64> = calloc(E + 1, 8)
+    let inv24pow: ptr<i64> = calloc(m + 1, 8)
+    let inv2pow: ptr<i64> = calloc(E + 1, 8)
+    if fact == null || invfact == null || pow2 == null || pow_neg3 == null || inv24pow == null || inv2pow == null {
+        return 1
+    }
+
+    fact[0] = 1
+    let mut i: i64 = 1
+    while i <= limit {
+        fact[i] = (fact[i - 1] * i) % MOD
+        i = i + 1
+    }
+    invfact[limit] = modpow(fact[limit], MOD - 2, MOD)
+    i = limit
+    while i > 0 {
+        invfact[i - 1] = (invfact[i] * i) % MOD
+        i = i - 1
+    }
+
+    pow2[0] = 1
+    i = 1
+    while i <= E {
+        pow2[i] = (pow2[i - 1] * 2) % MOD
+        i = i + 1
+    }
+
+    let neg3: i64 = MOD - 3
+    pow_neg3[0] = 1
+    i = 1
+    while i <= E {
+        pow_neg3[i] = (pow_neg3[i - 1] * neg3) % MOD
+        i = i + 1
+    }
+
+    let inv2: i64 = (MOD + 1) / 2
+    let inv24: i64 = modpow(24, MOD - 2, MOD)
+    inv24pow[0] = 1
+    i = 1
+    while i <= m {
+        inv24pow[i] = (inv24pow[i - 1] * inv24) % MOD
+        i = i + 1
+    }
+    inv2pow[0] = 1
+    i = 1
+    while i <= E {
+        inv2pow[i] = (inv2pow[i - 1] * inv2) % MOD
+        i = i + 1
+    }
+
+    let mut sigma: i64 = 0
+    i = 0
+    while i <= E {
+        let max_j: i64 = E - i
+        let mut j: i64 = 0
+        while j <= max_j {
+            let k: i64 = E - i - j
+            let A: i64 = 3 * i + j
+            let mut base: i64 = (fact[A] * invfact[i]) % MOD
+            base = (base * pow_neg3[j]) % MOD
+            base = (base * pow2[k]) % MOD
+
+            let mut dmin: i64 = 0
+            if i < n {
+                dmin = n - i
+            }
+            let dmax: i64 = j / 2
+            if dmin <= dmax {
+                let invfact_c: i64 = invfact[k]
+                let mut sumd: i64 = 0
+                let mut d: i64 = dmin
+                while d <= dmax {
+                    let a: i64 = i - n + d
+                    let b: i64 = j - 2 * d
+                    let mut term: i64 = invfact[a]
+                    term = (term * invfact[b]) % MOD
+                    term = (term * invfact_c) % MOD
+                    term = (term * invfact[d]) % MOD
+                    term = (term * inv24pow[a]) % MOD
+                    term = (term * inv2pow[b + d]) % MOD
+                    sumd = (sumd + term) % MOD
+                    d = d + 1
+                }
+                sigma = (sigma + base * sumd) % MOD
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let pow24m: i64 = modpow(24, m, MOD)
+    let inv6E: i64 = modpow(modpow(6, E, MOD), MOD - 2, MOD)
+    let mut ans: i64 = (pow24m * fact[m]) % MOD
+    ans = (ans * sigma) % MOD
+    ans = (ans * inv6E) % MOD
+    printf("%lld\n", ans)
+
+    free(fact)
+    free(invfact)
+    free(pow2)
+    free(pow_neg3)
+    free(inv24pow)
+    free(inv2pow)
+    return 0
+}

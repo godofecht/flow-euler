@@ -1,0 +1,27 @@
+# Project Euler 265
+# Sum of binary circle encodings S(5).
+
+function search(history: i64, sequence: i64, bits: i64) -> i64 {
+    let one: i64 = 1
+    let mask: i64 = (one << bits) - 1
+    let all_bits: i64 = (one << (one << bits)) - 1
+    if history == all_bits {
+        return sequence >> (bits - 1)
+    }
+    let next_value: i64 = (sequence << 1) & mask
+    let z: i64 = next_value
+    let o: i64 = next_value + 1
+    let mut result: i64 = 0
+    if (history & (one << z)) == 0 {
+        result = result + search(history | (one << z), sequence << 1, bits)
+    }
+    if (history & (one << o)) == 0 {
+        result = result + search(history | (one << o), (sequence << 1) | 1, bits)
+    }
+    return result
+}
+
+function main() -> i32 {
+    printf("%lld\n", search(1, 0, 5))
+    return 0
+}

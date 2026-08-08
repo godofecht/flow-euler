@@ -1,0 +1,137 @@
+# Project Euler 333
+# Sum of primes q < 1e6 with a unique 2^a*3^b antichain partition.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function ipow2_3(e2: i64, e3: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = 3
+    let mut e: i64 = e3
+    while e > 0 {
+        if (e & 1) == 1 { r = r * b }
+        b = b * b
+        e = e / 2
+    }
+    return r << e2
+}
+
+function bit_get(bits: ptr<i8>, base: i64, idx: i64) -> i64 {
+    let p: i64 = base + idx
+    return ((bits[p / 8] as i64) >> (p % 8)) & 1
+}
+
+function bit_set(bits: ptr<i8>, base: i64, idx: i64) -> i32 {
+    let p: i64 = base + idx
+    let byte: i64 = p / 8
+    let bit: i64 = p % 8
+    bits[byte] = ((bits[byte] as i64) | (1 << bit)) as i8
+    return 0
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let mut n2: i64 = 0
+    while ipow2_3(n2, 0) <= limit { n2 = n2 + 1 }
+    let mut n3: i64 = 0
+    while ipow2_3(0, n3) <= limit { n3 = n3 + 1 }
+
+    let ids: ptr<i32> = calloc(n2 * n3, 4)
+    let rev2: ptr<i32> = calloc(256, 4)
+    let rev3: ptr<i32> = calloc(256, 4)
+    let mut next_id: i64 = 1
+    let mut e2: i64 = 0
+    while e2 < n2 {
+        let mut e3: i64 = 0
+        while e3 < n3 {
+            let cur: i64 = ipow2_3(e2, e3)
+            if cur <= limit {
+                ids[e2 * n3 + e3] = next_id as i32
+                rev2[next_id] = e2 as i32
+                rev3[next_id] = e3 as i32
+                next_id = next_id + 1
+            }
+            e3 = e3 + 1
+        }
+        e2 = e2 + 1
+    }
+
+    let stride: i64 = limit + 1
+    let reach: ptr<i8> = calloc((next_id * stride + 7) / 8, 1)
+    let multi: ptr<i8> = calloc((next_id * stride + 7) / 8, 1)
+
+    let mut idx: i64 = 1
+    while idx < next_id {
+        let v: i64 = ipow2_3(rev2[idx] as i64, rev3[idx] as i64)
+        bit_set(reach, idx * stride, v)
+        idx = idx + 1
+    }
+
+    let half: i64 = (limit >> 1) + 1
+    let sieve: ptr<i8> = calloc(half, 1)
+    let mut i: i64 = 0
+    while i < half { sieve[i] = 1; i = i + 1 }
+    sieve[0] = 0
+    i = 1
+    while 2 * i * i < half {
+        if sieve[i] == 1 {
+            let mut cur: i64 = 3 * i + 1
+            let step: i64 = 2 * i + 1
+            while cur < half {
+                sieve[cur] = 0
+                cur = cur + step
+            }
+        }
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut value: i64 = 1
+    while value <= limit {
+        let mut possible: i64 = 0
+        let mut unique: i64 = 1
+        idx = 1
+        while idx < next_id {
+            if bit_get(reach, idx * stride, value) == 0 {
+                idx = idx + 1
+                continue
+            }
+            if possible == 1 || bit_get(multi, idx * stride, value) == 1 {
+                unique = 0
+            }
+            possible = 1
+            let exp_two: i64 = rev2[idx] as i64
+            let exp_three: i64 = rev3[idx] as i64
+            let mut ne2: i64 = exp_two + 1
+            while ne2 < n2 {
+                let mut ne3: i64 = 0
+                while ne3 < exp_three {
+                    let nid: i64 = ids[ne2 * n3 + ne3] as i64
+                    if nid == 0 { break }
+                    let nv: i64 = value + ipow2_3(ne2, ne3)
+                    if nv > limit { break }
+                    if bit_get(reach, nid * stride, nv) == 1 {
+                        bit_set(multi, nid * stride, nv)
+                    } else {
+                        bit_set(reach, nid * stride, nv)
+                    }
+                    ne3 = ne3 + 1
+                }
+                ne2 = ne2 + 1
+            }
+            idx = idx + 1
+        }
+        let mut is_p: i64 = 0
+        if value == 2 { is_p = 1 }
+        elif (value & 1) == 1 && sieve[value >> 1] == 1 { is_p = 1 }
+        if possible == 1 && unique == 1 && is_p == 1 {
+            total = total + value
+        }
+        value = value + 1
+    }
+    printf("%lld\n", total)
+    free(ids); free(rev2); free(rev3); free(reach); free(multi); free(sieve)
+    return 0
+}

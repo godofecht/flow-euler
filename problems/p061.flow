@@ -1,0 +1,88 @@
+# Project Euler 061
+# Sum of the only ordered set of six cyclic 4-digit figurate numbers.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function poly(t: i32, n: i64) -> i64 {
+    if t == 3 { return n * (n + 1) / 2 }
+    if t == 4 { return n * n }
+    if t == 5 { return n * (3 * n - 1) / 2 }
+    if t == 6 { return n * (2 * n - 1) }
+    if t == 7 { return n * (5 * n - 3) / 2 }
+    return n * (3 * n - 2)
+}
+
+function search(depth: i32, nums: ptr<i32>, counts: ptr<i32>, used: ptr<i8>, chain: ptr<i32>, answer: ptr<i64>) -> bool {
+    if depth == 6 {
+        if chain[5] % 100 == chain[0] / 100 {
+            let mut s: i64 = 0
+            let mut i: i32 = 0
+            while i < 6 {
+                s = s + (chain[i] as i64)
+                i = i + 1
+            }
+            answer[0] = s
+            return true
+        }
+        return false
+    }
+    let mut ti: i32 = 0
+    while ti < 6 {
+        if used[ti] == 0 {
+            used[ti] = 1
+            let mut k: i32 = 0
+            while k < counts[ti] {
+                let v: i32 = nums[ti * 200 + k]
+                if depth == 0 || v / 100 == chain[depth - 1] % 100 {
+                    chain[depth] = v
+                    if search(depth + 1, nums, counts, used, chain, answer) {
+                        return true
+                    }
+                }
+                k = k + 1
+            }
+            used[ti] = 0
+        }
+        ti = ti + 1
+    }
+    return false
+}
+
+function main() -> i32 {
+    let nums: ptr<i32> = calloc(6 * 200, 4)
+    let counts: ptr<i32> = calloc(6, 4)
+    let used: ptr<i8> = calloc(6, 1)
+    let chain: ptr<i32> = calloc(6, 4)
+    let answer: ptr<i64> = calloc(1, 8)
+    if nums == null || counts == null || used == null || chain == null || answer == null {
+        return 1
+    }
+
+    let mut t: i32 = 3
+    while t <= 8 {
+        let ti: i32 = t - 3
+        let mut n: i64 = 1
+        while true {
+            let v: i64 = poly(t, n)
+            if v >= 10000 { break }
+            if v >= 1000 {
+                nums[ti * 200 + counts[ti]] = v as i32
+                counts[ti] = counts[ti] + 1
+            }
+            n = n + 1
+        }
+        t = t + 1
+    }
+
+    search(0, nums, counts, used, chain, answer)
+    printf("%lld\n", answer[0])
+    free(answer)
+    free(chain)
+    free(used)
+    free(counts)
+    free(nums)
+    return 0
+}

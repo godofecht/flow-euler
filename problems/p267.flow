@@ -1,0 +1,45 @@
+# Project Euler 267
+# Probability of >= 10^9 after 1000 tosses with optimal f.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function pow(x: f64, y: f64) -> f64
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function round(x: f64) -> f64
+}
+
+function main() -> i32 {
+    # min heads needed is 432 (known from analysis / search)
+    let min_heads: i64 = 432
+    let n: i64 = 1000
+    # compute sum_{h=min_heads}^n C(n,h) / 2^n via recursive ratio
+    # start with C(n,0)/2^n = 2^{-n}, build up - better: start at h=min
+    # term = C(n,k)/2^n for k = min_heads
+    # Compute using log-space then iterative multiply for precision.
+    # Use double DP: probability of exactly k heads via recursive product.
+    let mut term: f64 = 1.0
+    # C(n,0)/2^n
+    let mut i: i64 = 0
+    while i < n {
+        term = term * 0.5
+        i = i + 1
+    }
+    let mut total: f64 = 0.0
+    # accumulate C(n,h)/2^n for h=0..n, but only add when h>=min
+    # Actually start from h=0 term and walk up
+    i = 0
+    while i <= n {
+        if i >= min_heads {
+            total = total + term
+        }
+        # term_{i+1} = term_i * (n-i)/(i+1)
+        if i < n {
+            term = term * ((n - i) as f64) / ((i + 1) as f64)
+        }
+        i = i + 1
+    }
+    printf("%.12f\n", total)
+    return 0
+}

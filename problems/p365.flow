@@ -1,0 +1,152 @@
+# Project Euler 365
+# sum M(10^18, 10^9, pqr) over primes 1000<p<q<r<5000 (Lucas + CRT).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function lucas(n0: i64, k0: i64, p: i64) -> i64 {
+    let fact: ptr<i64> = calloc(p, 8)
+    let invfact: ptr<i64> = calloc(p, 8)
+    if fact == null || invfact == null { return 0 }
+    fact[0] = 1
+    let mut i: i64 = 1
+    while i < p {
+        fact[i] = (fact[i - 1] * i) % p
+        i = i + 1
+    }
+    invfact[p - 1] = modpow(fact[p - 1], p - 2, p)
+    i = p - 1
+    while i > 0 {
+        invfact[i - 1] = (invfact[i] * i) % p
+        i = i - 1
+    }
+    let mut res: i64 = 1
+    let mut n: i64 = n0
+    let mut k: i64 = k0
+    while k > 0 || n > 0 {
+        let ni: i64 = n % p
+        let ki: i64 = k % p
+        if ki > ni {
+            free(invfact)
+            free(fact)
+            return 0
+        }
+        res = (res * fact[ni] % p * invfact[ki] % p * invfact[ni - ki]) % p
+        n = n / p
+        k = k / p
+    }
+    free(invfact)
+    free(fact)
+    return res
+}
+
+function main() -> i32 {
+    let HI: i32 = 5000
+    let sieve: ptr<i8> = calloc(HI as i64, 1)
+    if sieve == null { return 1 }
+    let mut i: i32 = 0
+    while i < HI {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    let mut p: i32 = 2
+    while p * p < HI {
+        if sieve[p] == 1 {
+            let mut m: i32 = p * p
+            while m < HI {
+                sieve[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let primes: ptr<i32> = calloc(1000, 4)
+    if primes == null { return 1 }
+    let mut L: i32 = 0
+    p = 1001
+    while p < HI {
+        if sieve[p] == 1 {
+            primes[L] = p
+            L = L + 1
+        }
+        p = p + 1
+    }
+
+    let N: i64 = 1000000000000000000
+    let K: i64 = 1000000000
+    let residues: ptr<i32> = calloc(L as i64, 4)
+    if residues == null { return 1 }
+    i = 0
+    while i < L {
+        residues[i] = lucas(N, K, primes[i] as i64) as i32
+        i = i + 1
+    }
+
+    # inv_rows[i][j-i-1] = p_i^{-1} mod p_j for j>i
+    # Store flat: for each i, row of length L-i-1
+    let invflat: ptr<i32> = calloc((L as i64) * (L as i64), 4)
+    if invflat == null { return 1 }
+    i = 0
+    while i < L {
+        let mut j: i32 = i + 1
+        while j < L {
+            let pi: i64 = primes[i] as i64
+            let pj: i64 = primes[j] as i64
+            invflat[i * L + j] = modpow(pi, pj - 2, pj) as i32
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    i = 0
+    while i < L - 2 {
+        let pi: i64 = primes[i] as i64
+        let a: i64 = residues[i] as i64
+        let mut j: i32 = i + 1
+        while j < L - 1 {
+            let q: i64 = primes[j] as i64
+            let b: i64 = residues[j] as i64
+            let inv_pq: i64 = invflat[i * L + j] as i64
+            let t1: i64 = ((b - a) % q + q) % q * inv_pq % q
+            let x1: i64 = a + pi * t1
+            let pq: i64 = pi * q
+            let mut k: i32 = j + 1
+            while k < L {
+                let r: i64 = primes[k] as i64
+                let c: i64 = residues[k] as i64
+                let inv_p_r: i64 = invflat[i * L + k] as i64
+                let inv_q_r: i64 = invflat[j * L + k] as i64
+                let inv_pq_r: i64 = (inv_p_r * inv_q_r) % r
+                let t2: i64 = ((c - x1) % r + r) % r * inv_pq_r % r
+                total = total + x1 + pq * t2
+                k = k + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    printf("%lld\n", total)
+    free(invflat)
+    free(residues)
+    free(primes)
+    free(sieve)
+    return 0
+}

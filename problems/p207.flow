@@ -1,0 +1,23 @@
+# Project Euler 207
+# Least m=k(k+1) with perfect/total partition ratio < 1/12345.
+
+function is_pow2(x: i64) -> bool {
+    return (x & (x - 1)) == 0
+}
+
+function main() -> i32 {
+    let num: i64 = 1
+    let den: i64 = 12345
+    let mut total: i64 = 1
+    let mut perfect: i64 = 1
+    let mut x: i64 = 3
+    while perfect * den > total * num {
+        if is_pow2(x) {
+            perfect = perfect + 1
+        }
+        total = total + 1
+        x = x + 1
+    }
+    printf("%lld\n", x * (x - 1))
+    return 0
+}

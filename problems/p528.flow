@@ -1,0 +1,97 @@
+# Project Euler 528
+# Constrained Sums — inclusion-exclusion for S(10^k,k,k), k=10..15.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function constrained(n: i64, k: i32, b: i64, w: ptr<i64>) -> i64 {
+    let mut pw: i64 = 1
+    let mut i: i32 = 0
+    while i < k {
+        pw = pw * b
+        w[i] = pw + 1
+        i = i + 1
+    }
+    let mut fact: i64 = 1
+    i = 2
+    while i <= k {
+        fact = (fact * (i as i64)) % MOD
+        i = i + 1
+    }
+    let invk: i64 = modpow(fact, MOD - 2, MOD)
+    let m: i32 = 1 << k
+    let mut ans: i64 = 0
+    let mut mask: i32 = 0
+    while mask < m {
+        let mut shift: i64 = 0
+        let mut bits: i32 = 0
+        let mut bit: i32 = 0
+        while bit < k {
+            if (mask & (1 << bit)) != 0 {
+                bits = bits + 1
+                shift = shift + w[bit]
+            }
+            bit = bit + 1
+        }
+        let budget: i64 = n - shift
+        if budget >= 0 {
+            let N: i64 = budget + (k as i64)
+            let mut prod: i64 = 1
+            let mut j: i32 = 0
+            while j < k {
+                let mut termn: i64 = (N - (j as i64)) % MOD
+                if termn < 0 { termn = termn + MOD }
+                prod = ((prod as i128) * (termn as i128) % (MOD as i128)) as i64
+                j = j + 1
+            }
+            let term: i64 = ((prod as i128) * (invk as i128) % (MOD as i128)) as i64
+            if (bits & 1) == 1 {
+                ans = ans - term
+            } else {
+                ans = ans + term
+            }
+            ans = ans % MOD
+            if ans < 0 { ans = ans + MOD }
+        }
+        mask = mask + 1
+    }
+    return ans
+}
+
+function main() -> i32 {
+    let w: ptr<i64> = calloc(16, 8)
+    if w == null { return 1 }
+    let mut total: i64 = 0
+    let mut k: i32 = 10
+    while k <= 15 {
+        let mut n: i64 = 1
+        let mut i: i32 = 0
+        while i < k {
+            n = n * 10
+            i = i + 1
+        }
+        total = (total + constrained(n, k, k as i64, w)) % MOD
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    free(w)
+    return 0
+}

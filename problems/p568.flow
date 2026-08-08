@@ -1,0 +1,38 @@
+# Project Euler 568
+# Reciprocal Games II
+# First 7 significant digits of D(n)=H_n/2^n for n=123456789.
+
+extern {
+    function log(x: f64) -> f64
+    function log10(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+function harmonic_asymp(n: i64) -> f64 {
+    let x: f64 = n as f64
+    let inv: f64 = 1.0 / x
+    let inv2: f64 = inv * inv
+    let gamma: f64 = 0.5772156649015329
+    return log(x) + gamma + 0.5 * inv - inv2 / 12.0 + (inv2 * inv2) / 120.0
+        - (inv2 * inv2 * inv2) / 252.0
+}
+
+function solve(n: i64) -> i64 {
+    let H: f64 = harmonic_asymp(n)
+    let L: f64 = log10(H) - (n as f64) * log10(2.0)
+    let e: f64 = floor(L)
+    let frac: f64 = L - e
+    let ln10: f64 = log(10.0)
+    let mantissa: f64 = exp(frac * ln10)
+    let digits: i64 = floor(mantissa * 1000000.0 + 1e-9) as i64
+    if digits >= 10000000 {
+        return digits / 10
+    }
+    return digits
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(123456789))
+    return 0
+}

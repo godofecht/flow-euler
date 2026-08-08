@@ -1,0 +1,40 @@
+# Project Euler 405
+# f(10^(10^18)) mod 17^7 via closed form + Euler totient.
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    if b < 0 { b = b + mod }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function modinv(x: i64, mod: i64, phi: i64) -> i64 {
+    return modpow(x, phi - 1, mod)
+}
+
+function main() -> i32 {
+    # MOD = 17^7
+    let MOD: i64 = 410338673
+    let PHI: i64 = MOD - MOD / 17
+    # e = 10^(10^18) mod PHI
+    let e: i64 = modpow(10, 1000000000000000000, PHI)
+    let inv15: i64 = modinv(MOD - 15, MOD, PHI)
+    let inv3: i64 = modinv(MOD - 3, MOD, PHI)
+    let inv5: i64 = modinv(5, MOD, PHI)
+    let t1: i64 = (modpow(MOD - 1, e, MOD) * inv15) % MOD
+    let t2: i64 = (((modpow(2, e, MOD) * 4) % MOD) * inv3) % MOD
+    let t3: i64 = (((2 * inv5) % MOD) * modpow(4, e, MOD)) % MOD
+    let ans: i64 = (t1 + t2 + t3 + 1) % MOD
+    printf("%lld\n", ans)
+    return 0
+}

@@ -1,0 +1,157 @@
+# Project Euler 096
+# Sum of first three digits of each of 50 sudoku solutions (top-left).
+# Iterative backtracking (heap stack) — deep recursion overflows the C stack.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function solve_iter(grid: ptr<i32>) -> bool {
+    let row: ptr<i32> = calloc(9, 4)
+    let col: ptr<i32> = calloc(9, 4)
+    let box: ptr<i32> = calloc(9, 4)
+    # stack frames: position, digit tried
+    let st_pos: ptr<i32> = calloc(81, 4)
+    let st_dig: ptr<i32> = calloc(81, 4)
+    if row == null || col == null || box == null || st_pos == null || st_dig == null {
+        return false
+    }
+
+    let mut i: i32 = 0
+    while i < 81 {
+        let v: i32 = grid[i]
+        if v != 0 {
+            let m: i32 = 1 << (v - 1)
+            let r: i32 = i / 9
+            let c: i32 = i % 9
+            let b: i32 = (r / 3) * 3 + c / 3
+            row[r] = row[r] | m
+            col[c] = col[c] | m
+            box[b] = box[b] | m
+        }
+        i = i + 1
+    }
+
+    # find first empty
+    let mut pos: i32 = 0
+    while pos < 81 && grid[pos] != 0 {
+        pos = pos + 1
+    }
+    if pos == 81 {
+        free(row)
+        free(col)
+        free(box)
+        free(st_pos)
+        free(st_dig)
+        return true
+    }
+
+    let mut sp: i32 = 0
+    st_pos[0] = pos
+    st_dig[0] = 1
+
+    while sp >= 0 {
+        pos = st_pos[sp]
+        let r: i32 = pos / 9
+        let c: i32 = pos % 9
+        let b: i32 = (r / 3) * 3 + c / 3
+        # undo previous try at this frame if any
+        if grid[pos] != 0 {
+            let old: i32 = grid[pos]
+            let om: i32 = 1 << (old - 1)
+            row[r] = row[r] ^ om
+            col[c] = col[c] ^ om
+            box[b] = box[b] ^ om
+            grid[pos] = 0
+        }
+        let used: i32 = row[r] | col[c] | box[b]
+        let mut d: i32 = st_dig[sp]
+        let mut found: bool = false
+        while d <= 9 {
+            let m: i32 = 1 << (d - 1)
+            if (used & m) == 0 {
+                grid[pos] = d
+                row[r] = row[r] | m
+                col[c] = col[c] | m
+                box[b] = box[b] | m
+                st_dig[sp] = d + 1
+                # advance to next empty
+                let mut np: i32 = pos + 1
+                while np < 81 && grid[np] != 0 {
+                    np = np + 1
+                }
+                if np == 81 {
+                    free(row)
+                    free(col)
+                    free(box)
+                    free(st_pos)
+                    free(st_dig)
+                    return true
+                }
+                sp = sp + 1
+                st_pos[sp] = np
+                st_dig[sp] = 1
+                found = true
+                break
+            }
+            d = d + 1
+        }
+        if !found {
+            st_dig[sp] = 1
+            sp = sp - 1
+        }
+    }
+    free(row)
+    free(col)
+    free(box)
+    free(st_pos)
+    free(st_dig)
+    return false
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p096.txt", "r")
+    if f == null {
+        printf("failed to read data/p096.txt\n")
+        return 1
+    }
+    let grid: ptr<i32> = calloc(81, 4)
+    if grid == null { return 1 }
+    let mut total: i64 = 0
+    let mut c: i32 = fgetc(f)
+    let mut puzzles: i32 = 0
+    while c >= 0 && puzzles < 50 {
+        # Skip "Grid XX" header line (must not treat its digits as cells).
+        if c == 10 {
+            c = fgetc(f)
+        }
+        while c >= 0 && c != 10 {
+            c = fgetc(f)
+        }
+        if c == 10 {
+            c = fgetc(f)
+        }
+        let mut i: i32 = 0
+        while i < 81 && c >= 0 {
+            if c >= 48 && c <= 57 {
+                grid[i] = c - 48
+                i = i + 1
+            }
+            c = fgetc(f)
+        }
+        if i == 81 {
+            if solve_iter(grid) {
+                total = total + (grid[0] as i64) * 100 + (grid[1] as i64) * 10 + (grid[2] as i64)
+            }
+            puzzles = puzzles + 1
+        }
+    }
+    fclose(f)
+    printf("%lld\n", total)
+    free(grid)
+    return 0
+}

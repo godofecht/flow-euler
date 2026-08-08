@@ -1,0 +1,219 @@
+# Project Euler 442
+# E(10^18): n-th eleven-free integer.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Globals via pointers passed around
+function dp_count(
+    pos: i32, state: i32, started: i32, tight: i32,
+    D: i32, nstates: i32,
+    digs: ptr<i32>, trans: ptr<i32>, bad: ptr<i8>,
+    memo: ptr<i64>, seen: ptr<i8>
+) -> i64 {
+    if pos == D {
+        if started == 1 { return 1 }
+        return 0
+    }
+    let key: i64 = ((((pos as i64) * (nstates as i64) + (state as i64)) * 2 + (started as i64)) * 2 + (tight as i64))
+    if seen[key] != 0 {
+        return memo[key]
+    }
+    let mut limit: i32 = 9
+    if tight == 1 { limit = digs[pos] }
+    let mut total: i64 = 0
+    let mut dig: i32 = 0
+    while dig <= limit {
+        let mut ntight: i32 = 0
+        if tight == 1 && dig == limit { ntight = 1 }
+        if started == 0 && dig == 0 {
+            total = total + dp_count(pos + 1, 0, 0, ntight, D, nstates, digs, trans, bad, memo, seen)
+        } else {
+            let st0: i32 = state
+            let mut st: i32 = 0
+            if started == 1 { st = st0 }
+            let nstate: i32 = trans[st * 10 + dig]
+            if bad[nstate] == 0 {
+                total = total + dp_count(pos + 1, nstate, 1, ntight, D, nstates, digs, trans, bad, memo, seen)
+            }
+        }
+        dig = dig + 1
+    }
+    seen[key] = 1
+    memo[key] = total
+    return total
+}
+
+function count_upto(
+    x: i64, nstates: i32, trans: ptr<i32>, bad: ptr<i8>,
+    memo: ptr<i64>, seen: ptr<i8>, digs: ptr<i32>, memo_sz: i64
+) -> i64 {
+    if x <= 0 { return 0 }
+    let mut t: i64 = x
+    let mut D: i32 = 0
+    let tmp: array<i32, 20> = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    while t > 0 {
+        tmp[D] = (t % 10) as i32
+        t = t / 10
+        D = D + 1
+    }
+    let mut i: i32 = 0
+    while i < D {
+        digs[i] = tmp[D - 1 - i]
+        i = i + 1
+    }
+    # clear memo
+    i = 0
+    while (i as i64) < memo_sz {
+        seen[i] = 0
+        i = i + 1
+    }
+    return dp_count(0, 0, 0, 1, D, nstates, digs, trans, bad, memo, seen)
+}
+
+function main() -> i32 {
+    let MAXS: i32 = 800
+    let nxt: ptr<i32> = calloc((MAXS * 10) as i64, 4)
+    let link: ptr<i32> = calloc(MAXS as i64, 4)
+    let bad: ptr<i8> = calloc(MAXS as i64, 1)
+    if nxt == null || link == null || bad == null { return 1 }
+    let mut i: i64 = 0
+    while i < (MAXS * 10) as i64 {
+        nxt[i] = -1
+        i = i + 1
+    }
+    let mut nstates: i32 = 1
+
+    # insert powers of 11
+    let mut p: i64 = 11
+    while true {
+        let mut tmp: i64 = p
+        let mut digits: array<i8, 40> = [
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        ]
+        let mut len: i32 = 0
+        while tmp > 0 {
+            digits[len] = (tmp % 10) as i8
+            tmp = tmp / 10
+            len = len + 1
+        }
+        if len > 19 { break }
+        let mut v: i32 = 0
+        let mut j: i32 = 0
+        while j < len {
+            let d: i32 = digits[len - 1 - j] as i32
+            let idx: i64 = (v * 10 + d) as i64
+            if nxt[idx] < 0 {
+                nxt[idx] = nstates
+                nstates = nstates + 1
+            }
+            v = nxt[idx]
+            j = j + 1
+        }
+        bad[v] = 1
+        if p > 9223372036854775807 / 11 { break }
+        p = p * 11
+    }
+
+    let q: ptr<i32> = calloc(MAXS as i64, 4)
+    if q == null { return 1 }
+    let mut qh: i32 = 0
+    let mut qt: i32 = 0
+    let mut d: i32 = 0
+    while d < 10 {
+        if nxt[d] >= 0 {
+            link[nxt[d]] = 0
+            q[qt] = nxt[d]
+            qt = qt + 1
+        } else {
+            nxt[d] = 0
+        }
+        d = d + 1
+    }
+    while qh < qt {
+        let v: i32 = q[qh]
+        qh = qh + 1
+        d = 0
+        while d < 10 {
+            let u: i32 = nxt[v * 10 + d]
+            if u >= 0 {
+                q[qt] = u
+                qt = qt + 1
+                let mut f: i32 = link[v]
+                while f != 0 && nxt[f * 10 + d] < 0 {
+                    f = link[f]
+                }
+                if nxt[f * 10 + d] >= 0 && nxt[f * 10 + d] != u {
+                    link[u] = nxt[f * 10 + d]
+                } else {
+                    link[u] = 0
+                }
+                if bad[link[u]] != 0 { bad[u] = 1 }
+            } else {
+                nxt[v * 10 + d] = nxt[link[v] * 10 + d]
+            }
+            d = d + 1
+        }
+    }
+
+    # Full transition table (already filled via failure)
+    let trans: ptr<i32> = calloc((nstates * 10) as i64, 4)
+    if trans == null { return 1 }
+    let mut s: i32 = 0
+    while s < nstates {
+        d = 0
+        while d < 10 {
+            let u: i32 = nxt[s * 10 + d]
+            if u < 0 { u = 0 }
+            trans[s * 10 + d] = u
+            d = d + 1
+        }
+        s = s + 1
+    }
+
+    let memo_sz: i64 = 20 * (nstates as i64) * 2 * 2
+    let memo: ptr<i64> = calloc(memo_sz, 8)
+    let seen: ptr<i8> = calloc(memo_sz, 1)
+    let digs: ptr<i32> = calloc(20, 4)
+    if memo == null || seen == null || digs == null { return 1 }
+
+    let target: i64 = 1000000000000000000
+    let mut high: i64 = target
+    while count_upto(high, nstates, trans, bad, memo, seen, digs, memo_sz) < target {
+        high = high * 2
+        if high < 0 {
+            high = 9223372036854775807
+            break
+        }
+    }
+    let mut low: i64 = 1
+    while low < high {
+        let mid: i64 = low + (high - low) / 2
+        if count_upto(mid, nstates, trans, bad, memo, seen, digs, memo_sz) >= target {
+            high = mid
+        } else {
+            low = mid + 1
+        }
+    }
+    # Nudge in case of off-by-one from automaton edge cases
+    while low > 1 && count_upto(low - 1, nstates, trans, bad, memo, seen, digs, memo_sz) >= target {
+        low = low - 1
+    }
+    while count_upto(low, nstates, trans, bad, memo, seen, digs, memo_sz) < target {
+        low = low + 1
+    }
+    printf("%lld\n", low)
+
+    free(digs)
+    free(seen)
+    free(memo)
+    free(trans)
+    free(q)
+    free(bad)
+    free(link)
+    free(nxt)
+    return 0
+}

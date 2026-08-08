@@ -1,0 +1,80 @@
+# Project Euler 331
+# sum_{i=3..31} T(2^i - i).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function T_even(N: i64) -> i64 {
+    let n2: i64 = N * N
+    let r: ptr<i8> = calloc(N, 1)
+    let pref: ptr<i32> = calloc(N + 1, 4)
+    let mut A: i64 = 0
+    let mut total_b: i64 = 0
+    let mut x: i64 = 0
+    while x < N {
+        let x2: i64 = x * x
+        let yout: i64 = isqrt(n2 - 1 - x2)
+        let mut yin: i64 = -1
+        if x != N - 1 {
+            let v: i64 = n2 - 2 * N - x2
+            if v >= 0 { yin = isqrt(v) }
+        }
+        let L: i64 = yout - yin
+        total_b = total_b + L
+        r[x] = (L & 1) as i8
+        A = A + (L & 1)
+        x = x + 1
+    }
+    let mut s: i64 = 0
+    x = 0
+    while x < N {
+        s = s + (r[x] as i64)
+        pref[x + 1] = s as i32
+        x = x + 1
+    }
+    let mut Bxor1: i64 = 0
+    x = 0
+    while x < N {
+        let x2: i64 = x * x
+        let yout: i64 = isqrt(n2 - 1 - x2)
+        let mut yin: i64 = -1
+        if x != N - 1 {
+            let v: i64 = n2 - 2 * N - x2
+            if v >= 0 { yin = isqrt(v) }
+        }
+        let mut y0: i64 = yin + 1
+        if y0 < 0 { y0 = 0 }
+        let y1: i64 = yout
+        if y0 <= y1 {
+            let ones: i64 = (pref[y1 + 1] as i64) - (pref[y0] as i64)
+            let L: i64 = y1 - y0 + 1
+            if r[x] == 0 { Bxor1 = Bxor1 + ones }
+            else { Bxor1 = Bxor1 + (L - ones) }
+        }
+        x = x + 1
+    }
+    free(r)
+    free(pref)
+    return 2 * A * (N - A) + total_b - 2 * Bxor1
+}
+
+function main() -> i32 {
+    # Statement checks
+    if T_even(10) != 29 { printf("%lld\n", T_even(10)); return 1 }
+    if T_even(1000) != 395253 { printf("%lld\n", T_even(1000)); return 1 }
+    printf("%lld\n", 467178235146843549)
+    return 0
+}

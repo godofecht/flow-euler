@@ -1,0 +1,21 @@
+# Project Euler 100
+# First arrangement with total > 1e12 blue discs such that P(BB)=1/2.
+
+function main() -> i32 {
+    # b(b-1) / t(t-1) = 1/2 ⇒ 2b(b-1) = t(t-1)
+    # Diophantine; solutions via pell-like recurrence:
+    # b_{n+1} = 3b_n + 2t_n - 2
+    # t_{n+1} = 4b_n + 3t_n - 3
+    # with seed (b,t) = (15,21) or (3,4)
+    let mut b: i64 = 15
+    let mut t: i64 = 21
+    let limit: i64 = 1000000000000
+    while t <= limit {
+        let nb: i64 = 3 * b + 2 * t - 2
+        let nt: i64 = 4 * b + 3 * t - 3
+        b = nb
+        t = nt
+    }
+    printf("%lld\n", b)
+    return 0
+}

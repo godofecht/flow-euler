@@ -1,0 +1,134 @@
+# Project Euler 454
+# Diophantine Reciprocals III — F(10^12) via Möbius + floor sums.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function sum_floor_segment(x: i64, lo: i64, hi0: i64) -> i64 {
+    if hi0 <= lo || x <= 0 { return 0 }
+    let mut res: i64 = 0
+    let mut i: i64 = lo + 1
+    let hi: i64 = hi0
+    while i <= hi {
+        let q: i64 = x / i
+        if q == 0 { break }
+        let mut j: i64 = x / q
+        if j > hi { j = hi }
+        res = res + q * (j - i + 1)
+        i = j + 1
+    }
+    return res
+}
+
+function F(L: i64) -> i64 {
+    let B: i64 = isqrt(L)
+    let spf: ptr<i32> = calloc(B + 1, 4)
+    let primes: ptr<i32> = calloc(B / 5 + 16, 4)
+    let pfac: ptr<i64> = calloc(16, 8)
+    let divs: ptr<i64> = calloc(128, 8)
+    let mus: ptr<i64> = calloc(128, 8)
+    if spf == null || primes == null || pfac == null || divs == null || mus == null {
+        return 0
+    }
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= B {
+        if spf[i] == 0 {
+            spf[i] = i as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let v: i64 = i * p
+            if v > B { break }
+            spf[v] = p as i32
+            if p == (spf[i] as i64) { break }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut n: i64 = 2
+    while n <= B {
+        let mut tmp: i64 = n
+        let mut pcount: i64 = 0
+        let mut last: i64 = 0
+        while tmp > 1 {
+            let p: i64 = spf[tmp] as i64
+            tmp = tmp / p
+            if p != last {
+                pfac[pcount] = p
+                pcount = pcount + 1
+                last = p
+            }
+        }
+        divs[0] = 1
+        mus[0] = 1
+        let mut dcount: i64 = 1
+        let mut pi: i64 = 0
+        while pi < pcount {
+            let p: i64 = pfac[pi]
+            let m: i64 = dcount
+            let mut di: i64 = 0
+            while di < m {
+                divs[dcount] = divs[di] * p
+                mus[dcount] = 0 - mus[di]
+                dcount = dcount + 1
+                di = di + 1
+            }
+            pi = pi + 1
+        }
+
+        let Ln: i64 = L / n
+        let mut idx: i64 = 0
+        while idx < dcount {
+            let d: i64 = divs[idx]
+            let mu: i64 = mus[idx]
+            let k: i64 = n / d
+            if k > 1 {
+                let x: i64 = Ln / d
+                if x > 0 {
+                    total = total + mu * sum_floor_segment(x, k, 2 * k - 1)
+                }
+            }
+            idx = idx + 1
+        }
+        n = n + 1
+    }
+
+    free(divs)
+    free(mus)
+    free(pfac)
+    free(spf)
+    free(primes)
+    return total
+}
+
+function main() -> i32 {
+    if F(15) != 4 {
+        printf("%lld\n", F(15))
+        return 1
+    }
+    if F(1000) != 1069 {
+        printf("%lld\n", F(1000))
+        return 1
+    }
+    printf("%lld\n", F(1000000000000))
+    return 0
+}

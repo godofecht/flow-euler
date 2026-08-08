@@ -1,0 +1,81 @@
+# Project Euler 557
+# Cutting Triangles
+# Enumerate (s,a,d) with s=t+a, bc=a^2*d/s integer, disc square; sum areas t<=10000.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function S(N: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut s: i64 = 3
+    while s <= 2 * N {
+        let mut a_min: i64 = s - N
+        if a_min < 1 { a_min = 1 }
+        let a_max: i64 = (s - 3) / 2
+        if a_min <= a_max {
+            let mut a: i64 = a_min
+            while a <= a_max {
+                let a2: i64 = a * a
+                let g: i64 = gcd(s, a2)
+                if g > 1 {
+                    let step: i64 = s / g
+                    let max_k: i64 = (s - 2 * a - 2) / step
+                    if max_k > 0 {
+                        let base_prod: i64 = a2 / g
+                        let mut k: i64 = 1
+                        while k <= max_k {
+                            let d: i64 = step * k
+                            let w: i64 = s - 2 * a - d
+                            let prod: i64 = base_prod * k
+                            let disc: i64 = w * w - 4 * prod
+                            if disc >= 0 {
+                                let r: i64 = isqrt(disc)
+                                if r * r == disc {
+                                    if ((w - r) & 1) == 0 {
+                                        let b: i64 = (w - r) / 2
+                                        if b > 0 {
+                                            let c: i64 = (w + r) / 2
+                                            if b <= c {
+                                                total = total + (s - a)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            k = k + 1
+                        }
+                    }
+                }
+                a = a + 1
+            }
+        }
+        s = s + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(10000))
+    return 0
+}

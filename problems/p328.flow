@@ -1,0 +1,133 @@
+# Project Euler 328
+# Sum of minimal worst-case search costs C(n) for n<=200000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function bisect_left_g(G: ptr<i64>, glen: i64, x: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = glen
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if G[mid] < x { lo = mid + 1 }
+        else { hi = mid }
+    }
+    return lo
+}
+
+function complete_coeff(L: i64, G: ptr<i64>, glen: i64, memo_m: ptr<i64>, memo_c: ptr<i64>, seen: ptr<i8>) -> i64 {
+    # stores m in memo_m[L], c in memo_c[L]; returns 0
+    if seen[L] == 1 { return 0 }
+    if L <= 0 {
+        memo_m[L] = 0; memo_c[L] = 0; seen[L] = 1; return 0
+    }
+    if L == 1 {
+        memo_m[L] = 1; memo_c[L] = 0; seen[L] = 1; return 0
+    }
+    if L == 2 {
+        memo_m[L] = 1; memo_c[L] = 1; seen[L] = 1; return 0
+    }
+    let idx: i64 = bisect_left_g(G, glen, L)
+    let t: i64 = G[idx - 1]
+    let mut d: i64 = t
+    let alt: i64 = L - (t - 1) / 2
+    if alt < d { d = alt }
+    let L_left: i64 = d - 1
+    let L_right: i64 = L - d - 1
+    complete_coeff(L_left, G, glen, memo_m, memo_c, seen)
+    complete_coeff(L_right, G, glen, memo_m, memo_c, seen)
+    let m1: i64 = memo_m[L_left]
+    let c1: i64 = memo_c[L_left]
+    let m2: i64 = memo_m[L_right]
+    let c2: i64 = memo_c[L_right]
+    let right_const: i64 = c2 + m2 * (d + 1)
+    let mut m_dom: i64 = m1
+    let mut c_dom: i64 = c1
+    if m2 > m1 {
+        m_dom = m2; c_dom = right_const
+    } elif m2 == m1 {
+        if c1 < right_const {
+            m_dom = m2; c_dom = right_const
+        }
+    }
+    memo_m[L] = m_dom + 1
+    memo_c[L] = d + c_dom
+    seen[L] = 1
+    return 0
+}
+
+function complete_cost(lo: i64, hi: i64, G: ptr<i64>, glen: i64, memo_m: ptr<i64>, memo_c: ptr<i64>, seen: ptr<i8>) -> i64 {
+    let L: i64 = hi - lo
+    complete_coeff(L, G, glen, memo_m, memo_c, seen)
+    return memo_m[L] * lo + memo_c[L]
+}
+
+function main() -> i32 {
+    let limit: i64 = 200000
+    let G: ptr<i64> = calloc(64, 8)
+    let mut x: i64 = 1
+    let mut glen: i64 = 0
+    while x < 400000 {
+        G[glen] = x
+        glen = glen + 1
+        x = x * 2 + 1
+    }
+    let memo_m: ptr<i64> = calloc(limit + 2, 8)
+    let memo_c: ptr<i64> = calloc(limit + 2, 8)
+    let seen: ptr<i8> = calloc(limit + 2, 1)
+    let C: ptr<i64> = calloc(limit + 1, 8)
+    C[1] = 0; C[2] = 1; C[3] = 2; C[4] = 4; C[5] = 6; C[6] = 8
+    let q: ptr<i64> = calloc(32, 8)
+    q[0] = 0
+    let mut qc: i64 = 1
+    let mut p: i64 = 4
+    while p <= 131072 {
+        q[qc] = p
+        qc = qc + 1
+        p = p * 2
+    }
+    let mut dist: i64 = 3
+    let mut ii: i64 = 2
+    let mut running: i64 = 0 + 1 + 2 + 4 + 6 + 8
+    let mut n: i64 = 7
+    while n <= limit {
+        let mut bound: i64 = 1
+        let mut t: i64 = 0
+        while t < ii {
+            bound = bound * 4
+            t = t + 1
+        }
+        if dist > bound { ii = ii + 1 }
+        let mut best_cost: i64 = -1
+        let mut best_dist: i64 = -1
+        let mut qi: i64 = 0
+        while qi < ii && qi < qc {
+            let k: i64 = n - dist - q[qi]
+            if k > 0 && k < n {
+                let left: i64 = C[k - 1]
+                let mut right: i64 = 0
+                if k != n {
+                    right = complete_cost(k + 1, n, G, glen, memo_m, memo_c, seen)
+                }
+                let mut worst: i64 = left
+                if right > worst { worst = right }
+                let total: i64 = k + worst
+                let new_dist: i64 = dist + q[qi]
+                if best_cost < 0 || total < best_cost {
+                    best_cost = total
+                    best_dist = new_dist
+                }
+            }
+            qi = qi + 1
+        }
+        C[n] = best_cost
+        dist = best_dist
+        running = running + best_cost
+        n = n + 1
+    }
+    printf("%lld\n", running)
+    free(G); free(memo_m); free(memo_c); free(seen); free(C); free(q)
+    return 0
+}

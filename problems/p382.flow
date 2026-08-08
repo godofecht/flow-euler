@@ -1,0 +1,186 @@
+# Project Euler 382
+# Last 9 digits of f(10^18) via 12x12 matrix exponentiation.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mat_mul(A: ptr<i64>, B: ptr<i64>, R: ptr<i64>, mod: i64) -> void {
+    let n: i64 = 12
+    let mut i: i64 = 0
+    while i < n {
+        let mut j: i64 = 0
+        while j < n {
+            let mut s: i64 = 0
+            let mut k: i64 = 0
+            while k < n {
+                let a: i64 = A[i * n + k]
+                if a != 0 {
+                    s = (s + a * B[k * n + j]) % mod
+                }
+                k = k + 1
+            }
+            R[i * n + j] = s
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function mat_copy(src: ptr<i64>, dst: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < 144 {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function mat_pow(M: ptr<i64>, e0: i64, mod: i64, out: ptr<i64>, tmp: ptr<i64>, base: ptr<i64>) -> void {
+    # out = I
+    let mut i: i64 = 0
+    while i < 144 {
+        out[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i < 12 {
+        out[i * 12 + i] = 1
+        i = i + 1
+    }
+    mat_copy(M, base)
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 {
+            mat_mul(base, out, tmp, mod)
+            mat_copy(tmp, out)
+        }
+        mat_mul(base, base, tmp, mod)
+        mat_copy(tmp, base)
+        e = e >> 1
+    }
+}
+
+function mat_vec(M: ptr<i64>, v: ptr<i64>, out: ptr<i64>, mod: i64) -> void {
+    let mut i: i64 = 0
+    while i < 12 {
+        let mut s: i64 = 0
+        let mut j: i64 = 0
+        while j < 12 {
+            let c: i64 = M[i * 12 + j]
+            if c != 0 {
+                s = (s + c * v[j]) % mod
+            }
+            j = j + 1
+        }
+        out[i] = s
+        i = i + 1
+    }
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e >> 1
+    }
+    return r
+}
+
+function prefix_sum_b(n: i64, mod: i64, M: ptr<i64>, P: ptr<i64>, tmp: ptr<i64>, base: ptr<i64>,
+                      v: ptr<i64>, v2: ptr<i64>) -> i64 {
+    if n <= 0 { return 0 }
+    let idx: i64 = n - 1
+    let b0: i64 = 1
+    let b1: i64 = 2
+    let b2: i64 = 4
+    let b3: i64 = 6
+    let b4: i64 = 11
+    let b5: i64 = 20
+    if idx == 0 { return b0 }
+    if idx == 1 { return (b0 + b1) % mod }
+    if idx == 2 { return (b0 + b1 + b2) % mod }
+    if idx == 3 { return (b0 + b1 + b2 + b3) % mod }
+    if idx == 4 { return (b0 + b1 + b2 + b3 + b4) % mod }
+    if idx == 5 { return (b0 + b1 + b2 + b3 + b4 + b5) % mod }
+
+    let S5: i64 = (b0 + b1 + b2 + b3 + b4 + b5) % mod
+    v[0] = b5
+    v[1] = b4
+    v[2] = b3
+    v[3] = b2
+    v[4] = b1
+    v[5] = b0
+    v[6] = modpow(2, 5, mod)
+    v[7] = modpow(2, 4, mod)
+    v[8] = modpow(2, 3, mod)
+    v[9] = modpow(2, 2, mod)
+    v[10] = S5
+    v[11] = 1
+
+    mat_pow(M, idx - 5, mod, P, tmp, base)
+    mat_vec(P, v, v2, mod)
+    return v2[10] % mod
+}
+
+function f_n(n: i64, mod: i64, M: ptr<i64>, P: ptr<i64>, tmp: ptr<i64>, base: ptr<i64>,
+             v: ptr<i64>, v2: ptr<i64>) -> i64 {
+    let bad: i64 = prefix_sum_b(n, mod, M, P, tmp, base, v, v2)
+    let pow2: i64 = modpow(2, n, mod)
+    let mut ans: i64 = (pow2 - 1 - bad) % mod
+    if ans < 0 { ans = ans + mod }
+    return ans
+}
+
+function main() -> i32 {
+    let mod: i64 = 1000000000
+    let M: ptr<i64> = calloc(144, 8)
+    let P: ptr<i64> = calloc(144, 8)
+    let tmp: ptr<i64> = calloc(144, 8)
+    let base: ptr<i64> = calloc(144, 8)
+    let v: ptr<i64> = calloc(12, 8)
+    let v2: ptr<i64> = calloc(12, 8)
+    if M == null || P == null || tmp == null || base == null || v == null || v2 == null { return 1 }
+
+    # Build transition matrix
+    let mut i: i64 = 0
+    while i < 144 {
+        M[i] = 0
+        i = i + 1
+    }
+    M[0 * 12 + 2] = 2
+    M[0 * 12 + 3] = 1
+    M[0 * 12 + 5] = mod - 1
+    M[0 * 12 + 9] = 5
+    M[0 * 12 + 11] = 1
+    M[1 * 12 + 0] = 1
+    M[2 * 12 + 1] = 1
+    M[3 * 12 + 2] = 1
+    M[4 * 12 + 3] = 1
+    M[5 * 12 + 4] = 1
+    M[6 * 12 + 6] = 2
+    M[7 * 12 + 6] = 1
+    M[8 * 12 + 7] = 1
+    M[9 * 12 + 8] = 1
+    M[10 * 12 + 10] = 1
+    i = 0
+    while i < 12 {
+        M[10 * 12 + i] = (M[10 * 12 + i] + M[0 * 12 + i]) % mod
+        i = i + 1
+    }
+    M[11 * 12 + 11] = 1
+
+    let ans: i64 = f_n(1000000000000000000, mod, M, P, tmp, base, v, v2)
+    printf("%lld\n", ans)
+
+    free(v2)
+    free(v)
+    free(base)
+    free(tmp)
+    free(P)
+    free(M)
+    return 0
+}

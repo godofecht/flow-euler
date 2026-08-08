@@ -1,0 +1,67 @@
+# Project Euler 580
+# Squarefree Hilbert Numbers
+# Inclusion over odd squareful sieves: f[d] = #Hilbert multiples of d^2 <= N.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 10000000000000000
+const M: i64 = 100000000
+
+function solve() -> i64 {
+    let f: ptr<i64> = calloc(M, 8)
+    if f == null { return -1 }
+
+    let mut i: i64 = ((M | 1) - 2)
+    while i >= 0 {
+        f[i] = (N / i / i + 3) / 4
+        let T: i64 = M / i
+        let mut j: i64 = 3
+        while j <= T {
+            f[i] = f[i] - f[i * j]
+            j = j + 2
+        }
+        i = i - 2
+    }
+
+    let sieve: ptr<i8> = calloc(M, 1)
+    if sieve == null { return -1 }
+    let mut p: i64 = 0
+    while p < M {
+        sieve[p] = 1
+        p = p + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    p = 2
+    while p * p < M {
+        if sieve[p] != 0 {
+            let mut q: i64 = p * p
+            while q < M {
+                sieve[q] = 0
+                q = q + p
+            }
+        }
+        p = p + 1
+    }
+
+    let mut ans: i64 = f[1]
+    p = 3
+    while p < M {
+        if sieve[p] != 0 && (p % 4) == 3 {
+            ans = ans + f[p]
+        }
+        p = p + 2
+    }
+
+    free(f)
+    free(sieve)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve())
+    return 0
+}

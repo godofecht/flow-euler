@@ -1,0 +1,121 @@
+# Project Euler 051
+# Smallest prime in an eight prime family by digit replacement.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function pow10(n: i32) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i32 = 0
+    while i < n {
+        r = r * 10
+        i = i + 1
+    }
+    return r
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let sieve: ptr<i8> = calloc(limit, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let digs: ptr<i32> = calloc(10, 4)
+    let repl: ptr<i32> = calloc(10, 4)
+    if digs == null || repl == null { return 1 }
+
+    let mut ans: i64 = 0
+    let mut n: i64 = 10
+    while n < limit {
+        if sieve[n] == 0 {
+            let mut x: i64 = n
+            let mut nd: i32 = 0
+            while x > 0 {
+                digs[nd] = (x % 10) as i32
+                x = x / 10
+                nd = nd + 1
+            }
+            # digs[0] = LSD; digs[nd-1] = MSD
+            let masks: i32 = (1 << nd) - 1
+            let mut mask: i32 = 1
+            while mask <= masks {
+                # require replaced digits equal
+                let mut same: i32 = -1
+                let mut ok_mask: bool = true
+                let mut i: i32 = 0
+                while i < nd {
+                    if (mask & (1 << i)) != 0 {
+                        if same < 0 {
+                            same = digs[i]
+                        } elif digs[i] != same {
+                            ok_mask = false
+                            break
+                        }
+                    }
+                    i = i + 1
+                }
+                if ok_mask {
+                    let mut count: i32 = 0
+                    let mut first: i64 = 0
+                    let mut d: i32 = 0
+                    while d <= 9 {
+                        # build number with replaced digits = d
+                        let mut v: i64 = 0
+                        let mut place: i64 = 1
+                        let mut lead_zero: bool = false
+                        i = 0
+                        while i < nd {
+                            let mut digit: i32 = digs[i]
+                            if (mask & (1 << i)) != 0 {
+                                digit = d
+                            }
+                            if i == nd - 1 && digit == 0 {
+                                lead_zero = true
+                            }
+                            v = v + (digit as i64) * place
+                            place = place * 10
+                            i = i + 1
+                        }
+                        if !lead_zero && v < limit && sieve[v] == 0 {
+                            count = count + 1
+                            if first == 0 {
+                                first = v
+                            }
+                        }
+                        d = d + 1
+                    }
+                    if count >= 8 {
+                        if ans == 0 || first < ans {
+                            ans = first
+                        }
+                    }
+                }
+                mask = mask + 1
+            }
+            if ans != 0 && n > ans {
+                break
+            }
+        }
+        n = n + 1
+    }
+
+    printf("%lld\n", ans)
+    free(repl)
+    free(digs)
+    free(sieve)
+    return 0
+}

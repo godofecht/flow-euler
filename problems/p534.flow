@@ -1,0 +1,179 @@
+# Project Euler 534
+# Weak Queens — S(14) via sliding-window DP.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 14
+const CAP: i64 = 65536
+
+function ipow(base: i64, exp: i64) -> i64 {
+    let mut r: i128 = 1 as i128
+    let mut b: i128 = base as i128
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) != 0 { r = r * b }
+        b = b * b
+        e = e >> 1
+    }
+    return r as i64
+}
+
+function nqueens_rec(cols: i64, d1: i64, d2: i64, all: i64) -> i64
+
+function nqueens_rec(cols: i64, d1: i64, d2: i64, all: i64) -> i64 {
+    if cols == all { return 1 }
+    let mut total: i64 = 0
+    let mut avail: i64 = all & ~(cols | d1 | d2)
+    while avail != 0 {
+        let bit: i64 = avail & (-avail)
+        avail = avail - bit
+        total = total + nqueens_rec(cols | bit, (d1 | bit) << 1 & all, (d2 | bit) >> 1, all)
+    }
+    return total
+}
+
+function nqueens_classic(n: i64) -> i64 {
+    let all: i64 = (1 << n) - 1
+    let half: i64 = n / 2
+    let mut total: i64 = 0
+    let mut col0: i64 = 0
+    while col0 < half {
+        let bit: i64 = 1 << col0
+        total = total + nqueens_rec(bit, (bit << 1) & all, bit >> 1, all)
+        col0 = col0 + 1
+    }
+    total = total * 2
+    if (n & 1) == 1 {
+        let col: i64 = half
+        let bit2: i64 = 1 << col
+        total = total + nqueens_rec(bit2, (bit2 << 1) & all, bit2 >> 1, all)
+    }
+    return total
+}
+
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
+    let mut h: i64 = key % CAP
+    if h < 0 { h = h + CAP }
+    while used[h] == 1 && keys[h] != key {
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function count_by_L(n: i64, L: i64, attack: ptr<i64>) -> i64 {
+    if L <= 0 { return ipow(n, n) }
+    if L >= n - 1 { return nqueens_classic(n) }
+    let all: i64 = (1 << n) - 1
+    let shift: i64 = 4
+    let keep: i64 = (1 << (shift * L)) - 1
+    let keys: ptr<i64> = calloc(CAP, 8)
+    let vals: ptr<i64> = calloc(CAP, 8)
+    let used: ptr<i8> = calloc(CAP, 1)
+    let nkeys: ptr<i64> = calloc(CAP, 8)
+    let nvals: ptr<i64> = calloc(CAP, 8)
+    let nused: ptr<i8> = calloc(CAP, 1)
+    if keys == null || vals == null { return 0 }
+    let half: i64 = n / 2
+    let mut c0: i64 = 0
+    while c0 < half {
+        let slot: i64 = hslot(c0, keys, used)
+        used[slot] = 1
+        keys[slot] = c0
+        vals[slot] = 1
+        c0 = c0 + 1
+    }
+    let mut r: i64 = 1
+    let mut ci: i64 = 0
+    while r < n {
+        let mut m_prev: i64 = r
+        if m_prev > L { m_prev = L }
+        let mut mn: i32 = 0
+        if r + 1 >= L { mn = 1 }
+        ci = 0
+        while ci < CAP { nused[ci] = 0; ci = ci + 1 }
+        ci = 0
+        while ci < CAP {
+            if used[ci] == 1 {
+                let state: i64 = keys[ci]
+                let cnt: i64 = vals[ci]
+                let mut forbid: i64 = 0
+                let mut s: i64 = state
+                let mut dist: i64 = 1
+                while dist <= m_prev {
+                    let pc: i64 = s & 0xF
+                    s = s >> shift
+                    forbid = forbid | attack[pc * (L + 1) + dist]
+                    dist = dist + 1
+                }
+                let mut avail: i64 = all & ~forbid
+                while avail != 0 {
+                    let bit: i64 = avail & (-avail)
+                    avail = avail - bit
+                    let mut tmp: i64 = bit
+                    let mut cc: i64 = 0
+                    while tmp > 1 { tmp = tmp >> 1; cc = cc + 1 }
+                    let mut ns: i64 = (state << shift) | cc
+                    if mn == 1 { ns = ns & keep }
+                    let sl: i64 = hslot(ns, nkeys, nused)
+                    if nused[sl] == 0 {
+                        nused[sl] = 1
+                        nkeys[sl] = ns
+                        nvals[sl] = cnt
+                    } else {
+                        nvals[sl] = nvals[sl] + cnt
+                    }
+                }
+            }
+            ci = ci + 1
+        }
+        ci = 0
+        while ci < CAP {
+            used[ci] = nused[ci]
+            keys[ci] = nkeys[ci]
+            vals[ci] = nvals[ci]
+            nused[ci] = 0
+            ci = ci + 1
+        }
+        r = r + 1
+    }
+    let mut total: i64 = 0
+    ci = 0
+    while ci < CAP {
+        if used[ci] == 1 { total = total + vals[ci] }
+        ci = ci + 1
+    }
+    free(keys); free(vals); free(used); free(nkeys); free(nvals); free(nused)
+    return total
+}
+
+function main() -> i32 {
+    let attack: ptr<i64> = calloc(N * (N + 1), 8)
+    if attack == null { return 1 }
+    let mut c: i64 = 0
+    while c < N {
+        let mut d: i64 = 1
+        while d <= N {
+            let mut m: i64 = 1 << c
+            let cp: i64 = c + d
+            if cp < N { m = m | (1 << cp) }
+            let cm: i64 = c - d
+            if cm >= 0 { m = m | (1 << cm) }
+            attack[c * (N + 1) + d] = m
+            d = d + 1
+        }
+        c = c + 1
+    }
+    let mut ans: i64 = 0
+    let mut w: i64 = 0
+    while w < N {
+        ans = ans + count_by_L(N, N - 1 - w, attack)
+        w = w + 1
+    }
+    printf("%lld\n", ans)
+    free(attack)
+    return 0
+}

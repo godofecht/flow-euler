@@ -1,0 +1,300 @@
+# Project Euler 212
+# Combined volume of 50000 cuboids via block decomposition.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function sort_i32(a: ptr<i32>, n0: i64) -> void {
+    # insertion sort (n small)
+    let mut i: i64 = 1
+    while i < n0 {
+        let key: i32 = a[i]
+        let mut j: i64 = i
+        while j > 0 && a[j - 1] > key {
+            a[j] = a[j - 1]
+            j = j - 1
+        }
+        a[j] = key
+        i = i + 1
+    }
+}
+
+function unique_sorted(a: ptr<i32>, n0: i64) -> i64 {
+    sort_i32(a, n0)
+    if n0 == 0 { return 0 }
+    let mut w: i64 = 1
+    let mut i: i64 = 1
+    while i < n0 {
+        if a[i] != a[w - 1] {
+            a[w] = a[i]
+            w = w + 1
+        }
+        i = i + 1
+    }
+    return w
+}
+
+function find_idx(a: ptr<i32>, n: i64, v: i32) -> i32 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = n - 1
+    while lo <= hi {
+        let mid: i64 = (lo + hi) / 2
+        if a[mid] == v { return mid as i32 }
+        if a[mid] < v { lo = mid + 1 }
+        else { hi = mid - 1 }
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let N: i64 = 50000
+    let m: i64 = 6 * N
+    let MOD: i64 = 1000000
+    let S: ptr<i64> = calloc(m + 1, 8)
+    if S == null { return 1 }
+    let mut k: i64 = 1
+    while k <= 55 && k <= m {
+        S[k] = (100003 - 200003 * k + 300007 * k * k * k) % MOD
+        if S[k] < 0 { S[k] = S[k] + MOD }
+        k = k + 1
+    }
+    k = 56
+    while k <= m {
+        S[k] = (S[k - 24] + S[k - 55]) % MOD
+        k = k + 1
+    }
+
+    let B: i32 = 400
+    let max_coord: i32 = 10400
+    let nb: i32 = (max_coord + B - 1) / B
+    let nblocks: i64 = (nb as i64) * (nb as i64) * (nb as i64)
+
+    # For each cuboid, distribute into blocks. Store all clipped cuboids in per-block arrays.
+    # First count per block
+    let bcount: ptr<i32> = calloc(nblocks, 4)
+    let cx0: ptr<i32> = calloc(N, 4)
+    let cx1: ptr<i32> = calloc(N, 4)
+    let cy0: ptr<i32> = calloc(N, 4)
+    let cy1: ptr<i32> = calloc(N, 4)
+    let cz0: ptr<i32> = calloc(N, 4)
+    let cz1: ptr<i32> = calloc(N, 4)
+    if bcount == null || cx0 == null { return 1 }
+
+    let mut i: i64 = 1
+    while i <= N {
+        let x0: i32 = (S[6 * i - 5] % 10000) as i32
+        let y0: i32 = (S[6 * i - 4] % 10000) as i32
+        let z0: i32 = (S[6 * i - 3] % 10000) as i32
+        let dx: i32 = 1 + (S[6 * i - 2] % 399) as i32
+        let dy: i32 = 1 + (S[6 * i - 1] % 399) as i32
+        let dz: i32 = 1 + (S[6 * i] % 399) as i32
+        cx0[i - 1] = x0; cx1[i - 1] = x0 + dx
+        cy0[i - 1] = y0; cy1[i - 1] = y0 + dy
+        cz0[i - 1] = z0; cz1[i - 1] = z0 + dz
+        let bx0: i32 = x0 / B
+        let bx1: i32 = (x0 + dx - 1) / B
+        let by0: i32 = y0 / B
+        let by1: i32 = (y0 + dy - 1) / B
+        let bz0: i32 = z0 / B
+        let bz1: i32 = (z0 + dz - 1) / B
+        let mut bx: i32 = bx0
+        while bx <= bx1 {
+            let mut by: i32 = by0
+            while by <= by1 {
+                let mut bz: i32 = bz0
+                while bz <= bz1 {
+                    let idx: i64 = ((bx as i64) * (nb as i64) + (by as i64)) * (nb as i64) + (bz as i64)
+                    bcount[idx] = bcount[idx] + 1
+                    bz = bz + 1
+                }
+                by = by + 1
+            }
+            bx = bx + 1
+        }
+        i = i + 1
+    }
+
+    let boff: ptr<i32> = calloc(nblocks + 1, 4)
+    let mut total_clips: i64 = 0
+    i = 0
+    while i < nblocks {
+        boff[i] = total_clips as i32
+        total_clips = total_clips + (bcount[i] as i64)
+        i = i + 1
+    }
+    boff[nblocks] = total_clips as i32
+    let rx0: ptr<i32> = calloc(total_clips, 4)
+    let rx1: ptr<i32> = calloc(total_clips, 4)
+    let ry0: ptr<i32> = calloc(total_clips, 4)
+    let ry1: ptr<i32> = calloc(total_clips, 4)
+    let rz0: ptr<i32> = calloc(total_clips, 4)
+    let rz1: ptr<i32> = calloc(total_clips, 4)
+    let cur: ptr<i32> = calloc(nblocks, 4)
+    if rx0 == null { return 1 }
+    i = 0
+    while i < nblocks {
+        cur[i] = boff[i]
+        i = i + 1
+    }
+
+    i = 0
+    while i < N {
+        let x0: i32 = cx0[i]; let x1: i32 = cx1[i]
+        let y0: i32 = cy0[i]; let y1: i32 = cy1[i]
+        let z0: i32 = cz0[i]; let z1: i32 = cz1[i]
+        let bx0: i32 = x0 / B
+        let bx1: i32 = (x1 - 1) / B
+        let by0: i32 = y0 / B
+        let by1: i32 = (y1 - 1) / B
+        let bz0: i32 = z0 / B
+        let bz1: i32 = (z1 - 1) / B
+        let mut bx: i32 = bx0
+        while bx <= bx1 {
+            let xL: i32 = bx * B
+            let xR: i32 = xL + B
+            let mut r0: i32 = 0
+            let mut r1: i32 = B
+            if x0 > xL { r0 = x0 - xL }
+            if x1 < xR { r1 = x1 - xL }
+            let mut by: i32 = by0
+            while by <= by1 {
+                let yL: i32 = by * B
+                let yR: i32 = yL + B
+                let mut s0: i32 = 0
+                let mut s1: i32 = B
+                if y0 > yL { s0 = y0 - yL }
+                if y1 < yR { s1 = y1 - yL }
+                let mut bz: i32 = bz0
+                while bz <= bz1 {
+                    let zL: i32 = bz * B
+                    let zR: i32 = zL + B
+                    let mut t0: i32 = 0
+                    let mut t1: i32 = B
+                    if z0 > zL { t0 = z0 - zL }
+                    if z1 < zR { t1 = z1 - zL }
+                    let bidx: i64 = ((bx as i64) * (nb as i64) + (by as i64)) * (nb as i64) + (bz as i64)
+                    let pos: i32 = cur[bidx]
+                    cur[bidx] = pos + 1
+                    rx0[pos] = r0; rx1[pos] = r1
+                    ry0[pos] = s0; ry1[pos] = s1
+                    rz0[pos] = t0; rz1[pos] = t1
+                    bz = bz + 1
+                }
+                by = by + 1
+            }
+            bx = bx + 1
+        }
+        i = i + 1
+    }
+
+    let mut volume: i64 = 0
+    let mut bi: i64 = 0
+    while bi < nblocks {
+        let start: i32 = boff[bi]
+        let end: i32 = boff[bi + 1]
+        let cnt: i32 = end - start
+        if cnt > 0 {
+            let xs: ptr<i32> = calloc((cnt as i64) * 2 + 2, 4)
+            let ys: ptr<i32> = calloc((cnt as i64) * 2 + 2, 4)
+            let zs: ptr<i32> = calloc((cnt as i64) * 2 + 2, 4)
+            xs[0] = 0; xs[1] = B
+            ys[0] = 0; ys[1] = B
+            zs[0] = 0; zs[1] = B
+            let mut nx: i64 = 2
+            let mut ny: i64 = 2
+            let mut nz: i64 = 2
+            let mut j: i32 = start
+            while j < end {
+                xs[nx] = rx0[j]; nx = nx + 1
+                xs[nx] = rx1[j]; nx = nx + 1
+                ys[ny] = ry0[j]; ny = ny + 1
+                ys[ny] = ry1[j]; ny = ny + 1
+                zs[nz] = rz0[j]; nz = nz + 1
+                zs[nz] = rz1[j]; nz = nz + 1
+                j = j + 1
+            }
+            nx = unique_sorted(xs, nx)
+            ny = unique_sorted(ys, ny)
+            nz = unique_sorted(zs, nz)
+            let stride_y: i64 = nz
+            let stride_x: i64 = ny * nz
+            let size: i64 = nx * ny * nz
+            let diff: ptr<i32> = calloc(size, 4)
+            j = start
+            while j < end {
+                let x0i: i32 = find_idx(xs, nx, rx0[j])
+                let x1i: i32 = find_idx(xs, nx, rx1[j])
+                let y0i: i32 = find_idx(ys, ny, ry0[j])
+                let y1i: i32 = find_idx(ys, ny, ry1[j])
+                let z0i: i32 = find_idx(zs, nz, rz0[j])
+                let z1i: i32 = find_idx(zs, nz, rz1[j])
+                diff[(x0i as i64) * stride_x + (y0i as i64) * stride_y + (z0i as i64)] = diff[(x0i as i64) * stride_x + (y0i as i64) * stride_y + (z0i as i64)] + 1
+                diff[(x1i as i64) * stride_x + (y0i as i64) * stride_y + (z0i as i64)] = diff[(x1i as i64) * stride_x + (y0i as i64) * stride_y + (z0i as i64)] - 1
+                diff[(x0i as i64) * stride_x + (y1i as i64) * stride_y + (z0i as i64)] = diff[(x0i as i64) * stride_x + (y1i as i64) * stride_y + (z0i as i64)] - 1
+                diff[(x0i as i64) * stride_x + (y0i as i64) * stride_y + (z1i as i64)] = diff[(x0i as i64) * stride_x + (y0i as i64) * stride_y + (z1i as i64)] - 1
+                diff[(x1i as i64) * stride_x + (y1i as i64) * stride_y + (z0i as i64)] = diff[(x1i as i64) * stride_x + (y1i as i64) * stride_y + (z0i as i64)] + 1
+                diff[(x1i as i64) * stride_x + (y0i as i64) * stride_y + (z1i as i64)] = diff[(x1i as i64) * stride_x + (y0i as i64) * stride_y + (z1i as i64)] + 1
+                diff[(x0i as i64) * stride_x + (y1i as i64) * stride_y + (z1i as i64)] = diff[(x0i as i64) * stride_x + (y1i as i64) * stride_y + (z1i as i64)] + 1
+                diff[(x1i as i64) * stride_x + (y1i as i64) * stride_y + (z1i as i64)] = diff[(x1i as i64) * stride_x + (y1i as i64) * stride_y + (z1i as i64)] - 1
+                j = j + 1
+            }
+            # prefix x
+            let mut ii: i64 = 1
+            while ii < nx {
+                let mut jj: i64 = 0
+                while jj < ny {
+                    let mut kk: i64 = 0
+                    while kk < nz {
+                        let off: i64 = ii * stride_x + jj * stride_y + kk
+                        let offp: i64 = (ii - 1) * stride_x + jj * stride_y + kk
+                        diff[off] = diff[off] + diff[offp]
+                        kk = kk + 1
+                    }
+                    jj = jj + 1
+                }
+                ii = ii + 1
+            }
+            ii = 0
+            while ii < nx {
+                let mut jj: i64 = 1
+                while jj < ny {
+                    let mut kk: i64 = 0
+                    while kk < nz {
+                        let off: i64 = ii * stride_x + jj * stride_y + kk
+                        let offp: i64 = ii * stride_x + (jj - 1) * stride_y + kk
+                        diff[off] = diff[off] + diff[offp]
+                        kk = kk + 1
+                    }
+                    jj = jj + 1
+                }
+                ii = ii + 1
+            }
+            ii = 0
+            while ii + 1 < nx {
+                let mut jj: i64 = 0
+                while jj + 1 < ny {
+                    let dxi: i64 = (xs[ii + 1] - xs[ii]) as i64
+                    let dyj: i64 = (ys[jj + 1] - ys[jj]) as i64
+                    let area: i64 = dxi * dyj
+                    let mut run: i32 = 0
+                    let mut kk: i64 = 0
+                    while kk + 1 < nz {
+                        run = run + diff[ii * stride_x + jj * stride_y + kk]
+                        if run > 0 {
+                            volume = volume + area * ((zs[kk + 1] - zs[kk]) as i64)
+                        }
+                        kk = kk + 1
+                    }
+                    jj = jj + 1
+                }
+                ii = ii + 1
+            }
+            free(xs); free(ys); free(zs); free(diff)
+        }
+        bi = bi + 1
+    }
+    printf("%lld\n", volume)
+    return 0
+}

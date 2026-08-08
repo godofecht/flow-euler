@@ -1,0 +1,62 @@
+# Project Euler 133
+# Sum of primes below 100000 that never divide R(10^k).
+
+function mod_pow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function divides_some_R10k(p: i64) -> bool {
+    # 2,3,5 never divide R(10^n): 2/5 end in 1; R(10^n) ≡ 1 (mod 3).
+    if p == 2 || p == 3 || p == 5 { return false }
+    # multiplicative order of 10 modulo p
+    let mut ord: i64 = p - 1
+    let mut n: i64 = p - 1
+    let mut f: i64 = 2
+    while f * f <= n {
+        if n % f == 0 {
+            while n % f == 0 { n = n / f }
+            while ord % f == 0 && mod_pow(10, ord / f, p) == 1 {
+                ord = ord / f
+            }
+        }
+        f = f + 1
+    }
+    if n > 1 {
+        while ord % n == 0 && mod_pow(10, ord / n, p) == 1 {
+            ord = ord / n
+        }
+    }
+    while ord % 2 == 0 { ord = ord / 2 }
+    while ord % 5 == 0 { ord = ord / 5 }
+    return ord == 1
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut n: i64 = 2
+    while n < 100000 {
+        let mut prime: bool = true
+        if n >= 4 && n % 2 == 0 { prime = false }
+        let mut d: i64 = 3
+        while prime && d * d <= n {
+            if n % d == 0 { prime = false }
+            d = d + 2
+        }
+        if prime {
+            if !divides_some_R10k(n) {
+                total = total + n
+            }
+        }
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

@@ -1,0 +1,178 @@
+# Project Euler 292
+# Pythagorean polygons P(120).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let n: i64 = 120
+    let max_perim: i64 = n
+    let O: i64 = max_perim
+    let W: i64 = 2 * max_perim + 1
+    let origin: i64 = O * W + O
+    let CAP: i64 = 20011
+    let P: i64 = max_perim + 1
+
+    let gdx: ptr<i64> = calloc(5000, 8)
+    let gdy: ptr<i64> = calloc(5000, 8)
+    let gc: ptr<i64> = calloc(5000, 8)
+    let mut ng: i64 = 0
+    gdx[ng] = 1; gdy[ng] = 0; gc[ng] = 1; ng = ng + 1
+    gdx[ng] = 0; gdy[ng] = 1; gc[ng] = 1; ng = ng + 1
+    let max_m: i64 = isqrt(max_perim - 1) + 2
+    let mut m: i64 = 2
+    while m <= max_m {
+        let mm: i64 = m * m
+        let mut nn: i64 = 1
+        while nn < m {
+            if ((m - nn) % 2) != 0 && gcd(m, nn) == 1 {
+                let a: i64 = mm - nn * nn
+                let b: i64 = 2 * m * nn
+                let c: i64 = mm + nn * nn
+                if c <= max_perim {
+                    gdx[ng] = a; gdy[ng] = b; gc[ng] = c; ng = ng + 1
+                    gdx[ng] = 0 - a; gdy[ng] = b; gc[ng] = c; ng = ng + 1
+                    gdx[ng] = b; gdy[ng] = a; gc[ng] = c; ng = ng + 1
+                    gdx[ng] = 0 - b; gdy[ng] = a; gc[ng] = c; ng = ng + 1
+                }
+            }
+            nn = nn + 1
+        }
+        m = m + 1
+    }
+
+    let keys: ptr<i64> = calloc(P * CAP, 8)
+    let vals: ptr<i64> = calloc(P * CAP, 8)
+    let used: ptr<i8> = calloc(P * CAP, 1)
+    let bkeys: ptr<i64> = calloc(P * CAP, 8)
+    let bvals: ptr<i64> = calloc(P * CAP, 8)
+    let bused: ptr<i8> = calloc(P * CAP, 1)
+
+    # insert origin into dp[0]
+    let mut h: i64 = origin % CAP
+    if h < 0 { h = -h }
+    used[0 * CAP + h] = 1
+    keys[0 * CAP + h] = origin
+    vals[0 * CAP + h] = 1
+
+    let mut gi: i64 = 0
+    while gi < ng {
+        let dx: i64 = gdx[gi]
+        let dy: i64 = gdy[gi]
+        let c: i64 = gc[gi]
+        let mut p: i64 = 0
+        while p <= max_perim {
+            h = 0
+            while h < CAP {
+                bused[p * CAP + h] = used[p * CAP + h]
+                bkeys[p * CAP + h] = keys[p * CAP + h]
+                bvals[p * CAP + h] = vals[p * CAP + h]
+                h = h + 1
+            }
+            p = p + 1
+        }
+        let max_scale: i64 = max_perim / c
+        let mut s: i64 = 1
+        while s <= max_scale {
+            let length: i64 = c * s
+            let delta: i64 = dx * s * W + dy * s
+            p = 0
+            while p + length <= max_perim {
+                h = 0
+                while h < CAP {
+                    if bused[p * CAP + h] != 0 {
+                        let key: i64 = bkeys[p * CAP + h]
+                        let cnt: i64 = bvals[p * CAP + h]
+                        let dest: i64 = p + length
+                        let k2: i64 = key + delta
+                        let mut hh: i64 = k2 % CAP
+                        if hh < 0 { hh = -hh }
+                        while used[dest * CAP + hh] != 0 {
+                            if keys[dest * CAP + hh] == k2 {
+                                vals[dest * CAP + hh] = vals[dest * CAP + hh] + cnt
+                                break
+                            }
+                            hh = hh + 1
+                            if hh == CAP { hh = 0 }
+                        }
+                        if used[dest * CAP + hh] == 0 {
+                            used[dest * CAP + hh] = 1
+                            keys[dest * CAP + hh] = k2
+                            vals[dest * CAP + hh] = cnt
+                        }
+                    }
+                    h = h + 1
+                }
+                p = p + 1
+            }
+            s = s + 1
+        }
+        gi = gi + 1
+    }
+
+    let mut total: i64 = 0
+    let mut p1: i64 = 0
+    while p1 <= n {
+        let mut p2: i64 = 0
+        while p2 <= n - p1 {
+            h = 0
+            while h < CAP {
+                if used[p1 * CAP + h] != 0 {
+                    let key: i64 = keys[p1 * CAP + h]
+                    let c1: i64 = vals[p1 * CAP + h]
+                    let c2: i64 = 0
+                    let mut hh: i64 = key % CAP
+                    if hh < 0 { hh = -hh }
+                    while used[p2 * CAP + hh] != 0 {
+                        if keys[p2 * CAP + hh] == key {
+                            c2 = vals[p2 * CAP + hh]
+                            break
+                        }
+                        hh = hh + 1
+                        if hh == CAP { hh = 0 }
+                    }
+                    if c2 != 0 {
+                        total = total + c1 * c2
+                    }
+                }
+                h = h + 1
+            }
+            p2 = p2 + 1
+        }
+        p1 = p1 + 1
+    }
+    total = total - 1
+    gi = 0
+    while gi < ng {
+        total = total - (n / (2 * gc[gi]))
+        gi = gi + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

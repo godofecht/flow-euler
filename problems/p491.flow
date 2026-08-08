@@ -1,0 +1,65 @@
+# Project Euler 491
+# Double pandigital numbers divisible by 11 (digit-mask enumeration).
+
+function snoob(x0: i64) -> i64 {
+    let x: i64 = x0
+    let smallest: i64 = x & -x
+    let ripple: i64 = x + smallest
+    let ones: i64 = ripple ^ x
+    return ((ones >> 2) / smallest) | ripple
+}
+
+function main() -> i32 {
+    let maxDigit: i32 = 9
+    let digitSum: i32 = (maxDigit + 1) * maxDigit
+    let numDigits: i32 = 2 * (maxDigit + 1)
+    let mut factorial: i64 = 1
+    let mut i: i32 = 1
+    while i <= maxDigit + 1 {
+        factorial = factorial * (i as i64)
+        i = i + 1
+    }
+    let perms: array<i64, 10> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    i = 0
+    while i <= maxDigit {
+        perms[i] = factorial >> i
+        i = i + 1
+    }
+    let minBitmask: i64 = (1 << (maxDigit + 1)) - 1
+    let maxBitmask: i64 = minBitmask << (maxDigit + 1)
+    let mut result: i64 = 0
+    let mut bitmask: i64 = minBitmask
+    while true {
+        let mut reduce: i64 = bitmask
+        let mut ok: bool = true
+        while reduce > 0 {
+            if (reduce & 3) == 2 {
+                ok = false
+                break
+            }
+            reduce = reduce >> 2
+        }
+        if ok {
+            let mut sumOdd: i32 = 0
+            let mut repeated: i32 = 0
+            let mut pos: i32 = 0
+            while pos < numDigits {
+                if (bitmask & (1 << pos)) != 0 {
+                    sumOdd = sumOdd + pos / 2
+                    if (pos & 1) != 0 {
+                        repeated = repeated + 1
+                    }
+                }
+                pos = pos + 1
+            }
+            let diff: i32 = digitSum - 2 * sumOdd
+            if diff % 11 == 0 {
+                result = result + perms[repeated] * perms[repeated]
+            }
+        }
+        if bitmask == maxBitmask { break }
+        bitmask = snoob(bitmask)
+    }
+    printf("%lld\n", result * (maxDigit as i64) / ((maxDigit + 1) as i64))
+    return 0
+}

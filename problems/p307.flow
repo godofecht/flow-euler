@@ -1,0 +1,32 @@
+# Project Euler 307
+# P(some chip has ≥3 defects) for k=20000, n=10^6; 10 decimals.
+
+extern {
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let k: i64 = 20000
+    let n: i64 = 1000000
+    let inv_n: f64 = 1.0 / (n as f64)
+    let mut log_t0: f64 = 0.0
+    let mut i: i64 = 0
+    while i < k {
+        log_t0 = log_t0 + log(1.0 - (i as f64) * inv_n)
+        i = i + 1
+    }
+    let mut t: f64 = exp(log_t0)
+    let mut q: f64 = t
+    let mut a: i64 = 0
+    while true {
+        let b: i64 = k - 2 * a
+        if b < 2 { break }
+        let ratio: f64 = ((b * (b - 1)) as f64) / (2.0 * ((a + 1) as f64) * ((n - k + a + 1) as f64))
+        t = t * ratio
+        q = q + t
+        a = a + 1
+    }
+    printf("%.10f\n", 1.0 - q)
+    return 0
+}

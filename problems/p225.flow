@@ -1,0 +1,37 @@
+# Project Euler 225
+# 124th odd number that does not divide any term of the tribonacci sequence.
+
+function divides_trib(mod: i64) -> bool {
+    let mut a: i64 = 1
+    let mut b: i64 = 1
+    let mut c: i64 = 1
+    # period at most mod^3; detect return to (1,1,1) or zero
+    let mut steps: i64 = 0
+    let limit: i64 = mod * mod * mod + 5
+    while steps < limit {
+        let nxt: i64 = (a + b + c) % mod
+        if nxt == 0 { return true }
+        a = b
+        b = c
+        c = nxt
+        if a == 1 && b == 1 && c == 1 { return false }
+        steps = steps + 1
+    }
+    return false
+}
+
+function main() -> i32 {
+    let mut count: i32 = 0
+    let mut n: i64 = 1
+    while true {
+        n = n + 2
+        if !divides_trib(n) {
+            count = count + 1
+            if count == 124 {
+                printf("%lld\n", n)
+                return 0
+            }
+        }
+    }
+    return 1
+}

@@ -1,0 +1,91 @@
+# Project Euler 167
+# Sum of U(2, 2n+1)_k for n=2..10, k=10^11.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function ulam_2_v_k(v: i64, k: i64) -> i64 {
+    if k == 1 { return 2 }
+    if k == 2 { return v }
+
+    let target_odd: i64 = k - 2
+    let m: i32 = (v + 1) as i32
+    let n: i32 = ((v - 1) / 2) as i32
+
+    let init_bits: ptr<i8> = calloc(m as i64, 1)
+    if init_bits == null { return 0 }
+    let mut t: i32 = n
+    while t <= 2 * n + 1 {
+        init_bits[t] = 1
+        t = t + 1
+    }
+
+    let mut state: i64 = 0
+    let mut i: i32 = 0
+    while i < m {
+        if init_bits[m - 1 - i] != 0 {
+            state = state | (1 << i)
+        }
+        i = i + 1
+    }
+    let init_state: i64 = state
+    let mask: i64 = (1 << m) - 1
+
+    # Collect bits until period; max period for these v is modest
+    let max_bits: i64 = 5000000
+    let bits: ptr<i8> = calloc(max_bits, 1)
+    if bits == null { free(init_bits); return 0 }
+    i = 0
+    while i < m {
+        bits[i] = init_bits[i]
+        i = i + 1
+    }
+    let mut period: i32 = 0
+    let mut len: i32 = m
+    while true {
+        let new_bit: i8 = ((state & 1) ^ ((state >> (m - 1)) & 1)) as i8
+        state = ((state << 1) & mask) | (new_bit as i64)
+        bits[len] = new_bit
+        len = len + 1
+        period = period + 1
+        if state == init_state { break }
+        if len as i64 >= max_bits { break }
+    }
+
+    # ones positions in one period of f[0..)
+    let ones: ptr<i32> = calloc(period as i64, 4)
+    if ones == null { free(bits); free(init_bits); return 0 }
+    let mut ones_count: i32 = 0
+    i = 0
+    while i < period {
+        if bits[i] != 0 {
+            ones[ones_count] = i
+            ones_count = ones_count + 1
+        }
+        i = i + 1
+    }
+
+    let q: i64 = (target_odd - 1) / (ones_count as i64)
+    let r: i64 = (target_odd - 1) % (ones_count as i64)
+    let t_idx: i64 = q * (period as i64) + (ones[r] as i64)
+    let result: i64 = 2 * t_idx + 1
+
+    free(ones)
+    free(bits)
+    free(init_bits)
+    return result
+}
+
+function main() -> i32 {
+    let k: i64 = 100000000000
+    let mut ans: i64 = 0
+    let mut n: i64 = 2
+    while n <= 10 {
+        ans = ans + ulam_2_v_k(2 * n + 1, k)
+        n = n + 1
+    }
+    printf("%lld\n", ans)
+    return 0
+}

@@ -1,0 +1,23 @@
+# Project Euler 034
+# Sum of numbers equal to the sum of the factorial of their digits.
+
+function main() -> i32 {
+    let fact: array<i64, 10> = [1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880]
+    # Upper bound: 7*9! = 2540160
+    let mut total: i64 = 0
+    let mut n: i64 = 3
+    while n <= 2540160 {
+        let mut s: i64 = 0
+        let mut x: i64 = n
+        while x > 0 {
+            s = s + fact[(x % 10) as i32]
+            x = x / 10
+        }
+        if s == n {
+            total = total + n
+        }
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

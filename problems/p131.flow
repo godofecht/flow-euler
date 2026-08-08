@@ -1,0 +1,29 @@
+# Project Euler 131
+# Count primes p < 10^6 such that n^3 + n^2 p is a perfect cube for some n.
+
+function is_prime(n: i64) -> bool {
+    if n < 2 { return false }
+    if n % 2 == 0 { return n == 2 }
+    if n % 3 == 0 { return n == 3 }
+    let mut d: i64 = 5
+    while d * d <= n {
+        if n % d == 0 { return false }
+        if n % (d + 2) == 0 { return false }
+        d = d + 6
+    }
+    return true
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let mut count: i64 = 0
+    let mut a: i64 = 1
+    while true {
+        let p: i64 = 3 * a * a + 3 * a + 1
+        if p >= limit { break }
+        if is_prime(p) { count = count + 1 }
+        a = a + 1
+    }
+    printf("%lld\n", count)
+    return 0
+}

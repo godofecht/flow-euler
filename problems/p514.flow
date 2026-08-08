@@ -1,0 +1,172 @@
+# Project Euler 514
+# Geoboard Shapes — E(100) expected convex hull area.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function line_len(kx_base: i64, kyv: i64) -> i64 {
+    if kyv > kx_base { return 1 + kx_base }
+    return 1 + kyv
+}
+
+function main() -> i32 {
+    let N: i64 = 100
+    let M: i64 = N + 1
+    let p: f64 = 1.0 / (M as f64)
+    let q: f64 = 1.0 - p
+    let total_points: i64 = M * M
+
+    let qpow: ptr<f64> = calloc(total_points + 1, 8)
+    let omq: ptr<f64> = calloc(total_points + 1, 8)
+    let qsmall: ptr<f64> = calloc(M + 1, 8)
+    let p2S: ptr<f64> = calloc(M + 1, 8)
+    let ky: ptr<i64> = calloc((N + 1) * M, 8)
+    let kx: ptr<i64> = calloc((N + 1) * M, 8)
+    if qpow == null || omq == null || qsmall == null || p2S == null || ky == null || kx == null { return 1 }
+
+    qpow[0] = 1.0
+    let mut i: i64 = 1
+    while i <= total_points {
+        qpow[i] = qpow[i - 1] * q
+        i = i + 1
+    }
+    i = 0
+    while i <= total_points {
+        omq[i] = 1.0 - qpow[i]
+        i = i + 1
+    }
+    qsmall[0] = 1.0
+    i = 1
+    while i <= M {
+        qsmall[i] = qsmall[i - 1] * q
+        i = i + 1
+    }
+    let p2: f64 = p * p
+    let mut L: i64 = 2
+    while L <= M {
+        let mut s: f64 = 0.0
+        let mut d: i64 = 1
+        while d < L {
+            s = s + (d as f64) * ((L - d) as f64) * qsmall[d - 1]
+            d = d + 1
+        }
+        p2S[L] = p2 * s
+        L = L + 1
+    }
+
+    let mut b: i64 = 1
+    while b <= N {
+        let mut y: i64 = 0
+        while y < M {
+            ky[b * M + y] = (N - y) / b
+            y = y + 1
+        }
+        b = b + 1
+    }
+    let mut a: i64 = 1
+    while a <= N {
+        let mut x: i64 = 0
+        while x < M {
+            kx[a * M + x] = (N - x) / a
+            x = x + 1
+        }
+        a = a + 1
+    }
+
+    let mut total_cross_scaled: f64 = 0.0
+    a = 1
+    while a <= N {
+        let mut bb: i64 = 0
+        while bb <= a {
+            if gcd(a, bb) == 1 {
+                if bb != 0 || a == 1 {
+                    let mut mult: f64 = 8.0
+                    if bb == 0 || a == bb { mult = 4.0 }
+
+                    if bb == 0 {
+                        let mut above: i64 = 0
+                        let mut dir_sum: f64 = 0.0
+                        let min_t: i64 = -a * N
+                        let mut K: f64 = (4 * (N - 0) + (4 * min_t - 2 * N * (bb - a))) as f64
+                        let Lline: i64 = M
+                        let coeff: f64 = p2S[Lline]
+                        let mut y3: i64 = 0
+                        while y3 < M {
+                            let below: i64 = total_points - above - Lline
+                            dir_sum = dir_sum + qpow[above] * omq[below] * (K * coeff)
+                            above = above + Lline
+                            K = K - 4.0
+                            y3 = y3 + 1
+                        }
+                        total_cross_scaled = total_cross_scaled + mult * dir_sum
+                    } else {
+                        let R: i64 = N * (a + bb) + 1
+                        let counts: ptr<i64> = calloc(R, 8)
+                        if counts != null {
+                            let mut x0: i64 = 0
+                            while x0 < a {
+                                let kx_base: i64 = kx[a * M + x0]
+                                let bx: i64 = bb * x0
+                                let mut y0: i64 = 0
+                                while y0 < M {
+                                    counts[bx + a * (N - y0)] = line_len(kx_base, ky[bb * M + y0])
+                                    y0 = y0 + 1
+                                }
+                                x0 = x0 + 1
+                            }
+                            x0 = a
+                            while x0 < M {
+                                let kx_base2: i64 = kx[a * M + x0]
+                                let bx2: i64 = bb * x0
+                                let mut y0b: i64 = 0
+                                while y0b < bb {
+                                    counts[bx2 + a * (N - y0b)] = line_len(kx_base2, ky[bb * M + y0b])
+                                    y0b = y0b + 1
+                                }
+                                x0 = x0 + 1
+                            }
+
+                            let mut above2: i64 = 0
+                            let k0: i64 = 4 * (-a * N) - 2 * N * (bb - a)
+                            let mut K2: f64 = (4 * (R - 1) + k0) as f64
+                            let mut dir_sum2: f64 = 0.0
+                            let mut idx: i64 = R - 1
+                            while idx >= 0 {
+                                let cnt: i64 = counts[idx]
+                                if cnt > 0 {
+                                    let below2: i64 = total_points - above2 - cnt
+                                    dir_sum2 = dir_sum2 + qpow[above2] * omq[below2] * (K2 * p2S[cnt])
+                                    above2 = above2 + cnt
+                                }
+                                K2 = K2 - 4.0
+                                idx = idx - 1
+                            }
+                            total_cross_scaled = total_cross_scaled + mult * dir_sum2
+                            free(counts)
+                        }
+                    }
+                }
+            }
+            bb = bb + 1
+        }
+        a = a + 1
+    }
+
+    let ans: f64 = total_cross_scaled / 8.0
+    printf("%.5f\n", ans)
+    free(qpow); free(omq); free(qsmall); free(p2S); free(ky); free(kx)
+    return 0
+}

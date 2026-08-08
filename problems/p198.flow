@@ -1,0 +1,57 @@
+# Project Euler 198
+# Count ambiguous rationals x=p/q with 0<x<1/100 and q<=10^8.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let limit_q: i64 = 100000000
+    let R: i64 = 100
+    let L: i64 = limit_q / 2
+    let base: i64 = L - (R / 2)
+
+    let m: i64 = isqrt(L)
+    let mut internal: i64 = 0
+    # stack of (a,b) pairs
+    let stack: ptr<i64> = calloc(2000000 * 2, 8)
+    if stack == null { return 1 }
+
+    let mut n: i64 = R
+    while n <= m {
+        let mut sp: i64 = 0
+        stack[0] = n
+        stack[1] = n + 1
+        sp = 1
+        while sp > 0 {
+            sp = sp - 1
+            let a: i64 = stack[sp * 2]
+            let b: i64 = stack[sp * 2 + 1]
+            if a * b > L { continue }
+            internal = internal + 1
+            let c: i64 = a + b
+            stack[sp * 2] = a
+            stack[sp * 2 + 1] = c
+            sp = sp + 1
+            stack[sp * 2] = c
+            stack[sp * 2 + 1] = b
+            sp = sp + 1
+        }
+        n = n + 1
+    }
+    printf("%lld\n", base + internal)
+    free(stack)
+    return 0
+}

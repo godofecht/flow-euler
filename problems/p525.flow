@@ -1,0 +1,104 @@
+# Project Euler 525
+# Rolling Ellipse — C(1,4)+C(3,4) via adaptive Simpson.
+
+extern {
+    function sin(x: f64) -> f64
+    function cos(x: f64) -> f64
+    function atan2(y: f64, x: f64) -> f64
+    function sqrt(x: f64) -> f64
+    function hypot(x: f64, y: f64) -> f64
+    function fabs(x: f64) -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const PI: f64 = 3.14159265358979323846
+
+function speed(t: f64, a: f64, b: f64) -> f64 {
+    let s: f64 = sin(t)
+    let c: f64 = cos(t)
+    let denom: f64 = a * a * s * s + b * b * c * c
+    let d: f64 = sqrt(denom)
+    let theta: f64 = atan2(b * c, a * s) - PI
+    let thetap: f64 = -a * b / denom
+    let px: f64 = a * c
+    let py: f64 = b * s
+    let jx: f64 = -py
+    let jy: f64 = px
+    let ppx: f64 = -a * s
+    let ppy: f64 = b * c
+    let wx: f64 = thetap * jx + ppx
+    let wy: f64 = thetap * jy + ppy
+    let ct: f64 = cos(theta)
+    let st: f64 = sin(theta)
+    let rwx: f64 = wx * ct - wy * st
+    let rwy: f64 = wx * st + wy * ct
+    let dx: f64 = d - rwx
+    let dy: f64 = -rwy
+    return hypot(dx, dy)
+}
+
+function simpson(a0: f64, b0: f64, fa: f64, fm: f64, fb: f64) -> f64 {
+    return (b0 - a0) * (fa + 4.0 * fm + fb) / 6.0
+}
+
+function adaptive_simpson(a: f64, b: f64, ea: f64, eb: f64, eps: f64) -> f64 {
+    # iterative stack: a,b,fa,fm,fb,s,eps  (7 doubles per frame)
+    let stack: ptr<f64> = calloc(7 * 10000, 8)
+    if stack == null { return 0.0 }
+    let fa: f64 = speed(a, ea, eb)
+    let fb: f64 = speed(b, ea, eb)
+    let m: f64 = (a + b) / 2.0
+    let fm: f64 = speed(m, ea, eb)
+    let whole: f64 = simpson(a, b, fa, fm, fb)
+    let mut sp: i64 = 0
+    stack[0] = a; stack[1] = b; stack[2] = fa; stack[3] = fm
+    stack[4] = fb; stack[5] = whole; stack[6] = eps
+    sp = 1
+    let mut total: f64 = 0.0
+    while sp > 0 {
+        sp = sp - 1
+        let base: i64 = sp * 7
+        let a1: f64 = stack[base]
+        let b1: f64 = stack[base + 1]
+        let fa1: f64 = stack[base + 2]
+        let fm1: f64 = stack[base + 3]
+        let fb1: f64 = stack[base + 4]
+        let s1: f64 = stack[base + 5]
+        let eps1: f64 = stack[base + 6]
+        let m1: f64 = (a1 + b1) / 2.0
+        let lm: f64 = (a1 + m1) / 2.0
+        let rm: f64 = (m1 + b1) / 2.0
+        let flm: f64 = speed(lm, ea, eb)
+        let frm: f64 = speed(rm, ea, eb)
+        let left: f64 = simpson(a1, m1, fa1, flm, fm1)
+        let right: f64 = simpson(m1, b1, fm1, frm, fb1)
+        if fabs((left + right) - s1) <= 15.0 * eps1 {
+            total = total + left + right + ((left + right) - s1) / 15.0
+        } else {
+            let e2: f64 = eps1 / 2.0
+            let b2: i64 = sp * 7
+            stack[b2] = m1; stack[b2 + 1] = b1; stack[b2 + 2] = fm1
+            stack[b2 + 3] = frm; stack[b2 + 4] = fb1; stack[b2 + 5] = right; stack[b2 + 6] = e2
+            sp = sp + 1
+            let b3: i64 = sp * 7
+            stack[b3] = a1; stack[b3 + 1] = m1; stack[b3 + 2] = fa1
+            stack[b3 + 3] = flm; stack[b3 + 4] = fm1; stack[b3 + 5] = left; stack[b3 + 6] = e2
+            sp = sp + 1
+        }
+    }
+    free(stack)
+    return total
+}
+
+function center_curve_length(a: f64, b: f64) -> f64 {
+    let t0: f64 = -PI / 2.0
+    let t1: f64 = t0 + 2.0 * PI
+    return adaptive_simpson(t0, t1, a, b, 1.0e-12)
+}
+
+function main() -> i32 {
+    let ans: f64 = center_curve_length(1.0, 4.0) + center_curve_length(3.0, 4.0)
+    printf("%.8f\n", ans)
+    return 0
+}

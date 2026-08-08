@@ -1,0 +1,151 @@
+# Project Euler 161
+# Triomino tilings of a 9x12 grid.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function cache_get(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64) -> i64 {
+    let mut slot: i64 = key
+    if slot < 0 { slot = -slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 {
+        if keys[slot] == key { return vals[slot] }
+        slot = (slot + 1) & (cap - 1)
+    }
+    return -1
+}
+
+function cache_put(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, val: i64) -> void {
+    let mut slot: i64 = key
+    if slot < 0 { slot = -slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 && keys[slot] != key {
+        slot = (slot + 1) & (cap - 1)
+    }
+    used[slot] = 1
+    keys[slot] = key
+    vals[slot] = val
+}
+
+function use_cell(pos: i32, row: i32) -> i32 {
+    let mask: i32 = 1 << pos
+    if (row & mask) != 0 { return -1 }
+    return row | mask
+}
+
+function search(rows_left: i32, row_a: i32, row_b: i32, row_c: i32, width: i32,
+                keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    if rows_left == 0 { return 1 }
+    let full_row: i32 = (1 << width) - 1
+    if row_a == full_row {
+        return search(rows_left - 1, row_b, row_c, 0, width, keys, vals, used, cap)
+    }
+
+    let mut pos: i32 = 0
+    while (row_a & (1 << pos)) != 0 {
+        pos = pos + 1
+    }
+
+    let mut hash_value: i64 = rows_left as i64
+    hash_value = (hash_value << width) | (row_a as i64)
+    hash_value = (hash_value << width) | (row_b as i64)
+    hash_value = (hash_value << width) | (row_c as i64)
+
+    let cached: i64 = cache_get(keys, vals, used, cap, hash_value)
+    if cached >= 0 { return cached }
+
+    let mut result: i64 = 0
+
+    if rows_left >= 2 && pos < width - 1 {
+        let mut a: i32 = use_cell(pos, row_a)
+        if a >= 0 {
+            a = use_cell(pos + 1, a)
+            if a >= 0 {
+                let b: i32 = use_cell(pos, row_b)
+                if b >= 0 {
+                    result = result + search(rows_left, a, b, row_c, width, keys, vals, used, cap)
+                }
+            }
+        }
+    }
+    if rows_left >= 2 && pos < width - 1 {
+        let mut a: i32 = use_cell(pos, row_a)
+        if a >= 0 {
+            a = use_cell(pos + 1, a)
+            if a >= 0 {
+                let b: i32 = use_cell(pos + 1, row_b)
+                if b >= 0 {
+                    result = result + search(rows_left, a, b, row_c, width, keys, vals, used, cap)
+                }
+            }
+        }
+    }
+    if rows_left >= 2 && pos < width - 1 {
+        let a: i32 = use_cell(pos, row_a)
+        if a >= 0 {
+            let mut b: i32 = use_cell(pos, row_b)
+            if b >= 0 {
+                b = use_cell(pos + 1, b)
+                if b >= 0 {
+                    result = result + search(rows_left, a, b, row_c, width, keys, vals, used, cap)
+                }
+            }
+        }
+    }
+    if rows_left >= 2 && pos > 0 {
+        let a: i32 = use_cell(pos, row_a)
+        if a >= 0 {
+            let mut b: i32 = use_cell(pos - 1, row_b)
+            if b >= 0 {
+                b = use_cell(pos, b)
+                if b >= 0 {
+                    result = result + search(rows_left, a, b, row_c, width, keys, vals, used, cap)
+                }
+            }
+        }
+    }
+    if rows_left >= 3 {
+        let a: i32 = use_cell(pos, row_a)
+        if a >= 0 {
+            let b: i32 = use_cell(pos, row_b)
+            if b >= 0 {
+                let c: i32 = use_cell(pos, row_c)
+                if c >= 0 {
+                    result = result + search(rows_left, a, b, c, width, keys, vals, used, cap)
+                }
+            }
+        }
+    }
+    if rows_left >= 1 && pos < width - 2 {
+        let mut a: i32 = use_cell(pos, row_a)
+        if a >= 0 {
+            a = use_cell(pos + 1, a)
+            if a >= 0 {
+                a = use_cell(pos + 2, a)
+                if a >= 0 {
+                    result = result + search(rows_left, a, row_b, row_c, width, keys, vals, used, cap)
+                }
+            }
+        }
+    }
+
+    cache_put(keys, vals, used, cap, hash_value, result)
+    return result
+}
+
+function main() -> i32 {
+    let cap: i64 = 2097152
+    let keys: ptr<i64> = calloc(cap, 8)
+    let vals: ptr<i64> = calloc(cap, 8)
+    let used: ptr<i8> = calloc(cap, 1)
+    if keys == null || vals == null || used == null { return 1 }
+
+    let ans: i64 = search(12, 0, 0, 0, 9, keys, vals, used, cap)
+    printf("%lld\n", ans)
+    free(keys)
+    free(vals)
+    free(used)
+    return 0
+}

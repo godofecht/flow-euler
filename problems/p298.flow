@@ -1,0 +1,127 @@
+# Project Euler 298
+# E[|L-R|] after 50 turns to 8 decimals.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fclose(f: ptr<void>) -> i32
+    function fgetc(f: ptr<void>) -> i32
+}
+
+function read_i32_list(path: string, arr: ptr<i32>, n: i64) -> void {
+    let f: ptr<void> = fopen(path, "r")
+    let mut i: i64 = 0
+    let mut c: i32 = fgetc(f)
+    while i < n {
+        while c == 32 || c == 10 || c == 13 || c == 9 {
+            c = fgetc(f)
+        }
+        let mut sign: i32 = 1
+        if c == 45 {
+            sign = -1
+            c = fgetc(f)
+        }
+        let mut v: i32 = 0
+        while c >= 48 && c <= 57 {
+            v = v * 10 + (c - 48)
+            c = fgetc(f)
+        }
+        arr[i] = v * sign
+        i = i + 1
+    }
+    fclose(f)
+}
+
+function main() -> i32 {
+    let NS: i64 = 439
+    let TURNS: i64 = 50
+    let NT: i64 = 2886
+    let NO: i64 = 440
+    let offs: ptr<i32> = calloc(NO, 4)
+    let tos: ptr<i32> = calloc(NT, 4)
+    let deltas: ptr<i32> = calloc(NT, 4)
+    let weights: ptr<i32> = calloc(NT, 4)
+    read_i32_list("data/p298_offs.txt", offs, NO)
+    read_i32_list("data/p298_tos.txt", tos, NT)
+    read_i32_list("data/p298_deltas.txt", deltas, NT)
+    read_i32_list("data/p298_weights.txt", weights, NT)
+
+    let MAXLEN: i64 = 2 * TURNS + 1
+    let cur: ptr<f64> = calloc(NS * MAXLEN, 8)
+    let nxt: ptr<f64> = calloc(NS * MAXLEN, 8)
+    let active: ptr<i8> = calloc(NS, 1)
+    let nactive: ptr<i8> = calloc(NS, 1)
+    cur[0 * MAXLEN + 0] = 1.0
+    active[0] = 1
+    let mut t: i64 = 0
+    while t < TURNS {
+        let new_len: i64 = 2 * (t + 1) + 1
+        let old_len: i64 = 2 * t + 1
+        let mut s: i64 = 0
+        while s < NS {
+            nactive[s] = 0
+            let mut i: i64 = 0
+            while i < new_len {
+                nxt[s * MAXLEN + i] = 0.0
+                i = i + 1
+            }
+            s = s + 1
+        }
+        s = 0
+        while s < NS {
+            if active[s] != 0 {
+                let a: i64 = offs[s] as i64
+                let b: i64 = offs[s + 1] as i64
+                let mut e: i64 = a
+                while e < b {
+                    let ns: i64 = tos[e] as i64
+                    let delta: i64 = deltas[e] as i64
+                    let w: f64 = (weights[e] as f64) / 10.0
+                    let shift: i64 = delta + 1
+                    nactive[ns] = 1
+                    let mut i: i64 = 0
+                    while i < old_len {
+                        let val: f64 = cur[s * MAXLEN + i]
+                        if val != 0.0 {
+                            nxt[ns * MAXLEN + i + shift] = nxt[ns * MAXLEN + i + shift] + val * w
+                        }
+                        i = i + 1
+                    }
+                    e = e + 1
+                }
+            }
+            s = s + 1
+        }
+        s = 0
+        while s < NS {
+            active[s] = nactive[s]
+            let mut i: i64 = 0
+            while i < new_len {
+                cur[s * MAXLEN + i] = nxt[s * MAXLEN + i]
+                i = i + 1
+            }
+            s = s + 1
+        }
+        t = t + 1
+    }
+    let mut expected: f64 = 0.0
+    let offset: i64 = TURNS
+    let mut s: i64 = 0
+    while s < NS {
+        if active[s] != 0 {
+            let mut i: i64 = 0
+            while i < MAXLEN {
+                let diff: i64 = i - offset
+                let mut ad: f64 = diff as f64
+                if ad < 0.0 { ad = 0.0 - ad }
+                expected = expected + ad * cur[s * MAXLEN + i]
+                i = i + 1
+            }
+        }
+        s = s + 1
+    }
+    printf("%.8f\n", expected)
+    free(offs); free(tos); free(deltas); free(weights); free(cur); free(nxt); free(active); free(nactive)
+    return 0
+}

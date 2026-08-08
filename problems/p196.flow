@@ -1,0 +1,168 @@
+# Project Euler 196
+# S(5678027) + S(7208785) for prime-triplet elements in triangle rows.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, v: i32, n: i64) -> ptr<void>
+}
+
+let mut sieve: ptr<i8> = null
+let mut sieve_half: i64 = 0
+let mut segment: ptr<i8> = null
+let mut segment_len: i64 = 0
+let mut segment_start: i64 = 0
+let mut three_plus: ptr<i8> = null
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function fill_sieve(size: i64) -> void {
+    let half: i64 = (size >> 1) + 1
+    if sieve_half >= half { return }
+    if sieve != null { free(sieve) }
+    sieve = calloc(half, 1)
+    sieve_half = half
+    let mut i: i64 = 0
+    while i < half {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    i = 1
+    while 2 * i * i < half {
+        if sieve[i] == 1 {
+            let mut current: i64 = 3 * i + 1
+            let step: i64 = 2 * i + 1
+            while current < half {
+                sieve[current] = 0
+                current = current + step
+            }
+        }
+        i = i + 1
+    }
+}
+
+function is_prime_small(x: i64) -> bool {
+    if x % 2 == 0 { return x == 2 }
+    return sieve[x >> 1] == 1
+}
+
+function get_number(x: i64, y: i64) -> i64 {
+    return x + y * (y - 1) / 2
+}
+
+function fill_segmented_sieve(from_val: i64, to_val: i64) -> void {
+    fill_sieve(isqrt(to_val))
+    segment_start = from_val | 1
+    let num_values: i64 = to_val - from_val + 1
+    if segment != null { free(segment) }
+    if three_plus != null { free(three_plus) }
+    segment_len = num_values + 1
+    segment = calloc(segment_len, 1)
+    three_plus = calloc(segment_len, 1)
+    let mut i: i64 = 0
+    while i < segment_len {
+        segment[i] = 1
+        three_plus[i] = 0
+        i = i + 1
+    }
+    let lim: i64 = isqrt(to_val)
+    let mut p: i64 = 3
+    while p <= lim {
+        if is_prime_small(p) {
+            let mut smallest: i64 = from_val - (from_val % p) + p
+            if smallest % 2 == 0 { smallest = smallest + p }
+            let mut j: i64 = smallest
+            while j <= to_val {
+                segment[(j - segment_start) / 2] = 0
+                j = j + 2 * p
+            }
+        }
+        p = p + 2
+    }
+}
+
+function is_prime_in_segment(x: i64, y: i64) -> bool {
+    if x < 1 || x > y { return false }
+    let current: i64 = get_number(x, y)
+    if current % 2 == 0 { return current == 2 }
+    return segment[(current - segment_start) / 2] == 1
+}
+
+function process_line(line: i64) -> i64 {
+    let mut sieve_from: i64 = get_number(1, line - 2)
+    let sieve_to: i64 = get_number(1, line + 3) - 1
+    if line <= 2 { sieve_from = 1 }
+    fill_segmented_sieve(sieve_from, sieve_to)
+
+    let mut y: i64 = line - 1
+    while y <= line + 1 {
+        let mut x: i64 = 1
+        while x <= y {
+            if is_prime_in_segment(x, y) {
+                let mut count_primes: i32 = 0
+                let mut dx: i64 = 0 - 1
+                while dx <= 1 {
+                    let mut dy: i64 = 0 - 1
+                    while dy <= 1 {
+                        if count_primes < 3 && is_prime_in_segment(x + dx, y + dy) {
+                            count_primes = count_primes + 1
+                        }
+                        dy = dy + 1
+                    }
+                    dx = dx + 1
+                }
+                if count_primes >= 3 {
+                    three_plus[get_number(x, y) - segment_start] = 1
+                } else {
+                    three_plus[get_number(x, y) - segment_start] = 0
+                }
+            }
+            x = x + 1
+        }
+        y = y + 1
+    }
+
+    let mut total: i64 = 0
+    let mut x: i64 = 1
+    while x <= line {
+        if is_prime_in_segment(x, line) {
+            let mut at_least: bool = false
+            let mut dx: i64 = 0 - 1
+            while dx <= 1 {
+                let mut dy: i64 = 0 - 1
+                while dy <= 1 {
+                    if three_plus[get_number(x + dx, line + dy) - segment_start] == 1 {
+                        at_least = true
+                    }
+                    dy = dy + 1
+                }
+                dx = dx + 1
+            }
+            if at_least {
+                total = total + get_number(x, line)
+            }
+        }
+        x = x + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    let one: i64 = 5678027
+    let two: i64 = 7208785
+    printf("%lld\n", process_line(one) + process_line(two))
+    if sieve != null { free(sieve) }
+    if segment != null { free(segment) }
+    if three_plus != null { free(three_plus) }
+    return 0
+}

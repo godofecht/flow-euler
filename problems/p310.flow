@@ -1,0 +1,60 @@
+# Project Euler 310
+# Nim Square losing positions for a,b,c ≤ 100000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 100000
+    let mex: ptr<i32> = calloc(limit + 1, 4)
+    let moves: ptr<i8> = calloc(80, 1)
+    if mex == null || moves == null { return 1 }
+    let mut size: i64 = 0
+    while size <= limit {
+        let mut mi: i64 = 0
+        while mi < 80 {
+            moves[mi] = 0
+            mi = mi + 1
+        }
+        let mut i: i64 = 1
+        while i * i <= size {
+            moves[mex[size - i * i]] = 1
+            i = i + 1
+        }
+        let mut available: i32 = 0
+        while moves[available] == 1 {
+            available = available + 1
+        }
+        mex[size] = available
+        size = size + 1
+    }
+    let mut max_nim: i32 = 0
+    size = 0
+    while size <= limit {
+        if mex[size] > max_nim { max_nim = mex[size] }
+        size = size + 1
+    }
+    let mut next_pow: i64 = 1
+    while next_pow < (max_nim as i64) {
+        next_pow = next_pow * 2
+    }
+    let frequency: ptr<i64> = calloc(next_pow, 8)
+    if frequency == null { return 1 }
+    let mut num_lost: i64 = 0
+    let mut a: i64 = limit
+    while a >= 0 {
+        let mut c: i64 = a
+        while c <= limit {
+            let idx: i64 = (mex[a] ^ mex[c]) as i64
+            frequency[idx] = frequency[idx] + 1
+            c = c + 1
+        }
+        num_lost = num_lost + frequency[mex[a]]
+        a = a - 1
+    }
+    printf("%lld\n", num_lost)
+    free(mex); free(moves); free(frequency)
+    return 0
+}

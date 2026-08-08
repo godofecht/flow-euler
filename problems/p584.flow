@@ -1,0 +1,253 @@
+# Project Euler 584
+# Birthday Problem Revisited — EGF + Gauss–Laguerre + transfer matrix.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fabs(x: f64) -> f64
+}
+
+function gauss_laguerre(n: i64, xs: ptr<f64>, ws: ptr<f64>) -> void {
+    let mut z: f64 = 0.0
+    let mut i: i64 = 1
+    while i <= n {
+        if i == 1 {
+            z = 3.0 / (1.0 + 2.4 * (n as f64))
+        } else {
+            if i == 2 {
+                z = z + 15.0 / (1.0 + 2.5 * (n as f64))
+            } else {
+                let ai: f64 = (i - 2) as f64
+                z = z + ((1.0 + 2.55 * ai) / (1.9 * ai)) * (z - xs[i - 3])
+            }
+        }
+        let mut it: i64 = 0
+        while it < 100 {
+            let mut L0: f64 = 1.0
+            let mut L1: f64 = 1.0 - z
+            let mut Ln: f64 = L1
+            let mut Lnm1: f64 = L0
+            if n == 1 {
+                Ln = L1
+                Lnm1 = L0
+            } else {
+                let mut k: i64 = 2
+                while k <= n {
+                    let L2: f64 = ((2.0 * (k as f64) - 1.0 - z) * L1 - ((k - 1) as f64) * L0) / (k as f64)
+                    L0 = L1
+                    L1 = L2
+                    k = k + 1
+                }
+                Ln = L1
+                Lnm1 = L0
+            }
+            let dLn: f64 = (n as f64) * (Ln - Lnm1) / z
+            let dz: f64 = Ln / dLn
+            z = z - dz
+            if fabs(dz) < 1e-14 { break }
+            it = it + 1
+        }
+        xs[i - 1] = z
+        let mut L0b: f64 = 1.0
+        let mut L1b: f64 = 1.0 - z
+        let mut k2: i64 = 2
+        while k2 <= n + 1 {
+            let L2b: f64 = ((2.0 * (k2 as f64) - 1.0 - z) * L1b - ((k2 - 1) as f64) * L0b) / (k2 as f64)
+            L0b = L1b
+            L1b = L2b
+            k2 = k2 + 1
+        }
+        let Ln1: f64 = L1b
+        ws[i - 1] = z / (((n + 1) as f64) * ((n + 1) as f64) * Ln1 * Ln1)
+        i = i + 1
+    }
+}
+
+# Enumerate states: compositions of remaining into state_len buckets, sum <= max_total
+# Store states as packed i64 with 4 bits per day count (max_total<=3 fits)
+
+function pack_state(cur: ptr<i64>, len: i64) -> i64 {
+    let mut key: i64 = 0
+    let mut i: i64 = 0
+    while i < len {
+        key = (key << 4) | cur[i]
+        i = i + 1
+    }
+    return key
+}
+
+function expected_people(N: i64, within_days: i64, target_people: i64, quad_n: i64) -> f64 {
+    let window_len: i64 = within_days + 1
+    let max_total: i64 = target_people - 1
+    let state_len: i64 = window_len - 1
+    # Max states: C(state_len + max_total, max_total) roughly <= 2000 for our params
+    let max_states: i64 = 5000
+    let states: ptr<i64> = calloc(max_states, 8)
+    let keys: ptr<i64> = calloc(max_states, 8)
+    let mut nstates: i64 = 0
+    let cur: ptr<i64> = calloc(state_len, 8)
+
+    nstates = enumerate_states(state_len, max_total, states, keys, max_states)
+    # states layout: states[s * state_len + j]
+
+    # Build transitions: for each state, for each c in 0..max_total-sum, next state
+    let trans_to: ptr<i64> = calloc(max_states * (max_total + 1), 8)
+    let trans_c: ptr<i64> = calloc(max_states * (max_total + 1), 8)
+    let trans_n: ptr<i64> = calloc(max_states, 8)
+    let mut s: i64 = 0
+    while s < nstates {
+        let mut ssum: i64 = 0
+        let mut j: i64 = 0
+        while j < state_len {
+            ssum = ssum + states[s * state_len + j]
+            j = j + 1
+        }
+        let mut c: i64 = 0
+        let mut cnt: i64 = 0
+        while c <= max_total - ssum {
+            # next = shift + append c
+            let mut key: i64 = 0
+            j = 1
+            while j < state_len {
+                key = (key << 4) | states[s * state_len + j]
+                j = j + 1
+            }
+            key = (key << 4) | c
+            # find index
+            let mut ns: i64 = 0
+            while ns < nstates {
+                if keys[ns] == key { break }
+                ns = ns + 1
+            }
+            trans_to[s * (max_total + 1) + cnt] = ns
+            trans_c[s * (max_total + 1) + cnt] = c
+            cnt = cnt + 1
+            c = c + 1
+        }
+        trans_n[s] = cnt
+        s = s + 1
+    }
+
+    let xs: ptr<f64> = calloc(quad_n, 8)
+    let ws: ptr<f64> = calloc(quad_n, 8)
+    gauss_laguerre(quad_n, xs, ws)
+    let mut acc: f64 = 0.0
+    let mut qi: i64 = 0
+    while qi < quad_n {
+        let tval: f64 = xs[qi]
+        let wgt: f64 = ws[qi]
+        let g: f64 = trace_power(N, nstates, max_total, trans_to, trans_c, trans_n, tval)
+        acc = acc + wgt * g
+        qi = qi + 1
+    }
+    free(states)
+    free(keys)
+    free(cur)
+    free(trans_to)
+    free(trans_c)
+    free(trans_n)
+    free(xs)
+    free(ws)
+    return acc
+}
+
+function enumerate_states(state_len: i64, max_total: i64, states: ptr<i64>, keys: ptr<i64>, max_states: i64) -> i64 {
+    let cur: ptr<i64> = calloc(state_len, 8)
+    let n_ptr: ptr<i64> = calloc(1, 8)
+    n_ptr[0] = 0
+    enum_rec(0, max_total, state_len, max_total, cur, states, keys, n_ptr, max_states)
+    let n: i64 = n_ptr[0]
+    free(cur)
+    free(n_ptr)
+    return n
+}
+
+function enum_rec(pos: i64, remaining: i64, state_len: i64, max_total: i64, cur: ptr<i64>, states: ptr<i64>, keys: ptr<i64>, n_ptr: ptr<i64>, max_states: i64) -> void {
+    if pos == state_len {
+        let n: i64 = n_ptr[0]
+        if n >= max_states { return }
+        let mut key: i64 = 0
+        let mut i: i64 = 0
+        while i < state_len {
+            states[n * state_len + i] = cur[i]
+            key = (key << 4) | cur[i]
+            i = i + 1
+        }
+        keys[n] = key
+        n_ptr[0] = n + 1
+        return
+    }
+    let mut v: i64 = 0
+    while v <= remaining {
+        cur[pos] = v
+        enum_rec(pos + 1, remaining - v, state_len, max_total, cur, states, keys, n_ptr, max_states)
+        v = v + 1
+    }
+}
+
+function trace_power(N: i64, S: i64, max_total: i64, trans_to: ptr<i64>, trans_c: ptr<i64>, trans_n: ptr<i64>, t: f64) -> f64 {
+    let ratio: f64 = t / (N as f64)
+    let w0: f64 = 1.0
+    let w1: f64 = ratio
+    let mut w2: f64 = 0.0
+    let mut w3: f64 = 0.0
+    if max_total >= 2 { w2 = (ratio * ratio) * 0.5 }
+    if max_total >= 3 { w3 = (ratio * ratio * ratio) / 6.0 }
+    let w: ptr<f64> = calloc(4, 8)
+    w[0] = w0
+    w[1] = w1
+    w[2] = w2
+    w[3] = w3
+    let mut total: f64 = 0.0
+    let v: ptr<f64> = calloc(S, 8)
+    let nv: ptr<f64> = calloc(S, 8)
+    let mut start: i64 = 0
+    while start < S {
+        let mut i: i64 = 0
+        while i < S {
+            v[i] = 0.0
+            i = i + 1
+        }
+        v[start] = 1.0
+        let mut step: i64 = 0
+        while step < N {
+            i = 0
+            while i < S {
+                nv[i] = 0.0
+                i = i + 1
+            }
+            i = 0
+            while i < S {
+                let val: f64 = v[i]
+                if val != 0.0 {
+                    let mut k: i64 = 0
+                    while k < trans_n[i] {
+                        let j: i64 = trans_to[i * (max_total + 1) + k]
+                        let c: i64 = trans_c[i * (max_total + 1) + k]
+                        nv[j] = nv[j] + val * w[c]
+                        k = k + 1
+                    }
+                }
+                i = i + 1
+            }
+            i = 0
+            while i < S {
+                v[i] = nv[i]
+                i = i + 1
+            }
+            step = step + 1
+        }
+        total = total + v[start]
+        start = start + 1
+    }
+    free(w)
+    free(v)
+    free(nv)
+    return total
+}
+
+function main() -> i32 {
+    let ans: f64 = expected_people(365, 7, 4, 28)
+    printf("%.8f\n", ans)
+    return 0
+}

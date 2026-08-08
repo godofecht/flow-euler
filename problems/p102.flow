@@ -1,0 +1,83 @@
+# Project Euler 102
+# How many triangles in data/p102.txt contain the origin?
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Read next signed integer. Sets ok[0]=0 on EOF/failure.
+function read_signed(f: ptr<void>, ok: ptr<i32>) -> i32 {
+    let mut c: i32 = fgetc(f)
+    while c >= 0 && c != 45 && (c < 48 || c > 57) {
+        c = fgetc(f)
+    }
+    if c < 0 {
+        ok[0] = 0
+        return 0
+    }
+    let mut neg: bool = false
+    if c == 45 {
+        neg = true
+        c = fgetc(f)
+    }
+    if c < 48 || c > 57 {
+        ok[0] = 0
+        return 0
+    }
+    let mut v: i32 = 0
+    while c >= 48 && c <= 57 {
+        v = v * 10 + (c - 48)
+        c = fgetc(f)
+    }
+    ok[0] = 1
+    if neg { return -v }
+    return v
+}
+
+function area2(ax: i32, ay: i32, bx: i32, by: i32, cx: i32, cy: i32) -> i64 {
+    return ((bx - ax) as i64) * ((cy - ay) as i64) - ((cx - ax) as i64) * ((by - ay) as i64)
+}
+
+function contains_origin(x1: i32, y1: i32, x2: i32, y2: i32, x3: i32, y3: i32) -> bool {
+    let A: i64 = area2(x1, y1, x2, y2, x3, y3)
+    let A1: i64 = area2(0, 0, x2, y2, x3, y3)
+    let A2: i64 = area2(x1, y1, 0, 0, x3, y3)
+    let A3: i64 = area2(x1, y1, x2, y2, 0, 0)
+    if A == 0 { return false }
+    if A > 0 {
+        return A1 >= 0 && A2 >= 0 && A3 >= 0 && A1 + A2 + A3 == A
+    }
+    return A1 <= 0 && A2 <= 0 && A3 <= 0 && A1 + A2 + A3 == A
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p102.txt", "r")
+    if f == null {
+        printf("failed to read data/p102.txt\n")
+        return 1
+    }
+    let ok: ptr<i32> = calloc(1, 4)
+    if ok == null { fclose(f); return 1 }
+    ok[0] = 1
+    let mut count: i64 = 0
+    while ok[0] == 1 {
+        let x1: i32 = read_signed(f, ok)
+        if ok[0] == 0 { break }
+        let y1: i32 = read_signed(f, ok)
+        let x2: i32 = read_signed(f, ok)
+        let y2: i32 = read_signed(f, ok)
+        let x3: i32 = read_signed(f, ok)
+        let y3: i32 = read_signed(f, ok)
+        if contains_origin(x1, y1, x2, y2, x3, y3) {
+            count = count + 1
+        }
+    }
+    fclose(f)
+    free(ok)
+    printf("%lld\n", count)
+    return 0
+}

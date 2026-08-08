@@ -1,0 +1,270 @@
+# Project Euler 482
+# The Incenter of a Triangle — S(10^7) via integer inradii + Pythagorean legs.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+function gcd64(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    if a < 0 { return 0 - a }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function S(P: i64) -> i64 {
+    let s_max: i64 = P / 2
+    if s_max < 3 { return 0 }
+    let x_max: i64 = s_max - 2
+    let r_max: i64 = ((s_max as f64) * sqrt(3.0) / 9.0) as i64 + 2
+
+    let counts: ptr<i32> = calloc(r_max + 1, 4)
+    let m_limit: i64 = isqrt(x_max) + 1
+    let mut m: i64 = 2
+    while m <= m_limit {
+        let mm: i64 = m * m
+        let mut n: i64 = 1
+        while n < m {
+            if ((m - n) & 1) != 0 {
+                if gcd64(m, n) == 1 {
+                    let mut a: i64 = mm - n * n
+                    let mut b: i64 = 2 * m * n
+                    if a > b {
+                        let tmp: i64 = a
+                        a = b
+                        b = tmp
+                    }
+                    # r = k*a, x = k*b
+                    let mut k_max: i64 = r_max / a
+                    let kb: i64 = x_max / b
+                    if kb < k_max { k_max = kb }
+                    let mut k: i64 = 1
+                    while k <= k_max {
+                        counts[k * a] = counts[k * a] + 1
+                        k = k + 1
+                    }
+                    # r = k*b, x = k*a
+                    k_max = r_max / b
+                    let ka: i64 = x_max / a
+                    if ka < k_max { k_max = ka }
+                    k = 1
+                    while k <= k_max {
+                        counts[k * b] = counts[k * b] + 1
+                        k = k + 1
+                    }
+                }
+            }
+            n = n + 1
+        }
+        m = m + 1
+    }
+
+    let offsets: ptr<i64> = calloc(r_max + 2, 8)
+    let mut total_pairs: i64 = 0
+    let mut r: i64 = 1
+    while r <= r_max {
+        total_pairs = total_pairs + (counts[r] as i64)
+        offsets[r + 1] = total_pairs
+        r = r + 1
+    }
+    let xs: ptr<i32> = calloc(total_pairs, 4)
+    let us: ptr<i32> = calloc(total_pairs, 4)
+    let pos: ptr<i64> = calloc(r_max + 1, 8)
+    r = 0
+    while r <= r_max {
+        pos[r] = offsets[r]
+        r = r + 1
+    }
+
+    m = 2
+    while m <= m_limit {
+        let mm: i64 = m * m
+        let mut n: i64 = 1
+        while n < m {
+            if ((m - n) & 1) != 0 {
+                if gcd64(m, n) == 1 {
+                    let mut a: i64 = mm - n * n
+                    let mut b: i64 = 2 * m * n
+                    let c: i64 = mm + n * n
+                    if a > b {
+                        let tmp: i64 = a
+                        a = b
+                        b = tmp
+                    }
+                    let mut k_max: i64 = r_max / a
+                    let kb: i64 = x_max / b
+                    if kb < k_max { k_max = kb }
+                    let mut k: i64 = 1
+                    while k <= k_max {
+                        let rr: i64 = k * a
+                        let idx: i64 = pos[rr]
+                        xs[idx] = (k * b) as i32
+                        us[idx] = (k * c) as i32
+                        pos[rr] = idx + 1
+                        k = k + 1
+                    }
+                    k_max = r_max / b
+                    let ka: i64 = x_max / a
+                    if ka < k_max { k_max = ka }
+                    k = 1
+                    while k <= k_max {
+                        let rr: i64 = k * b
+                        let idx: i64 = pos[rr]
+                        xs[idx] = (k * a) as i32
+                        us[idx] = (k * c) as i32
+                        pos[rr] = idx + 1
+                        k = k + 1
+                    }
+                }
+            }
+            n = n + 1
+        }
+        m = m + 1
+    }
+
+    # For each r: map x -> u via open addressing, then enumerate x<=y
+    let mut ans: i64 = 0
+    let HCAP: i64 = 4096
+    let hkey: ptr<i32> = calloc(HCAP, 4)
+    let hval: ptr<i32> = calloc(HCAP, 4)
+    let hused: ptr<i8> = calloc(HCAP, 1)
+    let xlist: ptr<i32> = calloc(HCAP, 4)
+
+    r = 1
+    while r <= r_max {
+        let start: i64 = offsets[r]
+        let end: i64 = offsets[r + 1]
+        let cnt: i64 = end - start
+        if cnt >= 3 {
+            let mut i: i64 = 0
+            while i < HCAP {
+                hused[i] = 0
+                i = i + 1
+            }
+            let mut nx: i64 = 0
+            i = start
+            while i < end {
+                let xv: i32 = xs[i]
+                let uv: i32 = us[i]
+                let mut slot: i64 = (xv as i64) % HCAP
+                if slot < 0 { slot = 0 - slot }
+                while hused[slot] != 0 && hkey[slot] != xv {
+                    slot = slot + 1
+                    if slot == HCAP { slot = 0 }
+                }
+                if hused[slot] == 0 {
+                    hused[slot] = 1
+                    hkey[slot] = xv
+                    hval[slot] = uv
+                    xlist[nx] = xv
+                    nx = nx + 1
+                }
+                i = i + 1
+            }
+            if nx >= 3 {
+                # sort xlist ascending
+                i = 0
+                while i < nx {
+                    let mut j: i64 = i + 1
+                    while j < nx {
+                        if xlist[j] < xlist[i] {
+                            let tmp: i32 = xlist[i]
+                            xlist[i] = xlist[j]
+                            xlist[j] = tmp
+                        }
+                        j = j + 1
+                    }
+                    i = i + 1
+                }
+                let r2: i64 = r * r
+                i = 0
+                while i < nx {
+                    let x: i64 = xlist[i] as i64
+                    # lookup ux
+                    let mut slot: i64 = x % HCAP
+                    while hused[slot] != 0 && (hkey[slot] as i64) != x {
+                        slot = slot + 1
+                        if slot == HCAP { slot = 0 }
+                    }
+                    let ux: i64 = hval[slot] as i64
+                    let mut j: i64 = i
+                    while j < nx {
+                        let y: i64 = xlist[j] as i64
+                        let denom: i64 = x * y - r2
+                        if denom > 0 {
+                            let numer: i64 = r2 * (x + y)
+                            if numer % denom == 0 {
+                                let z: i64 = numer / denom
+                                if z >= y {
+                                    let s: i64 = x + y + z
+                                    if s <= s_max {
+                                        # lookup uz
+                                        let mut slotz: i64 = z % HCAP
+                                        let mut found: i64 = 0
+                                        let mut uz: i64 = 0
+                                        while hused[slotz] != 0 {
+                                            if (hkey[slotz] as i64) == z {
+                                                found = 1
+                                                uz = hval[slotz] as i64
+                                                break
+                                            }
+                                            slotz = slotz + 1
+                                            if slotz == HCAP { slotz = 0 }
+                                        }
+                                        if found != 0 {
+                                            # uy
+                                            let mut sloty: i64 = y % HCAP
+                                            while hused[sloty] != 0 && (hkey[sloty] as i64) != y {
+                                                sloty = sloty + 1
+                                                if sloty == HCAP { sloty = 0 }
+                                            }
+                                            let uy: i64 = hval[sloty] as i64
+                                            ans = ans + 2 * s + ux + uy + uz
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        j = j + 1
+                    }
+                    i = i + 1
+                }
+            }
+        }
+        r = r + 1
+    }
+
+    free(xlist)
+    free(hused)
+    free(hval)
+    free(hkey)
+    free(pos)
+    free(us)
+    free(xs)
+    free(offsets)
+    free(counts)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(10000000))
+    return 0
+}

@@ -1,0 +1,150 @@
+# Project Euler 344
+# Silver dollar game W(10^6, 100) mod 1000036000099 via CRT.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = ((base % mod) + mod) % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function binom_mod(n: i64, k0: i64, prime: i64) -> i64 {
+    if k0 < 0 || k0 > n { return 0 }
+    let mut k: i64 = k0
+    if k > n - k { k = n - k }
+    let mut num: i64 = 1
+    let mut den: i64 = 1
+    let mut i: i64 = 1
+    while i <= k {
+        num = num * ((n - k + i) % prime) % prime
+        den = den * i % prime
+        i = i + 1
+    }
+    return num * modpow(den, prime - 2, prime) % prime
+}
+
+function build_ways(active: i64, passive: i64, mod: i64, ways: ptr<i64>) -> i32 {
+    let lim: i64 = active + passive
+    let mut i: i64 = 0
+    while i <= lim {
+        ways[i] = 0
+        i = i + 1
+    }
+    let mut aones: i64 = 0
+    while aones <= active {
+        let ac: i64 = binom_mod(active, aones, mod)
+        let mut pones: i64 = 0
+        while pones <= passive {
+            let ones: i64 = aones + pones
+            ways[ones] = (ways[ones] + ac * binom_mod(passive, pones, mod)) % mod
+            pones = pones + 1
+        }
+        aones = aones + 2
+    }
+    return 0
+}
+
+function count_with_ways(total_sum: i64, ways: ptr<i64>, wlen: i64, mod: i64) -> i64 {
+    # Collect nonzero terms
+    let terms_ones: ptr<i64> = calloc(wlen + 1, 8)
+    let terms_cnt: ptr<i64> = calloc(wlen + 1, 8)
+    let mut tc: i64 = 0
+    let mut ones: i64 = 0
+    while ones <= wlen {
+        if ways[ones] != 0 {
+            terms_ones[tc] = ones
+            terms_cnt[tc] = ways[ones]
+            tc = tc + 1
+        }
+        ones = ones + 1
+    }
+    let mut bits: i64 = 0
+    let mut tmp: i64 = total_sum
+    while tmp > 0 {
+        bits = bits + 1
+        tmp = tmp / 2
+    }
+    if bits < 1 { bits = 1 }
+
+    let mut dp: ptr<i64> = calloc(2, 8)
+    let mut dplen: i64 = 1
+    dp[0] = 1
+    let mut bit: i64 = 0
+    while bit < bits {
+        let target: i64 = (total_sum >> bit) & 1
+        let max_carry: i64 = dplen + wlen / 2 + 2
+        let next: ptr<i64> = calloc(max_carry + 1, 8)
+        let mut carry: i64 = 0
+        while carry < dplen {
+            let value: i64 = dp[carry]
+            if value != 0 {
+                let mut t: i64 = 0
+                while t < tc {
+                    let col: i64 = carry + terms_ones[t]
+                    if (col & 1) == target {
+                        let nc: i64 = (col - target) / 2
+                        next[nc] = (next[nc] + value * terms_cnt[t]) % mod
+                    }
+                    t = t + 1
+                }
+            }
+            carry = carry + 1
+        }
+        free(dp)
+        dp = next
+        dplen = max_carry + 1
+        bit = bit + 1
+    }
+    let ans: i64 = dp[0]
+    free(dp)
+    free(terms_ones)
+    free(terms_cnt)
+    return ans
+}
+
+function losing_count(n: i64, c: i64, mod: i64) -> i64 {
+    let coin_count: i64 = c + 1
+    let empty: i64 = n - coin_count
+    let active: i64 = (coin_count + 1) / 2
+    let passive: i64 = coin_count - active + 1
+    let wlen: i64 = active + passive
+    let ways: ptr<i64> = calloc(wlen + 1, 8)
+    let ways2: ptr<i64> = calloc(wlen + 1, 8)
+    build_ways(active, passive, mod, ways)
+    build_ways(active - 1, passive, mod, ways2)
+    let second: i64 = count_with_ways(empty, ways, wlen, mod)
+    let other: i64 = (count_with_ways(empty + 1, ways, wlen, mod) - count_with_ways(empty + 1, ways2, wlen, mod) + mod) % mod
+    free(ways)
+    free(ways2)
+    return (second + (coin_count - 2) % mod * other) % mod
+}
+
+function solve_prime(n: i64, c: i64, prime: i64) -> i64 {
+    let coin_count: i64 = c + 1
+    let total: i64 = coin_count % prime * binom_mod(n, coin_count, prime) % prime
+    return (total - losing_count(n, c, prime) + prime) % prime
+}
+
+function main() -> i32 {
+    let n: i64 = 1000000
+    let c: i64 = 100
+    let P1: i64 = 1000003
+    let P2: i64 = 1000033
+    let MOD: i64 = 1000036000099
+    let r1: i64 = solve_prime(n, c, P1)
+    let r2: i64 = solve_prime(n, c, P2)
+    let t: i64 = ((r2 - r1) % P2 + P2) % P2 * modpow(P1 % P2, P2 - 2, P2) % P2
+    let ans: i64 = (r1 + P1 * t) % MOD
+    printf("%lld\n", ans)
+    return 0
+}

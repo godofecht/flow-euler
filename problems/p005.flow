@@ -1,0 +1,32 @@
+# Project Euler 005
+# Smallest positive number evenly divisible by 1..20.
+#
+# LCM via successive gcd — a few lines of Flow, native arithmetic speed.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function lcm(a: i64, b: i64) -> i64 {
+    return a / gcd(a, b) * b
+}
+
+function solve(limit: i64) -> i64 {
+    let mut result: i64 = 1
+    for n in 2..(limit + 1) {
+        result = lcm(result, n)
+    }
+    return result
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(20))
+    return 0
+}

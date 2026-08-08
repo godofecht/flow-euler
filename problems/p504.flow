@@ -1,0 +1,73 @@
+# Project Euler 504
+# Square on the Inside — Pick's theorem, m = 100.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function main() -> i32 {
+    let M: i64 = 100
+    let edge: ptr<i32> = calloc((M + 1) * (M + 1), 4)
+    if edge == null { return 1 }
+    let mut a: i64 = 1
+    while a <= M {
+        let mut b: i64 = 1
+        while b <= M {
+            edge[a * (M + 1) + b] = gcd(a, b) as i32
+            b = b + 1
+        }
+        a = a + 1
+    }
+    let max_pts: i64 = (M + M) * (M + M) / 2
+    let is_sq: ptr<i8> = calloc(max_pts + 1, 1)
+    if is_sq == null { free(edge); return 1 }
+    let mut k: i64 = 1
+    while k * k <= max_pts {
+        is_sq[k * k] = 1
+        k = k + 1
+    }
+    let mut count: i64 = 0
+    a = 1
+    while a <= M {
+        let mut b: i64 = 1
+        while b <= M {
+            let mut c: i64 = 1
+            while c <= M {
+                let mut d: i64 = 1
+                while d <= M {
+                    let inside: i64 = (a + c) * (b + d) / 2
+                    let boundary: i64 = (edge[a * (M + 1) + b] as i64)
+                        + (edge[b * (M + 1) + c] as i64)
+                        + (edge[c * (M + 1) + d] as i64)
+                        + (edge[a * (M + 1) + d] as i64) - 4
+                    let pts: i64 = inside - boundary / 2 - 1
+                    if pts >= 0 && pts <= max_pts {
+                        if is_sq[pts] == 1 {
+                            count = count + 1
+                        }
+                    }
+                    d = d + 1
+                }
+                c = c + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    printf("%lld\n", count)
+    free(is_sq)
+    free(edge)
+    return 0
+}

@@ -1,0 +1,37 @@
+# Project Euler 004
+# Largest palindrome product of two 3-digit numbers.
+
+function is_palindrome(n: i64) -> bool {
+    let mut x: i64 = n
+    let mut rev: i64 = 0
+    while x > 0 {
+        rev = rev * 10 + x % 10
+        x = x / 10
+    }
+    return rev == n
+}
+
+function solve() -> i64 {
+    let mut best: i64 = 0
+    let mut a: i64 = 999
+    while a >= 100 {
+        let mut b: i64 = 999
+        while b >= a {
+            let prod: i64 = a * b
+            if prod <= best {
+                break
+            }
+            if is_palindrome(prod) {
+                best = prod
+            }
+            b = b - 1
+        }
+        a = a - 1
+    }
+    return best
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve())
+    return 0
+}

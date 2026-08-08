@@ -1,0 +1,193 @@
+# Project Euler 259
+# Sum of positive reachable integers from digits 1..9.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function concat_val(l: i64, r: i64) -> i64 {
+    let mut v: i64 = 0
+    let mut i: i64 = l
+    while i <= r {
+        v = v * 10 + i
+        i = i + 1
+    }
+    return v
+}
+
+function pack(num: i64, den: i64) -> i64 {
+    # mix into one key for hash; store separately
+    return num * 1000003 + den
+}
+
+function main() -> i32 {
+    # 10x10 ranges; for each range a hashset
+    let R: i64 = 10
+    let CAP: i64 = 8000009
+    # Too big for all ranges - use one working set built bottom-up by span
+    # Store results in jagged: offsets[100], nums/dens big arrays
+    let max_total: i64 = 6000000
+    let all_num: ptr<i64> = calloc(max_total, 8)
+    let all_den: ptr<i64> = calloc(max_total, 8)
+    let off: ptr<i32> = calloc(101, 4)
+    let cnt: ptr<i32> = calloc(100, 4)
+    let ready: ptr<i8> = calloc(100, 1)
+    let mut total: i64 = 0
+
+    # hash helpers for building one range
+    let HCAP: i64 = 8388608
+    let hused: ptr<i8> = calloc(HCAP, 1)
+    let hnum: ptr<i64> = calloc(HCAP, 8)
+    let hden: ptr<i64> = calloc(HCAP, 8)
+
+    let mut span: i64 = 1
+    while span <= 9 {
+        let mut l: i64 = 1
+        while l + span - 1 <= 9 {
+            let r: i64 = l + span - 1
+            let idx: i64 = l * 10 + r
+            # clear hash
+            let mut hi: i64 = 0
+            while hi < HCAP {
+                hused[hi] = 0
+                hi = hi + 1
+            }
+            let mut nlocal: i64 = 0
+
+            # insert helper via inline
+            # concat
+            let cv: i64 = concat_val(l, r)
+            let mut hn: i64 = cv % HCAP
+            if hn < 0 { hn = -hn }
+            while hused[hn] != 0 {
+                if hnum[hn] == cv && hden[hn] == 1 { break }
+                hn = hn + 1
+                if hn == HCAP { hn = 0 }
+            }
+            if hused[hn] == 0 {
+                hused[hn] = 1
+                hnum[hn] = cv
+                hden[hn] = 1
+                nlocal = nlocal + 1
+            }
+
+            if span > 1 {
+                let mut mid: i64 = l
+                while mid < r {
+                    let li: i64 = l * 10 + mid
+                    let ri: i64 = (mid + 1) * 10 + r
+                    let l0: i64 = off[li] as i64
+                    let lc: i64 = cnt[li] as i64
+                    let r0: i64 = off[ri] as i64
+                    let rc: i64 = cnt[ri] as i64
+                    let mut i: i64 = 0
+                    while i < lc {
+                        let an: i64 = all_num[l0 + i]
+                        let ad: i64 = all_den[l0 + i]
+                        let mut j: i64 = 0
+                        while j < rc {
+                            let bn: i64 = all_num[r0 + j]
+                            let bd: i64 = all_den[r0 + j]
+                            # four ops
+                            let mut op: i64 = 0
+                            while op < 4 {
+                                let mut num: i64 = 0
+                                let mut den: i64 = 1
+                                let mut ok: bool = true
+                                if op == 0 {
+                                    num = an * bd + bn * ad
+                                    den = ad * bd
+                                } elif op == 1 {
+                                    num = an * bd - bn * ad
+                                    den = ad * bd
+                                } elif op == 2 {
+                                    num = an * bn
+                                    den = ad * bd
+                                } else {
+                                    if bn == 0 { ok = false }
+                                    else {
+                                        num = an * bd
+                                        den = ad * bn
+                                    }
+                                }
+                                if ok {
+                                    if den < 0 {
+                                        num = 0 - num
+                                        den = 0 - den
+                                    }
+                                    if den != 0 {
+                                        let g: i64 = gcd(num, den)
+                                        num = num / g
+                                        den = den / g
+                                        hn = (num * 1000003 + den) % HCAP
+                                        if hn < 0 { hn = -hn }
+                                        while hused[hn] != 0 {
+                                            if hnum[hn] == num && hden[hn] == den { break }
+                                            hn = hn + 1
+                                            if hn == HCAP { hn = 0 }
+                                        }
+                                        if hused[hn] == 0 {
+                                            hused[hn] = 1
+                                            hnum[hn] = num
+                                            hden[hn] = den
+                                            nlocal = nlocal + 1
+                                        }
+                                    }
+                                }
+                                op = op + 1
+                            }
+                            j = j + 1
+                        }
+                        i = i + 1
+                    }
+                    mid = mid + 1
+                }
+            }
+
+            off[idx] = total as i32
+            cnt[idx] = nlocal as i32
+            # dump hash to all_*
+            hi = 0
+            while hi < HCAP {
+                if hused[hi] != 0 {
+                    all_num[total] = hnum[hi]
+                    all_den[total] = hden[hi]
+                    total = total + 1
+                }
+                hi = hi + 1
+            }
+            ready[idx] = 1
+            l = l + 1
+        }
+        span = span + 1
+    }
+
+    let idx: i64 = 19
+    let base: i64 = off[idx] as i64
+    let n: i64 = cnt[idx] as i64
+    let mut sum: i64 = 0
+    let mut i: i64 = 0
+    while i < n {
+        if all_den[base + i] == 1 && all_num[base + i] > 0 {
+            sum = sum + all_num[base + i]
+        }
+        i = i + 1
+    }
+    printf("%lld\n", sum)
+    free(all_num); free(all_den); free(off); free(cnt); free(ready); free(hused); free(hnum); free(hden)
+    return 0
+}

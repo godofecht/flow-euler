@@ -1,0 +1,128 @@
+# Project Euler 477
+# Number Sequence Game
+# Optimal end-take score for s_0=0, s_{k+1}=(s_k^2+45) mod 10^9+7, N=10^8.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const N: i64 = 100000000
+const PERIOD_MULT: i64 = 8
+
+function next_s(x: i64) -> i64 {
+    return ((x * x) % MOD + 45) % MOD
+}
+
+let mut MU: i64 = 0
+let mut LAM: i64 = 0
+
+function floyd() -> void {
+    let mut tort: i64 = next_s(0)
+    let mut hare: i64 = next_s(next_s(0))
+    while tort != hare {
+        tort = next_s(tort)
+        hare = next_s(next_s(hare))
+    }
+    MU = 0
+    tort = 0
+    while tort != hare {
+        tort = next_s(tort)
+        hare = next_s(hare)
+        MU = MU + 1
+    }
+    LAM = 1
+    hare = next_s(tort)
+    while tort != hare {
+        hare = next_s(hare)
+        LAM = LAM + 1
+    }
+}
+
+function value_at(idx1: i64, pref: ptr<i64>, mu: i64, lam: i64) -> i64 {
+    let k: i64 = idx1 - 1
+    if k < mu + lam {
+        return pref[k]
+    }
+    return pref[mu + (k - mu) % lam]
+}
+
+function optimal_first_sum(seq: ptr<i64>, n: i64) -> i64 {
+    let dp: ptr<i64> = calloc(n, 8)
+    if dp == null { return -1 }
+    let mut i: i64 = n - 1
+    while i >= 0 {
+        dp[i] = seq[i]
+        let mut s: i64 = seq[i]
+        let mut j: i64 = i + 1
+        while j < n {
+            s = s + seq[j]
+            let x: i64 = dp[j]
+            let y: i64 = dp[j - 1]
+            let mut m: i64 = x
+            if y < m { m = y }
+            dp[j] = s - m
+            j = j + 1
+        }
+        i = i - 1
+    }
+    let ans: i64 = dp[n - 1]
+    free(dp)
+    return ans
+}
+
+function main() -> i32 {
+    floyd()
+    let period: i64 = PERIOD_MULT * LAM
+    let m: i64 = MU + LAM
+    let pref: ptr<i64> = calloc(m, 8)
+    if pref == null { return 1 }
+    pref[0] = 0
+    let mut x: i64 = 0
+    let mut t: i64 = 1
+    while t < m {
+        x = next_s(x)
+        pref[t] = x
+        t = t + 1
+    }
+
+    let mut lx: i64 = N
+    let mut kblocks: i64 = 0
+    while lx > period {
+        let v1: i64 = value_at(lx, pref, MU, LAM)
+        let v2: i64 = value_at(lx - period, pref, MU, LAM)
+        if v1 != v2 { break }
+        lx = lx - period
+        kblocks = kblocks + 1
+    }
+
+    # Build the reduced sequence and DP its optimal first-player sum.
+    let seq: ptr<i64> = calloc(lx, 8)
+    if seq == null { return 1 }
+    let mut i: i64 = 0
+    while i < lx {
+        seq[i] = value_at(i + 1, pref, MU, LAM)
+        i = i + 1
+    }
+    let base: i64 = optimal_first_sum(seq, lx)
+    free(seq)
+
+    # DIFF = sum of values on one parity inside one PERIOD block after lx.
+    let parity: i64 = (lx + 1) & 1
+    let mut diff: i64 = 0
+    let start: i64 = lx + 1
+    let end: i64 = lx + period
+    let mut idx: i64 = start
+    while idx <= end {
+        if (idx & 1) == parity {
+            diff = diff + value_at(idx, pref, MU, LAM)
+        }
+        idx = idx + 1
+    }
+
+    let ans: i64 = base + kblocks * diff
+    printf("%lld\n", ans)
+    free(pref)
+    return 0
+}

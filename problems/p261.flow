@@ -1,0 +1,240 @@
+# Project Euler 261
+# Sum of pivots k <= 10^10 for pivoted square sums.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+# Multiply two non-neg i64 into hi:lo (unsigned interpretation of bits)
+function mul128(a: i64, b: i64, hi: ptr<i64>, lo: ptr<i64>) -> void {
+    let mask: i64 = 4294967295
+    let a0: i64 = a & mask
+    let a1: i64 = (a >> 32) & mask
+    let b0: i64 = b & mask
+    let b1: i64 = (b >> 32) & mask
+    let p0: i64 = a0 * b0
+    let p1: i64 = a0 * b1
+    let p2: i64 = a1 * b0
+    let p3: i64 = a1 * b1
+    let mut mid: i64 = (p0 >> 32) + (p1 & mask) + (p2 & mask)
+    lo[0] = (p0 & mask) | ((mid & mask) << 32)
+    hi[0] = p3 + (p1 >> 32) + (p2 >> 32) + (mid >> 32)
+}
+
+function add128(ahi: i64, alo: i64, bhi: i64, blo: i64, hi: ptr<i64>, lo: ptr<i64>) -> void {
+    let mask: i64 = 4294967295
+    # add low as unsigned - use careful
+    let mut lo_sum: i64 = alo + blo
+    let mut carry: i64 = 0
+    # detect unsigned overflow: if both nonneg and sum < either, or mixed signs hard
+    # Since pell numbers stay positive and < 2^63 for final x,y we only need intermediates
+    # that may exceed 2^63. Use unsigned compare via bits.
+    let alo_u_hi: i64 = (alo >> 32) & mask
+    let alo_u_lo: i64 = alo & mask
+    let blo_u_hi: i64 = (blo >> 32) & mask
+    let blo_u_lo: i64 = blo & mask
+    let s_lo: i64 = alo_u_lo + blo_u_lo
+    let c1: i64 = s_lo >> 32
+    let s_hi: i64 = alo_u_hi + blo_u_hi + c1
+    carry = s_hi >> 32
+    lo[0] = (s_lo & mask) | ((s_hi & mask) << 32)
+    hi[0] = ahi + bhi + carry
+}
+
+function set_add(keys: ptr<i64>, used: ptr<i8>, cap: i64, key: i64) -> bool {
+    let mut h: i64 = key % cap
+    if h < 0 { h = -h }
+    while used[h] != 0 {
+        if keys[h] == key { return false }
+        h = h + 1
+        if h == cap { h = 0 }
+    }
+    used[h] = 1
+    keys[h] = key
+    return true
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 10000000000
+    let mmax: i64 = (isqrt(1 + 2 * LIMIT) - 1) / 2
+    let spf: ptr<i32> = calloc(mmax + 3, 4)
+    let mut i: i64 = 0
+    while i <= mmax + 2 {
+        spf[i] = i as i32
+        i = i + 1
+    }
+    i = 2
+    while i * i <= mmax + 2 {
+        if (spf[i] as i64) == i {
+            let mut j: i64 = i * i
+            while j <= mmax + 2 {
+                if (spf[j] as i64) == j {
+                    spf[j] = i as i32
+                }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    # pell cache as parallel arrays keyed by D via hashmap
+    let PCAP: i64 = 200003
+    let p_used: ptr<i8> = calloc(PCAP, 1)
+    let p_D: ptr<i64> = calloc(PCAP, 8)
+    let p_x: ptr<i64> = calloc(PCAP, 8)
+    let p_y: ptr<i64> = calloc(PCAP, 8)
+
+    let SCAP: i64 = 150001
+    let s_used: ptr<i8> = calloc(SCAP, 1)
+    let s_keys: ptr<i64> = calloc(SCAP, 8)
+    let mut sum: i64 = 0
+
+    let hi1: ptr<i64> = calloc(1, 8)
+    let lo1: ptr<i64> = calloc(1, 8)
+    let hi2: ptr<i64> = calloc(1, 8)
+    let lo2: ptr<i64> = calloc(1, 8)
+    let hi3: ptr<i64> = calloc(1, 8)
+    let lo3: ptr<i64> = calloc(1, 8)
+
+    let mut m: i64 = 1
+    while m <= mmax {
+        # squarefree_and_sqrt(m)
+        let mut n: i64 = m
+        let mut s: i64 = 1
+        let mut p: i64 = 1
+        while n > 1 {
+            let pr: i64 = spf[n] as i64
+            let mut e: i64 = 0
+            while n % pr == 0 {
+                n = n / pr
+                e = e + 1
+            }
+            if e % 2 == 1 { s = s * pr }
+            let mut ee: i64 = e / 2
+            let mut pp: i64 = 1
+            let mut t: i64 = 0
+            while t < ee {
+                pp = pp * pr
+                t = t + 1
+            }
+            p = p * pp
+        }
+        n = m + 1
+        let mut g: i64 = 1
+        let mut r: i64 = 1
+        while n > 1 {
+            let pr: i64 = spf[n] as i64
+            let mut e: i64 = 0
+            while n % pr == 0 {
+                n = n / pr
+                e = e + 1
+            }
+            if e % 2 == 1 { g = g * pr }
+            let mut ee: i64 = e / 2
+            let mut pp: i64 = 1
+            let mut t: i64 = 0
+            while t < ee {
+                pp = pp * pr
+                t = t + 1
+            }
+            r = r * pp
+        }
+        let D: i64 = s * g
+
+        # get or compute pell fundamental
+        let mut h: i64 = D % PCAP
+        if h < 0 { h = -h }
+        while p_used[h] != 0 && p_D[h] != D {
+            h = h + 1
+            if h == PCAP { h = 0 }
+        }
+        let mut x1: i64 = 0
+        let mut y1: i64 = 0
+        if p_used[h] != 0 {
+            x1 = p_x[h]
+            y1 = p_y[h]
+        } else {
+            let a0: i64 = isqrt(D)
+            let mut mm: i64 = 0
+            let mut dd: i64 = 1
+            let mut a: i64 = a0
+            let mut num1: i64 = 1
+            let mut num: i64 = a
+            let mut den1: i64 = 0
+            let mut den: i64 = 1
+            while num * num - D * den * den != 1 {
+                mm = dd * a - mm
+                dd = (D - mm * mm) / dd
+                a = (a0 + mm) / dd
+                let num2: i64 = num1
+                num1 = num
+                let den2: i64 = den1
+                den1 = den
+                num = a * num1 + num2
+                den = a * den1 + den2
+            }
+            x1 = num
+            y1 = den
+            p_used[h] = 1
+            p_D[h] = D
+            p_x[h] = x1
+            p_y[h] = y1
+        }
+
+        let mut x: i64 = g * r
+        let mut y: i64 = p
+        while true {
+            let q: i64 = y
+            let numerator: i64 = s * p * (p + q)
+            let k_floor: i64 = numerator / 2
+            if k_floor > LIMIT && q > p { break }
+            if numerator % 2 == 0 {
+                let k: i64 = numerator / 2
+                if k <= LIMIT && k >= 2 * m * (m + 1) {
+                    let u: i64 = x / g
+                    let tt: i64 = g * r * u
+                    if (tt - m - 1) % 2 == 0 {
+                        let nn: i64 = (tt - m - 1) / 2
+                        if nn >= k {
+                            if set_add(s_keys, s_used, SCAP, k) {
+                                sum = sum + k
+                            }
+                        }
+                    }
+                }
+            }
+            # x,y = x*x1 + y*y1*D, x*y1 + y*x1
+            # use 128-bit for safety then take low if fits
+            mul128(x, x1, hi1, lo1)
+            mul128(y, y1, hi2, lo2)
+            mul128(lo2[0], D, hi3, lo3)
+            # add lo1+lo3 -> newx, need hi
+            add128(hi1[0], lo1[0], hi3[0], lo3[0], hi1, lo1)
+            let newx: i64 = lo1[0]
+            mul128(x, y1, hi1, lo1)
+            mul128(y, x1, hi2, lo2)
+            add128(hi1[0], lo1[0], hi2[0], lo2[0], hi1, lo1)
+            let newy: i64 = lo1[0]
+            x = newx
+            y = newy
+            if x < 0 || y < 0 { break }
+        }
+        m = m + 1
+    }
+    printf("%lld\n", sum)
+    free(spf); free(p_used); free(p_D); free(p_x); free(p_y); free(s_used); free(s_keys)
+    free(hi1); free(lo1); free(hi2); free(lo2); free(hi3); free(lo3)
+    return 0
+}

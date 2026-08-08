@@ -1,0 +1,69 @@
+# Project Euler 032
+# Sum of all products whose multiplicand/multiplier/product identity
+# is 1–9 pandigital.
+
+function is_pandigital_set(a: i64, b: i64, c: i64) -> bool {
+    let mut seen: i32 = 0
+    let mut count: i32 = 0
+    let nums: array<i64, 3> = [a, b, c]
+    let mut i: i32 = 0
+    while i < 3 {
+        let mut n: i64 = nums[i]
+        if n == 0 { return false }
+        while n > 0 {
+            let d: i32 = (n % 10) as i32
+            if d == 0 { return false }
+            let bit: i32 = 1 << d
+            if (seen & bit) != 0 { return false }
+            seen = seen | bit
+            count = count + 1
+            n = n / 10
+        }
+        i = i + 1
+    }
+    return count == 9 && seen == 1022  # bits 1..9 set
+}
+
+function main() -> i32 {
+    # Collect unique products
+    let mut products: array<i64, 64> = [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ]
+    let mut pc: i32 = 0
+
+    # 1-digit × 4-digit = 4-digit, or 2-digit × 3-digit = 4-digit
+    let mut a: i64 = 1
+    while a <= 99 {
+        let mut b: i64 = a + 1
+        while b <= 9999 {
+            let p: i64 = a * b
+            if p > 9999 { break }
+            if is_pandigital_set(a, b, p) {
+                let mut found: bool = false
+                let mut i: i32 = 0
+                while i < pc {
+                    if products[i] == p { found = true; break }
+                    i = i + 1
+                }
+                if !found {
+                    products[pc] = p
+                    pc = pc + 1
+                }
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let mut total: i64 = 0
+    let mut i: i32 = 0
+    while i < pc {
+        total = total + products[i]
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

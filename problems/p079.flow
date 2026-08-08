@@ -1,0 +1,112 @@
+# Project Euler 079
+# Shortest passcode consistent with keylog login occurrences.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    # before[d*10+e] = 1 if d must appear before e
+    let before: ptr<i8> = calloc(100, 1)
+    let used: ptr<i8> = calloc(10, 1)
+    if before == null || used == null { return 1 }
+
+    let f: ptr<void> = fopen("data/p079.txt", "r")
+    if f == null {
+        printf("failed to read data/p079.txt\n")
+        return 1
+    }
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        while c >= 0 && (c < 48 || c > 57) {
+            c = fgetc(f)
+        }
+        if c < 0 { break }
+        let a: i32 = c - 48
+        c = fgetc(f)
+        let b: i32 = c - 48
+        c = fgetc(f)
+        let d: i32 = c - 48
+        used[a] = 1
+        used[b] = 1
+        used[d] = 1
+        before[a * 10 + b] = 1
+        before[b * 10 + d] = 1
+        before[a * 10 + d] = 1
+        c = fgetc(f)
+    }
+    fclose(f)
+
+    # transitive closure (Floyd) so topological order is unique/shortest
+    let mut k: i32 = 0
+    while k < 10 {
+        let mut i: i32 = 0
+        while i < 10 {
+            let mut j: i32 = 0
+            while j < 10 {
+                if before[i * 10 + k] != 0 && before[k * 10 + j] != 0 {
+                    before[i * 10 + j] = 1
+                }
+                j = j + 1
+            }
+            i = i + 1
+        }
+        k = k + 1
+    }
+
+    # indegree among used digits
+    let indeg: ptr<i32> = calloc(10, 4)
+    if indeg == null { return 1 }
+    let mut i: i32 = 0
+    while i < 10 {
+        if used[i] != 0 {
+            let mut j: i32 = 0
+            while j < 10 {
+                if used[j] != 0 && before[j * 10 + i] != 0 {
+                    indeg[i] = indeg[i] + 1
+                }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+
+    let mut result: i64 = 0
+    let mut remaining: i32 = 0
+    i = 0
+    while i < 10 {
+        if used[i] != 0 { remaining = remaining + 1 }
+        i = i + 1
+    }
+    while remaining > 0 {
+        let mut pick: i32 = -1
+        i = 0
+        while i < 10 {
+            if used[i] != 0 && indeg[i] == 0 {
+                pick = i
+                break
+            }
+            i = i + 1
+        }
+        if pick < 0 { break }
+        result = result * 10 + (pick as i64)
+        used[pick] = 0
+        remaining = remaining - 1
+        let mut j: i32 = 0
+        while j < 10 {
+            if before[pick * 10 + j] != 0 && used[j] != 0 {
+                indeg[j] = indeg[j] - 1
+            }
+            j = j + 1
+        }
+    }
+    printf("%lld\n", result)
+    free(before)
+    free(used)
+    free(indeg)
+    return 0
+}

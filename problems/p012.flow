@@ -1,0 +1,36 @@
+# Project Euler 012
+# First triangle number with over 500 divisors.
+
+function divisor_count(n: i64) -> i64 {
+    let mut count: i64 = 0
+    let mut i: i64 = 1
+    while i * i <= n {
+        if n % i == 0 {
+            if i * i == n {
+                count = count + 1
+            } else {
+                count = count + 2
+            }
+        }
+        i = i + 1
+    }
+    return count
+}
+
+function solve(min_divisors: i64) -> i64 {
+    let mut n: i64 = 1
+    let mut tri: i64 = 0
+    while true {
+        tri = tri + n
+        if divisor_count(tri) > min_divisors {
+            return tri
+        }
+        n = n + 1
+    }
+    return 0
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(500))
+    return 0
+}

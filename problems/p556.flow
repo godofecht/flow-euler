@@ -1,0 +1,204 @@
+# Project Euler 556
+# Squarefree Gaussian Integers
+# f(n)=(1/4)*sum_m F(m)*A(n/m^2) with Gaussian Möbius F and lattice counts A.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function lattice_points_nonzero(x: i64) -> i64 {
+    if x <= 0 { return 0 }
+    let R: i64 = isqrt(x)
+    let mut b: i64 = R
+    let mut bb: i64 = b * b
+    let mut s: i64 = 0
+    let mut a: i64 = 1
+    while a <= R {
+        let aa: i64 = a * a
+        while aa + bb > x {
+            b = b - 1
+            bb = b * b
+        }
+        s = s + b
+        a = a + 1
+    }
+    return (s << 2) + (R << 2)
+}
+
+function compute_f(n: i64) -> i64 {
+    let limit: i64 = isqrt(n)
+    let spf: ptr<i32> = calloc(limit + 1, 4)
+    let F: ptr<i16> = calloc(limit + 1, 2)
+    let prefixF: ptr<i64> = calloc(limit + 1, 8)
+    let r2: ptr<i32> = calloc(limit + 1, 4)
+    let A_small: ptr<i32> = calloc(limit + 1, 4)
+    if spf == null || F == null || prefixF == null || r2 == null || A_small == null { return -1 }
+
+    let mut i: i64 = 0
+    while i <= limit {
+        spf[i] = 0
+        i = i + 1
+    }
+    if limit >= 0 { spf[0] = 1 }
+    if limit >= 1 { spf[1] = 1 }
+    let r: i64 = isqrt(limit)
+    i = 2
+    while i <= r {
+        if spf[i] == 0 {
+            spf[i] = i as i32
+            let mut j: i64 = i * i
+            while j <= limit {
+                if spf[j] == 0 { spf[j] = i as i32 }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    i = 2
+    while i <= limit {
+        if spf[i] == 0 { spf[i] = i as i32 }
+        i = i + 1
+    }
+
+    F[1] = 1
+    let mut nn: i64 = 2
+    while nn <= limit {
+        let p: i64 = spf[nn] as i64
+        let mut rest: i64 = nn / p
+        let mut e: i64 = 1
+        while rest % p == 0 {
+            rest = rest / p
+            e = e + 1
+        }
+        let mut coef: i64 = 0
+        if p == 2 {
+            if e == 1 { coef = -1 }
+        } elif (p & 3) == 1 {
+            if e == 1 { coef = -2 } elif e == 2 { coef = 1 }
+        } else {
+            if e == 2 { coef = -1 }
+        }
+        if coef == 0 {
+            F[nn] = 0
+        } else {
+            F[nn] = (F[rest] as i64 * coef) as i16
+        }
+        nn = nn + 1
+    }
+
+    let mut s: i64 = 0
+    i = 1
+    while i <= limit {
+        s = s + (F[i] as i64)
+        prefixF[i] = s
+        i = i + 1
+    }
+
+    if limit >= 1 { r2[1] = 4 }
+    nn = 2
+    while nn <= limit {
+        let p: i64 = spf[nn] as i64
+        let mut rest: i64 = nn / p
+        let mut e: i64 = 1
+        while rest % p == 0 {
+            rest = rest / p
+            e = e + 1
+        }
+        let base: i64 = r2[rest] as i64
+        if base == 0 {
+            r2[nn] = 0
+        } elif p == 2 {
+            r2[nn] = base as i32
+        } elif (p & 3) == 1 {
+            r2[nn] = (base * (e + 1)) as i32
+        } else {
+            if (e & 1) != 0 { r2[nn] = 0 } else { r2[nn] = base as i32 }
+        }
+        nn = nn + 1
+    }
+
+    let mut acc: i64 = 0
+    i = 1
+    while i <= limit {
+        acc = acc + (r2[i] as i64)
+        A_small[i] = acc as i32
+        i = i + 1
+    }
+
+    # Cache for large A(x): open addressing on x
+    let CACHE_N: i64 = 200003
+    let ckey: ptr<i64> = calloc(CACHE_N, 8)
+    let cval: ptr<i64> = calloc(CACHE_N, 8)
+    let cused: ptr<i8> = calloc(CACHE_N, 1)
+    if ckey == null || cval == null || cused == null { return -1 }
+
+    let mut total: i64 = 0
+    let mut m: i64 = 1
+    let M: i64 = limit
+    while m <= M {
+        let x: i64 = n / (m * m)
+        if x == 0 { break }
+        let mut m2: i64 = isqrt(n / x)
+        if m2 > M { m2 = M }
+        let sumF: i64 = prefixF[m2] - prefixF[m - 1]
+        if sumF != 0 {
+            let mut A: i64 = 0
+            if x <= limit {
+                A = A_small[x] as i64
+            } else {
+                let mut h: i64 = x % CACHE_N
+                if h < 0 { h = -h }
+                let mut found: i32 = 0
+                let mut probes: i64 = 0
+                while probes < 10000 {
+                    if cused[h] == 0 {
+                        A = lattice_points_nonzero(x)
+                        cused[h] = 1
+                        ckey[h] = x
+                        cval[h] = A
+                        found = 1
+                        break
+                    }
+                    if ckey[h] == x {
+                        A = cval[h]
+                        found = 1
+                        break
+                    }
+                    h = h + 1
+                    if h >= CACHE_N { h = 0 }
+                    probes = probes + 1
+                }
+                if found == 0 { A = lattice_points_nonzero(x) }
+            }
+            total = total + sumF * A
+        }
+        m = m2 + 1
+    }
+
+    free(spf)
+    free(F)
+    free(prefixF)
+    free(r2)
+    free(A_small)
+    free(ckey)
+    free(cval)
+    free(cused)
+    return total / 4
+}
+
+function main() -> i32 {
+    printf("%lld\n", compute_f(100000000000000))
+    return 0
+}

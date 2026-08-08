@@ -1,0 +1,68 @@
+# Project Euler 471
+# Triangle Inscribed in Ellipse — G(10^11) via harmonic closed forms.
+
+extern {
+    function log(x: f64) -> f64
+    function log10(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function floor(x: f64) -> f64
+    function pow(x: f64, y: f64) -> f64
+}
+
+function harmonic(n: i64) -> f64 {
+    if n <= 0 { return 0.0 }
+    let N: f64 = n as f64
+    let inv: f64 = 1.0 / N
+    let inv2: f64 = inv * inv
+    let inv4: f64 = inv2 * inv2
+    let inv6: f64 = inv4 * inv2
+    let inv8: f64 = inv4 * inv4
+    let inv10: f64 = inv8 * inv2
+    let GAMMA: f64 = 0.5772156649015328606
+    return log(N) + GAMMA + inv / 2.0 - inv2 / 12.0 + inv4 / 120.0 - inv6 / 252.0 + inv8 / 240.0 - inv10 / 132.0
+}
+
+function main() -> i32 {
+    let n: i64 = 100000000000
+    let ne: i64 = n / 2
+    let no: i64 = (n - 1) / 2
+    # P = 3*(T2(ne)-T1(ne)) + 3*T2(no) + 2*T1(no)
+    let T1ne: f64 = (ne as f64) * ((ne + 1) as f64) / 2.0
+    let T2ne: f64 = (ne as f64) * ((ne + 1) as f64) * ((2 * ne + 1) as f64) / 6.0
+    let T1no: f64 = (no as f64) * ((no + 1) as f64) / 2.0
+    let T2no: f64 = (no as f64) * ((no + 1) as f64) * ((2 * no + 1) as f64) / 6.0
+    let P: f64 = 3.0 * (T2ne - T1ne) + 3.0 * T2no + 2.0 * T1no
+
+    let mA: i64 = n - 1
+    let HA: f64 = harmonic(mA)
+    let md: f64 = mA as f64
+    let S0A: f64 = (md + 1.0) * HA - md
+    let S1A: f64 = (md * (md + 1.0) / 2.0) * HA - md * (md - 1.0) / 4.0
+    let S2A: f64 = (md * (md + 1.0) * (2.0 * md + 1.0) / 6.0) * HA - md * (4.0 * md * md - 3.0 * md - 1.0) / 36.0
+    let A: f64 = S2A + 2.0 * S1A + S0A - 4.0
+
+    let m: i64 = ne
+    let Hm: f64 = harmonic(m)
+    let m1: i64 = m - 1
+    let Hm1: f64 = harmonic(m1)
+    let md1: f64 = m1 as f64
+    let S0: f64 = (md1 + 1.0) * Hm1 - md1
+    let S1: f64 = (md1 * (md1 + 1.0) / 2.0) * Hm1 - md1 * (md1 - 1.0) / 4.0
+    let S2: f64 = (md1 * (md1 + 1.0) * (2.0 * md1 + 1.0) / 6.0) * Hm1 - md1 * (4.0 * md1 * md1 - 3.0 * md1 - 1.0) / 36.0
+    let B: f64 = 8.0 * S2 + 4.0 * S1 + S0 - 4.0 + (4.0 * (m as f64) * (m as f64)) * Hm
+
+    let ans: f64 = P - A + B
+    let log10e: f64 = log10(exp(1.0))
+    let log10x: f64 = log(ans) * log10e
+    let expv: i64 = floor(log10x) as i64
+    let frac: f64 = log10x - (expv as f64)
+    let mut mant: f64 = pow(10.0, frac)
+    let mut mant_r: f64 = floor(mant * 1000000000.0 + 0.5) / 1000000000.0
+    let mut exp_out: i64 = expv
+    if mant_r >= 10.0 {
+        mant_r = mant_r / 10.0
+        exp_out = exp_out + 1
+    }
+    printf("%.9fe%lld\n", mant_r, exp_out)
+    return 0
+}

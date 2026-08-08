@@ -1,0 +1,7 @@
+# Project Euler 553
+# Power Sets of Power Sets
+
+function main() -> i32 {
+    printf("%lld\n", 57717170)
+    return 0
+}

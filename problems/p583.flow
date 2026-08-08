@@ -1,0 +1,201 @@
+# Project Euler 583
+# Heron Envelopes — sum perimeters of valid flap envelopes with P <= 10^7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function is_square(n: i64) -> i32 {
+    if n < 0 { return 0 }
+    let r: i64 = isqrt(n)
+    if r * r == n { return 1 }
+    return 0
+}
+
+function S(p: i64) -> i64 {
+    let N: i64 = p / 2
+    let counts: ptr<i32> = calloc(N + 1, 4)
+    if counts == null { return -1 }
+
+    let mmax_leg: i64 = isqrt(2 * N) + 1
+    let mut m: i64 = 2
+    while m <= mmax_leg {
+        let mm: i64 = m * m
+        let mut n: i64 = 1
+        if (m & 1) != 0 { n = 2 }
+        while n < m {
+            if gcd(m, n) == 1 {
+                let mut a0: i64 = mm - n * n
+                let mut b0: i64 = 2 * m * n
+                if a0 > b0 {
+                    let t: i64 = a0
+                    a0 = b0
+                    b0 = t
+                }
+                if b0 <= N {
+                    let mut aa: i64 = a0
+                    let mut bb: i64 = b0
+                    while bb <= N {
+                        counts[aa] = counts[aa] + 1
+                        counts[bb] = counts[bb] + 1
+                        aa = aa + a0
+                        bb = bb + b0
+                    }
+                }
+            }
+            n = n + 2
+        }
+        m = m + 1
+    }
+
+    let offset: ptr<i64> = calloc(N + 2, 8)
+    let mut total_e: i64 = 0
+    let mut i: i64 = 0
+    while i <= N {
+        offset[i] = total_e
+        total_e = total_e + (counts[i] as i64)
+        i = i + 1
+    }
+    offset[N + 1] = total_e
+    let vals: ptr<i32> = calloc(total_e + 1, 4)
+    let cursor: ptr<i64> = calloc(N + 1, 8)
+    if vals == null || cursor == null { return -1 }
+    i = 0
+    while i <= N {
+        cursor[i] = offset[i]
+        i = i + 1
+    }
+
+    m = 2
+    while m <= mmax_leg {
+        let mm: i64 = m * m
+        let mut n: i64 = 1
+        if (m & 1) != 0 { n = 2 }
+        while n < m {
+            if gcd(m, n) == 1 {
+                let mut a0: i64 = mm - n * n
+                let mut b0: i64 = 2 * m * n
+                if a0 > b0 {
+                    let t: i64 = a0
+                    a0 = b0
+                    b0 = t
+                }
+                if b0 <= N {
+                    let mut aa: i64 = a0
+                    let mut bb: i64 = b0
+                    while bb <= N {
+                        vals[cursor[aa]] = bb as i32
+                        cursor[aa] = cursor[aa] + 1
+                        vals[cursor[bb]] = aa as i32
+                        cursor[bb] = cursor[bb] + 1
+                        aa = aa + a0
+                        bb = bb + b0
+                    }
+                }
+            }
+            n = n + 2
+        }
+        m = m + 1
+    }
+
+    let mut ans: i64 = 0
+    let mmax_hyp: i64 = isqrt(N) + 1
+    m = 2
+    while m <= mmax_hyp {
+        let mm: i64 = m * m
+        let mut n: i64 = 1
+        if (m & 1) != 0 { n = 2 }
+        while n < m {
+            if gcd(m, n) == 1 {
+                let mut a0: i64 = mm - n * n
+                let mut b0: i64 = 2 * m * n
+                let c0: i64 = mm + n * n
+                if c0 <= N {
+                    if a0 > b0 {
+                        let t: i64 = a0
+                        a0 = b0
+                        b0 = t
+                    }
+                    let mut a: i64 = a0
+                    let mut b: i64 = b0
+                    let mut c: i64 = c0
+                    while c <= N {
+                        let mut pass: i64 = 0
+                        while pass < 2 {
+                            let mut AA: i64 = a
+                            let mut TT: i64 = b
+                            if pass == 1 {
+                                AA = b
+                                TT = a
+                            }
+                            let start: i64 = offset[AA]
+                            let end: i64 = offset[AA + 1]
+                            if start != end {
+                                let h_max: i64 = N - AA - c
+                                if h_max > TT {
+                                    let lo: i64 = 2 * TT + 1
+                                    let hi: i64 = TT + h_max
+                                    let fourA2: i64 = (AA * AA) << 2
+                                    let per_base: i64 = 2 * (AA + c)
+                                    let mut q: i64 = start
+                                    while q < end {
+                                        let u: i64 = vals[q] as i64
+                                        if u >= lo && u <= hi {
+                                            let h: i64 = u - TT
+                                            if h > TT && h <= h_max {
+                                                if is_square(fourA2 + h * h) != 0 {
+                                                    ans = ans + per_base + 2 * h
+                                                }
+                                            }
+                                        }
+                                        q = q + 1
+                                    }
+                                }
+                            }
+                            pass = pass + 1
+                        }
+                        a = a + a0
+                        b = b + b0
+                        c = c + c0
+                    }
+                }
+            }
+            n = n + 2
+        }
+        m = m + 1
+    }
+
+    free(counts)
+    free(offset)
+    free(vals)
+    free(cursor)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(10000000))
+    return 0
+}

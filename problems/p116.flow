@@ -1,0 +1,32 @@
+# Project Euler 116
+# Ways to tile length 50 with black unit tiles and colored tiles of length 2,3, or 4
+# (exactly one color used per counting; sum the three cases).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function tile_ways(n: i32, tlen: i32) -> i64 {
+    let a: ptr<i64> = calloc((n + 1) as i64, 8)
+    if a == null { return 0 }
+    a[0] = 1
+    let mut i: i32 = 1
+    while i <= n {
+        a[i] = a[i - 1]
+        if i >= tlen {
+            a[i] = a[i] + a[i - tlen]
+        }
+        i = i + 1
+    }
+    let r: i64 = a[n] - 1  # exclude all-black
+    free(a)
+    return r
+}
+
+function main() -> i32 {
+    let n: i32 = 50
+    let ans: i64 = tile_ways(n, 2) + tile_ways(n, 3) + tile_ways(n, 4)
+    printf("%lld\n", ans)
+    return 0
+}

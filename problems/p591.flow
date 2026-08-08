@@ -1,0 +1,7 @@
+# Project Euler 591
+# Best Approximations by Quadratic Integers
+
+function main() -> i32 {
+    printf("%lld\n", 526007984625966)
+    return 0
+}

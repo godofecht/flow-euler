@@ -1,0 +1,50 @@
+# Project Euler 363
+# Bézier curve vs quarter circle: percentage error to 10 decimals.
+
+extern {
+    function sqrt(x: f64) -> f64
+}
+
+function dist(x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
+    let dx: f64 = x1 - x2
+    let dy: f64 = y1 - y2
+    return sqrt(dx * dx + dy * dy)
+}
+
+function bezier_x(v: f64, t: f64) -> f64 {
+    let u: f64 = 1.0 - t
+    return u * u * u + 3.0 * u * u * t + 3.0 * u * t * t * v
+}
+
+function bezier_y(v: f64, t: f64) -> f64 {
+    let u: f64 = 1.0 - t
+    return 3.0 * u * u * t * v + 3.0 * u * t * t + t * t * t
+}
+
+function get_length(v: f64, start: f64, end: f64, epsilon: f64) -> f64 {
+    let bisect: f64 = (start + end) / 2.0
+    let xs: f64 = bezier_x(v, start)
+    let ys: f64 = bezier_y(v, start)
+    let xm: f64 = bezier_x(v, bisect)
+    let ym: f64 = bezier_y(v, bisect)
+    let xe: f64 = bezier_x(v, end)
+    let ye: f64 = bezier_y(v, end)
+    let total: f64 = dist(xs, ys, xe, ye)
+    let first: f64 = dist(xm, ym, xs, ys)
+    let second: f64 = dist(xm, ym, xe, ye)
+    let more: f64 = first + second
+    if more < total + epsilon {
+        return more
+    }
+    return get_length(v, start, bisect, epsilon) + get_length(v, bisect, end, epsilon)
+}
+
+function main() -> i32 {
+    let v: f64 = 0.5517784778044677
+    let pi_div2: f64 = 1.5707963267948966
+    let epsilon: f64 = 0.00000000000000001
+    let length: f64 = get_length(v, 0.0, 1.0, epsilon)
+    let error: f64 = 100.0 * (length - pi_div2) / pi_div2
+    printf("%.10f\n", error)
+    return 0
+}

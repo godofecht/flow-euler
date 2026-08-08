@@ -1,0 +1,224 @@
+# Project Euler 325
+# S(10^16) mod 7^10 via Beatty summatory functions.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function modinv(a0: i64, mod: i64) -> i64 {
+    # Extended Euclid (mod = 7^10 is composite; Fermat is invalid).
+    let mut a: i64 = ((a0 % mod) + mod) % mod
+    let mut m: i64 = mod
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while m > 0 {
+        let q: i64 = a / m
+        let t: i64 = a - q * m
+        a = m
+        m = t
+        let tx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = tx
+    }
+    return ((x0 % mod) + mod) % mod
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function mul64_to_128(a: i64, b: i64, hi: ptr<i64>, lo: ptr<i64>) -> i32 {
+    # Unsigned 32x32->64 products (signed i64 multiply overflows for large halves).
+    let mask: u64 = 4294967295
+    let au: u64 = a as u64
+    let bu: u64 = b as u64
+    let a0: u64 = au & mask
+    let a1: u64 = (au >> 32) & mask
+    let b0: u64 = bu & mask
+    let b1: u64 = (bu >> 32) & mask
+    let u0: u64 = a0 * b0
+    let u1: u64 = a0 * b1
+    let u2: u64 = a1 * b0
+    let u3: u64 = a1 * b1
+    let mid: u64 = (u0 >> 32) + (u1 & mask) + (u2 & mask)
+    let lou: u64 = (u0 & mask) | ((mid & mask) << 32)
+    let hiu: u64 = u3 + (u1 >> 32) + (u2 >> 32) + (mid >> 32)
+    lo[0] = lou as i64
+    hi[0] = hiu as i64
+    return 0
+}
+
+function cmp128(ah: i64, al: i64, bh: i64, bl: i64) -> i32 {
+    let ahu: u64 = ah as u64
+    let bhu: u64 = bh as u64
+    if ahu > bhu { return 1 }
+    if ahu < bhu { return -1 }
+    let alu: u64 = al as u64
+    let blu: u64 = bl as u64
+    if alu > blu { return 1 }
+    if alu < blu { return -1 }
+    return 0
+}
+
+function floor_n_sqrt5(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    if n < 1000000000 {
+        return isqrt(5 * n * n)
+    }
+    let approx: f64 = (n as f64) * 2.2360679774997896964
+    let mut x: i64 = approx as i64
+    let mut nn_hi: i64 = 0
+    let mut nn_lo: i64 = 0
+    mul64_to_128(n, n, &nn_hi, &nn_lo)
+    let mut t_hi: i64 = 0
+    let mut t_lo: i64 = 0
+    mul64_to_128(nn_lo, 5, &t_hi, &t_lo)
+    t_hi = t_hi + nn_hi * 5
+    let mut xx_hi: i64 = 0
+    let mut xx_lo: i64 = 0
+    mul64_to_128(x, x, &xx_hi, &xx_lo)
+    while cmp128(xx_hi, xx_lo, t_hi, t_lo) > 0 {
+        x = x - 1
+        mul64_to_128(x, x, &xx_hi, &xx_lo)
+    }
+    while true {
+        let y: i64 = x + 1
+        let mut yy_hi: i64 = 0
+        let mut yy_lo: i64 = 0
+        mul64_to_128(y, y, &yy_hi, &yy_lo)
+        if cmp128(yy_hi, yy_lo, t_hi, t_lo) <= 0 {
+            x = y
+        } else {
+            break
+        }
+    }
+    return x
+}
+
+function slot(n: i64, keys: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    let mut h: i64 = n % cap
+    if h < 0 { h = h + cap }
+    while used[h] == 1 && keys[h] != n {
+        h = h + 1
+        if h == cap { h = 0 }
+    }
+    return h
+}
+
+function tri(n: i64, mod: i64, inv2: i64) -> i64 {
+    return (n % mod) * ((n + 1) % mod) % mod * inv2 % mod
+}
+
+function sqsum(n: i64, mod: i64, inv6: i64) -> i64 {
+    return (n % mod) * ((n + 1) % mod) % mod * ((2 * n + 1) % mod) % mod * inv6 % mod
+}
+
+function A(n: i64, mod: i64, inv2: i64, inv6: i64, keys: ptr<i64>, valsA: ptr<i64>, valsB: ptr<i64>, valsH: ptr<i64>, used: ptr<i8>, cap: i64) -> i64
+function B(n: i64, mod: i64, inv2: i64, inv6: i64, keys: ptr<i64>, valsA: ptr<i64>, valsB: ptr<i64>, valsH: ptr<i64>, used: ptr<i8>, cap: i64) -> i64
+function H(n: i64, mod: i64, inv2: i64, inv6: i64, keys: ptr<i64>, valsA: ptr<i64>, valsB: ptr<i64>, valsH: ptr<i64>, used: ptr<i8>, cap: i64) -> i64
+
+function A(n: i64, mod: i64, inv2: i64, inv6: i64, keys: ptr<i64>, valsA: ptr<i64>, valsB: ptr<i64>, valsH: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    if n == 0 { return 0 }
+    let s: i64 = slot(n, keys, used, cap)
+    if used[s] == 1 && valsA[s] >= 0 { return valsA[s] }
+    # Reserve before recursion so child inserts cannot steal this slot.
+    if used[s] == 0 {
+        used[s] = 1
+        keys[s] = n
+        valsA[s] = -1
+        valsB[s] = -1
+        valsH[s] = -1
+    }
+    let t: i64 = floor_n_sqrt5(n)
+    let m: i64 = (n + t) / 2
+    let c: i64 = (t - n) / 2
+    let res: i64 = (tri(m, mod, inv2) - A(c, mod, inv2, inv6, keys, valsA, valsB, valsH, used, cap) - tri(c, mod, inv2) + 2 * mod) % mod
+    valsA[s] = res
+    return res
+}
+
+function H(n: i64, mod: i64, inv2: i64, inv6: i64, keys: ptr<i64>, valsA: ptr<i64>, valsB: ptr<i64>, valsH: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    if n == 0 { return 0 }
+    let s: i64 = slot(n, keys, used, cap)
+    if used[s] == 1 && valsH[s] >= 0 { return valsH[s] }
+    if used[s] == 0 {
+        used[s] = 1
+        keys[s] = n
+        valsA[s] = -1
+        valsB[s] = -1
+        valsH[s] = -1
+    }
+    let t: i64 = floor_n_sqrt5(n)
+    let c: i64 = (t - n) / 2
+    let res: i64 = (sqsum(n, mod, inv6) + (c % mod) * tri(n, mod, inv2) % mod - (B(c, mod, inv2, inv6, keys, valsA, valsB, valsH, used, cap) + A(c, mod, inv2, inv6, keys, valsA, valsB, valsH, used, cap)) % mod * inv2 % mod + mod) % mod
+    valsH[s] = res
+    return res
+}
+
+function B(n: i64, mod: i64, inv2: i64, inv6: i64, keys: ptr<i64>, valsA: ptr<i64>, valsB: ptr<i64>, valsH: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    if n == 0 { return 0 }
+    let s: i64 = slot(n, keys, used, cap)
+    if used[s] == 1 && valsB[s] >= 0 { return valsB[s] }
+    if used[s] == 0 {
+        used[s] = 1
+        keys[s] = n
+        valsA[s] = -1
+        valsB[s] = -1
+        valsH[s] = -1
+    }
+    let t: i64 = floor_n_sqrt5(n)
+    let m: i64 = (n + t) / 2
+    let c: i64 = (t - n) / 2
+    let res: i64 = (sqsum(m, mod, inv6) - B(c, mod, inv2, inv6, keys, valsA, valsB, valsH, used, cap) - 2 * H(c, mod, inv2, inv6, keys, valsA, valsB, valsH, used, cap) % mod - sqsum(c, mod, inv6) + 3 * mod) % mod
+    valsB[s] = res
+    return res
+}
+
+function main() -> i32 {
+    let mod: i64 = 282475249
+    let cap: i64 = 1048576
+    let keys: ptr<i64> = calloc(cap, 8)
+    let valsA: ptr<i64> = calloc(cap, 8)
+    let valsB: ptr<i64> = calloc(cap, 8)
+    let valsH: ptr<i64> = calloc(cap, 8)
+    let used: ptr<i8> = calloc(cap, 1)
+    if keys == null || valsA == null || valsB == null || valsH == null || used == null { return 1 }
+    let inv2: i64 = modinv(2, mod)
+    let inv6: i64 = modinv(6, mod)
+    let N: i64 = 10000000000000000
+    let tN: i64 = floor_n_sqrt5(N)
+    let d: i64 = (tN - N) / 2
+    let A_d: i64 = A(d, mod, inv2, inv6, keys, valsA, valsB, valsH, used, cap)
+    let B_d: i64 = B(d, mod, inv2, inv6, keys, valsA, valsB, valsH, used, cap)
+    let H_d: i64 = H(d, mod, inv2, inv6, keys, valsA, valsB, valsH, used, cap)
+    let sum_t: i64 = (A_d - tri(d, mod, inv2) + mod) % mod
+    let sum_xt: i64 = (H_d - sqsum(d, mod, inv6) + mod) % mod
+    let sum_t2: i64 = (B_d - 2 * H_d % mod + sqsum(d, mod, inv6) + 2 * mod) % mod
+    let part1: i64 = (2 * sum_xt % mod + (sum_t2 + sum_t) % mod * inv2 % mod) % mod
+    let k: i64 = (N - d - 1) % mod
+    let term: i64 = ((N % mod) * ((N + 1) % mod) % mod - (d % mod) * ((d + 1) % mod) % mod + mod) % mod
+    let part2: i64 = k * term % mod * inv2 % mod
+    printf("%lld\n", (part1 + part2) % mod)
+    free(keys); free(valsA); free(valsB); free(valsH); free(used)
+    return 0
+}

@@ -1,0 +1,74 @@
+# Project Euler 400
+# Winning moves on poisoned Fibonacci tree T(10000), mod 10^18.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function bit_length(n0: i64) -> i32 {
+    let mut n: i64 = n0
+    let mut b: i32 = 0
+    while n > 0 {
+        b = b + 1
+        n = n / 2
+    }
+    return b
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000000000000
+    let N: i32 = 10000
+    let h: ptr<i64> = calloc((N + 1) as i64, 8)
+    if h == null { return 1 }
+    h[1] = 1
+    h[2] = 2
+    let mut k: i32 = 3
+    let mut maxh: i64 = 2
+    while k <= N {
+        h[k] = (h[k - 1] ^ h[k - 2]) + 1
+        if h[k] > maxh { maxh = h[k] }
+        k = k + 1
+    }
+    let limit: i64 = 1 << bit_length(maxh)
+
+    let prev2: ptr<i64> = calloc(limit, 8)
+    let prev1: ptr<i64> = calloc(limit, 8)
+    let cur: ptr<i64> = calloc(limit, 8)
+    if prev2 == null || prev1 == null || cur == null { return 1 }
+    prev1[0] = 1
+
+    let mut result: i64 = 0
+    k = 2
+    while k <= N {
+        result = (prev1[h[k - 2]] + prev2[h[k - 1]]) % MOD
+        let mut v: i64 = 0
+        while v < limit {
+            cur[v] = 0
+            v = v + 1
+        }
+        cur[0] = 1
+        let h1: i64 = h[k - 2]
+        let h2: i64 = h[k - 1]
+        v = 1
+        while v < limit {
+            cur[v] = (prev1[(v - 1) ^ h1] + prev2[(v - 1) ^ h2]) % MOD
+            v = v + 1
+        }
+        # rotate: prev2=prev1, prev1=cur
+        let mut i: i64 = 0
+        while i < limit {
+            prev2[i] = prev1[i]
+            prev1[i] = cur[i]
+            i = i + 1
+        }
+        k = k + 1
+    }
+
+    printf("%lld\n", result)
+    free(cur)
+    free(prev1)
+    free(prev2)
+    free(h)
+    return 0
+}

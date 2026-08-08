@@ -1,0 +1,79 @@
+# Project Euler 201
+# Sum of uniquely-occurring 50-element subset sums of {1^2..100^2}.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let N: i32 = 100
+    let K: i32 = 50
+    let mut max_sum: i64 = 0
+    let mut i: i32 = N - K + 1
+    while i <= N {
+        max_sum = max_sum + (i as i64) * (i as i64)
+        i = i + 1
+    }
+    let SZ: i64 = max_sum + 1
+    # state[size][sum] capped at 2
+    let state: ptr<i8> = calloc((K as i64 + 1) * SZ, 1)
+    let low: ptr<i64> = calloc(K as i64 + 1, 8)
+    let high: ptr<i64> = calloc(K as i64 + 1, 8)
+    if state == null || low == null || high == null { return 1 }
+    let MISSING: i64 = max_sum + 1
+    i = 0
+    while i <= K {
+        low[i] = MISSING
+        high[i] = 0 - 1
+        i = i + 1
+    }
+    state[0] = 1
+    low[0] = 0
+    high[0] = 0
+
+    let mut used: i32 = 0
+    let mut sq_i: i32 = 1
+    while sq_i <= N {
+        let square: i64 = (sq_i as i64) * (sq_i as i64)
+        let upper: i32 = used + 1
+        let mut size: i32 = upper
+        if size > K { size = K }
+        while size > 0 {
+            let lo: i64 = low[size - 1]
+            if lo != MISSING {
+                let hi: i64 = high[size - 1]
+                let mut sub: i64 = hi
+                while sub >= lo {
+                    let ways: i32 = state[((size - 1) as i64) * SZ + sub] as i32
+                    if ways != 0 {
+                        let ns: i64 = sub + square
+                        let mut nw: i32 = (state[(size as i64) * SZ + ns] as i32) + ways
+                        if nw >= 2 { nw = 2 }
+                        state[(size as i64) * SZ + ns] = nw as i8
+                    }
+                    sub = sub - 1
+                }
+                let nlo: i64 = lo + square
+                let nhi: i64 = hi + square
+                if nlo < low[size] { low[size] = nlo }
+                if nhi > high[size] { high[size] = nhi }
+            }
+            size = size - 1
+        }
+        used = used + 1
+        sq_i = sq_i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut s: i64 = low[K]
+    while s <= high[K] {
+        if state[(K as i64) * SZ + s] == 1 {
+            total = total + s
+        }
+        s = s + 1
+    }
+    printf("%lld\n", total)
+    free(state); free(low); free(high)
+    return 0
+}

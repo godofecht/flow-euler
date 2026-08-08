@@ -1,0 +1,45 @@
+# Project Euler 222
+# Sphere packing in pipe of radius 50mm; balls 30..50mm; length in um.
+
+extern {
+    function sqrt(x: f64) -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function axial(R: f64, a: f64, b: f64) -> f64 {
+    return sqrt(4.0 * R * (a + b - R))
+}
+
+function main() -> i32 {
+    let R: f64 = 50.0
+    let order: ptr<f64> = calloc(30, 8)
+    if order == null { return 1 }
+    let mut n: i32 = 0
+    let mut r: i32 = 50
+    while r >= 30 {
+        if r % 2 == 0 {
+            order[n] = r as f64
+            n = n + 1
+        }
+        r = r - 1
+    }
+    r = 30
+    while r <= 50 {
+        if r % 2 == 1 {
+            order[n] = r as f64
+            n = n + 1
+        }
+        r = r + 1
+    }
+    let mut total: f64 = order[0] + order[n - 1]
+    let mut i: i32 = 0
+    while i + 1 < n {
+        total = total + axial(R, order[i], order[i + 1])
+        i = i + 1
+    }
+    let um: i64 = (total * 1000.0 + 0.5) as i64
+    printf("%lld\n", um)
+    free(order)
+    return 0
+}

@@ -1,0 +1,218 @@
+# Project Euler 152
+# Ways to write 1/2 as sum of distinct 1/n^2 for n in 2..80.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function lcm(a: i64, b: i64) -> i64 {
+    return a / gcd(a, b) * b
+}
+
+function only_allowed(n0: i64) -> bool {
+    let mut t: i64 = n0
+    let primes: array<i64, 5> = [2, 3, 5, 7, 13]
+    let mut i: i32 = 0
+    while i < 5 {
+        while t % primes[i] == 0 { t = t / primes[i] }
+        i = i + 1
+    }
+    return t == 1
+}
+
+function main() -> i32 {
+    let mut cand: array<i64, 64> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    let mut nc: i32 = 0
+    let mut n: i64 = 2
+    while n <= 80 {
+        if only_allowed(n) {
+            cand[nc] = n
+            nc = nc + 1
+        }
+        n = n + 1
+    }
+
+    let mut L: i64 = 1
+    let mut i: i32 = 0
+    while i < nc {
+        L = lcm(L, cand[i])
+        i = i + 1
+    }
+
+    let mut weights: array<i64, 64> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    i = 0
+    while i < nc {
+        let t: i64 = L / cand[i]
+        weights[i] = t * t
+        i = i + 1
+    }
+    let target: i64 = L * L / 2
+
+    let mut split: i32 = 0
+    i = 0
+    while i < nc {
+        if cand[i] >= 40 {
+            split = i
+            break
+        }
+        i = i + 1
+    }
+
+    let mut first: array<i64, 64> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    let nf: i32 = split
+    i = 0
+    while i < nf {
+        first[i] = weights[i]
+        i = i + 1
+    }
+    i = 0
+    while i < nf {
+        let mut j: i32 = i + 1
+        while j < nf {
+            if first[j] > first[i] {
+                let tmp: i64 = first[i]
+                first[i] = first[j]
+                first[j] = tmp
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let nl: i32 = nc - split
+    let nsums: i32 = 1 << nl
+    # Open-addressing hash: keys + counts
+    let cap: i64 = 524288  # power of 2 > 2*nsums
+    let hkey: ptr<i64> = calloc(cap, 8)
+    let hcnt: ptr<i32> = calloc(cap, 4)
+    let used: ptr<i8> = calloc(cap, 1)
+    if hkey == null || hcnt == null || used == null { return 1 }
+
+    let mut sums_tmp: ptr<i64> = calloc(nsums as i64, 8)
+    if sums_tmp == null { return 1 }
+    let mut ns: i32 = 1
+    sums_tmp[0] = 0
+    i = 0
+    while i < nl {
+        let w: i64 = weights[split + i]
+        let mut s: i32 = 0
+        while s < ns {
+            sums_tmp[ns + s] = sums_tmp[s] + w
+            s = s + 1
+        }
+        ns = ns * 2
+        i = i + 1
+    }
+
+    i = 0
+    while i < ns {
+        let key: i64 = sums_tmp[i]
+        let mut slot: i64 = (key * 11400714819323198485) as i64  # multiplicative hash
+        if slot < 0 { slot = -slot }
+        slot = slot & (cap - 1)
+        while used[slot] != 0 && hkey[slot] != key {
+            slot = (slot + 1) & (cap - 1)
+        }
+        if used[slot] == 0 {
+            used[slot] = 1
+            hkey[slot] = key
+            hcnt[slot] = 1
+        } else {
+            hcnt[slot] = hcnt[slot] + 1
+        }
+        i = i + 1
+    }
+    free(sums_tmp)
+
+    let mut max_last: i64 = 0
+    i = 0
+    while i < nl {
+        max_last = max_last + weights[split + i]
+        i = i + 1
+    }
+
+    let mut suffix: array<i64, 64> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    i = nf - 1
+    while i >= 0 {
+        suffix[i] = suffix[i + 1] + first[i]
+        i = i - 1
+    }
+
+    let mut ans: i64 = 0
+    let mut stack_i: array<i32, 128> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    let mut stack_acc: array<i64, 128> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    let mut sp: i32 = 0
+    stack_i[sp] = 0
+    stack_acc[sp] = 0
+    sp = sp + 1
+
+    while sp > 0 {
+        sp = sp - 1
+        let ii: i32 = stack_i[sp]
+        let acc: i64 = stack_acc[sp]
+        if acc > target { continue }
+        if acc + suffix[ii] + max_last < target { continue }
+        if ii == nf {
+            let key: i64 = target - acc
+            let mut slot: i64 = (key * 11400714819323198485) as i64
+            if slot < 0 { slot = -slot }
+            slot = slot & (cap - 1)
+            while used[slot] != 0 {
+                if hkey[slot] == key {
+                    ans = ans + (hcnt[slot] as i64)
+                    break
+                }
+                slot = (slot + 1) & (cap - 1)
+            }
+            continue
+        }
+        # exclude
+        stack_i[sp] = ii + 1
+        stack_acc[sp] = acc
+        sp = sp + 1
+        # include
+        stack_i[sp] = ii + 1
+        stack_acc[sp] = acc + first[ii]
+        sp = sp + 1
+    }
+
+    printf("%lld\n", ans)
+    free(hkey)
+    free(hcnt)
+    free(used)
+    return 0
+}

@@ -1,0 +1,239 @@
+# Project Euler 200
+# 200th prime-proof sqube containing substring "200".
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mulmod(a: i64, b: i64, mod: i64) -> i64 {
+    let r: i128 = ((a as i128) * (b as i128)) % (mod as i128)
+    return r as i64
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = mulmod(r, b, mod) }
+        b = mulmod(b, b, mod)
+        e = e / 2
+    }
+    return r
+}
+
+function is_prime(value: i64) -> bool {
+    if value < 2 { return false }
+    if value % 2 == 0 { return value == 2 }
+    if value % 3 == 0 { return value == 3 }
+    if value % 5 == 0 { return value == 5 }
+    if value % 7 == 0 { return value == 7 }
+    if value % 11 == 0 { return value == 11 }
+    if value % 13 == 0 { return value == 13 }
+    if value % 17 == 0 { return value == 17 }
+    if value % 19 == 0 { return value == 19 }
+    if value % 23 == 0 { return value == 23 }
+    if value % 29 == 0 { return value == 29 }
+
+    let mut d: i64 = value - 1
+    let mut shifts: i32 = 0
+    while d % 2 == 0 {
+        d = d / 2
+        shifts = shifts + 1
+    }
+    let bases: ptr<i64> = calloc(7, 8)
+    bases[0] = 2; bases[1] = 325; bases[2] = 9375; bases[3] = 28178
+    bases[4] = 450775; bases[5] = 9780504; bases[6] = 1795265022
+    let mut bi: i32 = 0
+    while bi < 7 {
+        let base: i64 = bases[bi] % value
+        if base != 0 {
+            let mut x: i64 = modpow(base, d, value)
+            if !(x == 1 || x == value - 1) {
+                let mut ok: bool = false
+                let mut r: i32 = 0
+                while r < shifts - 1 {
+                    x = mulmod(x, x, value)
+                    if x == value - 1 {
+                        ok = true
+                        break
+                    }
+                    r = r + 1
+                }
+                if !ok {
+                    free(bases)
+                    return false
+                }
+            }
+        }
+        bi = bi + 1
+    }
+    free(bases)
+    return true
+}
+
+function contains_200(value: i64) -> bool {
+    let mut v: i64 = value
+    while v >= 200 {
+        if v % 1000 == 200 { return true }
+        v = v / 10
+    }
+    return false
+}
+
+function is_prime_proof(value: i64) -> bool {
+    let digits: ptr<i32> = calloc(20, 4)
+    let powers: ptr<i64> = calloc(20, 8)
+    let mut len: i32 = 0
+    let mut rem: i64 = value
+    let mut power: i64 = 1
+    while rem > 0 {
+        digits[len] = (rem % 10) as i32
+        powers[len] = power
+        rem = rem / 10
+        power = power * 10
+        len = len + 1
+    }
+    let leading: i32 = len - 1
+    let mut pos: i32 = 0
+    while pos < len {
+        let orig: i32 = digits[pos]
+        let mut first: i32 = 0
+        if pos == leading { first = 1 }
+        let mut digit: i32 = first
+        while digit <= 9 {
+            if digit != orig {
+                if !(pos == 0 && (digit % 2 == 0 || digit == 5)) {
+                    let modified: i64 = value + ((digit - orig) as i64) * powers[pos]
+                    if is_prime(modified) {
+                        free(digits); free(powers)
+                        return false
+                    }
+                }
+            }
+            digit = digit + 1
+        }
+        pos = pos + 1
+    }
+    free(digits); free(powers)
+    return true
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000000000
+    let pmax: i64 = isqrt(limit / 8) + 1
+    let sieve: ptr<i8> = calloc(pmax + 1, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i <= pmax {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0; sieve[1] = 0
+    let mut p: i64 = 2
+    while p * p <= pmax {
+        if sieve[p] == 1 {
+            let mut m: i64 = p * p
+            while m <= pmax {
+                sieve[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut pc: i64 = 0
+    i = 2
+    while i <= pmax {
+        if sieve[i] == 1 { pc = pc + 1 }
+        i = i + 1
+    }
+    let primes: ptr<i64> = calloc(pc, 8)
+    let mut idx: i64 = 0
+    i = 2
+    while i <= pmax {
+        if sieve[i] == 1 {
+            primes[idx] = i
+            idx = idx + 1
+        }
+        i = i + 1
+    }
+
+    let squbes: ptr<i64> = calloc(5000000, 8)
+    let mut sc: i64 = 0
+    let mut ii: i64 = 0
+    while ii < pc {
+        let pp: i64 = primes[ii]
+        let p2: i64 = pp * pp
+        if p2 > limit / 8 { break }
+        let mut jj: i64 = 0
+        while jj < pc {
+            let qq: i64 = primes[jj]
+            if qq != pp {
+                if qq > 1000000 { break }
+                # q^3 may overflow; check carefully
+                if qq > 100000 { 
+                    # q^3 > 1e15 > limit
+                    # still need smaller q
+                }
+                let q2: i64 = qq * qq
+                if q2 > limit / qq { break }
+                let q3: i64 = q2 * qq
+                if q3 > limit / p2 { break }
+                let value: i64 = p2 * q3
+                squbes[sc] = value
+                sc = sc + 1
+            }
+            jj = jj + 1
+        }
+        ii = ii + 1
+    }
+
+    # shell sort
+    let mut gap: i64 = sc / 2
+    while gap > 0 {
+        let mut i2: i64 = gap
+        while i2 < sc {
+            let tmp: i64 = squbes[i2]
+            let mut j2: i64 = i2
+            while j2 >= gap && squbes[j2 - gap] > tmp {
+                squbes[j2] = squbes[j2 - gap]
+                j2 = j2 - gap
+            }
+            squbes[j2] = tmp
+            i2 = i2 + 1
+        }
+        gap = gap / 2
+    }
+
+    let mut count: i64 = 0
+    let mut ans: i64 = 0
+    i = 0
+    while i < sc {
+        let v: i64 = squbes[i]
+        if contains_200(v) {
+            if is_prime_proof(v) {
+                count = count + 1
+                if count == 200 {
+                    ans = v
+                    break
+                }
+            }
+        }
+        i = i + 1
+    }
+    printf("%lld\n", ans)
+    free(sieve); free(primes); free(squbes)
+    return 0
+}

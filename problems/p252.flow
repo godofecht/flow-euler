@@ -1,0 +1,257 @@
+# Project Euler 252
+# Maximum area convex hole among 500 PRNG points.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function atan2(y: f64, x: f64) -> f64
+}
+
+function gcd_i(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function tri_empty(left1: ptr<i8>, n: i64, s: i64, a: i64, b: i64) -> bool {
+    let mut w: i64 = 0
+    while w < n {
+        if left1[((s * n + a) * n) + w] != 0 && left1[((a * n + b) * n) + w] != 0 && left1[((b * n + s) * n) + w] != 0 {
+            return false
+        }
+        w = w + 1
+    }
+    return true
+}
+
+function sort_by_angle(cand: ptr<i64>, ang: ptr<f64>, dist: ptr<f64>, m: i64) -> void {
+    let mut i: i64 = 1
+    while i < m {
+        let key: i64 = cand[i]
+        let key_a: f64 = ang[i]
+        let key_d: f64 = dist[i]
+        let mut j: i64 = i - 1
+        while j >= 0 {
+            if ang[j] < key_a { break }
+            if ang[j] == key_a && dist[j] <= key_d { break }
+            cand[j + 1] = cand[j]
+            ang[j + 1] = ang[j]
+            dist[j + 1] = dist[j]
+            j = j - 1
+        }
+        cand[j + 1] = key
+        ang[j + 1] = key_a
+        dist[j + 1] = key_d
+        i = i + 1
+    }
+}
+
+function main() -> i32 {
+    let n: i64 = 500
+    let xs: ptr<i64> = calloc(n, 8)
+    let ys: ptr<i64> = calloc(n, 8)
+    let left1: ptr<i8> = calloc(n * n * n, 1)
+    let seg_clear: ptr<i8> = calloc(n * n, 1)
+    let cand: ptr<i64> = calloc(n, 8)
+    let ang: ptr<f64> = calloc(n, 8)
+    let dist: ptr<f64> = calloc(n, 8)
+    let succ_j: ptr<i64> = calloc(n * n, 8)
+    let succ_w: ptr<i64> = calloc(n * n, 8)
+    let succ_cnt: ptr<i64> = calloc(n, 8)
+    let dp: ptr<i64> = calloc(n * n, 8)
+
+    let MOD: i64 = 50515093
+    let mut s0: i64 = 290797
+    let mut ti: i64 = 0
+    while ti < 2 * n {
+        s0 = (s0 * s0) % MOD
+        if ti % 2 == 0 {
+            xs[ti / 2] = (s0 % 2000) - 1000
+        } else {
+            ys[ti / 2] = (s0 % 2000) - 1000
+        }
+        ti = ti + 1
+    }
+
+    let mut u: i64 = 0
+    while u < n {
+        let mut v: i64 = 0
+        while v < n {
+            if v != u {
+                let vx: i64 = xs[v] - xs[u]
+                let vy: i64 = ys[v] - ys[u]
+                let base: i64 = (u * n + v) * n
+                let mut w: i64 = 0
+                while w < n {
+                    if w != u && w != v {
+                        let wx: i64 = xs[w] - xs[u]
+                        let wy: i64 = ys[w] - ys[u]
+                        let c: i64 = vx * wy - vy * wx
+                        if c > 0 {
+                            left1[base + w] = 1
+                        }
+                    }
+                    w = w + 1
+                }
+            }
+            v = v + 1
+        }
+        u = u + 1
+    }
+
+    let mut a: i64 = 0
+    while a < n {
+        let mut b: i64 = 0
+        while b < n {
+            if b != a {
+                let dx: i64 = xs[b] - xs[a]
+                let dy: i64 = ys[b] - ys[a]
+                let g: i64 = gcd_i(dx, dy)
+                let rdx: i64 = dx / g
+                let rdy: i64 = dy / g
+                let dist2: i64 = dx * dx + dy * dy
+                let mut best: i64 = -1
+                let mut bestd: i64 = 1000000000000
+                let mut c: i64 = 0
+                while c < n {
+                    if c != a {
+                        let cdx: i64 = xs[c] - xs[a]
+                        let cdy: i64 = ys[c] - ys[a]
+                        let gg: i64 = gcd_i(cdx, cdy)
+                        if cdx / gg == rdx && cdy / gg == rdy {
+                            let dd: i64 = cdx * cdx + cdy * cdy
+                            if dd < dist2 && (best < 0 || dd < bestd) {
+                                best = c
+                                bestd = dd
+                            }
+                        }
+                    }
+                    c = c + 1
+                }
+                if best < 0 || best == b { seg_clear[a * n + b] = 1 }
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let mut best2: i64 = 0
+    let mut s: i64 = 0
+    while s < n {
+        let x_s: i64 = xs[s]
+        let y_s: i64 = ys[s]
+        let mut mc: i64 = 0
+        let mut i: i64 = 0
+        while i < n {
+            if i != s && (ys[i] > y_s || (ys[i] == y_s && xs[i] > x_s)) {
+                cand[mc] = i
+                let dx: f64 = (xs[i] - x_s) as f64
+                let dy: f64 = (ys[i] - y_s) as f64
+                ang[mc] = atan2(dy, dx)
+                dist[mc] = dx * dx + dy * dy
+                mc = mc + 1
+            }
+            i = i + 1
+        }
+        if mc >= 2 {
+            sort_by_angle(cand, ang, dist, mc)
+            i = 0
+            while i < mc { succ_cnt[i] = 0; i = i + 1 }
+
+            let mut ai: i64 = 0
+            while ai < mc - 1 {
+                let aidx: i64 = cand[ai]
+                let ax: i64 = xs[aidx] - x_s
+                let ay: i64 = ys[aidx] - y_s
+                let mut bi: i64 = ai + 1
+                while bi < mc {
+                    let bidx: i64 = cand[bi]
+                    let c: i64 = ax * (ys[bidx] - y_s) - ay * (xs[bidx] - x_s)
+                    if c > 0 {
+                        if tri_empty(left1, n, s, aidx, bidx) {
+                            let sc: i64 = succ_cnt[ai]
+                            succ_j[ai * n + sc] = bi
+                            succ_w[ai * n + sc] = c
+                            succ_cnt[ai] = sc + 1
+                        }
+                    }
+                    bi = bi + 1
+                }
+                ai = ai + 1
+            }
+
+            i = 0
+            while i < mc * mc { dp[i] = -1; i = i + 1 }
+
+            ai = 0
+            while ai < mc - 1 {
+                let sc: i64 = succ_cnt[ai]
+                let mut si: i64 = 0
+                while si < sc {
+                    let jj: i64 = succ_j[ai * n + si]
+                    let ww: i64 = succ_w[ai * n + si]
+                    let slot: i64 = jj * mc + ai
+                    if dp[slot] < ww { dp[slot] = ww }
+                    si = si + 1
+                }
+                ai = ai + 1
+            }
+
+            let mut curr: i64 = 0
+            while curr < mc {
+                let c_idx: i64 = cand[curr]
+                let x_c: i64 = xs[c_idx]
+                let y_c: i64 = ys[c_idx]
+                let mut prev: i64 = 0
+                while prev < mc {
+                    let val: i64 = dp[curr * mc + prev]
+                    if val >= 0 {
+                        let p_idx: i64 = cand[prev]
+                        if (x_c - xs[p_idx]) * (y_s - y_c) - (y_c - ys[p_idx]) * (x_s - x_c) > 0 {
+                            if val > best2 { best2 = val }
+                        }
+                    }
+                    prev = prev + 1
+                }
+                if seg_clear[s * n + c_idx] != 0 {
+                    prev = 0
+                    while prev < mc {
+                        let val: i64 = dp[curr * mc + prev]
+                        if val >= 0 {
+                            let p_idx: i64 = cand[prev]
+                            let sc2: i64 = succ_cnt[curr]
+                            let mut si2: i64 = 0
+                            while si2 < sc2 {
+                                let nxt: i64 = succ_j[curr * n + si2]
+                                let w: i64 = succ_w[curr * n + si2]
+                                let n_idx: i64 = cand[nxt]
+                                if (x_c - xs[p_idx]) * (ys[n_idx] - y_c) - (y_c - ys[p_idx]) * (xs[n_idx] - x_c) > 0 {
+                                    let nv: i64 = val + w
+                                    let slot: i64 = nxt * mc + curr
+                                    if dp[slot] < nv { dp[slot] = nv }
+                                }
+                                si2 = si2 + 1
+                            }
+                        }
+                        prev = prev + 1
+                    }
+                }
+                curr = curr + 1
+            }
+        }
+        s = s + 1
+    }
+
+    let ans_half: f64 = (best2 as f64) * 0.5
+    printf("%.1f\n", ans_half)
+    free(xs); free(ys); free(left1); free(seg_clear); free(cand); free(ang); free(dist)
+    free(succ_j); free(succ_w); free(succ_cnt); free(dp)
+    return 0
+}

@@ -1,0 +1,5 @@
+# Ignore build artifacts
+bench/bin/
+*.o
+.DS_Store
+a.out

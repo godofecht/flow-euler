@@ -1,0 +1,89 @@
+# Project Euler 083
+# Minimal path sum with four-way moves (Dijkstra).
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function read_int(f: ptr<void>) -> i32 {
+    let mut c: i32 = fgetc(f)
+    while c >= 0 && (c < 48 || c > 57) {
+        c = fgetc(f)
+    }
+    if c < 0 { return -1 }
+    let mut v: i32 = 0
+    while c >= 48 && c <= 57 {
+        v = v * 10 + (c - 48)
+        c = fgetc(f)
+    }
+    return v
+}
+
+function main() -> i32 {
+    let n: i32 = 80
+    let N: i32 = n * n
+    let a: ptr<i64> = calloc(N as i64, 8)
+    let dist: ptr<i64> = calloc(N as i64, 8)
+    let done: ptr<i8> = calloc(N as i64, 1)
+    if a == null || dist == null || done == null { return 1 }
+
+    let f: ptr<void> = fopen("data/p083.txt", "r")
+    if f == null {
+        printf("failed to read data/p083.txt\n")
+        return 1
+    }
+    let mut i: i32 = 0
+    while i < N {
+        a[i] = read_int(f) as i64
+        dist[i] = 1000000000000
+        i = i + 1
+    }
+    fclose(f)
+
+    dist[0] = a[0]
+    let mut iter: i32 = 0
+    while iter < N {
+        let mut u: i32 = -1
+        let mut best: i64 = 1000000000000
+        let mut v: i32 = 0
+        while v < N {
+            if done[v] == 0 && dist[v] < best {
+                best = dist[v]
+                u = v
+            }
+            v = v + 1
+        }
+        if u < 0 { break }
+        done[u] = 1
+        let r: i32 = u / n
+        let c: i32 = u % n
+        # neighbors
+        let mut k: i32 = 0
+        while k < 4 {
+            let mut nr: i32 = r
+            let mut nc: i32 = c
+            if k == 0 { nr = r - 1 }
+            elif k == 1 { nr = r + 1 }
+            elif k == 2 { nc = c - 1 }
+            else { nc = c + 1 }
+            if nr >= 0 && nr < n && nc >= 0 && nc < n {
+                let w: i32 = nr * n + nc
+                let nd: i64 = dist[u] + a[w]
+                if nd < dist[w] {
+                    dist[w] = nd
+                }
+            }
+            k = k + 1
+        }
+        iter = iter + 1
+    }
+    printf("%lld\n", dist[N - 1])
+    free(a)
+    free(dist)
+    free(done)
+    return 0
+}

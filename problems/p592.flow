@@ -1,0 +1,103 @@
+# Project Euler 592
+# Factorial Trailing Digits II
+# f(N) = odd_part(N!) * 2^{v2(N!) mod 4} mod 2^48 for N=20!, printed as 12 hex digits.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const M: i64 = 33554432
+const MOD: i64 = 281474976710656
+const NVAL: i64 = 2432902008176640000
+const HALF: i64 = 16777216
+
+let mut FAC: ptr<i64> = null
+let mut TAB: ptr<i64> = null
+
+function mul(A: i64, B: i64) -> i64 {
+    let A1: i64 = (A >> 24) & 16777215
+    let A2: i64 = A & 16777215
+    let B1: i64 = (B >> 24) & 16777215
+    let B2: i64 = B & 16777215
+    let mid: i64 = ((A1 * B2 + A2 * B1) & 16777215) << 24
+    return (mid + A2 * B2) & (MOD - 1)
+}
+
+function partial(a: i64, b: i64) -> i64 {
+    let ret: i64 = FAC[a] + mul(b, TAB[a])
+    return ret % MOD
+}
+
+function factorial_oddprod(n0: i64) -> i64 {
+    let mut n: i64 = n0 % MOD
+    let mut ret: i64 = 1
+    let mut b: i64 = 0
+    while b < n {
+        let mut a: i64 = M
+        if n - b < a { a = n - b }
+        ret = mul(ret, partial((a - 1) >> 1, b))
+        b = b + a
+    }
+    return ret
+}
+
+function print_hex12(v0: i64) -> void {
+    let hex: ptr<i8> = calloc(13, 1)
+    if hex == null { return }
+    let mut v: i64 = v0
+    let mut i: i64 = 11
+    while i >= 0 {
+        let d: i64 = v & 15
+        if d < 10 {
+            hex[i] = (48 + d) as i8
+        } else {
+            hex[i] = (55 + d) as i8
+        }
+        v = v >> 4
+        i = i - 1
+    }
+    hex[12] = 0
+    printf("%s\n", hex)
+    free(hex)
+}
+
+function main() -> i32 {
+    FAC = calloc(HALF, 8)
+    TAB = calloc(HALF, 8)
+    if FAC == null || TAB == null { return 1 }
+    FAC[0] = 1
+    TAB[0] = 1
+    let mut i: i64 = 1
+    while i < HALF {
+        let p: i64 = 2 * i + 1
+        FAC[i] = mul(FAC[i - 1], p)
+        TAB[i] = (mul(TAB[i - 1], p) + FAC[i - 1]) % MOD
+        i = i + 1
+    }
+
+    let mut ans: i64 = 1
+    let mut expo: i64 = 0
+    let mut n: i64 = NVAL
+    while n > 1 {
+        n = n >> 1
+        expo = expo + n
+    }
+    expo = expo % 4
+    i = 0
+    while i < expo {
+        ans = ans * 2
+        i = i + 1
+    }
+
+    n = NVAL
+    while n > 0 {
+        ans = mul(ans, factorial_oddprod(n))
+        n = n >> 1
+    }
+
+    print_hex12(ans)
+    free(FAC)
+    free(TAB)
+    return 0
+}

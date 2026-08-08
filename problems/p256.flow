@@ -1,0 +1,56 @@
+# Project Euler 256
+# Smallest s with T(s)=200 tatami-free rooms.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function tfree(a: i64, b: i64) -> bool {
+    let q: i64 = b / a
+    let lmin: i64 = (a + 1) * q + 2
+    let lmax: i64 = (a - 1) * (q + 1) - 2
+    return lmin <= b && b <= lmax
+}
+
+function T_of_s(s: i64) -> i64 {
+    let root: i64 = isqrt(s)
+    let mut result: i64 = 0
+    let mut a: i64 = 1
+    while a <= root {
+        if s % a == 0 {
+            let b: i64 = s / a
+            if a <= b && tfree(a, b) {
+                result = result + 1
+            }
+        }
+        a = a + 1
+    }
+    return result
+}
+
+function main() -> i32 {
+    let target: i64 = 200
+    let step: i64 = 55440
+    let limit: i64 = 100000000
+    let mut s: i64 = step
+    while s <= limit {
+        if T_of_s(s) == target {
+            printf("%lld\n", s)
+            return 0
+        }
+        s = s + step
+    }
+    return 1
+}

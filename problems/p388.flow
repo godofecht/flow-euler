@@ -1,0 +1,186 @@
+# Project Euler 388
+# Distinct lines D(10^10); print first 9 and last 9 digits concatenated.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function icbrt128(n: i128) -> i64 {
+    if n < (2 as i128) { return n as i64 }
+    # binary search for floor(cbrt(n))
+    let mut lo: i64 = 1
+    let mut hi: i64 = 1 << 22
+    while lo < hi {
+        let mid: i64 = (lo + hi + 1) / 2
+        let m: i128 = mid as i128
+        if m * m * m <= n {
+            lo = mid
+        } else {
+            hi = mid - 1
+        }
+    }
+    return lo
+}
+
+function memo_get(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, out: ptr<i64>) -> i32 {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 {
+        if keys[slot] == key {
+            out[0] = vals[slot]
+            return 1
+        }
+        slot = (slot + 1) & (cap - 1)
+    }
+    return 0
+}
+
+function memo_put(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, val: i64) -> void {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 && keys[slot] != key {
+        slot = (slot + 1) & (cap - 1)
+    }
+    used[slot] = 1
+    keys[slot] = key
+    vals[slot] = val
+}
+
+function mertens(n: i64, B: i64, M_small: ptr<i64>,
+                 keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    if n <= B { return M_small[n] }
+    let box: array<i64, 1> = [0]
+    if memo_get(keys, vals, used, cap, n, box) == 1 {
+        return box[0]
+    }
+    let mut res: i64 = 1
+    let mut l: i64 = 2
+    while l <= n {
+        let q: i64 = n / l
+        let r: i64 = n / q
+        res = res - (r - l + 1) * mertens(q, B, M_small, keys, vals, used, cap)
+        l = r + 1
+    }
+    memo_put(keys, vals, used, cap, n, res)
+    return res
+}
+
+function G(q: i128) -> i128 {
+    return q * (q * (q + (3 as i128)) + (3 as i128))
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000000
+    let NN: i128 = (N as i128) * (N as i128)
+    let B: i64 = icbrt128(NN)
+
+    let mu: ptr<i8> = calloc(B + 1, 1)
+    let lp: ptr<i32> = calloc(B + 1, 4)
+    let primes: ptr<i32> = calloc(B / 5 + 10, 4)
+    let M_small: ptr<i64> = calloc(B + 1, 8)
+    if mu == null || lp == null || primes == null || M_small == null { return 1 }
+
+    mu[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= B {
+        if lp[i] == 0 {
+            lp[i] = i as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+            mu[i] = (0 - 1) as i8
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > B { break }
+            lp[ip] = p as i32
+            if i % p == 0 {
+                mu[ip] = 0
+                break
+            }
+            mu[ip] = (0 - (mu[i] as i64)) as i8
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let mut s: i64 = 0
+    i = 1
+    while i <= B {
+        s = s + (mu[i] as i64)
+        M_small[i] = s
+        i = i + 1
+    }
+
+    let cap: i64 = 8192
+    let keys: ptr<i64> = calloc(cap, 8)
+    let vals: ptr<i64> = calloc(cap, 8)
+    let used: ptr<i8> = calloc(cap, 1)
+    if keys == null || vals == null || used == null { return 1 }
+
+    # warm
+    let _w: i64 = mertens(N, B, M_small, keys, vals, used, cap)
+
+    let mut total: i128 = 0
+    # Part 1: d <= B
+    let mut l: i64 = 1
+    while l <= B {
+        let q: i64 = N / l
+        let mut r: i64 = N / q
+        if r > B { r = B }
+        let dm: i64 = M_small[r] - M_small[l - 1]
+        total = total + (dm as i128) * G(q as i128)
+        l = r + 1
+    }
+
+    # Part 2: d > B
+    let max_q: i64 = N / (B + 1)
+    let mut q: i64 = 1
+    while q <= max_q {
+        let mut left: i64 = N / (q + 1) + 1
+        let right: i64 = N / q
+        if left <= B { left = B + 1 }
+        if left <= right {
+            let mr: i64 = mertens(right, B, M_small, keys, vals, used, cap)
+            let ml: i64 = mertens(left - 1, B, M_small, keys, vals, used, cap)
+            total = total + ((mr - ml) as i128) * G(q as i128)
+        }
+        q = q + 1
+    }
+
+    let MOD9: i128 = 1000000000
+    let last9: i64 = (total % MOD9) as i64
+    if last9 < 0 { last9 = 0 - last9 }  # shouldn't be negative
+
+    # first 9 digits
+    let mut tmp: i128 = total
+    if tmp < (0 as i128) { tmp = 0 as i128 - tmp }
+    let mut digs: i64 = 0
+    let mut t2: i128 = tmp
+    while t2 > (0 as i128) {
+        digs = digs + 1
+        t2 = t2 / (10 as i128)
+    }
+    let mut div: i128 = 1
+    let mut k: i64 = 0
+    while k < digs - 9 {
+        div = div * (10 as i128)
+        k = k + 1
+    }
+    let first9: i64 = (tmp / div) as i64
+    printf("%lld%09lld\n", first9, last9)
+
+    free(used)
+    free(vals)
+    free(keys)
+    free(M_small)
+    free(primes)
+    free(lp)
+    free(mu)
+    return 0
+}

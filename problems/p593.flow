@@ -1,0 +1,316 @@
+# Project Euler 593
+# Fleeting Medians — segmented sieve + discrete-log pow + sliding median counts.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log(x: f64) -> f64
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 10007
+const PHI: i64 = 10006
+const DOM_SZ: i64 = 20013
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function modpow(base0: i64, exp0: i64, modv: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % modv
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            result = (result * base) % modv
+        }
+        base = (base * base) % modv
+        exp = exp >> 1
+    }
+    return result
+}
+
+function nth_prime_upper_bound(n: i64) -> i64 {
+    if n < 6 { return 15 }
+    let x: f64 = n as f64
+    return (x * (log(x) + log(log(x))) + 10.0) as i64
+}
+
+function sieve_upto(limit: i64, primes: ptr<i64>) -> i64 {
+    let s: ptr<i8> = calloc(limit + 1, 1)
+    let mut i: i64 = 0
+    while i <= limit { s[i] = 1; i = i + 1 }
+    s[0] = 0
+    s[1] = 0
+    i = 2
+    while i * i <= limit {
+        if s[i] != 0 {
+            let mut j: i64 = i * i
+            while j <= limit {
+                s[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut m: i64 = 0
+    i = 2
+    while i <= limit {
+        if s[i] != 0 {
+            primes[m] = i
+            m = m + 1
+        }
+        i = i + 1
+    }
+    free(s)
+    return m
+}
+
+function build_tables(logt: ptr<i64>, expt: ptr<i64>) -> void {
+    # factorize PHI=10006 = 2*5003
+    let factors: ptr<i64> = calloc(8, 8)
+    factors[0] = 2
+    factors[1] = 5003
+    let nf: i64 = 2
+    let mut g: i64 = 0
+    let mut cand: i64 = 2
+    while cand < MOD {
+        let mut ok: i64 = 1
+        let mut qi: i64 = 0
+        while qi < nf {
+            if modpow(cand, PHI / factors[qi], MOD) == 1 {
+                ok = 0
+            }
+            qi = qi + 1
+        }
+        if ok != 0 {
+            g = cand
+            break
+        }
+        cand = cand + 1
+    }
+    free(factors)
+    let mut x: i64 = 1
+    let mut i: i64 = 0
+    while i < MOD {
+        logt[i] = -1
+        i = i + 1
+    }
+    i = 0
+    while i < PHI {
+        expt[i] = x
+        logt[x] = i
+        x = (x * g) % MOD
+        i = i + 1
+    }
+}
+
+function pow_fast(a_mod: i64, e_mod: i64, logt: ptr<i64>, expt: ptr<i64>) -> i64 {
+    if a_mod == 0 { return 0 }
+    return expt[(logt[a_mod] * e_mod) % PHI]
+}
+
+function compute_F2(n: i64, k: i64) -> i64 {
+    let logt: ptr<i64> = calloc(MOD, 8)
+    let expt: ptr<i64> = calloc(PHI, 8)
+    build_tables(logt, expt)
+
+    let counts: ptr<i64> = calloc(DOM_SZ, 8)
+    let window: ptr<i64> = calloc(k, 8)
+    let mut filled: i64 = 0
+    let mut pos: i64 = 0
+    let even: i64 = 0
+    if (k & 1) == 0 { even = 1 }
+    let mut r1: i64 = (k + 1) / 2
+    if even != 0 { r1 = k / 2 }
+    let mut m1: i64 = 0
+    let mut below: i64 = 0
+    let mut sum2: i64 = 0
+
+    let offsets: ptr<i64> = calloc(1002, 8)
+    let mut e: i64 = 1
+    let mut t: i64 = 1
+    let mut next_t: i64 = 10000
+    let mut idx: i64 = 1
+
+    # prime 2
+    let s0: i64 = pow_fast(2 % MOD, e, logt, expt)
+    offsets[1] = s0
+    let v0: i64 = s0 + s0
+    window[0] = v0
+    counts[v0] = counts[v0] + 1
+    filled = 1
+
+    if k == 1 {
+        m1 = v0
+        below = 0
+        sum2 = sum2 + (m1 << 1)
+        if n == 1 {
+            free(logt); free(expt); free(counts); free(window); free(offsets)
+            return sum2
+        }
+    }
+
+    let limit: i64 = nth_prime_upper_bound(n)
+    let root: i64 = isqrt(limit)
+    let base_primes: ptr<i64> = calloc(root + 100, 8)
+    let nbase: i64 = sieve_upto(root, base_primes)
+    # collect odd base primes
+    let base_odds: ptr<i64> = calloc(nbase, 8)
+    let base_sq: ptr<i64> = calloc(nbase, 8)
+    let mut nob: i64 = 0
+    let mut bi: i64 = 0
+    while bi < nbase {
+        let p: i64 = base_primes[bi]
+        if p > 2 {
+            base_odds[nob] = p
+            base_sq[nob] = p * p
+            nob = nob + 1
+        }
+        bi = bi + 1
+    }
+
+    let seg_odds: i64 = 1 << 20
+    let mut low: i64 = 3
+    while low <= limit {
+        let mut high: i64 = low + 2 * seg_odds
+        if high > limit + 1 { high = limit + 1 }
+        let seg_len: i64 = (high - low) / 2
+        let seg: ptr<i8> = calloc(seg_len, 1)
+        let mut si: i64 = 0
+        while si < seg_len { seg[si] = 1; si = si + 1 }
+
+        bi = 0
+        while bi < nob {
+            let p: i64 = base_odds[bi]
+            let sq: i64 = base_sq[bi]
+            if sq >= high { break }
+            let mut start: i64 = sq
+            if start < low {
+                let rem: i64 = low % p
+                if rem == 0 {
+                    start = low
+                } else {
+                    start = low + (p - rem)
+                }
+                if (start & 1) == 0 { start = start + p }
+            }
+            let mut j: i64 = (start - low) / 2
+            while j < seg_len {
+                seg[j] = 0
+                j = j + p
+            }
+            bi = bi + 1
+        }
+
+        si = 0
+        while si < seg_len {
+            if seg[si] != 0 {
+                let prime: i64 = low + 2 * si
+                idx = idx + 1
+                e = e + 1
+                if e == PHI { e = 0 }
+                if idx == next_t {
+                    t = t + 1
+                    next_t = next_t + 10000
+                }
+                let pm: i64 = prime % MOD
+                let s: i64 = pow_fast(pm, e, logt, expt)
+                if idx <= 1001 { offsets[idx] = s }
+                let v: i64 = s + offsets[t]
+
+                if filled < k {
+                    window[filled] = v
+                    counts[v] = counts[v] + 1
+                    filled = filled + 1
+                    if filled == k {
+                        # init m1
+                        let mut cum: i64 = 0
+                        let mut vv: i64 = 0
+                        while cum + counts[vv] < r1 {
+                            cum = cum + counts[vv]
+                            vv = vv + 1
+                        }
+                        m1 = vv
+                        below = cum
+                        # median2
+                        if even == 0 {
+                            sum2 = sum2 + (m1 << 1)
+                        } else {
+                            let pos_in: i64 = r1 - below
+                            if pos_in < counts[m1] {
+                                sum2 = sum2 + (m1 << 1)
+                            } else {
+                                let mut m2: i64 = m1 + 1
+                                while counts[m2] == 0 { m2 = m2 + 1 }
+                                sum2 = sum2 + m1 + m2
+                            }
+                        }
+                    }
+                    if idx == n {
+                        free(seg); free(logt); free(expt); free(counts); free(window); free(offsets)
+                        free(base_primes); free(base_odds); free(base_sq)
+                        return sum2
+                    }
+                } else {
+                    let outv: i64 = window[pos]
+                    if outv != v {
+                        counts[outv] = counts[outv] - 1
+                        if outv < m1 { below = below - 1 }
+                        window[pos] = v
+                        counts[v] = counts[v] + 1
+                        if v < m1 { below = below + 1 }
+                        # adjust m1
+                        while below >= r1 {
+                            m1 = m1 - 1
+                            below = below - counts[m1]
+                        }
+                        while below + counts[m1] < r1 {
+                            below = below + counts[m1]
+                            m1 = m1 + 1
+                        }
+                    } else {
+                        window[pos] = v
+                    }
+                    pos = pos + 1
+                    if pos == k { pos = 0 }
+                    if even == 0 {
+                        sum2 = sum2 + (m1 << 1)
+                    } else {
+                        let pos_in: i64 = r1 - below
+                        if pos_in < counts[m1] {
+                            sum2 = sum2 + (m1 << 1)
+                        } else {
+                            let mut m2: i64 = m1 + 1
+                            while counts[m2] == 0 { m2 = m2 + 1 }
+                            sum2 = sum2 + m1 + m2
+                        }
+                    }
+                    if idx == n {
+                        free(seg); free(logt); free(expt); free(counts); free(window); free(offsets)
+                        free(base_primes); free(base_odds); free(base_sq)
+                        return sum2
+                    }
+                }
+            }
+            si = si + 1
+        }
+        free(seg)
+        low = high | 1
+    }
+    return sum2
+}
+
+function main() -> i32 {
+    let ans2: i64 = compute_F2(10000000, 100000)
+    # print as half with .0 or .5 — answer is *.0
+    printf("%.1f\n", (ans2 as f64) / 2.0)
+    return 0
+}

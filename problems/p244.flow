@@ -1,0 +1,142 @@
+# Project Euler 244
+# Sliding block puzzle: sum of checksums of shortest paths.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 100000007
+const CAP: i64 = 262144
+
+function encode(cells: ptr<i32>) -> i64 {
+    let mut v: i64 = 0
+    let mut i: i32 = 0
+    while i < 16 {
+        v = v | ((cells[i] as i64) << (2 * i))
+        i = i + 1
+    }
+    return v
+}
+
+function decode(state: i64, cells: ptr<i32>) -> void {
+    let mut i: i32 = 0
+    while i < 16 {
+        cells[i] = ((state >> (2 * i)) & 3) as i32
+        i = i + 1
+    }
+}
+
+function main() -> i32 {
+    let KEYS: ptr<i64> = calloc(CAP, 8)
+    let SEEN: ptr<i8> = calloc(CAP, 1)
+    let Q: ptr<i64> = calloc(CAP, 8)
+    let QC: ptr<i64> = calloc(CAP, 8)
+    let cells: ptr<i32> = calloc(16, 4)
+    let ncells: ptr<i32> = calloc(16, 4)
+    if KEYS == null || Q == null { return 1 }
+
+    let start_s: ptr<i8> = ".rbbrrbbrrbbrrbb"
+    let goal_s: ptr<i8> = ".brbbrbrrbrbbrbr"
+    let mut i: i32 = 0
+    while i < 16 {
+        let c: i32 = start_s[i] as i32
+        if c == 46 { cells[i] = 0 }
+        elif c == 114 { cells[i] = 1 }
+        else { cells[i] = 2 }
+        i = i + 1
+    }
+    let start: i64 = encode(cells)
+    i = 0
+    while i < 16 {
+        let c: i32 = goal_s[i] as i32
+        if c == 46 { cells[i] = 0 }
+        elif c == 114 { cells[i] = 1 }
+        else { cells[i] = 2 }
+        i = i + 1
+    }
+    let goal: i64 = encode(cells)
+
+    # hash insert start
+    let mut h: i64 = start % CAP
+    if h < 0 { h = 0 - h }
+    SEEN[h] = 1
+    KEYS[h] = start
+
+    Q[0] = start
+    QC[0] = 0
+    let mut qh: i64 = 0
+    let mut qt: i64 = 1
+    let mut result: i64 = 0
+    let mut last_iter: bool = false
+
+    while !last_iter {
+        let layer_end: i64 = qt
+        let mut next_start: i64 = qt
+        while qh < layer_end {
+            let state: i64 = Q[qh]
+            let checksum: i64 = QC[qh]
+            qh = qh + 1
+            if state == goal {
+                last_iter = true
+                result = (result + checksum) % MOD
+            }
+            decode(state, cells)
+            let mut emp: i32 = 0
+            while emp < 16 {
+                if cells[emp] == 0 { break }
+                emp = emp + 1
+            }
+            let ex: i32 = emp % 4
+            let ey: i32 = emp / 4
+            let mut mi: i32 = 0
+            while mi < 4 {
+                let mut move: i32 = 0
+                let mut tx: i32 = ex
+                let mut ty: i32 = ey
+                let mut ok: bool = true
+                if mi == 0 { move = 76; if ex == 3 { ok = false } else { tx = ex + 1 } }
+                elif mi == 1 { move = 82; if ex == 0 { ok = false } else { tx = ex - 1 } }
+                elif mi == 2 { move = 85; if ey == 3 { ok = false } else { ty = ey + 1 } }
+                else { move = 68; if ey == 0 { ok = false } else { ty = ey - 1 } }
+                if ok {
+                    let ti: i32 = ty * 4 + tx
+                    let mut j: i32 = 0
+                    while j < 16 {
+                        ncells[j] = cells[j]
+                        j = j + 1
+                    }
+                    ncells[emp] = cells[ti]
+                    ncells[ti] = 0
+                    let ns: i64 = encode(ncells)
+                    let ncs: i64 = (checksum * 243 + (move as i64)) % MOD
+                    h = ns % CAP
+                    if h < 0 { h = 0 - h }
+                    let mut inserted: bool = false
+                    while true {
+                        if SEEN[h] == 0 {
+                            SEEN[h] = 1
+                            KEYS[h] = ns
+                            inserted = true
+                            break
+                        }
+                        if KEYS[h] == ns { break }
+                        h = h + 1
+                        if h >= CAP { h = 0 }
+                    }
+                    if inserted {
+                        Q[qt] = ns
+                        QC[qt] = ncs
+                        qt = qt + 1
+                    }
+                }
+                mi = mi + 1
+            }
+        }
+        if last_iter { break }
+        if qh >= qt { break }
+    }
+    printf("%lld\n", result)
+    free(KEYS); free(SEEN); free(Q); free(QC); free(cells); free(ncells)
+    return 0
+}

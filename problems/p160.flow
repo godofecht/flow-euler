@@ -1,0 +1,61 @@
+# Project Euler 160
+# Last five non-zero digits of 10^12!.
+
+function count_factors(end0: i64, n: i64) -> i64 {
+    let mut end: i64 = end0
+    let mut total: i64 = 0
+    while end > 0 {
+        end = end / n
+        total = total + end
+    }
+    return total
+}
+
+function factorial_coprime(n0: i64) -> i64 {
+    let n: i64 = n0 % 100000
+    let mut product: i64 = 1
+    let mut i: i64 = 1
+    while i <= n {
+        if (i % 2) != 0 && (i % 5) != 0 {
+            product = (i * product) % 100000
+        }
+        i = i + 1
+    }
+    return product
+}
+
+function odd_factorialish(n: i64) -> i64 {
+    if n == 0 { return 1 }
+    return (odd_factorialish(n / 5) * factorial_coprime(n)) % 100000
+}
+
+function factorialish(n: i64) -> i64 {
+    if n == 0 { return 1 }
+    # even_factorialish(n) = factorialish(n/2)
+    return (factorialish(n / 2) * odd_factorialish(n)) % 100000
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    let mut r: i64 = 1
+    while exp > 0 {
+        if (exp & 1) == 1 { r = (r * base) % mod }
+        base = (base * base) % mod
+        exp = exp >> 1
+    }
+    return r
+}
+
+function factorial_suffix(n: i64) -> i64 {
+    let mut twos: i64 = count_factors(n, 2) - count_factors(n, 5)
+    if twos >= 2505 {
+        twos = (twos - 5) % 2500 + 5
+    }
+    return (factorialish(n) * modpow(2, twos, 100000)) % 100000
+}
+
+function main() -> i32 {
+    printf("%lld\n", factorial_suffix(1000000000000))
+    return 0
+}

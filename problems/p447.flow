@@ -1,0 +1,149 @@
+# Project Euler 447
+# F(10^14) mod 10^9+7 where F(N)=sum_{n=2..N} R(n), R(n)=sigma*(n)-n
+# (unitary divisor sum). Uses Möbius inversion:
+# sum_{n<=N} sigma*(n) = sum_e μ(e)*e * sum_{k<=N/e^2} k*floor((N/e^2)/k).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function sum_k_floor(M: i64, MOD: i64, INV2: i64) -> i64 {
+    let mut s: i64 = 0
+    let mut k: i64 = 1
+    while k <= M {
+        let q: i64 = M / k
+        let mut maxk: i64 = M / q
+        if maxk > M { maxk = M }
+        let hi: i64 = maxk
+        let lo: i64 = k
+        let mut sumk: i64 = ((hi % MOD) * ((hi + 1) % MOD) % MOD) * INV2 % MOD
+        let lom1: i64 = lo - 1
+        let sub: i64 = ((lom1 % MOD) * ((lom1 + 1) % MOD) % MOD) * INV2 % MOD
+        sumk = (sumk - sub) % MOD
+        if sumk < 0 { sumk = sumk + MOD }
+        s = (s + (q % MOD) * sumk) % MOD
+        k = maxk + 1
+    }
+    return s
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000007
+    let INV2: i64 = (MOD + 1) / 2
+    let N: i64 = 100000000000000
+    let L: i64 = isqrt(N)
+
+    let mu: ptr<i8> = calloc(L + 1, 1)
+    let is_comp: ptr<i8> = calloc(L + 1, 1)
+    let primes: ptr<i32> = calloc(L / 5 + 10, 4)
+    let pref: ptr<i64> = calloc(L + 1, 8)
+    if mu == null || is_comp == null || primes == null || pref == null { return 1 }
+
+    mu[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= L {
+        if is_comp[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            mu[i] = -1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > L { break }
+            is_comp[ip] = 1
+            if i % p == 0 {
+                mu[ip] = 0
+                break
+            }
+            mu[ip] = (0 - (mu[i] as i64)) as i8
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    i = 1
+    while i <= L {
+        let term: i64 = (mu[i] as i64) * (i % MOD) % MOD
+        pref[i] = (pref[i - 1] + term) % MOD
+        if pref[i] < 0 { pref[i] = pref[i] + MOD }
+        i = i + 1
+    }
+
+    # cache for sum_k_floor(M): open-address hash
+    let HCAP: i64 = 1 << 20
+    let keys: ptr<i64> = calloc(HCAP, 8)
+    let vals: ptr<i64> = calloc(HCAP, 8)
+    let used: ptr<i8> = calloc(HCAP, 1)
+    if keys == null || vals == null || used == null { return 1 }
+
+    let mut total: i64 = 0
+    let mut e: i64 = 1
+    while e <= L {
+        let M: i64 = N / (e * e)
+        if M == 0 { break }
+
+        # largest e2 with N/(e2*e2) == M
+        let mut e2: i64 = isqrt(N / M)
+        if e2 > L { e2 = L }
+        if e2 < e { e2 = e }
+        while e2 > e && N / (e2 * e2) < M {
+            e2 = e2 - 1
+        }
+        while e2 + 1 <= L && N / ((e2 + 1) * (e2 + 1)) == M {
+            e2 = e2 + 1
+        }
+
+        let mut sum_emu: i64 = (pref[e2] - pref[e - 1]) % MOD
+        if sum_emu < 0 { sum_emu = sum_emu + MOD }
+
+        # cached sum_k_floor(M)
+        let mut h: i64 = M % HCAP
+        let mut piece: i64 = -1
+        while used[h] != 0 {
+            if keys[h] == M {
+                piece = vals[h]
+                break
+            }
+            h = h + 1
+            if h >= HCAP { h = 0 }
+        }
+        if piece < 0 {
+            piece = sum_k_floor(M, MOD, INV2)
+            used[h] = 1
+            keys[h] = M
+            vals[h] = piece
+        }
+
+        total = (total + sum_emu * piece) % MOD
+        e = e2 + 1
+    }
+
+    let tri: i64 = ((N % MOD) * ((N + 1) % MOD) % MOD) * INV2 % MOD
+    let ans: i64 = (total - tri) % MOD
+    if ans < 0 { ans = ans + MOD }
+    printf("%lld\n", ans)
+
+    free(used)
+    free(vals)
+    free(keys)
+    free(pref)
+    free(primes)
+    free(is_comp)
+    free(mu)
+    return 0
+}

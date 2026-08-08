@@ -1,0 +1,43 @@
+# Project Euler 136
+# Count n < 50e6 with exactly one solution of the PE135 equation.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 50000000
+    let once: ptr<i8> = calloc(limit, 1)
+    let many: ptr<i8> = calloc(limit, 1)
+    if once == null || many == null { return 1 }
+
+    let mut a: i64 = 1
+    while a < limit {
+        let mut b: i64 = (a + 3) / 4
+        while b < a {
+            let current: i64 = a * (4 * b - a)
+            if current >= limit { break }
+            if current > 0 {
+                if once[current] == 1 {
+                    many[current] = 1
+                } else {
+                    once[current] = 1
+                }
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let mut count: i64 = 0
+    let mut n: i64 = 1
+    while n < limit {
+        if once[n] == 1 && many[n] == 0 { count = count + 1 }
+        n = n + 1
+    }
+    printf("%lld\n", count)
+    free(many)
+    free(once)
+    return 0
+}

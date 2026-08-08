@@ -1,0 +1,84 @@
+# Project Euler 373
+# S(10^7) = sum r*N(r) for integer circumradius triangles.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let n: i64 = 10000000
+    let spf: ptr<i32> = calloc(n + 1, 4)
+    let primes: ptr<i32> = calloc(n / 5 + 10, 4)
+    if spf == null || primes == null { return 1 }
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= n {
+        if spf[i] == 0 {
+            spf[i] = i as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+        }
+        let si: i64 = spf[i] as i64
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > n { break }
+            spf[ip] = p as i32
+            if p == si { break }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let t1: ptr<i64> = calloc(25, 8)
+    let t2: ptr<i64> = calloc(25, 8)
+    let t3: ptr<i64> = calloc(25, 8)
+    if t1 == null || t2 == null || t3 == null { return 1 }
+    let mut e: i64 = 0
+    while e <= 24 {
+        t1[e] = 3 * e * e + 3 * e + 1
+        t2[e] = 2 * e + 1
+        t3[e] = 2 * (e / 2) + 1
+        e = e + 1
+    }
+
+    let mut total: i64 = 0
+    let mut r: i64 = 1
+    while r <= n {
+        let mut x: i64 = r
+        let mut prod1: i64 = 1
+        let mut prod2: i64 = 1
+        let mut prod3: i64 = 1
+        while x > 1 {
+            let p: i64 = spf[x] as i64
+            let mut ee: i64 = 1
+            x = x / p
+            while x % p == 0 {
+                x = x / p
+                ee = ee + 1
+            }
+            if p % 4 == 1 {
+                prod1 = prod1 * t1[ee]
+                prod2 = prod2 * t2[ee]
+                prod3 = prod3 * t3[ee]
+            }
+        }
+        if prod1 != 1 {
+            let cnt: i64 = (2 * prod1 - 3 * prod2 + 3 * prod3 - 2) / 6
+            if cnt != 0 {
+                total = total + r * cnt
+            }
+        }
+        r = r + 1
+    }
+
+    printf("%lld\n", total)
+    free(t3)
+    free(t2)
+    free(t1)
+    free(primes)
+    free(spf)
+    return 0
+}

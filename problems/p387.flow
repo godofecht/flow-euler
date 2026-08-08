@@ -1,0 +1,204 @@
+# Project Euler 387
+# Sum of right-truncatable Harshad primes whose Harshad parents are strong, < 10^14.
+
+function mulmod(a: i64, b: i64, mod: i64) -> i64 {
+    let mut x: i64 = a % mod
+    if x < 0 { x = x + mod }
+    let mut y: i64 = b % mod
+    if y < 0 { y = y + mod }
+    let mut res: i64 = 0
+    while y > 0 {
+        if y % 2 == 1 {
+            res = res + x
+            if res >= mod { res = res - mod }
+        }
+        x = x + x
+        if x >= mod { x = x - mod }
+        y = y / 2
+    }
+    return res
+}
+
+function powmod(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if exp % 2 == 1 { result = mulmod(result, base, mod) }
+        base = mulmod(base, base, mod)
+        exp = exp / 2
+    }
+    return result
+}
+
+function is_prime(p: i64) -> i32 {
+    if p < 2 { return 0 }
+    if p < 31 {
+        # bitmask of primes < 31
+        let mask: i64 = (1 << 2) | (1 << 3) | (1 << 5) | (1 << 7) | (1 << 11) | (1 << 13) | (1 << 17) | (1 << 19) | (1 << 23) | (1 << 29)
+        if (mask & (1 << (p as i32))) != 0 { return 1 }
+        return 0
+    }
+    if p % 2 == 0 || p % 3 == 0 || p % 5 == 0 || p % 7 == 0 || p % 11 == 0 || p % 13 == 0 || p % 17 == 0 {
+        return 0
+    }
+    if p < 17 * 19 { return 1 }
+
+    let sps: ptr<i64> = calloc(18, 8)
+    if sps == null { return 0 }
+    sps[0]=19; sps[1]=23; sps[2]=29; sps[3]=31; sps[4]=37; sps[5]=41
+    sps[6]=43; sps[7]=47; sps[8]=53; sps[9]=59; sps[10]=61; sps[11]=67
+    sps[12]=71; sps[13]=73; sps[14]=79; sps[15]=83; sps[16]=89; sps[17]=97
+    let mut si: i32 = 0
+    while si < 18 {
+        if p % sps[si] == 0 {
+            free(sps)
+            return 0
+        }
+        si = si + 1
+    }
+    free(sps)
+
+    # Miller-Rabin bases
+    let bases: ptr<i64> = calloc(7, 8)
+    let mut nb: i32 = 0
+    if p < 5329 {
+        bases[0] = 377687; nb = 1
+    } elif p < 9080191 {
+        bases[0] = 31; bases[1] = 73; nb = 2
+    } elif p < 4759123141 {
+        bases[0] = 2; bases[1] = 7; bases[2] = 61; nb = 3
+    } elif p < 1122004669633 {
+        bases[0] = 2; bases[1] = 13; bases[2] = 23; bases[3] = 1662803; nb = 4
+    } else {
+        bases[0] = 2; bases[1] = 325; bases[2] = 9375; bases[3] = 28178
+        bases[4] = 450775; bases[5] = 9780504; bases[6] = 1795265022; nb = 7
+    }
+
+    let mut d: i64 = (p - 1) / 2
+    let mut shift: i32 = 0
+    while d % 2 == 0 {
+        shift = shift + 1
+        d = d / 2
+    }
+
+    let mut bi: i32 = 0
+    while bi < nb {
+        let base: i64 = bases[bi] % p
+        if base == 0 {
+            bi = bi + 1
+            continue
+        }
+        let mut x: i64 = powmod(base, d, p)
+        if x != 1 && x != p - 1 {
+            let mut maybe: i32 = 0
+            let mut r: i32 = 0
+            while r < shift {
+                x = mulmod(x, x, p)
+                if x == 1 {
+                    free(bases)
+                    return 0
+                }
+                if x == p - 1 {
+                    maybe = 1
+                    break
+                }
+                r = r + 1
+            }
+            if maybe == 0 {
+                free(bases)
+                return 0
+            }
+        }
+        bi = bi + 1
+    }
+    free(bases)
+    return 1
+}
+
+function digit_sum(x0: i64) -> i64 {
+    let mut x: i64 = x0
+    let mut result: i64 = 0
+    while x >= 10 {
+        result = result + x % 10
+        x = x / 10
+    }
+    return result + x
+}
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let max_digits: i32 = 14
+    # Harshad numbers by digit length; strong Harshad flagged separately
+    let CAP: i64 = 200000
+    let todo: ptr<i64> = calloc(CAP, 8)
+    let nextv: ptr<i64> = calloc(CAP, 8)
+    let strong: ptr<i8> = calloc(CAP, 1)
+    let strong_next: ptr<i8> = calloc(CAP, 1)
+    if todo == null || nextv == null || strong == null || strong_next == null { return 1 }
+
+    let mut tlen: i64 = 0
+    let mut d0: i64 = 1
+    while d0 <= 9 {
+        todo[tlen] = d0
+        strong[tlen] = 0
+        tlen = tlen + 1
+        d0 = d0 + 1
+    }
+
+    let mut result: i64 = 0
+    let mut num_digits: i32 = 1
+    while num_digits < max_digits {
+        num_digits = num_digits + 1
+        let mut nlen: i64 = 0
+        let mut ix: i64 = 0
+        while ix < tlen {
+            let x: i64 = todo[ix]
+            let is_strong_parent: i32 = strong[ix] as i32
+            let mut digit: i64 = 0
+            while digit <= 9 {
+                let current: i64 = x * 10 + digit
+                if is_strong_parent == 1 {
+                    if is_prime(current) == 1 {
+                        result = result + current
+                    }
+                }
+                let reduced: i64 = digit_sum(current)
+                if current % reduced == 0 {
+                    nextv[nlen] = current
+                    if is_prime(current / reduced) == 1 {
+                        strong_next[nlen] = 1
+                    } else {
+                        strong_next[nlen] = 0
+                    }
+                    nlen = nlen + 1
+                    if nlen >= CAP {
+                        printf("overflow\n")
+                        return 1
+                    }
+                }
+                digit = digit + 1
+            }
+            ix = ix + 1
+        }
+        # swap buffers
+        let mut j: i64 = 0
+        while j < nlen {
+            todo[j] = nextv[j]
+            strong[j] = strong_next[j]
+            j = j + 1
+        }
+        tlen = nlen
+    }
+
+    printf("%lld\n", result)
+    free(strong_next)
+    free(strong)
+    free(nextv)
+    free(todo)
+    return 0
+}

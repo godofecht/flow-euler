@@ -1,0 +1,43 @@
+# Project Euler 144
+# Laser reflections in an elliptical mirror until exit.
+
+extern {
+    function sqrt(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let mut steps: i64 = 0
+    let mut from_x: f64 = 0.0
+    let mut from_y: f64 = 10.1
+    let mut to_x: f64 = 1.4
+    let mut to_y: f64 = 0.0 - 9.6
+
+    while true {
+        if to_x >= (0.0 - 0.01) && to_x <= 0.01 && to_y > 9.9 {
+            break
+        }
+
+        let mut nx: f64 = 0.0 - 4.0 * to_x
+        let mut ny: f64 = 0.0 - to_y
+        let length: f64 = sqrt(nx * nx + ny * ny)
+        nx = nx / length
+        ny = ny / length
+
+        let dx: f64 = to_x - from_x
+        let dy: f64 = to_y - from_y
+
+        let dot: f64 = dx * nx + dy * ny
+        let rx: f64 = dx - 2.0 * dot * nx
+        let ry: f64 = dy - 2.0 * dot * ny
+        let slope: f64 = ry / rx
+
+        from_x = to_x
+        from_y = to_y
+
+        to_x = (4.0 * from_x - slope * slope * from_x + 2.0 * slope * from_y) / (0.0 - 4.0 - slope * slope)
+        to_y = slope * (to_x - from_x) + from_y
+        steps = steps + 1
+    }
+    printf("%lld\n", steps)
+    return 0
+}

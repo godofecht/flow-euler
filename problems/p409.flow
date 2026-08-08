@@ -1,0 +1,93 @@
+# Project Euler 409
+# W(10^7) mod 10^9+7: winning nim positions with distinct pile sizes.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000
+    let MOD: i64 = 1000000007
+    let q: i64 = modpow(2, N, MOD)
+    let q_minus_1: i64 = q - 1
+    if q_minus_1 < 0 { q_minus_1 = q_minus_1 + MOD }
+
+    let mut total: i64 = 1
+    let mut fact: i64 = 1
+    let mut term: i64 = q_minus_1
+    let mut i: i64 = 1
+    while i <= N {
+        let t: i128 = (total as i128) * (term as i128) % (MOD as i128)
+        total = t as i64
+        term = term - 1
+        if term < 0 { term = term + MOD }
+        let t2: i128 = (fact as i128) * (i as i128) % (MOD as i128)
+        fact = t2 as i64
+        i = i + 1
+    }
+    let inv_fact: i64 = modpow(fact, MOD - 2, MOD)
+    let comb: i64 = ((total as i128) * (inv_fact as i128) % (MOD as i128)) as i64
+
+    let m: i64 = N / 2
+    let mut s: i64 = 1
+    if m > 0 {
+        let inv: ptr<i64> = calloc(m + 1, 8)
+        if inv == null { return 1 }
+        inv[1] = 1
+        i = 2
+        while i <= m {
+            inv[i] = MOD - ((MOD / i) * inv[MOD % i]) % MOD
+            i = i + 1
+        }
+        let n_half: i64 = modpow(2, N - 1, MOD)
+        let mut binom: i64 = 1
+        let mut r: i64 = 1
+        while r <= m {
+            let tr: i64 = (n_half - r + 1) % MOD
+            if tr < 0 { tr = tr + MOD }
+            binom = ((binom as i128) * (tr as i128) % (MOD as i128)) as i64
+            binom = ((binom as i128) * (inv[r] as i128) % (MOD as i128)) as i64
+            if r % 2 == 1 {
+                s = s - binom
+            } else {
+                s = s + binom
+            }
+            s = s % MOD
+            if s < 0 { s = s + MOD }
+            r = r + 1
+        }
+        free(inv)
+    }
+
+    let mut e_n: i64 = s
+    if N % 2 == 1 {
+        e_n = (0 - s) % MOD
+        if e_n < 0 { e_n = e_n + MOD }
+    }
+
+    let inv_q: i64 = modpow(q, MOD - 2, MOD)
+    let mut losing: i64 = ((fact as i128) * (inv_q as i128) % (MOD as i128)) as i64
+    let inner: i64 = (comb + ((q_minus_1 as i128) * (e_n as i128) % (MOD as i128)) as i64) % MOD
+    losing = ((losing as i128) * (inner as i128) % (MOD as i128)) as i64
+    let ans: i64 = (total - losing) % MOD
+    if ans < 0 { ans = ans + MOD }
+    printf("%lld\n", ans)
+    return 0
+}

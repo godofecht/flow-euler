@@ -1,0 +1,459 @@
+# Project Euler 598
+# Split Divisibilities — ratio DP for C(100!).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function build_spf(limit: i64, spf: ptr<i32>) -> void {
+    let mut i: i64 = 0
+    while i <= limit {
+        spf[i] = i as i32
+        i = i + 1
+    }
+    spf[0] = 0
+    if limit >= 1 { spf[1] = 1 }
+    i = 2
+    while i * i <= limit {
+        if (spf[i] as i64) == i {
+            let mut j: i64 = i * i
+            while j <= limit {
+                if (spf[j] as i64) == j { spf[j] = i as i32 }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+}
+
+function packR(v: ptr<i64>) -> i64 {
+    let mut k: i64 = 0
+    let mut i: i64 = 0
+    while i < 7 {
+        k = (k << 8) + (v[i] + 128)
+        i = i + 1
+    }
+    return k
+}
+
+function main() -> i32 {
+    let spf: ptr<i32> = calloc(100, 4)
+    build_spf(99, spf)
+    let pl: ptr<i64> = calloc(9, 8)
+    pl[0]=2
+    pl[1]=3
+    pl[2]=5
+    pl[3]=7
+    pl[4]=11
+    pl[5]=13
+    pl[6]=17
+    pl[7]=19
+    pl[8]=23
+    let ph: ptr<i64> = calloc(6, 8)
+    ph[0]=29
+    ph[1]=31
+    ph[2]=37
+    ph[3]=41
+    ph[4]=43
+    ph[5]=47
+    let vlow: ptr<i64> = calloc(100 * 9, 8)
+    let vhigh: ptr<i64> = calloc(100 * 6, 8)
+    let has_big: ptr<i8> = calloc(100, 1)
+    let mut n: i64 = 2
+    while n <= 99 {
+        let mut x: i64 = n
+        while x > 1 {
+            let p: i64 = spf[x] as i64
+            let mut c: i64 = 0
+            while x % p == 0 {
+                x = x / p
+                c = c + 1
+            }
+            if p > 47 { has_big[n] = 1 }
+            let mut i: i64 = 0
+            while i < 9 {
+                if pl[i] == p { vlow[n * 9 + i] = c }
+                i = i + 1
+            }
+            i = 0
+            while i < 6 {
+                if ph[i] == p { vhigh[n * 6 + i] = c }
+                i = i + 1
+            }
+        }
+        n = n + 1
+    }
+
+    let big_es: ptr<i64> = calloc(7, 8)
+    let bps: ptr<i64> = calloc(7, 8)
+    bps[0]=5
+    bps[1]=7
+    bps[2]=11
+    bps[3]=13
+    bps[4]=17
+    bps[5]=19
+    bps[6]=23
+    let mut bi: i64 = 0
+    while bi < 7 {
+        let p: i64 = bps[bi]
+        let mut e: i64 = 0
+        let mut v: i64 = 100
+        while v > 0 {
+            v = v / p
+            e = e + v
+        }
+        big_es[bi] = e
+        bi = bi + 1
+    }
+
+    # Entry lists: Rpack, d2, d3, cnt
+    let CAP: i64 = 3000000
+    let mut R0: ptr<i64> = calloc(CAP, 8)
+    let mut A0: ptr<i64> = calloc(CAP, 8)
+    let mut B0: ptr<i64> = calloc(CAP, 8)
+    let mut C0: ptr<i64> = calloc(CAP, 8)
+    let mut n0: i64 = 1
+    let zR: ptr<i64> = calloc(7, 8)
+    R0[0] = packR(zR)
+    free(zR)
+    A0[0] = 0
+    B0[0] = 0
+    C0[0] = 1
+
+    # Hash for combining duplicates each layer
+    let HCAP: i64 = 400003
+    let mut hi: i64 = 0
+    let hkey: ptr<i64> = calloc(HCAP, 8)
+    let hval: ptr<i64> = calloc(HCAP, 8)
+    let hused: ptr<i8> = calloc(HCAP, 1)
+    let hidx: ptr<i64> = calloc(HCAP, 8)
+
+    bi = 0
+    while bi < 7 {
+        let e: i64 = big_es[bi]
+        # clear hash
+        hi = 0
+        while hi < HCAP {
+            hused[hi] = 0
+            hi = hi + 1
+        }
+        let R1: ptr<i64> = calloc(CAP, 8)
+        let A1: ptr<i64> = calloc(CAP, 8)
+        let B1: ptr<i64> = calloc(CAP, 8)
+        let C1: ptr<i64> = calloc(CAP, 8)
+        let mut n1: i64 = 0
+        let mut oi: i64 = 0
+        while oi < n0 {
+            let mut x: i64 = 0
+            while x <= e {
+                let u: i64 = x + 1
+                let v: i64 = e - x + 1
+                let Rd: ptr<i64> = calloc(7, 8)
+                let mut k: i64 = 0
+                while k < 7 {
+                    Rd[k] = vlow[u * 9 + (k + 2)] - vlow[v * 9 + (k + 2)]
+                    k = k + 1
+                }
+                let d2d: i64 = vlow[u * 9 + 0] - vlow[v * 9 + 0]
+                let d3d: i64 = vlow[u * 9 + 1] - vlow[v * 9 + 1]
+                # decode old R
+                let mut oldR: ptr<i64> = calloc(7, 8)
+                let mut rp: i64 = R0[oi]
+                k = 6
+                while k >= 0 {
+                    oldR[k] = (rp & 255) - 128
+                    rp = rp >> 8
+                    k = k - 1
+                }
+                let newR: ptr<i64> = calloc(7, 8)
+                k = 0
+                while k < 7 {
+                    newR[k] = oldR[k] + Rd[k]
+                    k = k + 1
+                }
+                let Rpack: i64 = packR(newR)
+                let nd2: i64 = A0[oi] + d2d
+                let nd3: i64 = B0[oi] + d3d
+                let mut combo: i64 = Rpack ^ ((nd2 + 5000) * 1000003) ^ ((nd3 + 5000) * 9176)
+                if combo < 0 { combo = -combo }
+                let mut h: i64 = combo % HCAP
+                let mut found: i32 = 0
+                let mut probes: i64 = 0
+                while probes < 20000 {
+                    if hused[h] == 0 {
+                        hused[h] = 1
+                        hkey[h] = combo
+                        hidx[h] = n1
+                        R1[n1] = Rpack
+                        A1[n1] = nd2
+                        B1[n1] = nd3
+                        C1[n1] = C0[oi]
+                        n1 = n1 + 1
+                        found = 1
+                        break
+                    }
+                    if hkey[h] == combo && R1[hidx[h]] == Rpack && A1[hidx[h]] == nd2 && B1[hidx[h]] == nd3 {
+                        C1[hidx[h]] = C1[hidx[h]] + C0[oi]
+                        found = 1
+                        break
+                    }
+                    h = h + 1
+                    if h >= HCAP { h = 0 }
+                    probes = probes + 1
+                }
+                free(Rd)
+                free(oldR)
+                free(newR)
+                x = x + 1
+            }
+            oi = oi + 1
+        }
+        free(R0)
+        free(A0)
+        free(B0)
+        free(C0)
+        R0 = R1
+        A0 = A1
+        B0 = B1
+        C0 = C1
+        n0 = n1
+        bi = bi + 1
+    }
+
+    # Small-groups distribution S on (d2,d3)
+    let SCAP: i64 = 200000
+    let mut S2: ptr<i64> = calloc(SCAP, 8)
+    let mut S3: ptr<i64> = calloc(SCAP, 8)
+    let mut SC: ptr<i64> = calloc(SCAP, 8)
+    let mut ns: i64 = 1
+    S2[0]=0
+    S3[0]=0
+    SC[0]=1
+    # 10 times (+-1,0)
+    let mut rep: i64 = 0
+    while rep < 10 {
+        let mut T2: ptr<i64> = calloc(SCAP, 8)
+        let mut T3: ptr<i64> = calloc(SCAP, 8)
+        let mut TC: ptr<i64> = calloc(SCAP, 8)
+        let mut nt: i64 = 0
+        hi = 0
+        while hi < HCAP {
+            hused[hi] = 0
+            hi = hi + 1
+        }
+        let mut si: i64 = 0
+        while si < ns {
+            let mut sign: i64 = -1
+            while sign <= 1 {
+                if sign != 0 {
+                    let nd2: i64 = S2[si] + sign
+                    let nd3: i64 = S3[si]
+                    let mut combo: i64 = (nd2 + 5000) * 10007 + (nd3 + 5000)
+                    if combo < 0 { combo = -combo }
+                    let mut h: i64 = combo % HCAP
+                    let mut probes: i64 = 0
+                    while probes < 20000 {
+                        if hused[h] == 0 {
+                            hused[h]=1
+                            hkey[h]=combo
+                            hidx[h]=nt
+                            T2[nt]=nd2
+                            T3[nt]=nd3
+                            TC[nt]=SC[si]
+                            nt=nt+1
+                            break
+                        }
+                        if hkey[h]==combo && T2[hidx[h]]==nd2 && T3[hidx[h]]==nd3 {
+                            TC[hidx[h]] = TC[hidx[h]] + SC[si]
+                            break
+                        }
+                        h=h+1
+                        if h>=HCAP { h=0 }
+                        probes=probes+1
+                    }
+                }
+                sign = sign + 2
+            }
+            si = si + 1
+        }
+        free(S2)
+        free(S3)
+        free(SC)
+        S2=T2
+        S3=T3
+        SC=TC
+        ns=nt
+        rep = rep + 1
+    }
+    # 4 times (0, +-1) and (0,0)
+    rep = 0
+    while rep < 4 {
+        let mut T2: ptr<i64> = calloc(SCAP, 8)
+        let mut T3: ptr<i64> = calloc(SCAP, 8)
+        let mut TC: ptr<i64> = calloc(SCAP, 8)
+        let mut nt: i64 = 0
+        hi = 0
+        while hi < HCAP {
+            hused[hi] = 0
+            hi = hi + 1
+        }
+        let mut si: i64 = 0
+        while si < ns {
+            let mut db: i64 = -1
+            while db <= 1 {
+                let nd2: i64 = S2[si]
+                let nd3: i64 = S3[si] + db
+                let mut combo: i64 = (nd2 + 5000) * 10007 + (nd3 + 5000)
+                if combo < 0 { combo = -combo }
+                let mut h: i64 = combo % HCAP
+                let mut probes: i64 = 0
+                while probes < 20000 {
+                    if hused[h] == 0 {
+                        hused[h]=1
+                        hkey[h]=combo
+                        hidx[h]=nt
+                        T2[nt]=nd2
+                        T3[nt]=nd3
+                        TC[nt]=SC[si]
+                        nt=nt+1
+                        break
+                    }
+                    if hkey[h]==combo && T2[hidx[h]]==nd2 && T3[hidx[h]]==nd3 {
+                        TC[hidx[h]] = TC[hidx[h]] + SC[si]
+                        break
+                    }
+                    h=h+1
+                    if h>=HCAP { h=0 }
+                    probes=probes+1
+                }
+                db = db + 1
+            }
+            si = si + 1
+        }
+        free(S2)
+        free(S3)
+        free(SC)
+        S2=T2
+        S3=T3
+        SC=TC
+        ns=nt
+        rep = rep + 1
+    }
+    # 2 times special deltas for e=3
+    rep = 0
+    while rep < 2 {
+        let deltas: ptr<i64> = calloc(8, 8)
+        deltas[0]=-2
+        deltas[1]=0
+        deltas[2]=1
+        deltas[3]=-1
+        deltas[4]=-1
+        deltas[5]=1
+        deltas[6]=2
+        deltas[7]=0
+        let mut T2: ptr<i64> = calloc(SCAP, 8)
+        let mut T3: ptr<i64> = calloc(SCAP, 8)
+        let mut TC: ptr<i64> = calloc(SCAP, 8)
+        let mut nt: i64 = 0
+        hi = 0
+        while hi < HCAP {
+            hused[hi] = 0
+            hi = hi + 1
+        }
+        let mut si: i64 = 0
+        while si < ns {
+            let mut di: i64 = 0
+            while di < 4 {
+                let nd2: i64 = S2[si] + deltas[2*di]
+                let nd3: i64 = S3[si] + deltas[2*di+1]
+                let mut combo: i64 = (nd2 + 5000) * 10007 + (nd3 + 5000)
+                if combo < 0 { combo = -combo }
+                let mut h: i64 = combo % HCAP
+                let mut probes: i64 = 0
+                while probes < 20000 {
+                    if hused[h] == 0 {
+                        hused[h]=1
+                        hkey[h]=combo
+                        hidx[h]=nt
+                        T2[nt]=nd2
+                        T3[nt]=nd3
+                        TC[nt]=SC[si]
+                        nt=nt+1
+                        break
+                    }
+                    if hkey[h]==combo && T2[hidx[h]]==nd2 && T3[hidx[h]]==nd3 {
+                        TC[hidx[h]] = TC[hidx[h]] + SC[si]
+                        break
+                    }
+                    h=h+1
+                    if h>=HCAP { h=0 }
+                    probes=probes+1
+                }
+                di = di + 1
+            }
+            si = si + 1
+        }
+        free(deltas)
+        free(S2)
+        free(S3)
+        free(SC)
+        S2=T2
+        S3=T3
+        SC=TC
+        ns=nt
+        rep = rep + 1
+    }
+
+    # Index M by Rpack for lookup: build hash Rpack -> list of (d2,d3,cnt)
+    # For simplicity linear scan over n0 entries per query is OK if we first bucket by Rpack
+    let mut N_all: i64 = 0
+    let mut u2: i64 = 1
+    while u2 <= 98 {
+        let v2: i64 = 99 - u2
+        if has_big[u2] == 0 && has_big[v2] == 0 {
+            let mut u3: i64 = 1
+            while u3 <= 49 {
+                let v3: i64 = 50 - u3
+                let mut okh: i32 = 1
+                let mut k: i64 = 0
+                while k < 6 {
+                    if vhigh[u2*6+k] - vhigh[v2*6+k] + vhigh[u3*6+k] - vhigh[v3*6+k] != 0 { okh = 0 }
+                    k = k + 1
+                }
+                if okh != 0 {
+                    let targetR: ptr<i64> = calloc(7, 8)
+                    k = 0
+                    while k < 7 {
+                        let d: i64 = (vlow[u2*9+(k+2)] - vlow[v2*9+(k+2)]) + (vlow[u3*9+(k+2)] - vlow[v3*9+(k+2)])
+                        targetR[k] = 0 - d
+                        k = k + 1
+                    }
+                    let tpack: i64 = packR(targetR)
+                    let t2: i64 = 0 - ((vlow[u2*9+0]-vlow[v2*9+0]) + (vlow[u3*9+0]-vlow[v3*9+0]))
+                    let t3: i64 = 0 - ((vlow[u2*9+1]-vlow[v2*9+1]) + (vlow[u3*9+1]-vlow[v3*9+1]))
+                    let mut sub: i64 = 0
+                    let mut mi: i64 = 0
+                    while mi < n0 {
+                        if R0[mi] == tpack {
+                            let mut si: i64 = 0
+                            while si < ns {
+                                if A0[mi] == t2 - S2[si] && B0[mi] == t3 - S3[si] {
+                                    sub = sub + C0[mi] * SC[si]
+                                }
+                                si = si + 1
+                            }
+                        }
+                        mi = mi + 1
+                    }
+                    N_all = N_all + sub
+                    free(targetR)
+                }
+                u3 = u3 + 1
+            }
+        }
+        u2 = u2 + 1
+    }
+    printf("%lld\n", N_all / 2)
+    return 0
+}

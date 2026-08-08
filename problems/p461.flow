@@ -1,0 +1,137 @@
+# Project Euler 461
+# Almost Pi — meet-in-the-middle over pair sums of exp(k/n)-1.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function exp(x: f64) -> f64
+    function log(x: f64) -> f64
+    function acos(x: f64) -> f64
+    function fabs(x: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+const N: i64 = 10000
+const PAIR_CAP: i64 = 73000000
+
+function merge_f(sums: ptr<f64>, sqs: ptr<i32>, tmp_s: ptr<f64>, tmp_q: ptr<i32>, lo: i64, mid: i64, hi: i64) -> void {
+    let mut i: i64 = lo
+    let mut j: i64 = mid
+    let mut k: i64 = lo
+    while i < mid && j < hi {
+        if sums[i] <= sums[j] {
+            tmp_s[k] = sums[i]
+            tmp_q[k] = sqs[i]
+            i = i + 1
+        } else {
+            tmp_s[k] = sums[j]
+            tmp_q[k] = sqs[j]
+            j = j + 1
+        }
+        k = k + 1
+    }
+    while i < mid {
+        tmp_s[k] = sums[i]
+        tmp_q[k] = sqs[i]
+        i = i + 1
+        k = k + 1
+    }
+    while j < hi {
+        tmp_s[k] = sums[j]
+        tmp_q[k] = sqs[j]
+        j = j + 1
+        k = k + 1
+    }
+    i = lo
+    while i < hi {
+        sums[i] = tmp_s[i]
+        sqs[i] = tmp_q[i]
+        i = i + 1
+    }
+}
+
+function merge_sort_f(sums: ptr<f64>, sqs: ptr<i32>, tmp_s: ptr<f64>, tmp_q: ptr<i32>, lo: i64, hi: i64) -> void {
+    if hi - lo <= 1 { return }
+    let mid: i64 = (lo + hi) / 2
+    merge_sort_f(sums, sqs, tmp_s, tmp_q, lo, mid)
+    merge_sort_f(sums, sqs, tmp_s, tmp_q, mid, hi)
+    merge_f(sums, sqs, tmp_s, tmp_q, lo, mid, hi)
+}
+
+function main() -> i32 {
+    let PI: f64 = acos(-1.0)
+    let kmax: i64 = floor(N as f64 * log(1.0 + PI)) as i64
+    let f: ptr<f64> = calloc(kmax + 1, 8)
+    let sums: ptr<f64> = calloc(PAIR_CAP, 8)
+    let sqs: ptr<i32> = calloc(PAIR_CAP, 4)
+    let tmp_s: ptr<f64> = calloc(PAIR_CAP, 8)
+    let tmp_q: ptr<i32> = calloc(PAIR_CAP, 4)
+    if f == null || sums == null || sqs == null || tmp_s == null || tmp_q == null { return 1 }
+
+    let mut k: i64 = 0
+    while k <= kmax {
+        f[k] = exp((k as f64) / (N as f64)) - 1.0
+        k = k + 1
+    }
+
+    let mut np: i64 = 0
+    let mut i: i64 = 0
+    while i <= kmax {
+        let mut j: i64 = i
+        while j <= kmax {
+            let s: f64 = f[i] + f[j]
+            if s > PI { break }
+            if np >= PAIR_CAP { return 1 }
+            sums[np] = s
+            sqs[np] = ((i * i + j * j) as i32)
+            np = np + 1
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    merge_sort_f(sums, sqs, tmp_s, tmp_q, 0, np)
+
+    let mut best_err: f64 = 1.0e300
+    let mut best_g: i64 = 9223372036854775807
+    let mut jj: i64 = np - 1
+    i = 0
+    while i < np {
+        while jj >= 0 && sums[i] + sums[jj] > PI {
+            jj = jj - 1
+        }
+        if jj >= 0 {
+            let err: f64 = PI - (sums[i] + sums[jj])
+            let g: i64 = (sqs[i] as i64) + (sqs[jj] as i64)
+            if err < best_err - 1.0e-18 {
+                best_err = err
+                best_g = g
+            } else {
+                if fabs(err - best_err) <= 1.0e-18 && g < best_g {
+                    best_g = g
+                }
+            }
+        }
+        if jj + 1 < np {
+            let err2: f64 = (sums[i] + sums[jj + 1]) - PI
+            let g2: i64 = (sqs[i] as i64) + (sqs[jj + 1] as i64)
+            if err2 < best_err - 1.0e-18 {
+                best_err = err2
+                best_g = g2
+            } else {
+                if fabs(err2 - best_err) <= 1.0e-18 && g2 < best_g {
+                    best_g = g2
+                }
+            }
+        }
+        i = i + 1
+    }
+
+    printf("%lld\n", best_g)
+    free(tmp_q)
+    free(tmp_s)
+    free(sqs)
+    free(sums)
+    free(f)
+    return 0
+}

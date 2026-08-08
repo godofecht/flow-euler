@@ -1,0 +1,114 @@
+# Project Euler 068
+# Magic 5-gon ring: maximum 16-digit magic string.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function swap(a: ptr<i32>, i: i32, j: i32) -> void {
+    let t: i32 = a[i]
+    a[i] = a[j]
+    a[j] = t
+}
+
+function next_perm(a: ptr<i32>, n: i32) -> bool {
+    let mut i: i32 = n - 2
+    while i >= 0 && a[i] >= a[i + 1] { i = i - 1 }
+    if i < 0 { return false }
+    let mut j: i32 = n - 1
+    while a[j] <= a[i] { j = j - 1 }
+    swap(a, i, j)
+    let mut l: i32 = i + 1
+    let mut r: i32 = n - 1
+    while l < r {
+        swap(a, l, r)
+        l = l + 1
+        r = r - 1
+    }
+    return true
+}
+
+function append_num(v: i64, x: i32) -> i64 {
+    if x >= 10 {
+        return v * 100 + (x as i64)
+    }
+    return v * 10 + (x as i64)
+}
+
+function main() -> i32 {
+    let nums: ptr<i32> = calloc(10, 4)
+    let outer: ptr<i32> = calloc(5, 4)
+    let inner: ptr<i32> = calloc(5, 4)
+    if nums == null || outer == null || inner == null { return 1 }
+    let mut i: i32 = 0
+    while i < 10 {
+        nums[i] = i + 1
+        i = i + 1
+    }
+
+    let mut best: i64 = 0
+    while true {
+        i = 0
+        while i < 5 {
+            outer[i] = nums[i]
+            inner[i] = nums[i + 5]
+            i = i + 1
+        }
+        let mut has10: bool = false
+        i = 0
+        while i < 5 {
+            if outer[i] == 10 { has10 = true }
+            i = i + 1
+        }
+        if has10 {
+            let s0: i32 = outer[0] + inner[0] + inner[1]
+            let mut magic: bool = true
+            i = 1
+            while i < 5 {
+                let nidx: i32 = i + 1
+                if nidx == 5 { nidx = 0 }
+                if outer[i] + inner[i] + inner[nidx] != s0 {
+                    magic = false
+                    break
+                }
+                i = i + 1
+            }
+            if magic {
+                let mut start: i32 = 0
+                i = 1
+                while i < 5 {
+                    if outer[i] < outer[start] { start = i }
+                    i = i + 1
+                }
+                let mut v: i64 = 0
+                let mut digs: i32 = 0
+                i = 0
+                while i < 5 {
+                    let mut idx: i32 = start + i
+                    if idx >= 5 { idx = idx - 5 }
+                    let a: i32 = outer[idx]
+                    let b: i32 = inner[idx]
+                    let mut cidx: i32 = idx + 1
+                    if cidx >= 5 { cidx = 0 }
+                    let c: i32 = inner[cidx]
+                    if a >= 10 { digs = digs + 2 } else { digs = digs + 1 }
+                    digs = digs + 2
+                    v = append_num(v, a)
+                    v = append_num(v, b)
+                    v = append_num(v, c)
+                    i = i + 1
+                }
+                if digs == 16 && v > best {
+                    best = v
+                }
+            }
+        }
+        if !next_perm(nums, 10) { break }
+    }
+    printf("%lld\n", best)
+    free(inner)
+    free(outer)
+    free(nums)
+    return 0
+}

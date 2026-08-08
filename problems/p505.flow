@@ -1,0 +1,212 @@
+# Project Euler 505
+# Bidirectional Recurrence — A(10^12) via frontier block minimax.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MASK: i64 = 1152921504606846975  # 2^60 - 1
+const CAP: i64 = 1048576
+
+function combine(a: i64, b: i64, c: i64, d: i64) -> i64 {
+    return ((a * b) + (c * d)) & MASK
+}
+
+function state_at(k: i64, out_x: ptr<i64>, out_p: ptr<i64>) -> void {
+    if k == 0 {
+        out_x[0] = 0
+        out_p[0] = 0
+        return
+    }
+    let mut x: i64 = 1
+    let mut parent: i64 = 0
+    let mut bits: i32 = 0
+    let mut t: i64 = k
+    while t > 0 {
+        bits = bits + 1
+        t = t / 2
+    }
+    let mut bit: i32 = bits - 2
+    while bit >= 0 {
+        if ((k >> bit) & 1) == 1 {
+            let next_x: i64 = combine(2, x, 3, parent)
+            parent = x
+            x = next_x
+        } else {
+            let next_x2: i64 = combine(3, x, 2, parent)
+            parent = x
+            x = next_x2
+        }
+        bit = bit - 1
+    }
+    out_x[0] = x
+    out_p[0] = parent
+}
+
+function minimax(x0: i64, parent0: i64, depth: i32, alpha0: i64, beta0: i64) -> i64 {
+    if depth == 0 { return x0 }
+    let left0: i64 = combine(3, x0, 2, parent0)
+    let right0: i64 = combine(2, x0, 3, parent0)
+    let mut left: i64 = left0
+    let mut right: i64 = right0
+    let mut alpha: i64 = alpha0
+    let mut beta: i64 = beta0
+    if (depth & 1) == 1 {
+        if left < right {
+            let tmp: i64 = left
+            left = right
+            right = tmp
+        }
+        if depth == 1 { return left }
+        let mut value: i64 = minimax(left, x0, depth - 1, alpha, beta)
+        if value > alpha { alpha = value }
+        if alpha >= beta { return alpha }
+        value = minimax(right, x0, depth - 1, alpha, beta)
+        if value > alpha { return value }
+        return alpha
+    }
+    if left > right {
+        let tmp2: i64 = left
+        left = right
+        right = tmp2
+    }
+    if depth == 1 { return left }
+    let mut value2: i64 = minimax(left, x0, depth - 1, alpha, beta)
+    if value2 < beta { beta = value2 }
+    if alpha >= beta { return beta }
+    value2 = minimax(right, x0, depth - 1, alpha, beta)
+    if value2 < beta { return value2 }
+    return beta
+}
+
+function evaluate_subtree(k: i64, depth: i32, buf: ptr<i64>) -> i64 {
+    state_at(k, buf, buf + 1)
+    return minimax(buf[0], buf[1], depth, 0, MASK)
+}
+
+function block_value(start: i64, depth: i32, right_side: i32, base: i64, buf: ptr<i64>) -> i64 {
+    let leaf_start: i64 = base + start
+    if right_side == 0 {
+        return evaluate_subtree(leaf_start >> depth, depth, buf)
+    }
+    if depth == 0 {
+        state_at(leaf_start >> 1, buf, buf + 1)
+        return MASK - buf[0]
+    }
+    return MASK - evaluate_subtree(leaf_start >> depth, depth - 1, buf)
+}
+
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
+    let mut h: i64 = key % CAP
+    if h < 0 { h = h + CAP }
+    while used[h] == 1 && keys[h] != key {
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function collect_blocks(start: i64, depth: i32, left_length: i64,
+                        bs: ptr<i64>, bd: ptr<i32>, br: ptr<i8>, bn: ptr<i64>) -> void {
+    let size: i64 = (1 as i64) << depth
+    if start + size <= left_length {
+        let i: i64 = bn[0]
+        bs[i] = start
+        bd[i] = depth
+        br[i] = 0
+        bn[0] = i + 1
+        return
+    }
+    if start >= left_length {
+        let i2: i64 = bn[0]
+        bs[i2] = start
+        bd[i2] = depth
+        br[i2] = 1
+        bn[0] = i2 + 1
+        return
+    }
+    let half: i64 = size >> 1
+    collect_blocks(start, depth - 1, left_length, bs, bd, br, bn)
+    collect_blocks(start + half, depth - 1, left_length, bs, bd, br, bn)
+}
+
+function fold(start: i64, depth: i32, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>,
+              buf: ptr<i64>, base: i64) -> i64 {
+    let key: i64 = (start << 6) | (depth as i64)
+    let s: i64 = hslot(key, keys, used)
+    if used[s] == 1 { return vals[s] }
+    # If this is a leaf block we should have prefilled; otherwise recurse.
+    let half: i64 = (1 as i64) << (depth - 1)
+    let left: i64 = fold(start, depth - 1, keys, vals, used, buf, base)
+    let right: i64 = fold(start + half, depth - 1, keys, vals, used, buf, base)
+    let mut val: i64 = 0
+    if (depth & 1) == 1 {
+        if left > right { val = left } else { val = right }
+    } else {
+        if left < right { val = left } else { val = right }
+    }
+    used[s] = 1
+    keys[s] = key
+    vals[s] = val
+    return val
+}
+
+function A(n: i64, buf: ptr<i64>, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>,
+           bs: ptr<i64>, bd: ptr<i32>, br: ptr<i8>, bn: ptr<i64>) -> i64 {
+    if n == 1 { return 1 }
+    let total_nodes: i64 = 2 * n - 1
+    let mut height: i32 = 0
+    let mut t: i64 = total_nodes
+    while t > 1 {
+        height = height + 1
+        t = t / 2
+    }
+    let base: i64 = (1 as i64) << height
+    let boundary: i64 = 2 * n
+    let left_length: i64 = boundary - base
+    bn[0] = 0
+    collect_blocks(0, height, left_length, bs, bd, br, bn)
+    # clear memo
+    let mut i: i64 = 0
+    while i < CAP {
+        used[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i < bn[0] {
+        let start: i64 = bs[i]
+        let depth: i32 = bd[i]
+        let right_side: i32 = br[i] as i32
+        let key: i64 = (start << 6) | (depth as i64)
+        let s: i64 = hslot(key, keys, used)
+        used[s] = 1
+        keys[s] = key
+        vals[s] = block_value(start, depth, right_side, base, buf)
+        i = i + 1
+    }
+    let value: i64 = fold(0, height, keys, vals, used, buf, base)
+    if (height & 1) == 1 {
+        return MASK - value
+    }
+    return value
+}
+
+function main() -> i32 {
+    let buf: ptr<i64> = calloc(4, 8)
+    let keys: ptr<i64> = calloc(CAP, 8)
+    let vals: ptr<i64> = calloc(CAP, 8)
+    let used: ptr<i8> = calloc(CAP, 1)
+    let bs: ptr<i64> = calloc(4096, 8)
+    let bd: ptr<i32> = calloc(4096, 4)
+    let br: ptr<i8> = calloc(4096, 1)
+    let bn: ptr<i64> = calloc(1, 8)
+    if buf == null || keys == null || vals == null || used == null
+        || bs == null || bd == null || br == null || bn == null {
+        return 1
+    }
+    let ans: i64 = A(1000000000000, buf, keys, vals, used, bs, bd, br, bn)
+    printf("%lld\n", ans)
+    free(buf); free(keys); free(vals); free(used); free(bs); free(bd); free(br); free(bn)
+    return 0
+}

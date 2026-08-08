@@ -1,0 +1,73 @@
+# Project Euler 498
+# Remainder of Polynomial Division — C(n,m,d)=C(n,d)*C(n-d-1,m-d-1) via Lucas.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function nCk_small(nn: i64, kk: i64, fact: ptr<i64>, invfact: ptr<i64>, p: i64) -> i64 {
+    if kk < 0 || kk > nn { return 0 }
+    return ((fact[nn] * invfact[kk]) % p) * invfact[nn - kk] % p
+}
+
+function nCk_lucas(nn0: i64, kk0: i64, fact: ptr<i64>, invfact: ptr<i64>, p: i64) -> i64 {
+    let mut nn: i64 = nn0
+    let mut kk: i64 = kk0
+    let mut res: i64 = 1
+    while nn > 0 || kk > 0 {
+        let ni: i64 = nn % p
+        let ki: i64 = kk % p
+        if ki > ni { return 0 }
+        res = (res * nCk_small(ni, ki, fact, invfact, p)) % p
+        nn = nn / p
+        kk = kk / p
+    }
+    return res
+}
+
+function main() -> i32 {
+    let n: i64 = 10000000000000
+    let m: i64 = 1000000000000
+    let d: i64 = 10000
+    let p: i64 = 999999937
+    # max Lucas digit for these params is n%p = 630000
+    let max_digit: i64 = 630000
+    let fact: ptr<i64> = calloc(max_digit + 1, 8)
+    let invfact: ptr<i64> = calloc(max_digit + 1, 8)
+    if fact == null || invfact == null { return 1 }
+    fact[0] = 1
+    let mut i: i64 = 1
+    while i <= max_digit {
+        fact[i] = (fact[i - 1] * i) % p
+        i = i + 1
+    }
+    invfact[max_digit] = modpow(fact[max_digit], p - 2, p)
+    i = max_digit
+    while i > 0 {
+        invfact[i - 1] = (invfact[i] * i) % p
+        i = i - 1
+    }
+    let part1: i64 = nCk_lucas(n, d, fact, invfact, p)
+    let part2: i64 = nCk_lucas(n - d - 1, m - d - 1, fact, invfact, p)
+    printf("%lld\n", (part1 * part2) % p)
+    free(invfact)
+    free(fact)
+    return 0
+}

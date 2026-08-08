@@ -1,0 +1,42 @@
+# Project Euler 097
+# Last ten digits of 28433 × 2^7830457 + 1.
+
+function mod_mul(a: i64, b: i64, mod: i64) -> i64 {
+    # overflow-safe multiply via addition
+    let mut res: i64 = 0
+    let mut x: i64 = a % mod
+    let mut y: i64 = b
+    if x < 0 { x = x + mod }
+    while y > 0 {
+        if y % 2 == 1 {
+            res = res + x
+            if res >= mod { res = res - mod }
+        }
+        x = x + x
+        if x >= mod { x = x - mod }
+        y = y / 2
+    }
+    return res
+}
+
+function mod_pow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            r = mod_mul(r, b, mod)
+        }
+        b = mod_mul(b, b, mod)
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let mod: i64 = 10000000000
+    let p: i64 = mod_pow(2, 7830457, mod)
+    let ans: i64 = (mod_mul(28433, p, mod) + 1) % mod
+    printf("%lld\n", ans)
+    return 0
+}

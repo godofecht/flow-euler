@@ -1,0 +1,75 @@
+# Project Euler 013
+# First ten digits of the sum of one hundred 50-digit numbers.
+# Digit-array addition — expressive and still native-speed.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    # sum digits, least-significant first; allow carry room
+    let sum: ptr<i32> = calloc(60, 4)
+    if sum == null {
+        return 1
+    }
+
+    let f: ptr<void> = fopen("data/p013.txt", "r")
+    if f == null {
+        printf("failed to read data/p013.txt\n")
+        free(sum)
+        return 1
+    }
+
+    let mut line: ptr<i32> = calloc(50, 4)
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        let mut len: i32 = 0
+        while c >= 0 && c != 10 {
+            if c >= 48 && c <= 57 {
+                line[len] = c - 48
+                len = len + 1
+            }
+            c = fgetc(f)
+        }
+        if len == 50 {
+            let mut i: i32 = 0
+            while i < 50 {
+                sum[i] = sum[i] + line[49 - i]
+                i = i + 1
+            }
+        }
+        if c == 10 {
+            c = fgetc(f)
+        }
+    }
+    fclose(f)
+    free(line)
+
+    # propagate carry
+    let mut i: i32 = 0
+    while i < 59 {
+        sum[i + 1] = sum[i + 1] + sum[i] / 10
+        sum[i] = sum[i] % 10
+        i = i + 1
+    }
+
+    # find most-significant non-zero digit
+    let mut top: i32 = 59
+    while top > 0 && sum[top] == 0 {
+        top = top - 1
+    }
+
+    let mut result: i64 = 0
+    let mut k: i32 = 0
+    while k < 10 {
+        result = result * 10 + (sum[top - k] as i64)
+        k = k + 1
+    }
+    printf("%lld\n", result)
+    free(sum)
+    return 0
+}

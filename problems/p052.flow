@@ -1,0 +1,49 @@
+# Project Euler 052
+# Smallest positive integer x such that 2x..6x are permutations of x.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function same_digits(a: i64, b: i64, ca: ptr<i32>, cb: ptr<i32>) -> bool {
+    let mut i: i32 = 0
+    while i < 10 {
+        ca[i] = 0
+        cb[i] = 0
+        i = i + 1
+    }
+    let mut x: i64 = a
+    while x > 0 {
+        ca[(x % 10) as i32] = ca[(x % 10) as i32] + 1
+        x = x / 10
+    }
+    x = b
+    while x > 0 {
+        cb[(x % 10) as i32] = cb[(x % 10) as i32] + 1
+        x = x / 10
+    }
+    i = 0
+    while i < 10 {
+        if ca[i] != cb[i] { return false }
+        i = i + 1
+    }
+    return true
+}
+
+function main() -> i32 {
+    let ca: ptr<i32> = calloc(10, 4)
+    let cb: ptr<i32> = calloc(10, 4)
+    if ca == null || cb == null { return 1 }
+    let mut n: i64 = 1
+    while true {
+        if same_digits(n, 2 * n, ca, cb) && same_digits(n, 3 * n, ca, cb) && same_digits(n, 4 * n, ca, cb) && same_digits(n, 5 * n, ca, cb) && same_digits(n, 6 * n, ca, cb) {
+            printf("%lld\n", n)
+            free(ca)
+            free(cb)
+            return 0
+        }
+        n = n + 1
+    }
+    return 0
+}

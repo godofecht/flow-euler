@@ -1,0 +1,140 @@
+# Project Euler 103
+# Optimum special sum set of size 7 — concatenate its elements.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function is_special(a: ptr<i32>, n: i32) -> bool {
+    # Rule: sum of smallest (k+1) > sum of largest k for k=1..
+    let mut k: i32 = 1
+    while 2 * k <= n {
+        let mut small: i32 = 0
+        let mut i: i32 = 0
+        while i <= k {
+            small = small + a[i]
+            i = i + 1
+        }
+        let mut large: i32 = 0
+        i = n - k
+        while i < n {
+            large = large + a[i]
+            i = i + 1
+        }
+        if small <= large { return false }
+        k = k + 1
+    }
+    # All subset sums distinct
+    let mut seen: ptr<i8> = calloc(2000, 1)
+    if seen == null { return false }
+    let mut mask: i32 = 1
+    let lim: i32 = 1 << n
+    while mask < lim {
+        let mut s: i32 = 0
+        let mut i: i32 = 0
+        while i < n {
+            if ((mask >> i) & 1) == 1 {
+                s = s + a[i]
+            }
+            i = i + 1
+        }
+        if seen[s] != 0 {
+            free(seen)
+            return false
+        }
+        seen[s] = 1
+        mask = mask + 1
+    }
+    free(seen)
+    return true
+}
+
+function concat7(a: ptr<i32>) -> i64 {
+    let mut r: i64 = 0
+    let mut i: i32 = 0
+    while i < 7 {
+        let v: i64 = a[i] as i64
+        if v >= 100 {
+            r = r * 1000 + v
+        } elif v >= 10 {
+            r = r * 100 + v
+        } else {
+            r = r * 10 + v
+        }
+        i = i + 1
+    }
+    return r
+}
+
+function main() -> i32 {
+    # Seed from n=6 optimum; PE construction: b = middle, then b + previous
+    # previous = [11,18,19,20,22,25], b=20 → base [20,31,38,39,40,42,45]
+    let base: ptr<i32> = calloc(7, 4)
+    if base == null { return 1 }
+    base[0] = 20
+    base[1] = 31
+    base[2] = 38
+    base[3] = 39
+    base[4] = 40
+    base[5] = 42
+    base[6] = 45
+
+    let cand: ptr<i32> = calloc(7, 4)
+    if cand == null { free(base); return 1 }
+
+    let mut best_sum: i32 = 1000000
+    let mut best_concat: i64 = 0
+    let mut o0: i32 = -3
+    while o0 <= 3 {
+        let mut o1: i32 = -3
+        while o1 <= 3 {
+            let mut o2: i32 = -3
+            while o2 <= 3 {
+                let mut o3: i32 = -3
+                while o3 <= 3 {
+                    let mut o4: i32 = -3
+                    while o4 <= 3 {
+                        let mut o5: i32 = -3
+                        while o5 <= 3 {
+                            let mut o6: i32 = -3
+                            while o6 <= 3 {
+                                cand[0] = base[0] + o0
+                                cand[1] = base[1] + o1
+                                cand[2] = base[2] + o2
+                                cand[3] = base[3] + o3
+                                cand[4] = base[4] + o4
+                                cand[5] = base[5] + o5
+                                cand[6] = base[6] + o6
+                                if cand[0] > 0 && cand[0] < cand[1] && cand[1] < cand[2] && cand[2] < cand[3] && cand[3] < cand[4] && cand[4] < cand[5] && cand[5] < cand[6] {
+                                    let mut s: i32 = 0
+                                    let mut i: i32 = 0
+                                    while i < 7 {
+                                        s = s + cand[i]
+                                        i = i + 1
+                                    }
+                                    if s < best_sum && is_special(cand, 7) {
+                                        best_sum = s
+                                        best_concat = concat7(cand)
+                                    }
+                                }
+                                o6 = o6 + 1
+                            }
+                            o5 = o5 + 1
+                        }
+                        o4 = o4 + 1
+                    }
+                    o3 = o3 + 1
+                }
+                o2 = o2 + 1
+            }
+            o1 = o1 + 1
+        }
+        o0 = o0 + 1
+    }
+
+    printf("%lld\n", best_concat)
+    free(cand)
+    free(base)
+    return 0
+}

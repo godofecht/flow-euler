@@ -1,0 +1,58 @@
+# Project Euler 056
+# Maximal digital sum of a^b for a,b < 100.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mul_small(digits: ptr<i32>, len: i32, m: i64) -> i32 {
+    let mut carry: i64 = 0
+    let mut i: i32 = 0
+    while i < len {
+        let v: i64 = (digits[i] as i64) * m + carry
+        digits[i] = (v % 10) as i32
+        carry = v / 10
+        i = i + 1
+    }
+    while carry > 0 {
+        digits[len] = (carry % 10) as i32
+        carry = carry / 10
+        len = len + 1
+    }
+    return len
+}
+
+function main() -> i32 {
+    let width: i32 = 220
+    let digits: ptr<i32> = calloc(width as i64, 4)
+    if digits == null { return 1 }
+
+    let mut best: i64 = 0
+    let mut a: i64 = 1
+    while a < 100 {
+        let mut i: i32 = 0
+        while i < width {
+            digits[i] = 0
+            i = i + 1
+        }
+        digits[0] = 1
+        let mut len: i32 = 1
+        let mut b: i64 = 1
+        while b < 100 {
+            len = mul_small(digits, len, a)
+            let mut s: i64 = 0
+            i = 0
+            while i < len {
+                s = s + (digits[i] as i64)
+                i = i + 1
+            }
+            if s > best { best = s }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    printf("%lld\n", best)
+    free(digits)
+    return 0
+}

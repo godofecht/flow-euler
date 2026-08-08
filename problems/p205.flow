@@ -1,0 +1,66 @@
+# Project Euler 205
+# P(Peter 9d4 beats Colin 6d6).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function roll_dp(dices: i32, sides: i32, count: ptr<i64>) -> void {
+    count[0] = 1
+    let mut d: i32 = 0
+    while d < dices {
+        let mut next: ptr<i64> = calloc(40, 8)
+        let mut t: i32 = 0
+        while t <= 36 {
+            if count[t] != 0 {
+                let mut s: i32 = 1
+                while s <= sides {
+                    next[t + s] = next[t + s] + count[t]
+                    s = s + 1
+                }
+            }
+            t = t + 1
+        }
+        t = 0
+        while t <= 36 {
+            count[t] = next[t]
+            t = t + 1
+        }
+        free(next)
+        d = d + 1
+    }
+}
+
+function main() -> i32 {
+    let peter: ptr<i64> = calloc(40, 8)
+    let colin: ptr<i64> = calloc(40, 8)
+    if peter == null || colin == null { return 1 }
+    roll_dp(9, 4, peter)
+    roll_dp(6, 6, colin)
+
+    let mut sum_p: f64 = 0.0
+    let mut sum_c: f64 = 0.0
+    let mut t: i32 = 0
+    while t <= 36 {
+        sum_p = sum_p + (peter[t] as f64)
+        sum_c = sum_c + (colin[t] as f64)
+        t = t + 1
+    }
+
+    let mut win: f64 = 0.0
+    t = 1
+    while t <= 36 {
+        let mut num_wins: f64 = 0.0
+        let mut u: i32 = 1
+        while u < t {
+            num_wins = num_wins + (colin[u] as f64)
+            u = u + 1
+        }
+        win = win + (num_wins / sum_c) * ((peter[t] as f64) / sum_p)
+        t = t + 1
+    }
+    printf("%.7f\n", win)
+    free(peter); free(colin)
+    return 0
+}

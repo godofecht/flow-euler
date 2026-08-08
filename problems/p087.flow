@@ -1,0 +1,73 @@
+# Project Euler 087
+# How many numbers below fifty million are prime power triples (p1^2+p2^3+p3^4).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 50000000
+    let plim: i32 = 8000  # sqrt(50e6)≈7071
+    let sieve: ptr<i8> = calloc(plim as i64, 1)
+    let primes: ptr<i32> = calloc(plim as i64, 4)
+    if sieve == null || primes == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i32 = 2
+    while p * p < plim {
+        if sieve[p] == 0 {
+            let mut m: i32 = p * p
+            while m < plim {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut pc: i32 = 0
+    let mut i: i32 = 2
+    while i < plim {
+        if sieve[i] == 0 {
+            primes[pc] = i
+            pc = pc + 1
+        }
+        i = i + 1
+    }
+
+    let seen: ptr<i8> = calloc(limit, 1)
+    if seen == null { return 1 }
+
+    let mut count: i64 = 0
+    let mut i4: i32 = 0
+    while i4 < pc {
+        let a: i64 = primes[i4] as i64
+        let p4: i64 = a * a * a * a
+        if p4 >= limit { break }
+        let mut i3: i32 = 0
+        while i3 < pc {
+            let b: i64 = primes[i3] as i64
+            let p3: i64 = b * b * b
+            if p4 + p3 >= limit { break }
+            let mut i2: i32 = 0
+            while i2 < pc {
+                let c: i64 = primes[i2] as i64
+                let p2: i64 = c * c
+                let v: i64 = p4 + p3 + p2
+                if v >= limit { break }
+                if seen[v] == 0 {
+                    seen[v] = 1
+                    count = count + 1
+                }
+                i2 = i2 + 1
+            }
+            i3 = i3 + 1
+        }
+        i4 = i4 + 1
+    }
+    printf("%lld\n", count)
+    free(sieve)
+    free(primes)
+    free(seen)
+    return 0
+}

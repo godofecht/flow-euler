@@ -1,0 +1,155 @@
+# Project Euler 497
+# Drunken Tower of Hanoi — sum E(n,10^n,3^n,6^n,9^n) last 9 digits.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+const LIMIT: i64 = 10000
+
+# Flattened dp[fr][dst][st][edge]
+# Edges: (0,1),(0,2),(1,0),(1,2),(2,0),(2,1)
+
+function edge_idx(u: i32, v: i32) -> i32 {
+    if u == 0 {
+        if v == 1 { return 0 }
+        return 1
+    }
+    if u == 1 {
+        if v == 0 { return 2 }
+        return 3
+    }
+    if v == 0 { return 4 }
+    return 5
+}
+
+function dp_idx(fr: i32, dst: i32, st: i32, e: i32) -> i64 {
+    return ((((fr * 3 + dst) * 3 + st) * 6 + e) as i64)
+}
+
+function dist_lt(i: i64, j: i64) -> i64 {
+    let mut a: i64 = (j - i) % MOD
+    if a < 0 { a = a + MOD }
+    let mut b: i64 = (j + i - 2) % MOD
+    if b < 0 { b = b + MOD }
+    return ((a as i128) * (b as i128) % (MOD as i128)) as i64
+}
+
+function dist_gt(i: i64, j: i64, k: i64) -> i64 {
+    let mut a: i64 = (i - j) % MOD
+    if a < 0 { a = a + MOD }
+    let mut b: i64 = (2 * k - i - j) % MOD
+    if b < 0 { b = b + MOD }
+    return ((a as i128) * (b as i128) % (MOD as i128)) as i64
+}
+
+function init_counts(dp: ptr<i64>) -> void {
+    let mut fr: i32 = 0
+    while fr < 3 {
+        let mut dst: i32 = 0
+        while dst < 3 {
+            if fr != dst {
+                let mut st: i32 = 0
+                while st < 3 {
+                    let mut e: i32 = 0
+                    while e < 6 {
+                        dp[dp_idx(fr, dst, st, e)] = 0
+                        e = e + 1
+                    }
+                    if st != fr {
+                        let ei: i32 = edge_idx(st, fr)
+                        dp[dp_idx(fr, dst, st, ei)] = dp[dp_idx(fr, dst, st, ei)] + 1
+                    }
+                    let ej: i32 = edge_idx(fr, dst)
+                    dp[dp_idx(fr, dst, st, ej)] = dp[dp_idx(fr, dst, st, ej)] + 1
+                    st = st + 1
+                }
+            }
+            dst = dst + 1
+        }
+        fr = fr + 1
+    }
+}
+
+function step_counts(dp: ptr<i64>, newdp: ptr<i64>) -> void {
+    let mut fr: i32 = 0
+    while fr < 3 {
+        let mut dst: i32 = 0
+        while dst < 3 {
+            if fr != dst {
+                let aux: i32 = 3 - fr - dst
+                let mut st: i32 = 0
+                while st < 3 {
+                    let mut e: i32 = 0
+                    while e < 6 {
+                        let v1: i64 = dp[dp_idx(fr, aux, st, e)]
+                        let v2: i64 = dp[dp_idx(aux, dst, dst, e)]
+                        newdp[dp_idx(fr, dst, st, e)] = (v1 + v2) % MOD
+                        e = e + 1
+                    }
+                    let e1: i32 = edge_idx(aux, fr)
+                    let e2: i32 = edge_idx(fr, dst)
+                    newdp[dp_idx(fr, dst, st, e1)] = (newdp[dp_idx(fr, dst, st, e1)] + 1) % MOD
+                    newdp[dp_idx(fr, dst, st, e2)] = (newdp[dp_idx(fr, dst, st, e2)] + 1) % MOD
+                    st = st + 1
+                }
+            }
+            dst = dst + 1
+        }
+        fr = fr + 1
+    }
+}
+
+function main() -> i32 {
+    let sz: i64 = 3 * 3 * 3 * 6
+    let dp: ptr<i64> = calloc(sz, 8)
+    let newdp: ptr<i64> = calloc(sz, 8)
+    if dp == null || newdp == null { return 1 }
+    init_counts(dp)
+
+    let mut a: i64 = 1
+    let mut b: i64 = 1
+    let mut c: i64 = 1
+    let mut k: i64 = 1
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n <= LIMIT {
+        a = (a * 3) % MOD
+        b = (b * 6) % MOD
+        c = (c * 9) % MOD
+        k = (k * 10) % MOD
+
+        if n > 1 {
+            step_counts(dp, newdp)
+            let mut i: i64 = 0
+            while i < sz {
+                dp[i] = newdp[i]
+                i = i + 1
+            }
+        }
+
+        let d01: i64 = dist_lt(a, b)
+        let d02: i64 = dist_lt(a, c)
+        let d10: i64 = dist_gt(b, a, k)
+        let d12: i64 = dist_lt(b, c)
+        let d20: i64 = dist_gt(c, a, k)
+        let d21: i64 = dist_gt(c, b, k)
+
+        let mut e: i128 = 0
+        e = e + (dp[dp_idx(0, 2, 1, 0)] as i128) * (d01 as i128)
+        e = e + (dp[dp_idx(0, 2, 1, 1)] as i128) * (d02 as i128)
+        e = e + (dp[dp_idx(0, 2, 1, 2)] as i128) * (d10 as i128)
+        e = e + (dp[dp_idx(0, 2, 1, 3)] as i128) * (d12 as i128)
+        e = e + (dp[dp_idx(0, 2, 1, 4)] as i128) * (d20 as i128)
+        e = e + (dp[dp_idx(0, 2, 1, 5)] as i128) * (d21 as i128)
+        total = ((total as i128 + e) % (MOD as i128)) as i64
+        n = n + 1
+    }
+
+    printf("%lld\n", total)
+    free(newdp)
+    free(dp)
+    return 0
+}

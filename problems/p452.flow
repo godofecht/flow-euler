@@ -1,0 +1,280 @@
+# Project Euler 452
+# Minimal Product-sum Numbers II — summatory multiplicative g via Lehmer π.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1234567891
+const N: i64 = 1000000000
+const SIEVE_MAX: i64 = 1000000
+const PI_CAP: i64 = 2097152
+const PHI_CAP: i64 = 4194304
+const S_CAP: i64 = 4194304
+
+let mut G_primes: ptr<i32> = null
+let mut G_pc: i64 = 0
+let mut G_pi_small: ptr<i32> = null
+let mut G_w: ptr<i64> = null
+let mut G_max_e: i64 = 0
+
+let mut G_pi_k: ptr<i64> = null
+let mut G_pi_v: ptr<i64> = null
+let mut G_pi_u: ptr<i8> = null
+
+let mut G_phi_k1: ptr<i64> = null
+let mut G_phi_k2: ptr<i64> = null
+let mut G_phi_v: ptr<i64> = null
+let mut G_phi_u: ptr<i8> = null
+
+let mut G_s_k1: ptr<i64> = null
+let mut G_s_k2: ptr<i64> = null
+let mut G_s_v: ptr<i64> = null
+let mut G_s_u: ptr<i8> = null
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function iroot(n: i64, k: i64) -> i64 {
+    if n < 2 { return n }
+    let mut lo: i64 = 1
+    let mut hi: i64 = 2
+    while true {
+        let mut p: i64 = 1
+        let mut t: i64 = 0
+        while t < k {
+            if p > n / hi { break }
+            p = p * hi
+            t = t + 1
+        }
+        if t == k && p <= n {
+            hi = hi * 2
+        } else {
+            break
+        }
+    }
+    lo = hi / 2
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        let mut p: i64 = 1
+        let mut t: i64 = 0
+        let mut ok: i64 = 1
+        while t < k {
+            if p > n / mid {
+                ok = 0
+                break
+            }
+            p = p * mid
+            t = t + 1
+        }
+        if ok == 1 && p <= n {
+            lo = mid
+        } else {
+            hi = mid
+        }
+    }
+    return lo
+}
+
+function phi(x: i64, a: i64) -> i64 {
+    if a == 0 { return x }
+    if a == 1 { return x - x / 2 }
+    if a == 2 { return x - x / 2 - x / 3 + x / 6 }
+    let mut h: i64 = (x * 1315423911 + a) % PHI_CAP
+    if h < 0 { h = h + PHI_CAP }
+    while G_phi_u[h] != 0 {
+        if G_phi_k1[h] == x && G_phi_k2[h] == a {
+            return G_phi_v[h]
+        }
+        h = h + 1
+        if h == PHI_CAP { h = 0 }
+    }
+    let r: i64 = phi(x, a - 1) - phi(x / (G_primes[a - 1] as i64), a - 1)
+    G_phi_u[h] = 1
+    G_phi_k1[h] = x
+    G_phi_k2[h] = a
+    G_phi_v[h] = r
+    return r
+}
+
+function prime_pi(n: i64) -> i64 {
+    if n < SIEVE_MAX { return G_pi_small[n] as i64 }
+    if n < 2 { return 0 }
+    let mut h: i64 = n % PI_CAP
+    if h < 0 { h = h + PI_CAP }
+    while G_pi_u[h] != 0 {
+        if G_pi_k[h] == n {
+            return G_pi_v[h]
+        }
+        h = h + 1
+        if h == PI_CAP { h = 0 }
+    }
+    let a: i64 = prime_pi(iroot(n, 4))
+    let b: i64 = prime_pi(isqrt(n))
+    let c: i64 = prime_pi(iroot(n, 3))
+    let mut res: i64 = phi(n, a) + ((b + a - 2) * (b - a + 1)) / 2
+    let mut i: i64 = a
+    while i < b {
+        let p: i64 = G_primes[i] as i64
+        let w: i64 = n / p
+        res = res - prime_pi(w)
+        if i < c {
+            let lim: i64 = prime_pi(isqrt(w))
+            let mut j: i64 = i
+            while j < lim {
+                res = res - (prime_pi(w / (G_primes[j] as i64)) - j)
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    G_pi_u[h] = 1
+    G_pi_k[h] = n
+    G_pi_v[h] = res
+    return res
+}
+
+function S(limit: i64, idx: i64) -> i64 {
+    if limit < 2 { return 1 }
+    if idx >= G_pc || (G_primes[idx] as i64) > limit { return 1 }
+    let mut h: i64 = (limit * 1315423911 + idx) % S_CAP
+    if h < 0 { h = h + S_CAP }
+    while G_s_u[h] != 0 {
+        if G_s_k1[h] == limit && G_s_k2[h] == idx {
+            return G_s_v[h]
+        }
+        h = h + 1
+        if h == S_CAP { h = 0 }
+    }
+
+    let p0: i64 = G_primes[idx] as i64
+    let w1: i64 = G_w[1]
+    if p0 * p0 > limit {
+        let cnt: i64 = prime_pi(limit) - prime_pi(p0 - 1)
+        let r: i64 = (1 + (cnt % MOD) * w1) % MOD
+        G_s_u[h] = 1
+        G_s_k1[h] = limit
+        G_s_k2[h] = idx
+        G_s_v[h] = r
+        return r
+    }
+
+    let mut res: i64 = 1
+    let root: i64 = isqrt(limit)
+    let cnt_large: i64 = prime_pi(limit) - prime_pi(root)
+    res = (res + (cnt_large % MOD) * w1) % MOD
+
+    let mut i: i64 = idx
+    while i < G_pc {
+        let p: i64 = G_primes[i] as i64
+        if p > root { break }
+        let mut pe: i64 = p
+        let mut e: i64 = 1
+        while pe <= limit {
+            res = (res + G_w[e] * S(limit / pe, i + 1)) % MOD
+            e = e + 1
+            if e > G_max_e { break }
+            if pe > limit / p { break }
+            pe = pe * p
+        }
+        i = i + 1
+    }
+
+    G_s_u[h] = 1
+    G_s_k1[h] = limit
+    G_s_k2[h] = idx
+    G_s_v[h] = res
+    return res
+}
+
+function main() -> i32 {
+    let is_p: ptr<i8> = calloc(SIEVE_MAX + 1, 1)
+    G_primes = calloc(SIEVE_MAX / 5 + 16, 4)
+    G_pi_small = calloc(SIEVE_MAX + 1, 4)
+    G_w = calloc(64, 8)
+    G_pi_k = calloc(PI_CAP, 8)
+    G_pi_v = calloc(PI_CAP, 8)
+    G_pi_u = calloc(PI_CAP, 1)
+    G_phi_k1 = calloc(PHI_CAP, 8)
+    G_phi_k2 = calloc(PHI_CAP, 8)
+    G_phi_v = calloc(PHI_CAP, 8)
+    G_phi_u = calloc(PHI_CAP, 1)
+    G_s_k1 = calloc(S_CAP, 8)
+    G_s_k2 = calloc(S_CAP, 8)
+    G_s_v = calloc(S_CAP, 8)
+    G_s_u = calloc(S_CAP, 1)
+    if is_p == null || G_primes == null || G_pi_small == null || G_w == null { return 1 }
+
+    let mut i: i64 = 0
+    while i <= SIEVE_MAX {
+        is_p[i] = 1
+        i = i + 1
+    }
+    is_p[0] = 0
+    is_p[1] = 0
+    i = 2
+    while i * i <= SIEVE_MAX {
+        if is_p[i] != 0 {
+            let mut j: i64 = i * i
+            while j <= SIEVE_MAX {
+                is_p[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut c: i64 = 0
+    i = 0
+    while i <= SIEVE_MAX {
+        if is_p[i] != 0 {
+            G_primes[G_pc] = i as i32
+            G_pc = G_pc + 1
+            c = c + 1
+        }
+        G_pi_small[i] = c as i32
+        i = i + 1
+    }
+    free(is_p)
+
+    G_max_e = 0
+    let mut t: i64 = N
+    while t > 1 {
+        t = t / 2
+        G_max_e = G_max_e + 1
+    }
+    G_w[0] = 1
+    let mut cur: i64 = 1
+    let mut e: i64 = 1
+    while e <= G_max_e {
+        cur = (cur * ((N + e - 1) % MOD)) % MOD
+        cur = (cur * modpow(e, MOD - 2, MOD)) % MOD
+        G_w[e] = cur
+        e = e + 1
+    }
+
+    printf("%lld\n", S(N, 0))
+    return 0
+}

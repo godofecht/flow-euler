@@ -1,0 +1,23 @@
+# Project Euler 129
+# Least n > 10^6 with A(n) > 10^6 (repunit divisibility).
+
+function A(n: i64) -> i64 {
+    if n % 2 == 0 || n % 5 == 0 { return 0 }
+    let mut k: i64 = 1
+    let mut r: i64 = 1
+    while r != 0 {
+        r = (r * 10 + 1) % n
+        k = k + 1
+    }
+    return k
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let mut n: i64 = limit
+    while A(n) <= limit {
+        n = n + 1
+    }
+    printf("%lld\n", n)
+    return 0
+}

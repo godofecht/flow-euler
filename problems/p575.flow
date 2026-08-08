@@ -1,0 +1,83 @@
+# Project Euler 575
+# Wandering Robots
+# Average stationary prob on square-index rooms for two move rules, n=1000.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function stationary_num(n: i64, rule: i64) -> i64 {
+    let mut interior: i64 = 0
+    let mut edge: i64 = 0
+    let mut corner: i64 = 0
+    let mut s: i64 = 1
+    while s <= n {
+        let x: i64 = s * s
+        let r: i64 = (x - 1) / n + 1
+        let c: i64 = (x - 1) % n + 1
+        let tb: bool = (r == 1) || (r == n)
+        let lr: bool = (c == 1) || (c == n)
+        if tb && lr {
+            corner = corner + 1
+        } elif tb || lr {
+            edge = edge + 1
+        } else {
+            interior = interior + 1
+        }
+        s = s + 1
+    }
+    let mut w_i: i64 = 4
+    let mut w_e: i64 = 3
+    let mut w_c: i64 = 2
+    if rule == 1 {
+        w_i = 5
+        w_e = 4
+        w_c = 3
+    }
+    return interior * w_i + edge * w_e + corner * w_c
+}
+
+function stationary_den(n: i64, rule: i64) -> i64 {
+    let mut w_i: i64 = 4
+    let mut w_e: i64 = 3
+    let mut w_c: i64 = 2
+    if rule == 1 {
+        w_i = 5
+        w_e = 4
+        w_c = 3
+    }
+    return w_i * (n - 2) * (n - 2) + w_e * 4 * (n - 2) + w_c * 4
+}
+
+function main() -> i32 {
+    let n: i64 = 1000
+    let n1: i64 = stationary_num(n, 1)
+    let d1: i64 = stationary_den(n, 1)
+    let n2: i64 = stationary_num(n, 2)
+    let d2: i64 = stationary_den(n, 2)
+    let mut num: i64 = n1 * d2 + n2 * d1
+    let mut den: i64 = d1 * d2 * 2
+    let g: i64 = gcd(num, den)
+    num = num / g
+    den = den / g
+    let scale: i64 = 1000000000000
+    let scaled: i64 = num * scale
+    let mut q: i64 = scaled / den
+    let r: i64 = scaled % den
+    if 2 * r >= den {
+        q = q + 1
+    }
+    let ip: i64 = q / scale
+    let fp: i64 = q % scale
+    printf("%lld.%012lld\n", ip, fp)
+    return 0
+}

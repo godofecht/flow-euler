@@ -1,0 +1,198 @@
+# Project Euler 272
+# Sum of n <= 10^11 with C(n)=242.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+let mut G_primes: ptr<i64> = null
+let mut G_L: i64 = 0
+let mut G_min_prod: ptr<i64> = null
+let mut G_pref: ptr<i64> = null
+let mut G_N: i64 = 100000000000
+let mut G_total: i64 = 0
+
+function dfs(start: i64, remaining: i64, prod: i64) -> void {
+    if remaining == 1 {
+        let max_n: i64 = G_N / prod
+        let mut j: i64 = start
+        while j < G_L {
+            let pj: i64 = G_primes[j]
+            if pj > max_n { break }
+            let mut powv: i64 = pj
+            while powv <= max_n {
+                let n0: i64 = prod * powv
+                G_total = G_total + n0 * G_pref[G_N / n0]
+                if powv > max_n / pj { break }
+                powv = powv * pj
+            }
+            j = j + 1
+        }
+        return
+    }
+    let last: i64 = G_L - remaining
+    let mut j: i64 = start
+    while j <= last {
+        let pj: i64 = G_primes[j]
+        let mp: i64 = G_min_prod[(remaining - 1) * (G_L + 1) + (j + 1)]
+        if prod > G_N / pj / mp { break }
+        let max_pow: i64 = G_N / (prod * mp)
+        let mut powv: i64 = pj
+        while powv <= max_pow {
+            dfs(j + 1, remaining - 1, prod * powv)
+            if powv > max_pow / pj { break }
+            powv = powv * pj
+        }
+        j = j + 1
+    }
+}
+
+function sum_pick(rem: i64, pref: ptr<i64>, initial_prod: i64) -> i64 {
+    G_pref = pref
+    G_total = 0
+    dfs(0, rem, initial_prod)
+    return G_total
+}
+
+function main() -> i32 {
+    let N: i64 = 100000000000
+    G_N = N
+    let max_good_prime: i64 = N / (9 * 7 * 13 * 19)
+    let lim: i64 = max_good_prime
+    let sieve: ptr<i8> = calloc(lim + 1, 1)
+    let mut i: i64 = 0
+    while i <= lim { sieve[i] = 1; i = i + 1 }
+    sieve[0] = 0; sieve[1] = 0
+    if lim >= 4 {
+        i = 4
+        while i <= lim { sieve[i] = 0; i = i + 2 }
+    }
+    let r: i64 = isqrt(lim)
+    let mut p: i64 = 3
+    while p <= r {
+        if sieve[p] != 0 {
+            let mut j: i64 = p * p
+            while j <= lim {
+                sieve[j] = 0
+                j = j + 2 * p
+            }
+        }
+        p = p + 2
+    }
+    let primes_all: ptr<i64> = calloc(lim / 5 + 10, 8)
+    let mut pc: i64 = 0
+    if lim >= 2 {
+        primes_all[pc] = 2
+        pc = pc + 1
+    }
+    i = 3
+    while i <= lim {
+        if sieve[i] != 0 {
+            primes_all[pc] = i
+            pc = pc + 1
+        }
+        i = i + 2
+    }
+    let primes: ptr<i64> = calloc(pc, 8)
+    let mut L: i64 = 0
+    i = 0
+    while i < pc {
+        if primes_all[i] % 3 == 1 {
+            primes[L] = primes_all[i]
+            L = L + 1
+        }
+        i = i + 1
+    }
+    G_primes = primes
+    G_L = L
+
+    let min_good_part: i64 = 9 * 7 * 13 * 19 * 31
+    let b_limit_max: i64 = N / min_good_part
+    let allow3: ptr<i8> = calloc(b_limit_max + 1, 1)
+    let no3: ptr<i8> = calloc(b_limit_max + 1, 1)
+    i = 0
+    while i <= b_limit_max { allow3[i] = 1; i = i + 1 }
+    allow3[0] = 0
+    if b_limit_max >= 9 {
+        i = 9
+        while i <= b_limit_max { allow3[i] = 0; i = i + 9 }
+    }
+    i = 0
+    while i < pc {
+        let pr: i64 = primes_all[i]
+        if pr % 3 == 1 {
+            let mut j: i64 = pr
+            while j <= b_limit_max {
+                allow3[j] = 0
+                j = j + pr
+            }
+        }
+        i = i + 1
+    }
+    i = 0
+    while i <= b_limit_max {
+        no3[i] = allow3[i]
+        i = i + 1
+    }
+    if b_limit_max >= 3 {
+        i = 3
+        while i <= b_limit_max { no3[i] = 0; i = i + 3 }
+    }
+    let pref_allow3: ptr<i64> = calloc(b_limit_max + 1, 8)
+    let pref_no3: ptr<i64> = calloc(b_limit_max + 1, 8)
+    let mut s1: i64 = 0
+    let mut s2: i64 = 0
+    i = 1
+    while i <= b_limit_max {
+        if allow3[i] != 0 { s1 = s1 + i }
+        if no3[i] != 0 { s2 = s2 + i }
+        pref_allow3[i] = s1
+        pref_no3[i] = s2
+        i = i + 1
+    }
+
+    G_min_prod = calloc(6 * (L + 1), 8)
+    let mut kk: i64 = 1
+    while kk <= 5 {
+        G_min_prod[kk * (L + 1) + L] = N + 1
+        kk = kk + 1
+    }
+    i = L - 1
+    while i >= 0 {
+        G_min_prod[0 * (L + 1) + i] = 1
+        let pi: i64 = primes[i]
+        kk = 1
+        while kk <= 5 {
+            let v: i64 = pi * G_min_prod[(kk - 1) * (L + 1) + (i + 1)]
+            if v > N || G_min_prod[(kk - 1) * (L + 1) + (i + 1)] > N / pi {
+                G_min_prod[kk * (L + 1) + i] = N + 1
+            } else {
+                G_min_prod[kk * (L + 1) + i] = v
+            }
+            kk = kk + 1
+        }
+        i = i - 1
+    }
+
+    let mut total: i64 = sum_pick(5, pref_allow3, 1)
+    let mut p3: i64 = 9
+    while p3 <= N / G_min_prod[4 * (L + 1) + 0] {
+        total = total + sum_pick(4, pref_no3, p3)
+        if p3 > N / 3 { break }
+        p3 = p3 * 3
+    }
+    printf("%lld\n", total)
+    return 0
+}

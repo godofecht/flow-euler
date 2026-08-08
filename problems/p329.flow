@@ -1,0 +1,95 @@
+# Project Euler 329
+# Prime frog croak probability as reduced fraction.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function probability(square: i64, depth: i64, max_depth: i64, limit: i64, is_prime: ptr<i8>, seq: ptr<i8>, cache: ptr<i64>) -> i64 {
+    let mut chance: i64 = 1
+    let want_n: bool = seq[depth] == 78  # 'N'
+    let prime: bool = is_prime[square] == 1
+    if (prime && !want_n) || (!prime && want_n) {
+        chance = 2
+    }
+    if depth == max_depth {
+        return chance
+    }
+    let idx: i64 = square * max_depth + depth
+    if cache[idx] != 0 {
+        return cache[idx]
+    }
+    let mut left: i64 = square - 1
+    if left < 1 { left = 2 }
+    let mut right: i64 = square + 1
+    if right > limit { right = limit - 1 }
+    let result: i64 = chance * (
+        probability(left, depth + 1, max_depth, limit, is_prime, seq, cache) +
+        probability(right, depth + 1, max_depth, limit, is_prime, seq, cache)
+    )
+    cache[idx] = result
+    return result
+}
+
+function main() -> i32 {
+    let limit: i64 = 500
+    let max_depth: i64 = 15
+    let is_prime: ptr<i8> = calloc(limit + 1, 1)
+    let seq: ptr<i8> = calloc(16, 1)
+    let cache: ptr<i64> = calloc((max_depth + 1) * (limit + 1), 8)
+    if is_prime == null || seq == null || cache == null { return 1 }
+    # sequence " PPPPNNPPPNPPNPN" with leading space so index from 1
+    seq[0] = 32
+    let s: string = "PPPPNNPPPNPPNPN"
+    # manually
+    seq[1]=80; seq[2]=80; seq[3]=80; seq[4]=80; seq[5]=78; seq[6]=78; seq[7]=80
+    seq[8]=80; seq[9]=80; seq[10]=78; seq[11]=80; seq[12]=80; seq[13]=78; seq[14]=80; seq[15]=78
+
+    let mut i: i64 = 0
+    while i <= limit {
+        is_prime[i] = 1
+        i = i + 1
+    }
+    is_prime[0] = 0; is_prime[1] = 0
+    i = 2
+    while i * i <= limit {
+        if is_prime[i] == 1 {
+            let mut j: i64 = i * i
+            while j <= limit {
+                is_prime[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    i = 1
+    while i <= limit {
+        total = total + probability(i, 1, max_depth, limit, is_prime, seq, cache)
+        i = i + 1
+    }
+    let mut denominator: i64 = limit
+    let mut d: i64 = 1
+    while d < max_depth {
+        denominator = denominator * 6
+        d = d + 1
+    }
+    denominator = denominator * 3
+    let g: i64 = gcd(total, denominator)
+    printf("%lld/%lld\n", total / g, denominator / g)
+    free(is_prime); free(seq); free(cache)
+    return 0
+}

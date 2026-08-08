@@ -1,0 +1,72 @@
+# Project Euler 243
+# Least n with resilience R(n) < 15499/94744.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function phi_with_primes(x: i64, primes: ptr<i64>, pc: i32) -> i64 {
+    let mut result: i64 = x
+    let mut reduced: i64 = x
+    let mut i: i32 = 0
+    while i < pc {
+        let p: i64 = primes[i]
+        if p * p > reduced { break }
+        if reduced % p == 0 {
+            while reduced % p == 0 { reduced = reduced / p }
+            result = result - result / p
+        }
+        i = i + 1
+    }
+    if reduced > 1 {
+        result = result - result / reduced
+    }
+    return result
+}
+
+function is_less(a1: i64, b1: i64, a2: i64, b2: i64) -> bool {
+    return a1 * b2 < a2 * b1
+}
+
+function main() -> i32 {
+    let num: i64 = 15499
+    let den: i64 = 94744
+    let primes: ptr<i64> = calloc(100, 8)
+    if primes == null { return 1 }
+    let mut pc: i32 = 0
+    let mut current: i64 = 1
+    let mut i: i64 = 2
+    while true {
+        let mut is_p: bool = true
+        let mut j: i32 = 0
+        while j < pc {
+            if primes[j] * primes[j] > i { break }
+            if i % primes[j] == 0 { is_p = false; break }
+            j = j + 1
+        }
+        if !is_p {
+            i = i + 1
+            continue
+        }
+        primes[pc] = i
+        pc = pc + 1
+        current = current * i
+        if is_less(phi_with_primes(current, primes, pc), current - 1, num, den) {
+            break
+        }
+        i = i + 1
+    }
+    current = current / primes[pc - 1]
+    let mut k: i64 = 1
+    while true {
+        let nxt: i64 = current * k
+        if is_less(phi_with_primes(nxt, primes, pc), nxt - 1, num, den) {
+            printf("%lld\n", nxt)
+            free(primes)
+            return 0
+        }
+        k = k + 1
+    }
+    return 1
+}

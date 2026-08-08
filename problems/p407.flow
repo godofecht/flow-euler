@@ -1,0 +1,109 @@
+# Project Euler 407
+# Sum M(n) for 1<=n<=10^7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modinv(a0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    let mut b: i64 = m
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = a - q * b
+        a = b
+        b = t
+        let tx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = tx
+    }
+    if x0 < 0 { x0 = x0 + m }
+    return x0
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 10000000
+    let spf: ptr<i32> = calloc(LIMIT + 1, 4)
+    if spf == null { return 1 }
+    let mut i: i64 = 0
+    while i <= LIMIT {
+        spf[i] = i as i32
+        i = i + 1
+    }
+    i = 2
+    while i * i <= LIMIT {
+        if (spf[i] as i64) == i {
+            let mut j: i64 = i * i
+            while j <= LIMIT {
+                if (spf[j] as i64) == j {
+                    spf[j] = i as i32
+                }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut n: i64 = 2
+    while n <= LIMIT {
+        let mut t: i64 = n
+        let p0: i64 = spf[t] as i64
+        let mut pk: i64 = 1
+        while t % p0 == 0 {
+            t = t / p0
+            pk = pk * p0
+        }
+        if t == 1 {
+            total = total + 1
+            n = n + 1
+            continue
+        }
+        # CRT subsets of sum of e_i where e_i ≡ 1 mod q_i, 0 mod n/q_i
+        let mut sums: ptr<i64> = calloc(512, 8)
+        if sums == null { return 1 }
+        let mut sc: i64 = 1
+        sums[0] = 0
+        let mut min_gt: i64 = n
+
+        # first factor pk
+        let mut q: i64 = pk
+        let n_div: i64 = n / q
+        let e: i64 = n_div * modinv(n_div, q)
+        let mut v: i64 = e % n
+        if v > 1 && v < min_gt { min_gt = v }
+        sums[sc] = v
+        sc = sc + 1
+
+        while t > 1 {
+            let p: i64 = spf[t] as i64
+            pk = 1
+            while t % p == 0 {
+                t = t / p
+                pk = pk * p
+            }
+            q = pk
+            let nd: i64 = n / q
+            let ee: i64 = nd * modinv(nd, q)
+            let old: i64 = sc
+            let mut s: i64 = 0
+            while s < old {
+                v = sums[s] + ee
+                if v >= n { v = v - n }
+                if v > 1 && v < min_gt { min_gt = v }
+                sums[sc] = v
+                sc = sc + 1
+                s = s + 1
+            }
+        }
+        total = total + n + 1 - min_gt
+        free(sums)
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    free(spf)
+    return 0
+}

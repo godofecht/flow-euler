@@ -1,0 +1,180 @@
+# Project Euler 511
+# Nice sequences — Seq(1234567898765,4321) mod 1e9 via cyclic convolution.
+
+const MOD: i64 = 1000000000
+const K: i64 = 4321
+const TARGET_N: i64 = 1234567898765
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function egcd(a0: i64, b0: i64, x: ptr<i64>, y: ptr<i64>) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    let mut x1: i64 = 1
+    let mut y1: i64 = 0
+    let mut x2: i64 = 0
+    let mut y2: i64 = 1
+    while b != 0 {
+        let q: i64 = a / b
+        let tx: i64 = x1 - q * x2
+        let ty: i64 = y1 - q * y2
+        x1 = x2
+        y1 = y2
+        x2 = tx
+        y2 = ty
+        let ta: i64 = a
+        a = b
+        b = ta % b
+    }
+    x[0] = x1
+    y[0] = y1
+    return a
+}
+
+function factorize(n0: i64, primes: ptr<i64>, exps: ptr<i64>) -> i64 {
+    let mut n: i64 = n0
+    let mut nf: i64 = 0
+    let mut cnt: i64 = 0
+    while n % 2 == 0 {
+        n = n / 2
+        cnt = cnt + 1
+    }
+    if cnt > 0 {
+        primes[nf] = 2
+        exps[nf] = cnt
+        nf = nf + 1
+    }
+    cnt = 0
+    while n % 3 == 0 {
+        n = n / 3
+        cnt = cnt + 1
+    }
+    if cnt > 0 {
+        primes[nf] = 3
+        exps[nf] = cnt
+        nf = nf + 1
+    }
+    let mut f: i64 = 5
+    let mut step: i64 = 2
+    while f * f <= n {
+        cnt = 0
+        while n % f == 0 {
+            n = n / f
+            cnt = cnt + 1
+        }
+        if cnt > 0 {
+            primes[nf] = f
+            exps[nf] = cnt
+            nf = nf + 1
+        }
+        f = f + step
+        step = 6 - step
+    }
+    if n > 1 {
+        primes[nf] = n
+        exps[nf] = 1
+        nf = nf + 1
+    }
+    return nf
+}
+
+function div_rec(i: i64, nf: i64, cur: i64, primes: ptr<i64>, exps: ptr<i64>, counts: ptr<i64>) -> void {
+    if i == nf {
+        let r: i64 = cur % K
+        counts[r] = counts[r] + 1
+        return
+    }
+    let mut v: i64 = cur
+    let mut e: i64 = 0
+    while e <= exps[i] {
+        div_rec(i + 1, nf, v, primes, exps, counts)
+        v = v * primes[i]
+        e = e + 1
+    }
+}
+
+function divisor_counts(n0: i64, counts: ptr<i64>) -> void {
+    let primes: ptr<i64> = calloc(32, 8)
+    let exps: ptr<i64> = calloc(32, 8)
+    if primes == null || exps == null { return }
+    let nf: i64 = factorize(n0, primes, exps)
+    div_rec(0, nf, 1, primes, exps, counts)
+    free(primes)
+    free(exps)
+}
+
+function mul_cyclic(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < K {
+        out[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i < K {
+        if a[i] != 0 {
+            let mut j: i64 = 0
+            while j < K {
+                if b[j] != 0 {
+                    let idx: i64 = (i + j) % K
+                    out[idx] = (out[idx] + a[i] * b[j]) % MOD
+                }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+}
+
+function copy_arr(src: ptr<i64>, dst: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < K {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function pow_cyclic(base: ptr<i64>, exp0: i64, res: ptr<i64>, tmp: ptr<i64>, tmp2: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < K {
+        res[i] = 0
+        i = i + 1
+    }
+    res[0] = 1
+    copy_arr(base, tmp)
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) != 0 {
+            mul_cyclic(res, tmp, tmp2)
+            copy_arr(tmp2, res)
+        }
+        mul_cyclic(tmp, tmp, tmp2)
+        copy_arr(tmp2, tmp)
+        e = e >> 1
+    }
+}
+
+function main() -> i32 {
+    let counts: ptr<i64> = calloc(K, 8)
+    let base: ptr<i64> = calloc(K, 8)
+    let res: ptr<i64> = calloc(K, 8)
+    let tmp: ptr<i64> = calloc(K, 8)
+    let tmp2: ptr<i64> = calloc(K, 8)
+    if counts == null || base == null || res == null || tmp == null || tmp2 == null { return 1 }
+
+    divisor_counts(TARGET_N, counts)
+    let mut i: i64 = 0
+    while i < K {
+        base[i] = counts[i] % MOD
+        i = i + 1
+    }
+
+    pow_cyclic(base, TARGET_N, res, tmp, tmp2)
+    let need: i64 = ((-TARGET_N) % K + K) % K
+    printf("%lld\n", res[need] % MOD)
+
+    free(counts); free(base); free(res); free(tmp); free(tmp2)
+    return 0
+}

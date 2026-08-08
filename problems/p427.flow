@@ -1,0 +1,99 @@
+# Project Euler 427
+# f(7500000) mod 1000000009 for sum of longest equal runs over n-sequences.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mod_pow(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    let mut e: i64 = e0
+    let mut r: i64 = 1
+    while e > 0 {
+        if e % 2 == 1 { r = (r * a) % mod }
+        a = (a * a) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let n: i64 = 7500000
+    let mod: i64 = 1000000009
+    let n_mod: i64 = n % mod
+    let a_mod: i64 = (1 - n_mod) % mod
+    if a_mod < 0 { a_mod = a_mod + mod }
+
+    let fac: ptr<i32> = calloc(n + 1, 4)
+    let ifac: ptr<i32> = calloc(n + 1, 4)
+    let A: ptr<i32> = calloc(n + 1, 4)
+    let B: ptr<i32> = calloc(n + 1, 4)
+    if fac == null || ifac == null || A == null || B == null { return 1 }
+
+    fac[0] = 1
+    let mut i: i64 = 1
+    while i <= n {
+        fac[i] = (((fac[i - 1] as i64) * i) % mod) as i32
+        i = i + 1
+    }
+    ifac[n] = mod_pow(fac[n] as i64, mod - 2, mod) as i32
+    i = n
+    while i > 0 {
+        ifac[i - 1] = (((ifac[i] as i64) * i) % mod) as i32
+        i = i - 1
+    }
+
+    let mut pow_n: i64 = 1
+    let mut pow_a: i64 = 1
+    i = 0
+    while i <= n {
+        if i > 0 {
+            pow_n = (pow_n * n_mod) % mod
+            pow_a = (pow_a * a_mod) % mod
+        }
+        A[i] = ((pow_n * (ifac[i] as i64)) % mod) as i32
+        B[i] = ((pow_a * (ifac[i] as i64)) % mod) as i32
+        i = i + 1
+    }
+    free(ifac)
+
+    let mut sum_Ak: i64 = 0
+    let mut k: i64 = 2
+    while k <= n {
+        let q: i64 = n / k
+        let km1: i64 = k - 1
+        let mut m: i64 = n
+        let mut idx: i64 = n
+        let mut res: i64 = 0
+        let mut t: i64 = 0
+        while t < q {
+            let bt: i64 = B[t] as i64
+            let tmp: i64 = ((fac[idx] as i64) * (A[m] as i64)) % mod
+            res = res + (tmp * bt) % mod
+            let tmp2: i64 = ((fac[idx - k] as i64) * (A[m - k] as i64)) % mod
+            res = res - (tmp2 * bt) % mod
+            m = m - k
+            idx = idx - km1
+            t = t + 1
+        }
+        let tmp3: i64 = ((fac[idx] as i64) * (A[m] as i64)) % mod
+        res = res + (tmp3 * (B[q] as i64)) % mod
+        sum_Ak = sum_Ak + res % mod
+        if (k & 1023) == 0 {
+            sum_Ak = sum_Ak % mod
+        }
+        k = k + 1
+    }
+    sum_Ak = sum_Ak % mod
+    if sum_Ak < 0 { sum_Ak = sum_Ak + mod }
+
+    let ans: i64 = (mod_pow(n_mod, n + 1, mod) - sum_Ak) % mod
+    if ans < 0 { ans = ans + mod }
+    printf("%lld\n", ans)
+
+    free(B)
+    free(A)
+    free(fac)
+    return 0
+}

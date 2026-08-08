@@ -1,0 +1,77 @@
+# Project Euler 150
+# Minimum sub-triangle sum in a 1000-row LCG triangle.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let size: i64 = 1000
+    let total_n: i64 = size * (size + 1) / 2
+    let tri: ptr<i64> = calloc(total_n, 8)
+    let row_start: ptr<i64> = calloc(size + 1, 8)
+    if tri == null || row_start == null { return 1 }
+
+    let mut seed: i64 = 0
+    let mask: i64 = 1048576  # 2^20
+    let half: i64 = 524288    # 2^19
+    let mut idx: i64 = 0
+    let mut y: i64 = 0
+    while y < size {
+        row_start[y] = idx
+        let mut x: i64 = 0
+        while x <= y {
+            seed = (615949 * seed + 797807) % mask
+            tri[idx] = seed - half
+            idx = idx + 1
+            x = x + 1
+        }
+        y = y + 1
+    }
+
+    # prefix sums per row: sums[y][x] = sum of first x+1 entries of row y
+    let sums: ptr<i64> = calloc(total_n, 8)
+    if sums == null { return 1 }
+    y = 0
+    while y < size {
+        let mut run: i64 = 0
+        let mut x: i64 = 0
+        while x <= y {
+            run = run + tri[row_start[y] + x]
+            sums[row_start[y] + x] = run
+            x = x + 1
+        }
+        y = y + 1
+    }
+
+    let mut result: i64 = tri[0]
+    y = 0
+    while y < size {
+        let mut x: i64 = 0
+        while x <= y {
+            let mut total: i64 = tri[row_start[y] + x]
+            if result > total { result = total }
+            let max_len: i64 = size - y
+            let mut cur: i64 = 1
+            while cur < max_len {
+                let ry: i64 = y + cur
+                let mut row_sum: i64 = sums[row_start[ry] + x + cur]
+                if x > 0 {
+                    row_sum = row_sum - sums[row_start[ry] + x - 1]
+                }
+                total = total + row_sum
+                if result > total { result = total }
+                cur = cur + 1
+            }
+            x = x + 1
+        }
+        y = y + 1
+    }
+
+    printf("%lld\n", result)
+    free(sums)
+    free(row_start)
+    free(tri)
+    return 0
+}

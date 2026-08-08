@@ -1,0 +1,40 @@
+# Project Euler 033 (fixed)
+# Curious cancelling fractions — only the non-trivial "middle digit" cancel.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function main() -> i32 {
+    let mut num_prod: i64 = 1
+    let mut den_prod: i64 = 1
+    let mut n: i64 = 10
+    while n < 100 {
+        let mut d: i64 = n + 1
+        while d < 100 {
+            let n1: i64 = n / 10
+            let n0: i64 = n % 10
+            let d1: i64 = d / 10
+            let d0: i64 = d % 10
+            # non-trivial: cancel shared digit where n's units == d's tens, digit ≠ 0
+            if n0 == d1 && n0 != 0 && d0 != 0 {
+                if n * d0 == d * n1 {
+                    num_prod = num_prod * n1
+                    den_prod = den_prod * d0
+                }
+            }
+            d = d + 1
+        }
+        n = n + 1
+    }
+    let g: i64 = gcd(num_prod, den_prod)
+    printf("%lld\n", den_prod / g)
+    return 0
+}

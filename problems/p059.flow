@@ -1,0 +1,99 @@
+# Project Euler 059
+# XOR decryption: sum of ASCII values of the original text.
+# Key is three lowercase letters; plaintext contains " the ".
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p059.txt", "r")
+    if f == null {
+        printf("failed to read data/p059.txt\n")
+        return 1
+    }
+    let data: ptr<i32> = calloc(2000, 4)
+    let plain: ptr<i32> = calloc(2000, 4)
+    if data == null || plain == null { return 1 }
+
+    let mut n: i32 = 0
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        while c >= 0 && (c < 48 || c > 57) {
+            c = fgetc(f)
+        }
+        if c < 0 { break }
+        let mut v: i32 = 0
+        while c >= 48 && c <= 57 {
+            v = v * 10 + (c - 48)
+            c = fgetc(f)
+        }
+        data[n] = v
+        n = n + 1
+    }
+    fclose(f)
+
+    let mut best_sum: i64 = 0
+    let mut found: bool = false
+    let mut k0: i32 = 97
+    while k0 <= 122 {
+        let mut k1: i32 = 97
+        while k1 <= 122 {
+            let mut k2: i32 = 97
+            while k2 <= 122 {
+                let mut ok: bool = true
+                let mut sum: i64 = 0
+                let mut i: i32 = 0
+                while i < n {
+                    let mut key: i32 = k0
+                    if i % 3 == 1 { key = k1 }
+                    if i % 3 == 2 { key = k2 }
+                    let ch: i32 = data[i] ^ key
+                    if ch < 32 || ch > 126 {
+                        ok = false
+                        break
+                    }
+                    plain[i] = ch
+                    sum = sum + (ch as i64)
+                    i = i + 1
+                }
+                if ok {
+                    # search for " the "
+                    let mut has_the: bool = false
+                    i = 0
+                    while i + 4 < n {
+                        if plain[i] == 32 && plain[i + 1] == 116 && plain[i + 2] == 104 && plain[i + 3] == 101 && plain[i + 4] == 32 {
+                            has_the = true
+                            break
+                        }
+                        i = i + 1
+                    }
+                    if has_the {
+                        best_sum = sum
+                        found = true
+                        # take first/match; should be unique
+                        k2 = 123
+                        k1 = 123
+                        k0 = 123
+                        break
+                    }
+                }
+                k2 = k2 + 1
+            }
+            k1 = k1 + 1
+        }
+        k0 = k0 + 1
+    }
+    if !found {
+        printf("0\n")
+    } else {
+        printf("%lld\n", best_sum)
+    }
+    free(plain)
+    free(data)
+    return 0
+}

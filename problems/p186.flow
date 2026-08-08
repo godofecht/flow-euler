@@ -1,0 +1,82 @@
+# Project Euler 186
+# Calls until PM's friends reach 99% of network (Lagged Fibonacci + DSU).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function find(parent: ptr<i32>, x: i32) -> i32 {
+    let mut cur: i32 = x
+    while parent[cur] != cur {
+        parent[cur] = parent[parent[cur]]
+        cur = parent[cur]
+    }
+    return cur
+}
+
+function main() -> i32 {
+    let N: i32 = 1000000
+    let parent: ptr<i32> = calloc(N as i64, 4)
+    let sz: ptr<i32> = calloc(N as i64, 4)
+    let hist: ptr<i32> = calloc(200, 4)
+    if parent == null || sz == null || hist == null { return 1 }
+    let mut i: i32 = 0
+    while i < N {
+        parent[i] = i
+        sz[i] = 1
+        i = i + 1
+    }
+    let mut hlen: i32 = 0
+    let mut calls: i64 = 0
+    let phone: i32 = 524287
+    let target: i32 = 990000
+    while true {
+        let mut from_id: i32 = 0
+        let mut to_id: i32 = 0
+        let mut t: i32 = 0
+        while t < 2 {
+            let mut cur: i32 = 0
+            if hlen < 55 {
+                let k: i64 = (hlen + 1) as i64
+                let v: i64 = (300007 * k * k * k - 200003 * k + 100003) % 1000000
+                if v < 0 { cur = (v + 1000000) as i32 } else { cur = v as i32 }
+            } else {
+                let a: i32 = hist[hlen - 55]
+                let b: i32 = hist[hlen - 24]
+                cur = (a + b) % 1000000
+            }
+            hist[hlen] = cur
+            hlen = hlen + 1
+            if hlen >= 160 {
+                # compact history keep last 55
+                let mut j: i32 = 0
+                while j < 55 {
+                    hist[j] = hist[hlen - 55 + j]
+                    j = j + 1
+                }
+                hlen = 55
+            }
+            if t == 0 { from_id = cur } else { to_id = cur }
+            t = t + 1
+        }
+        if from_id == to_id { continue }
+        calls = calls + 1
+        let rx: i32 = find(parent, from_id)
+        let ry: i32 = find(parent, to_id)
+        if rx != ry {
+            if sz[rx] >= sz[ry] {
+                parent[ry] = rx
+                sz[rx] = sz[rx] + sz[ry]
+            } else {
+                parent[rx] = ry
+                sz[ry] = sz[ry] + sz[rx]
+            }
+        }
+        let root: i32 = find(parent, phone)
+        if sz[root] >= target { break }
+    }
+    printf("%lld\n", calls)
+    free(parent); free(sz); free(hist)
+    return 0
+}

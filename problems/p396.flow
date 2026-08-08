@@ -1,0 +1,224 @@
+# Project Euler 396
+# Last 9 digits of sum_{n=1..15} G(n) for weak Goodstein sequences.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    if mod == 1 { return 0 }
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e >> 1
+    }
+    return r
+}
+
+function f2_exact(x: i64) -> i64 {
+    let e: i64 = x + 1
+    return (x + 1) * (1 << e) - 1
+}
+
+function pow2_chain_level(a2: i64, b5: i64, m2: i64, m5: i64, phi5: i64, inv: i64,
+                          mod: i64, next_res: i64, exact_x: i64, has_exact: i64) -> i64 {
+    if mod == 1 { return 0 }
+    let mut r2: i64 = 0
+    if a2 != 0 {
+        if has_exact == 1 && (exact_x + 1) < a2 {
+            r2 = 1 << (exact_x + 1)
+        } else {
+            r2 = 0
+        }
+    }
+    let mut r5: i64 = 0
+    if b5 != 0 {
+        let exp_mod: i64 = (next_res % phi5 + 1) % phi5
+        r5 = modpow(2, exp_mod, m5)
+    }
+    if a2 == 0 { return r5 }
+    if b5 == 0 { return r2 }
+    let mask: i64 = m2 - 1
+    let t: i64 = ((((r2 - r5) & mask) * inv) & mask)
+    return (r5 + m5 * t) % mod
+}
+
+function f2_iter_mod5(x0: i64, iters: i64,
+                      mods: ptr<i64>, a2s: ptr<i64>, b5s: ptr<i64>,
+                      m2s: ptr<i64>, m5s: ptr<i64>, phi5s: ptr<i64>, invs: ptr<i64>,
+                      residues: ptr<i64>, new_res: ptr<i64>, clen: i64) -> i64 {
+    let mut i: i64 = 0
+    while i < clen {
+        residues[i] = x0 % mods[i]
+        i = i + 1
+    }
+    let mut has_exact: i64 = 0
+    let mut exact_x: i64 = 0
+    if x0 <= 20 {
+        has_exact = 1
+        exact_x = x0
+    }
+    let mut it: i64 = 0
+    while it < iters {
+        let mut exact_next: i64 = 0
+        let mut has_next: i64 = 0
+        if has_exact == 1 {
+            let en: i64 = f2_exact(exact_x)
+            if en <= 20 {
+                has_next = 1
+                exact_next = en
+            }
+        }
+        i = 0
+        while i < clen {
+            let m: i64 = mods[i]
+            if m == 1 {
+                new_res[i] = 0
+            } else {
+                let next_res: i64 = residues[i + 1]
+                let p2: i64 = pow2_chain_level(a2s[i], b5s[i], m2s[i], m5s[i], phi5s[i], invs[i],
+                                               m, next_res, exact_x, has_exact)
+                let mut val: i64 = (((residues[i] + 1) % m) * p2 - 1) % m
+                if val < 0 { val = val + m }
+                new_res[i] = val
+            }
+            i = i + 1
+        }
+        i = 0
+        while i < clen {
+            residues[i] = new_res[i]
+            i = i + 1
+        }
+        has_exact = has_next
+        exact_x = exact_next
+        it = it + 1
+    }
+    return residues[0]
+}
+
+function f2_iter_mod2(x0: i64, iters: i64) -> i64 {
+    let MOD2: i64 = 512
+    let mask: i64 = MOD2 - 1
+    let mut x_mod: i64 = x0 & mask
+    let mut has_exact: i64 = 0
+    let mut exact_x: i64 = 0
+    if x0 <= 20 {
+        has_exact = 1
+        exact_x = x0
+    }
+    let mut it: i64 = 0
+    while it < iters {
+        let mut p2: i64 = 0
+        if has_exact == 1 && (exact_x + 1) < 9 {
+            p2 = 1 << (exact_x + 1)
+            let en: i64 = f2_exact(exact_x)
+            if en <= 20 {
+                exact_x = en
+            } else {
+                has_exact = 0
+            }
+        } else {
+            p2 = 0
+            has_exact = 0
+        }
+        x_mod = (((x_mod + 1) & mask) * p2 - 1) & mask
+        it = it + 1
+    }
+    return x_mod
+}
+
+function crt_1e9(r2: i64, r5: i64) -> i64 {
+    let MOD: i64 = 1000000000
+    let MOD2: i64 = 512
+    let MOD5: i64 = 1953125
+    let INV: i64 = 1537323
+    let t: i64 = ((r5 - r2) % MOD5 + MOD5) % MOD5
+    t = (t * INV) % MOD5
+    return (r2 + MOD2 * t) % MOD
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000
+    let clen: i64 = 20
+    let mods: ptr<i64> = calloc(clen, 8)
+    let a2s: ptr<i64> = calloc(clen, 8)
+    let b5s: ptr<i64> = calloc(clen, 8)
+    let m2s: ptr<i64> = calloc(clen, 8)
+    let m5s: ptr<i64> = calloc(clen, 8)
+    let phi5s: ptr<i64> = calloc(clen, 8)
+    let invs: ptr<i64> = calloc(clen, 8)
+    let residues: ptr<i64> = calloc(clen, 8)
+    let new_res: ptr<i64> = calloc(clen, 8)
+    if mods == null || a2s == null || b5s == null || m2s == null || m5s == null { return 1 }
+    if phi5s == null || invs == null || residues == null || new_res == null { return 1 }
+
+    let mods_init: array<i64, 20> = [
+        1953125, 1562500, 625000, 250000, 100000, 40000, 16000, 6400, 2560, 1024,
+        512, 256, 128, 64, 32, 16, 8, 4, 2, 1
+    ]
+    let a2_init: array<i64, 20> = [
+        0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+    ]
+    let b5_init: array<i64, 20> = [
+        9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ]
+    let m2_init: array<i64, 20> = [
+        1, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2, 1
+    ]
+    let m5_init: array<i64, 20> = [
+        1953125, 390625, 78125, 15625, 3125, 625, 125, 25, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    ]
+    let phi5_init: array<i64, 20> = [
+        1562500, 312500, 62500, 12500, 2500, 500, 100, 20, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    ]
+    let inv_init: array<i64, 20> = [
+        0, 1, 5, 9, 29, 17, 85, 41, 205, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ]
+    let mut i: i64 = 0
+    while i < clen {
+        mods[i] = mods_init[i]
+        a2s[i] = a2_init[i]
+        b5s[i] = b5_init[i]
+        m2s[i] = m2_init[i]
+        m5s[i] = m5_init[i]
+        phi5s[i] = phi5_init[i]
+        invs[i] = inv_init[i]
+        i = i + 1
+    }
+
+    let a0: array<i64, 8> = [2, 3, 5, 7, 23, 63, 383, 2047]
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n < 16 {
+        let mut a_mod: i64 = 0
+        if n < 8 {
+            a_mod = a0[n]
+        } else {
+            let x0: i64 = a0[n - 8]
+            let iters: i64 = x0 + 1
+            let r5: i64 = f2_iter_mod5(x0, iters, mods, a2s, b5s, m2s, m5s, phi5s, invs, residues, new_res, clen)
+            let r2: i64 = f2_iter_mod2(x0, iters)
+            a_mod = crt_1e9(r2, r5)
+        }
+        let mut g: i64 = (a_mod - 2) % MOD
+        if g < 0 { g = g + MOD }
+        total = (total + g) % MOD
+        n = n + 1
+    }
+    printf("%lld\n", total)
+
+    free(new_res)
+    free(residues)
+    free(invs)
+    free(phi5s)
+    free(m5s)
+    free(m2s)
+    free(b5s)
+    free(a2s)
+    free(mods)
+    return 0
+}

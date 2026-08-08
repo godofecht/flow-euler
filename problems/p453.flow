@@ -1,0 +1,278 @@
+# Project Euler 453
+# Lattice Quadrilaterals — Q(12345,6789) via coprime power sums + closed form.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 135707531
+const CAP: i64 = 2097152
+
+let mut G_m: i64 = 0
+let mut G_n: i64 = 0
+let mut G_k1: ptr<i64> = null
+let mut G_k2: ptr<i64> = null
+let mut G_v: ptr<i128> = null
+let mut G_u: ptr<i8> = null
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function ipow(base: i64, e: i64) -> i128 {
+    let mut r: i128 = 1
+    let mut b: i128 = base as i128
+    let mut ee: i64 = e
+    while ee > 0 {
+        if (ee & 1) == 1 { r = r * b }
+        b = b * b
+        ee = ee / 2
+    }
+    return r
+}
+
+function sum_pows(t0: i64, k: i64) -> i128 {
+    if t0 <= 0 { return 0 as i128 }
+    let t: i128 = t0 as i128
+    if k == 0 { return t }
+    if k == 1 { return t * (t + 1) / 2 }
+    if k == 2 { return t * (t + 1) * (2 * t + 1) / 6 }
+    if k == 3 {
+        let s: i128 = t * (t + 1) / 2
+        return s * s
+    }
+    if k == 4 {
+        return t * (t + 1) * (2 * t + 1) * (3 * t * t + 3 * t - 1) / 30
+    }
+    # k==5 used? not in need list; keep general fallback unused
+    return 0 as i128
+}
+
+function max64(a: i64, b: i64) -> i64 {
+    if a > b { return a }
+    return b
+}
+
+function min64(a: i64, b: i64) -> i64 {
+    if a < b { return a }
+    return b
+}
+
+function G_fn(u: i64, v: i64, a: i64, b: i64) -> i128 {
+    if u <= 0 || v <= 0 { return 0 as i128 }
+    let key1: i64 = (u << 32) ^ v
+    let key2: i64 = (a << 8) ^ b
+    let mut h: i64 = (key1 * 1315423911 + key2) % CAP
+    if h < 0 { h = h + CAP }
+    while G_u[h] != 0 {
+        if G_k1[h] == key1 && G_k2[h] == key2 {
+            return G_v[h]
+        }
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+
+    let q: i64 = isqrt(u)
+    let mut upper: i64 = v
+    if u / q < upper { upper = u / q }
+    let mut res: i128 = sum_pows(u, a) * sum_pows(v, b)
+    let ab: i64 = a + b
+
+    let mut k: i64 = 2
+    while k <= upper {
+        res = res - G_fn(u / k, v / k, a, b) * ipow(k, ab)
+        k = k + 1
+    }
+
+    k = 1
+    while k < q {
+        let x: i64 = v / (u / (k + 1) + 1)
+        let y: i64 = v / (u / k)
+        if x == y {
+            res = res - G_fn(k, x, a, b) * (sum_pows(u / k, ab) - sum_pows(u / (k + 1), ab))
+        } else {
+            let lo: i64 = max64(u / (k + 1), v / (x + 1))
+            let hi: i64 = min64(u / k, v / x)
+            if hi > lo {
+                res = res - G_fn(k, x, a, b) * (sum_pows(hi, ab) - sum_pows(lo, ab))
+            }
+            if y != 0 {
+                let lo2: i64 = max64(u / (k + 1), v / (y + 1))
+                let hi2: i64 = min64(u / k, v / y)
+                if hi2 > lo2 {
+                    res = res - G_fn(k, y, a, b) * (sum_pows(hi2, ab) - sum_pows(lo2, ab))
+                }
+            }
+        }
+        k = k + 1
+    }
+
+    G_u[h] = 1
+    G_k1[h] = key1
+    G_k2[h] = key2
+    G_v[h] = res
+    return res
+}
+
+function H_fn(a: i64, b: i64, c: i64) -> i128 {
+    if c == 0 {
+        return sum_pows(G_m, a) * sum_pows(G_n, b)
+    }
+    let q: i64 = isqrt(G_m)
+    let mut upper: i64 = G_n
+    if G_m / q < upper { upper = G_m / q }
+    let mut res: i128 = 0
+    let abc: i64 = a + b + c
+    let mut k: i64 = 1
+    while k <= upper {
+        res = res + G_fn(G_m / k, G_n / k, a, b) * ipow(k, abc)
+        k = k + 1
+    }
+    k = 1
+    while k < q {
+        let x: i64 = G_n / (G_m / (k + 1) + 1)
+        let y: i64 = G_n / (G_m / k)
+        if x == y {
+            res = res + G_fn(k, x, a, b) * (sum_pows(G_m / k, abc) - sum_pows(G_m / (k + 1), abc))
+        } else {
+            let lo: i64 = max64(G_m / (k + 1), G_n / (x + 1))
+            let hi: i64 = min64(G_m / k, G_n / x)
+            if hi > lo {
+                res = res + G_fn(k, x, a, b) * (sum_pows(hi, abc) - sum_pows(lo, abc))
+            }
+            if y != 0 {
+                let lo2: i64 = max64(G_m / (k + 1), G_n / (y + 1))
+                let hi2: i64 = min64(G_m / k, G_n / y)
+                if hi2 > lo2 {
+                    res = res + G_fn(k, y, a, b) * (sum_pows(hi2, abc) - sum_pows(lo2, abc))
+                }
+            }
+        }
+        k = k + 1
+    }
+    return res
+}
+
+function f_fn(a: i64, b: i64, c: i64) -> i128 {
+    let mut res: i128 = H_fn(a, b, c)
+    if a == 0 {
+        res = res + sum_pows(G_n, b + c)
+    }
+    if b == 0 {
+        res = res + sum_pows(G_m, a + c)
+    }
+    if a + b + c == 0 {
+        res = res + 1
+    }
+    return res
+}
+
+function comb(n0: i128, k: i64) -> i128 {
+    if k < 0 { return 0 as i128 }
+    let mut r: i128 = 1
+    let mut i: i64 = 1
+    while i <= k {
+        r = r * (n0 - (i as i128) + 1) / (i as i128)
+        i = i + 1
+    }
+    return r
+}
+
+function Q_mod(m: i64, n: i64) -> i64 {
+    G_m = m
+    G_n = n
+    # clear memo
+    let mut i: i64 = 0
+    while i < CAP {
+        G_u[i] = 0
+        i = i + 1
+    }
+
+    let s001: i128 = f_fn(0, 0, 1)
+    let s011: i128 = f_fn(0, 1, 1)
+    let s101: i128 = f_fn(1, 0, 1)
+    let s111: i128 = f_fn(1, 1, 1)
+    let s002: i128 = f_fn(0, 0, 2)
+    let s012: i128 = f_fn(0, 1, 2)
+    let s102: i128 = f_fn(1, 0, 2)
+    let s112: i128 = f_fn(1, 1, 2)
+    let s000: i128 = f_fn(0, 0, 0)
+    let s010: i128 = f_fn(0, 1, 0)
+    let s100: i128 = f_fn(1, 0, 0)
+    let s110: i128 = f_fn(1, 1, 0)
+    let s330: i128 = f_fn(3, 3, 0)
+    let s320: i128 = f_fn(3, 2, 0)
+    let s230: i128 = f_fn(2, 3, 0)
+    let s220: i128 = f_fn(2, 2, 0)
+    let s310: i128 = f_fn(3, 1, 0)
+    let s210: i128 = f_fn(2, 1, 0)
+    let s300: i128 = f_fn(3, 0, 0)
+    let s200: i128 = f_fn(2, 0, 0)
+    let s130: i128 = f_fn(1, 3, 0)
+    let s120: i128 = f_fn(1, 2, 0)
+    let s030: i128 = f_fn(0, 3, 0)
+    let s020: i128 = f_fn(0, 2, 0)
+
+    let mp1: i128 = (m + 1) as i128
+    let np1: i128 = (n + 1) as i128
+    let P: i128 = mp1 * np1
+
+    let s: i128 = (s012 - 11 * s230 - s210 - s030) * mp1
+        + (s102 - 11 * s320 - s300 - s120) * np1
+        - (s112 - 11 * s330 - s310 - s130)
+        - (s002 - 11 * s220 - s200 - s020) * mp1 * np1
+
+    let c3: i128 = 2 * (
+            (s010 - s011) * mp1
+            + (s100 - s101) * np1
+            - (s000 - s001) * mp1 * np1
+            - (s110 - s111)
+        )
+        + s020
+        - ((n + 2) as i128) * s010
+        + np1 * s000
+        + s200
+        - ((m + 2) as i128) * s100
+        + mp1 * s000
+
+    let c4: i128 = (s000 * 4 - s001 * 6 + s002 * 2) * mp1 * np1
+        + (s110 * 4 - s111 * 6 + s112 * 2)
+        - (s100 * 4 - s101 * 6 + s102 * 2) * np1
+        - (s010 * 4 - s011 * 6 + s012 * 2) * mp1
+        + s030
+        - ((n + 4) as i128) * s020
+        + ((3 * n + 5) as i128) * s010
+        - 2 * np1 * s000
+        + s300
+        - ((m + 4) as i128) * s200
+        + ((3 * m + 5) as i128) * s100
+        - 2 * mp1 * s000
+
+    let Qv: i128 = comb(P, 4) - comb(P, 3) + s / 3 + (7 - 2 * P) * c3 + 7 * (c4 / 2)
+    let mm: i128 = MOD as i128
+    let mut r: i128 = Qv % mm
+    if r < 0 { r = r + mm }
+    return r as i64
+}
+
+function main() -> i32 {
+    G_k1 = calloc(CAP, 8)
+    G_k2 = calloc(CAP, 8)
+    G_v = calloc(CAP, 16)
+    G_u = calloc(CAP, 1)
+    if G_k1 == null || G_k2 == null || G_v == null || G_u == null { return 1 }
+    printf("%lld\n", Q_mod(12345, 6789))
+    free(G_u)
+    free(G_v)
+    free(G_k2)
+    free(G_k1)
+    return 0
+}

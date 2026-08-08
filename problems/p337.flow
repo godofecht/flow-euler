@@ -1,0 +1,77 @@
+# Project Euler 337
+# Totient stairstep sequences S(2e7) mod 1e8.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let n: i64 = 20000000
+    let mod: i64 = 100000000
+    let phi: ptr<i32> = calloc(n + 1, 4)
+    let primes: ptr<i32> = calloc(n / 5, 4)
+    let bit: ptr<i32> = calloc(n + 1, 4)
+    if phi == null || primes == null || bit == null { return 1 }
+    let mut pc: i64 = 0
+    phi[1] = 1
+    let mut i: i64 = 2
+    while i <= n {
+        if phi[i] == 0 {
+            phi[i] = (i - 1) as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+        }
+        let phi_i: i64 = phi[i] as i64
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            if i * p > n { break }
+            if i % p == 0 {
+                phi[i * p] = (phi_i * p) as i32
+                break
+            } else {
+                phi[i * p] = (phi_i * (p - 1)) as i32
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let mut ans: i64 = 0
+    i = 2
+    while i <= n {
+        let t: i64 = phi[i] as i64
+        let mut f: i64 = 0
+        if i == 6 {
+            f = 1
+        } else {
+            # query fenwick for sum of diffs at indices 1..t
+            let mut idx: i64 = t
+            while idx > 0 {
+                f = (f + (bit[idx] as i64)) % mod
+                idx = idx - (idx & -idx)
+            }
+        }
+        ans = (ans + f) % mod
+        if f != 0 {
+            let l: i64 = t + 1
+            if l <= i - 1 {
+                let mut idx: i64 = l
+                while idx <= n {
+                    bit[idx] = (((bit[idx] as i64) + f) % mod) as i32
+                    idx = idx + (idx & -idx)
+                }
+                idx = i
+                while idx <= n {
+                    bit[idx] = (((bit[idx] as i64) - f % mod + mod) % mod) as i32
+                    idx = idx + (idx & -idx)
+                }
+            }
+        }
+        i = i + 1
+    }
+    printf("%lld\n", ans)
+    free(phi); free(primes); free(bit)
+    return 0
+}

@@ -1,0 +1,167 @@
+# Project Euler 255
+# Average iterations for rounded square roots of 14-digit integers.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x { x = y; y = (x + n / x) / 2 }
+    return x
+}
+
+function pow10(e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i64 = 0
+    while i < e {
+        r = r * 10
+        i = i + 1
+    }
+    return r
+}
+
+function floordiv(a: i64, b: i64) -> i64 {
+    if b == 0 { return 0 }
+    let q: i64 = a / b
+    let r: i64 = a % b
+    if r != 0 {
+        if a < 0 && b > 0 { q = q - 1 }
+        elif a > 0 && b < 0 { q = q - 1 }
+    }
+    return q
+}
+
+function x0_for_digits(d: i64) -> i64 {
+    if d % 2 == 1 {
+        return 2 * pow10((d - 1) / 2)
+    }
+    return 7 * pow10((d - 2) / 2)
+}
+
+function iter_count(n: i64, x0: i64) -> i64 {
+    let mut x: i64 = x0
+    let mut it: i64 = 0
+    while true {
+        it = it + 1
+        let x1: i64 = floordiv(x + floordiv(n + x - 1, x), 2)
+        if x1 == x { return it }
+        x = x1
+    }
+    return 0
+}
+
+function print_average(total: i64, count: i64) -> void {
+    let scale: i64 = 10000000000
+    let mut ip: i64 = total / count
+    let mut rem: i64 = total % count
+    let mut fp: i64 = 0
+    let mut di: i64 = 0
+    while di < 10 {
+        rem = rem * 10
+        let digit: i64 = floordiv(rem, count)
+        fp = fp * 10 + digit
+        rem = rem % count
+        di = di + 1
+    }
+    if 2 * rem >= count {
+        fp = fp + 1
+        if fp >= scale {
+            fp = fp - scale
+            ip = ip + 1
+        }
+    }
+    printf("%lld.%010lld\n", ip, fp)
+}
+
+function iters_sum_seg(mm: i64, a: i64, b: i64, x: i64, k: i64, total_p: ptr<i64>) -> void {
+    let q_lo: i64 = floordiv(mm + a + x - 1, x)
+    let q_hi: i64 = floordiv(mm + b + x - 1, x)
+    let nk: i64 = k + 1
+    let mut q: i64 = q_lo
+    while q <= q_hi {
+        let mut sa: i64 = (q - 1) * x - mm + 1
+        if sa < a { sa = a }
+        let mut sb: i64 = q * x - mm
+        if sb > b { sb = b }
+        if sa <= sb {
+            let cnt: i64 = sb - sa + 1
+            let x1: i64 = floordiv(x + q, 2)
+            if x1 == x {
+                total_p[0] = total_p[0] + nk * cnt
+            } else {
+                iters_sum_seg(mm, sa, sb, x1, nk, total_p)
+            }
+        }
+        q = q + 1
+    }
+}
+
+function iters_sum_interval(mm: i64, s_lo: i64, s_hi: i64, x0: i64) -> i64 {
+    if s_lo > s_hi { return 0 }
+    let total_p: ptr<i64> = calloc(1, 8)
+    total_p[0] = 0
+    iters_sum_seg(mm, s_lo, s_hi, x0, 0, total_p)
+    let ans: i64 = total_p[0]
+    free(total_p)
+    return ans
+}
+
+function average_interval(d: i64) -> void {
+    let L: i64 = pow10(d - 1)
+    let U: i64 = pow10(d) - 1
+    let x0: i64 = x0_for_digits(d)
+
+    let mut m_full_start: i64 = isqrt(L)
+    while m_full_start * m_full_start - m_full_start + 1 < L {
+        m_full_start = m_full_start + 1
+    }
+    let mut m_full_end: i64 = isqrt(U)
+    while m_full_end * m_full_end + m_full_end > U {
+        m_full_end = m_full_end - 1
+    }
+
+    let mut total: i64 = 0
+
+    let m_low: i64 = m_full_start - 1
+    if m_low > 0 {
+        let mm: i64 = m_low * m_low
+        let end: i64 = mm + m_low
+        if end >= L {
+            let mut s_lo: i64 = L - mm
+            let s_min: i64 = -m_low + 1
+            if s_lo < s_min { s_lo = s_min }
+            let s_hi: i64 = m_low
+            total = total + iters_sum_interval(mm, s_lo, s_hi, x0)
+        }
+    }
+
+    let m_high: i64 = m_full_end + 1
+    let mm_h: i64 = m_high * m_high
+    let start: i64 = mm_h - m_high + 1
+    if start <= U {
+        let s_lo2: i64 = -m_high + 1
+        let mut s_hi2: i64 = U - mm_h
+        if s_hi2 > m_high { s_hi2 = m_high }
+        total = total + iters_sum_interval(mm_h, s_lo2, s_hi2, x0)
+    }
+
+    let mut m: i64 = m_full_start
+    let mut mm: i64 = m * m
+    while m <= m_full_end {
+        total = total + iters_sum_interval(mm, -m + 1, m, x0)
+        mm = mm + 2 * m + 1
+        m = m + 1
+    }
+
+    let count: i64 = U - L + 1
+    print_average(total, count)
+}
+
+function main() -> i32 {
+    average_interval(14)
+    return 0
+}

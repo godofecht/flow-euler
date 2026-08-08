@@ -1,0 +1,72 @@
+# Project Euler 587
+# Concave triangle under the circles; least n with area ratio < 0.1%.
+
+extern {
+    function sqrt(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+function get_intersection(slope: f64) -> f64 {
+    let mut x: f64 = 0.5
+    let mut step: f64 = 0.1
+    let eps: f64 = 0.00000000001
+    while true {
+        let left: f64 = slope * x
+        let dx: f64 = x - 1.0
+        let right: f64 = 1.0 - sqrt(1.0 - dx * dx)
+        if fabs(left - right) < eps {
+            return x
+        }
+        if left > right {
+            x = x - step
+        } else {
+            x = x + step
+        }
+        step = step * 0.99
+    }
+    return x
+}
+
+function get_area_l(slope: f64) -> f64 {
+    let mut intersection: f64 = 0.0
+    let mut left_area: f64 = 0.0
+    if slope > 0.0 {
+        intersection = get_intersection(slope)
+        left_area = intersection * (intersection * slope) / 2.0
+    }
+    let mut right_area: f64 = 0.0
+    let step: f64 = (1.0 - intersection) / 100000.0
+    let mut x: f64 = intersection
+    while x < 1.0 {
+        let dx: f64 = x - 1.0
+        let y: f64 = 1.0 - sqrt(1.0 - dx * dx)
+        right_area = right_area + y * step
+        x = x + step
+    }
+    return left_area + right_area
+}
+
+function solve(limit: f64) -> i64 {
+    let l_section: f64 = get_area_l(0.0)
+    let mut num_circles: i64 = 1
+    let mut step: i64 = 64
+    while true {
+        let slope: f64 = 1.0 / (num_circles as f64)
+        let area: f64 = get_area_l(slope)
+        let percentage: f64 = 100.0 * area / l_section
+        if percentage < limit {
+            if step == 1 {
+                break
+            }
+            num_circles = num_circles - step
+            step = step / 2
+        }
+        num_circles = num_circles + step
+    }
+    return num_circles
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(0.1))
+    return 0
+}

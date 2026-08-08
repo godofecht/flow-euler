@@ -1,0 +1,46 @@
+# Project Euler 509
+# Divisor Nim — g(n)=v2(n); winning triples <= 123456787654321 mod 1234567890.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1234567890
+    let N: i64 = 123456787654321
+    let f: ptr<i64> = calloc(64, 8)
+    if f == null { return 1 }
+    let mut k: i64 = 0
+    while k < 63 {
+        f[k] = (N >> k) - (N >> (k + 1))
+        k = k + 1
+    }
+    let mut losing: i64 = 0
+    let mut i: i64 = 0
+    while i < 64 {
+        let ci: i64 = f[i] % MOD
+        if ci != 0 {
+            let mut j: i64 = 0
+            while j < 64 {
+                let cj: i64 = f[j] % MOD
+                if cj != 0 {
+                    let x: i64 = i ^ j
+                    let cx: i64 = f[x] % MOD
+                    losing = (losing + ((ci * cj) % MOD) * cx) % MOD
+                }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    let nmod: i64 = N % MOD
+    let total: i64 = (((nmod * nmod) % MOD) * nmod) % MOD
+    let mut winning: i64 = (total - losing) % MOD
+    if winning < 0 {
+        winning = winning + MOD
+    }
+    printf("%lld\n", winning)
+    free(f)
+    return 0
+}

@@ -1,0 +1,327 @@
+# Project Euler 572
+# Idempotent Matrices
+# Count 3x3 integer matrices M with M^2=M and entries in [-n,n]; n=200.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function abs64(x: i64) -> i64 {
+    if x < 0 { return 0 - x }
+    return x
+}
+
+function floor_div(a: i64, b: i64) -> i64 {
+    # floor division for possibly negative a,b
+    let mut q: i64 = a / b
+    let r: i64 = a % b
+    if r != 0 && ((a < 0) != (b < 0)) {
+        q = q - 1
+    }
+    return q
+}
+
+function ceil_div(a: i64, b: i64) -> i64 {
+    return 0 - floor_div(0 - a, b)
+}
+
+function egcd(a0: i64, b0: i64, out_x: ptr<i64>, out_y: ptr<i64>) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    let mut x0: i64 = 1
+    let mut y0: i64 = 0
+    let mut x1: i64 = 0
+    let mut y1: i64 = 1
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = a - q * b
+        a = b
+        b = t
+        let nx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = nx
+        let ny: i64 = y0 - q * y1
+        y0 = y1
+        y1 = ny
+    }
+    if a < 0 {
+        a = 0 - a
+        x0 = 0 - x0
+        y0 = 0 - y0
+    }
+    out_x[0] = x0
+    out_y[0] = y0
+    return a
+}
+
+function t_bounds(base: i64, step: i64, low: i64, high: i64, out_lo: ptr<i64>, out_hi: ptr<i64>) -> void {
+    if step > 0 {
+        out_lo[0] = ceil_div(low - base, step)
+        out_hi[0] = floor_div(high - base, step)
+    } else {
+        out_lo[0] = ceil_div(high - base, step)
+        out_hi[0] = floor_div(low - base, step)
+    }
+}
+
+function count_2d(A: i64, B: i64, C: i64, Ly: i64, Ry: i64, Lz: i64, Rz: i64) -> i64 {
+    if Ly > Ry || Lz > Rz { return 0 }
+    if A == 0 {
+        if B == 0 {
+            if C == 0 { return (Ry - Ly + 1) * (Rz - Lz + 1) }
+            return 0
+        }
+        if C % B != 0 { return 0 }
+        let z: i64 = C / B
+        if Lz <= z && z <= Rz { return Ry - Ly + 1 }
+        return 0
+    }
+    if B == 0 {
+        if C % A != 0 { return 0 }
+        let y: i64 = C / A
+        if Ly <= y && y <= Ry { return Rz - Lz + 1 }
+        return 0
+    }
+    let xy: ptr<i64> = calloc(2, 8)
+    let ox: ptr<i64> = calloc(1,8)
+    let oy: ptr<i64> = calloc(1,8)
+    let g: i64 = egcd(A, B, ox, oy)
+    xy[0]=ox[0]
+    xy[1]=oy[0]
+    free(ox)
+    free(oy)
+    if g == 0 || C % g != 0 { free(xy); return 0 }
+    let k: i64 = C / g
+    let y0: i64 = xy[0] * k
+    let z0: i64 = xy[1] * k
+    let step_y: i64 = B / g
+    let step_z: i64 = 0 - A / g
+    let lohi: ptr<i64> = calloc(4, 8)
+    let o1: ptr<i64> = calloc(1,8)
+    let o2: ptr<i64> = calloc(1,8)
+    let o3: ptr<i64> = calloc(1,8)
+    let o4: ptr<i64> = calloc(1,8)
+    t_bounds(y0, step_y, Ly, Ry, o1, o2)
+    t_bounds(z0, step_z, Lz, Rz, o3, o4)
+    lohi[0]=o1[0]; lohi[1]=o2[0]; lohi[2]=o3[0]; lohi[3]=o4[0]
+    free(o1); free(o2); free(o3); free(o4)
+    let lo: i64 = lohi[0]
+    if lohi[2] > lo { lo = lohi[2] }
+    let hi: i64 = lohi[1]
+    if lohi[3] < hi { hi = lohi[3] }
+    free(xy)
+    free(lohi)
+    if hi < lo { return 0 }
+    return hi - lo + 1
+}
+
+function count_3d(a: i64, b: i64, c: i64, Lx: i64, Rx: i64, Ly: i64, Ry: i64, Lz: i64, Rz: i64) -> i64 {
+    if Lx > Rx || Ly > Ry || Lz > Rz { return 0 }
+    if a == 0 && b == 0 && c == 0 { return 0 }
+    let nnz: i64 = 0
+    if a != 0 { nnz = nnz + 1 }
+    if b != 0 { nnz = nnz + 1 }
+    if c != 0 { nnz = nnz + 1 }
+    if nnz == 1 {
+        if a != 0 {
+            if 1 % a != 0 { return 0 }
+            let x: i64 = 1 / a
+            if Lx <= x && x <= Rx { return (Ry - Ly + 1) * (Rz - Lz + 1) }
+            return 0
+        }
+        if b != 0 {
+            if 1 % b != 0 { return 0 }
+            let y: i64 = 1 / b
+            if Ly <= y && y <= Ry { return (Rx - Lx + 1) * (Rz - Lz + 1) }
+            return 0
+        }
+        if 1 % c != 0 { return 0 }
+        let z: i64 = 1 / c
+        if Lz <= z && z <= Rz { return (Rx - Lx + 1) * (Ry - Ly + 1) }
+        return 0
+    }
+    if nnz == 2 {
+        if a == 0 { return count_2d(b, c, 1, Ly, Ry, Lz, Rz) * (Rx - Lx + 1) }
+        if b == 0 { return count_2d(a, c, 1, Lx, Rx, Lz, Rz) * (Ry - Ly + 1) }
+        return count_2d(a, b, 1, Lx, Rx, Ly, Ry) * (Rz - Lz + 1)
+    }
+    let lenx: i64 = Rx - Lx + 1
+    let leny: i64 = Ry - Ly + 1
+    let lenz: i64 = Rz - Lz + 1
+    let mut total: i64 = 0
+    if lenx <= leny && lenx <= lenz {
+        let mut x: i64 = Lx
+        while x <= Rx {
+            total = total + count_2d(b, c, 1 - a * x, Ly, Ry, Lz, Rz)
+            x = x + 1
+        }
+    } elif leny <= lenx && leny <= lenz {
+        let mut y: i64 = Ly
+        while y <= Ry {
+            total = total + count_2d(a, c, 1 - b * y, Lx, Rx, Lz, Rz)
+            y = y + 1
+        }
+    } else {
+        let mut z: i64 = Lz
+        while z <= Rz {
+            total = total + count_2d(a, b, 1 - c * z, Lx, Rx, Ly, Ry)
+            z = z + 1
+        }
+    }
+    return total
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function count_rank1(n: i64) -> i64 {
+    let T: i64 = isqrt(n)
+    let mut S: i64 = 0
+    let mut O: i64 = 0
+    let mut a: i64 = 0 - T
+    while a <= T {
+        let mut b: i64 = 0 - T
+        while b <= T {
+            let mut c: i64 = 0 - T
+            while c <= T {
+                if not (a == 0 && b == 0 && c == 0) {
+                    let U: i64 = abs64(a)
+                    if abs64(b) > U { U = abs64(b) }
+                    if abs64(c) > U { U = abs64(c) }
+                    let B: i64 = n / U
+                    S = S + count_3d(a, b, c, 0 - B, B, 0 - B, B, 0 - B, B)
+                    O = O + count_3d(a, b, c, 0 - T, T, 0 - T, T, 0 - T, T)
+                }
+                c = c + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    return (2 * S - O) / 2
+}
+
+function div_interval(low: i64, high: i64, coef: i64, out_L: ptr<i64>, out_R: ptr<i64>) -> void {
+    if coef > 0 {
+        out_L[0] = ceil_div(low, coef)
+        out_R[0] = floor_div(high, coef)
+    } else {
+        out_L[0] = ceil_div(high, coef)
+        out_R[0] = floor_div(low, coef)
+    }
+}
+
+function count_rank2(n: i64) -> i64 {
+    let T: i64 = isqrt(n)
+    let mut SA: i64 = 0
+    let mut overlap: i64 = 0
+    let tmp: ptr<i64> = calloc(2, 8)
+    let mut a: i64 = 0 - T
+    while a <= T {
+        let mut b: i64 = 0 - T
+        while b <= T {
+            let mut c: i64 = 0 - T
+            while c <= T {
+                if not (a == 0 && b == 0 && c == 0) {
+                    let u0: i64 = a
+                    let u1: i64 = b
+                    let u2: i64 = c
+                    let low: i64 = 1 - n
+                    let high: i64 = 1 + n
+                    let mut L0: i64 = 0
+                    let mut R0: i64 = 0
+                    let mut L1: i64 = 0
+                    let mut R1: i64 = 0
+                    let mut L2: i64 = 0
+                    let mut R2: i64 = 0
+                    let mut ok: i32 = 1
+                    let mut j: i64 = 0
+                    while j < 3 {
+                        let mut off: i64 = n
+                        let mut i: i64 = 0
+                        while i < 3 {
+                            if i != j {
+                                let ui: i64 = u0
+                                if i == 1 { ui = u1 }
+                                if i == 2 { ui = u2 }
+                                if ui != 0 {
+                                    let t: i64 = n / abs64(ui)
+                                    if t < off { off = t }
+                                }
+                            }
+                            i = i + 1
+                        }
+                        let mut L: i64 = 0 - off
+                        let mut R: i64 = off
+                        let uj: i64 = u0
+                        if j == 1 { uj = u1 }
+                        if j == 2 { uj = u2 }
+                        if uj != 0 {
+                            let dL: ptr<i64> = calloc(1,8)
+                            let dR: ptr<i64> = calloc(1,8)
+                            div_interval(low, high, uj, dL, dR)
+                            tmp[0]=dL[0]; tmp[1]=dR[0]
+                            free(dL); free(dR)
+                            let Ld: i64 = tmp[0]
+                            let Rd: i64 = tmp[1]
+                            if Ld > Rd {
+                                let sw: i64 = Ld
+                                Ld = Rd
+                                Rd = sw
+                            }
+                            if Ld > L { L = Ld }
+                            if Rd < R { R = Rd }
+                        }
+                        if j == 0 { L0 = L; R0 = R }
+                        if j == 1 { L1 = L; R1 = R }
+                        if j == 2 { L2 = L; R2 = R }
+                        if L > R { ok = 0 }
+                        j = j + 1
+                    }
+                    if ok != 0 {
+                        SA = SA + count_3d(a, b, c, L0, R0, L1, R1, L2, R2)
+                        let mut L0b: i64 = L0
+                        let mut R0b: i64 = R0
+                        let mut L1b: i64 = L1
+                        let mut R1b: i64 = R1
+                        let mut L2b: i64 = L2
+                        let mut R2b: i64 = R2
+                        if L0b < 0 - T { L0b = 0 - T }
+                        if R0b > T { R0b = T }
+                        if L1b < 0 - T { L1b = 0 - T }
+                        if R1b > T { R1b = T }
+                        if L2b < 0 - T { L2b = 0 - T }
+                        if R2b > T { R2b = T }
+                        if L0b <= R0b && L1b <= R1b && L2b <= R2b {
+                            overlap = overlap + count_3d(a, b, c, L0b, R0b, L1b, R1b, L2b, R2b)
+                        }
+                    }
+                }
+                c = c + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    free(tmp)
+    return (2 * SA - overlap) / 2
+}
+
+function C(n: i64) -> i64 {
+    if n == 0 { return 1 }
+    return 2 + count_rank1(n) + count_rank2(n)
+}
+
+function main() -> i32 {
+    printf("%lld\n", C(200))
+    return 0
+}

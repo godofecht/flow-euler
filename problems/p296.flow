@@ -1,0 +1,163 @@
+# Project Euler 296
+# Count triangles with BE = ac/(a+b) integer, perimeter <= 100000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function floor_sum(n0: i64, m0: i64, a0: i64, b0: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut n: i64 = n0
+    let mut m: i64 = m0
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while true {
+        if a >= m {
+            total = total + (n - 1) * n * (a / m) / 2
+            a = a % m
+        }
+        if b >= m {
+            total = total + n * (b / m)
+            b = b % m
+        }
+        let y: i64 = a * n + b
+        if y < m {
+            return total
+        }
+        n = y / m
+        b = y % m
+        let tmp: i64 = m
+        m = a
+        a = tmp
+    }
+    return total
+}
+
+function main() -> i32 {
+    let limit: i64 = 100000
+    let max_q: i64 = limit / 3
+    let mu: ptr<i32> = calloc(max_q + 1, 4)
+    let is_comp: ptr<i8> = calloc(max_q + 1, 1)
+    let primes: ptr<i64> = calloc(max_q / 5 + 10, 8)
+    mu[1] = 1
+    let mut pc: i64 = 0
+    let mut n: i64 = 2
+    while n <= max_q {
+        if is_comp[n] == 0 {
+            primes[pc] = n
+            pc = pc + 1
+            mu[n] = -1
+        }
+        let mi: i32 = mu[n]
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j]
+            if p > max_q / n { break }
+            let ip: i64 = n * p
+            is_comp[ip] = 1
+            if n % p == 0 {
+                mu[ip] = 0
+                break
+            }
+            mu[ip] = 0 - mi
+            j = j + 1
+        }
+        n = n + 1
+    }
+
+    # divisors[q] stored as flat: first count, then pairs (d, mu) in separate arrays via CSR
+    let offs: ptr<i64> = calloc(max_q + 2, 8)
+    let mut d: i64 = 1
+    while d <= max_q {
+        if mu[d] != 0 {
+            let mut mult: i64 = d
+            while mult <= max_q {
+                offs[mult + 1] = offs[mult + 1] + 1
+                mult = mult + d
+            }
+        }
+        d = d + 1
+    }
+    let mut i: i64 = 1
+    while i <= max_q + 1 {
+        offs[i] = offs[i] + offs[i - 1]
+        i = i + 1
+    }
+    let total_pairs: i64 = offs[max_q + 1]
+    let ds: ptr<i64> = calloc(total_pairs, 8)
+    let ms: ptr<i32> = calloc(total_pairs, 4)
+    let cur: ptr<i64> = calloc(max_q + 1, 8)
+    i = 0
+    while i <= max_q {
+        cur[i] = offs[i]
+        i = i + 1
+    }
+    d = 1
+    while d <= max_q {
+        if mu[d] != 0 {
+            let mut mult: i64 = d
+            while mult <= max_q {
+                let at: i64 = cur[mult]
+                ds[at] = d
+                ms[at] = mu[d]
+                cur[mult] = at + 1
+                mult = mult + d
+            }
+        }
+        d = d + 1
+    }
+
+    let mut count: i64 = 0
+    let mut q: i64 = 2
+    while q <= max_q {
+        let max_g_plus_k: i64 = limit / q
+        let half_q: i64 = q / 2
+        let start: i64 = offs[q]
+        let end: i64 = offs[q + 1]
+
+        # reduced_up_to_half = sum mu*(half_q//d)
+        let mut reduced_up_to_half: i64 = 0
+        let mut t: i64 = start
+        while t < end {
+            reduced_up_to_half = reduced_up_to_half + (ms[t] as i64) * (half_q / ds[t])
+            t = t + 1
+        }
+
+        let mut g: i64 = 2
+        while g < max_g_plus_k {
+            let mut min_h: i64 = 1
+            let alt: i64 = 2 * g - max_g_plus_k
+            if alt > min_h { min_h = alt }
+            let before: i64 = (min_h * q + g - 1) / g - 1
+            if before < half_q {
+                let mut coprime_before: i64 = 0
+                let mut floor_half: i64 = 0
+                let mut floor_before: i64 = 0
+                t = start
+                while t < end {
+                    let dd: i64 = ds[t]
+                    let mmu: i64 = ms[t] as i64
+                    coprime_before = coprime_before + mmu * (before / dd)
+                    let n1: i64 = half_q / dd
+                    if n1 > 0 {
+                        floor_half = floor_half + mmu * floor_sum(n1 + 1, q / dd, g, 0)
+                    }
+                    let n2: i64 = before / dd
+                    if n2 > 0 {
+                        floor_before = floor_before + mmu * floor_sum(n2 + 1, q / dd, g, 0)
+                    }
+                    t = t + 1
+                }
+                let reduced_count: i64 = reduced_up_to_half - coprime_before
+                let floor_part: i64 = floor_half - floor_before
+                count = count + floor_part - (min_h - 1) * reduced_count
+            }
+            g = g + 1
+        }
+        q = q + 1
+    }
+    printf("%lld\n", count)
+    free(mu); free(is_comp); free(primes); free(offs); free(ds); free(ms); free(cur)
+    return 0
+}

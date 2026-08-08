@@ -1,0 +1,106 @@
+# Project Euler 315
+# Sam vs Max digital-root clocks for primes in [10^7, 2*10^7].
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function popcnt(x0: i64) -> i32 {
+    let mut x: i64 = x0
+    let mut r: i32 = 0
+    while x > 0 {
+        x = x & (x - 1)
+        r = r + 1
+    }
+    return r
+}
+
+function digit_sum(x0: i64) -> i64 {
+    let mut x: i64 = x0
+    let mut r: i64 = 0
+    while x > 0 {
+        r = r + x % 10
+        x = x / 10
+    }
+    return r
+}
+
+function get_segments(x0: i64, seg: ptr<i64>) -> i64 {
+    let mut x: i64 = x0
+    let mut result: i64 = 0
+    let mut shift: i64 = 0
+    while x > 0 {
+        result = result | (seg[x % 10] << shift)
+        x = x / 10
+        shift = shift + 8
+    }
+    return result
+}
+
+function sam(x0: i64, seg: ptr<i64>, cache: ptr<i32>) -> i32 {
+    let mut x: i64 = x0
+    if x < 100 && cache[x] > 0 { return cache[x] }
+    let segments: i64 = get_segments(x, seg)
+    let mut result: i32 = 2 * popcnt(segments)
+    if x > 9 {
+        result = result + sam(digit_sum(x), seg, cache)
+    }
+    if x < 100 { cache[x] = result }
+    return result
+}
+
+function max_clock(x0: i64, prev: i64, seg: ptr<i64>) -> i32 {
+    let segments: i64 = get_segments(x0, seg)
+    let mut result: i32 = popcnt(segments ^ prev)
+    if x0 > 9 {
+        result = result + max_clock(digit_sum(x0), segments, seg)
+    } else {
+        result = result + popcnt(segments)
+    }
+    return result
+}
+
+function main() -> i32 {
+    let lo: i64 = 10000000
+    let hi: i64 = 20000000
+    let half: i64 = (hi >> 1) + 1
+    let sieve: ptr<i8> = calloc(half, 1)
+    let seg: ptr<i64> = calloc(10, 8)
+    let cache: ptr<i32> = calloc(100, 4)
+    if sieve == null || seg == null || cache == null { return 1 }
+    # segment bitmasks
+    seg[0] = 119; seg[1] = 36; seg[2] = 93; seg[3] = 109; seg[4] = 46
+    seg[5] = 107; seg[6] = 123; seg[7] = 39; seg[8] = 127; seg[9] = 111
+
+    let mut i: i64 = 0
+    while i < half { sieve[i] = 1; i = i + 1 }
+    sieve[0] = 0
+    i = 1
+    while 2 * i * i < half {
+        if sieve[i] == 1 {
+            let mut current: i64 = 3 * i + 1
+            let step: i64 = 2 * i + 1
+            while current < half {
+                sieve[current] = 0
+                current = current + step
+            }
+        }
+        i = i + 1
+    }
+
+    let mut sum_sam: i64 = 0
+    let mut sum_max: i64 = 0
+    let mut p: i64 = lo
+    if p % 2 == 0 { p = p + 1 }
+    while p <= hi {
+        if sieve[p >> 1] == 1 {
+            sum_sam = sum_sam + (sam(p, seg, cache) as i64)
+            sum_max = sum_max + (max_clock(p, 0, seg) as i64)
+        }
+        p = p + 2
+    }
+    printf("%lld\n", sum_sam - sum_max)
+    free(sieve); free(seg); free(cache)
+    return 0
+}

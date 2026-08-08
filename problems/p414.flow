@@ -1,0 +1,121 @@
+# Project Euler 414
+# Sum of S(6k+3) for k=2..300, mod 10^18 (Kaprekar base-b 5-digit).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function idx(p: i64, q: i64) -> i64 {
+    return p * (p + 1) / 2 + q
+}
+
+function S_base(b: i64) -> i64 {
+    let MOD: i64 = 1000000000000000000
+    let t: i64 = (b - 3) / 6
+    let p_star: i64 = 4 * t + 2
+    let q_star: i64 = 2 * t + 1
+    let size: i64 = b * (b + 1) / 2
+    let target: i64 = idx(p_star, q_star)
+
+    let nxt: ptr<i32> = calloc(size, 4)
+    let w: ptr<i64> = calloc(size, 8)
+    let dist: ptr<i16> = calloc(size, 2)
+    if nxt == null || w == null || dist == null { return -1 }
+
+    let mut p: i64 = 1
+    while p < b {
+        let base: i64 = p * (p + 1) / 2
+        let bp: i64 = b - p
+
+        # q = 0
+        let c: i64 = p - 1
+        let a: i64 = bp
+        let mut mn: i64 = a
+        let mut mx: i64 = c
+        if c < a { mn = c; mx = a }
+        let p2: i64 = b - 1 - mn
+        let q2: i64 = b - 1 - mx
+        nxt[base + 0] = idx(p2, q2) as i32
+        w[base + 0] = bp * (20 * p - 10)
+
+        let mut q: i64 = 1
+        while q <= p {
+            let mut a1: i64 = p
+            let mut a2: i64 = bp
+            let mut a3: i64 = q - 1
+            let mut a4: i64 = b - q - 1
+            if a1 > a2 { let tmp: i64 = a1; a1 = a2; a2 = tmp }
+            if a3 > a4 { let tmp2: i64 = a3; a3 = a4; a4 = tmp2 }
+            if a1 > a3 { let tmp3: i64 = a1; a1 = a3; a3 = tmp3 }
+            if a2 > a4 { let tmp4: i64 = a2; a2 = a4; a4 = tmp4 }
+            if a2 > a3 { let tmp5: i64 = a2; a2 = a3; a3 = tmp5 }
+            let p2b: i64 = b - 1 - a1
+            let q2b: i64 = a4 - a2
+            nxt[base + q] = idx(p2b, q2b) as i32
+            if q < p {
+                w[base + q] = bp * (120 * q * (p - q) - 20)
+            } else {
+                w[base + q] = bp * (30 * p - 10)
+            }
+            q = q + 1
+        }
+        p = p + 1
+    }
+
+    let mut i: i64 = 0
+    while i < size {
+        dist[i] = -1
+        i = i + 1
+    }
+    dist[0] = 0
+    dist[target] = 0
+
+    let path: ptr<i32> = calloc(size, 4)
+    if path == null { return -1 }
+    let mut total: i64 = 0
+    i = 1
+    while i < size {
+        if dist[i] == -1 {
+            let mut cur: i64 = i
+            let mut plen: i64 = 0
+            while dist[cur] == -1 {
+                path[plen] = cur as i32
+                plen = plen + 1
+                cur = nxt[cur] as i64
+            }
+            let mut d: i64 = dist[cur] as i64
+            let mut k: i64 = plen - 1
+            while k >= 0 {
+                d = d + 1
+                let node: i64 = path[k] as i64
+                dist[node] = d as i16
+                total = (total + w[node] * (d + 1)) % MOD
+                k = k - 1
+            }
+        }
+        i = i + 1
+    }
+    free(path)
+    total = (total + w[target] * 1) % MOD
+    total = total - 1
+    if total < 0 { total = total + MOD }
+
+    free(dist)
+    free(w)
+    free(nxt)
+    return total
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000000000000
+    let mut total: i64 = 0
+    let mut k: i64 = 2
+    while k <= 300 {
+        let b: i64 = 6 * k + 3
+        total = (total + S_base(b)) % MOD
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

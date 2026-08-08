@@ -1,0 +1,185 @@
+# Project Euler 314
+# Maximize Area/Perimeter of wall on 500x500 posts (symmetry n=250).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let n: i64 = 250
+    let dist: ptr<f64> = calloc((n + 1) * (n + 1), 8)
+    let mut dx: i64 = 0
+    while dx <= n {
+        let mut dy: i64 = 0
+        while dy <= n {
+            dist[dx * (n + 1) + dy] = sqrt((dx * dx + dy * dy) as f64)
+            dy = dy + 1
+        }
+        dx = dx + 1
+    }
+    let NEG: f64 = -1.0e300
+    let dp: ptr<f64> = calloc((n + 1) * (n + 1), 8)
+    let parx: ptr<i16> = calloc((n + 1) * (n + 1), 2)
+    let pary: ptr<i16> = calloc((n + 1) * (n + 1), 2)
+    let best: ptr<f64> = calloc(n + 1, 8)
+    let best_px: ptr<i16> = calloc(n + 1, 2)
+    let best_py: ptr<i16> = calloc(n + 1, 2)
+    let sites: ptr<i32> = calloc(n + 1, 4)
+    let vals: ptr<f64> = calloc(n + 1, 8)
+    let starts: ptr<i32> = calloc(n + 1, 4)
+
+    # initial r from triangle cut example
+    let mut r: f64 = 238750.0 / (1400.0 + 300.0 * sqrt(2.0))
+    let mut iter: i64 = 0
+    while iter < 20 {
+        let mut y: i64 = 0
+        while y <= n {
+            dp[0 * (n + 1) + y] = -r * (y as f64)
+            y = y + 1
+        }
+        let mut i: i64 = 1
+        while i <= n {
+            y = 0
+            while y <= n {
+                best[y] = NEG
+                best_px[y] = -1
+                best_py[y] = -1
+                y = y + 1
+            }
+            let mut x: i64 = 0
+            while x < i {
+                let dxi: i64 = i - x
+                let halfdx: f64 = 0.5 * (dxi as f64)
+                let mut sc: i64 = 0
+                y = 0
+                while y <= n {
+                    let v: f64 = dp[x * (n + 1) + y]
+                    if v > NEG / 2.0 {
+                        let Sy: f64 = v + halfdx * (y as f64)
+                        if sc == 0 {
+                            sites[0] = y as i32; vals[0] = Sy; starts[0] = y as i32; sc = 1
+                        } else {
+                            while sc > 0 {
+                                let y_last: i64 = sites[sc - 1] as i64
+                                let S_last: f64 = vals[sc - 1]
+                                # intersect
+                                let k: i64 = y - y_last
+                                let dS: f64 = Sy - S_last
+                                let mut j0: i64 = y
+                                if dS < 0.0 {
+                                    if dS + r * (k as f64) <= 0.0 {
+                                        j0 = n + 1
+                                    } else {
+                                        let C: f64 = (S_last - Sy) / r
+                                        let A: f64 = (k * k) as f64 - C * C
+                                        let u: f64 = (-(k as f64) + C * sqrt(1.0 + 4.0 * (dxi * dxi) as f64 / A)) * 0.5
+                                        j0 = y + (u as i64)
+                                        if j0 < y { j0 = y }
+                                        while j0 <= n {
+                                            let fb: f64 = Sy - r * dist[dxi * (n + 1) + (j0 - y)]
+                                            let fa: f64 = S_last - r * dist[dxi * (n + 1) + (j0 - y_last)]
+                                            if fb >= fa - 1e-13 { break }
+                                            j0 = j0 + 1
+                                        }
+                                        if j0 > n { j0 = n + 1 }
+                                    }
+                                }
+                                if j0 <= (starts[sc - 1] as i64) { sc = sc - 1 }
+                                else {
+                                    sites[sc] = y as i32; vals[sc] = Sy; starts[sc] = j0 as i32; sc = sc + 1
+                                    break
+                                }
+                            }
+                            if sc == 0 {
+                                sites[0] = y as i32; vals[0] = Sy; starts[0] = y as i32; sc = 1
+                            }
+                        }
+                    }
+                    y = y + 1
+                }
+                let mut idx: i64 = 0
+                let mut j: i64 = 0
+                while j <= n {
+                    while idx + 1 < sc && j >= (starts[idx + 1] as i64) { idx = idx + 1 }
+                    let yb: i64 = sites[idx] as i64
+                    if yb <= j {
+                        let score: f64 = vals[idx] - r * dist[dxi * (n + 1) + (j - yb)] + halfdx * (j as f64)
+                        if score > best[j] {
+                            best[j] = score
+                            best_px[j] = x as i16
+                            best_py[j] = yb as i16
+                        }
+                    }
+                    j = j + 1
+                }
+                x = x + 1
+            }
+            y = 0
+            while y <= n {
+                dp[i * (n + 1) + y] = best[y]
+                parx[i * (n + 1) + y] = best_px[y]
+                pary[i * (n + 1) + y] = best_py[y]
+                y = y + 1
+            }
+            i = i + 1
+        }
+        # reconstruct
+        let pathx: ptr<i32> = calloc(n + 2, 4)
+        let pathy: ptr<i32> = calloc(n + 2, 4)
+        let mut k: i64 = 0
+        let mut cx: i64 = n
+        let mut cy: i64 = n
+        while cx != 0 {
+            pathx[k] = cx as i32
+            pathy[k] = cy as i32
+            let px: i64 = parx[cx * (n + 1) + cy] as i64
+            let py: i64 = pary[cx * (n + 1) + cy] as i64
+            cx = px
+            cy = py
+            k = k + 1
+        }
+        pathx[k] = 0
+        pathy[k] = cy as i32
+        k = k + 1
+        # reverse
+        let mut t: i64 = 0
+        while t < k / 2 {
+            let tx: i32 = pathx[t]; let ty: i32 = pathy[t]
+            pathx[t] = pathx[k - 1 - t]; pathy[t] = pathy[k - 1 - t]
+            pathx[k - 1 - t] = tx; pathy[k - 1 - t] = ty
+            t = t + 1
+        }
+        let mut area: f64 = 0.0
+        let mut peri: f64 = pathy[0] as f64
+        t = 0
+        while t < k - 1 {
+            let x1: i64 = pathx[t] as i64
+            let y1: i64 = pathy[t] as i64
+            let x2: i64 = pathx[t + 1] as i64
+            let y2: i64 = pathy[t + 1] as i64
+            let ddx: i64 = x2 - x1
+            let mut ddy: i64 = y2 - y1
+            if ddy < 0 { ddy = -ddy }
+            area = area + ((y1 + y2) as f64) * (ddx as f64) * 0.5
+            peri = peri + dist[ddx * (n + 1) + ddy]
+            t = t + 1
+        }
+        let new_r: f64 = area / peri
+        if fabs(new_r - r) < 5e-13 {
+            r = new_r
+            free(pathx); free(pathy)
+            break
+        }
+        r = new_r
+        free(pathx); free(pathy)
+        iter = iter + 1
+    }
+    # full figure is 4x quadrant area/peri ratio same
+    printf("%.8f\n", r)
+    free(dist); free(dp); free(parx); free(pary); free(best); free(best_px); free(best_py)
+    free(sites); free(vals); free(starts)
+    return 0
+}

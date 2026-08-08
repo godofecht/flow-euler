@@ -1,0 +1,343 @@
+# Project Euler 529
+# 10-substrings — DFA + Berlekamp-Massey + poly exponentiation at n=10^18.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const CAP: i64 = 8192
+const MAXS: i64 = 4096
+const N_EXP: i64 = 1000000000000000000
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 { r = ((r as i128) * (b as i128) % (mod as i128)) as i64 }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
+    let mut h: i64 = key % CAP
+    if h < 0 { h = h + CAP }
+    while used[h] == 1 && keys[h] != key {
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function pack_key(dlen: i32, digs: ptr<i8>, uncovered: i32) -> i64 {
+    let mut p: i64 = 0
+    let mut i: i32 = 0
+    while i < dlen {
+        p = p * 10 + (digs[i] as i64)
+        i = i + 1
+    }
+    return (uncovered as i64) * 10000000000 + p
+}
+
+function decode_digs(key: i64, dlen: ptr<i32>, digs: ptr<i8>, uncovered: ptr<i32>) -> void {
+    uncovered[0] = (key / 10000000000) as i32
+    let mut p: i64 = key % 10000000000
+    if p == 0 {
+        dlen[0] = 0
+        return
+    }
+    let tmp: ptr<i8> = calloc(16, 1)
+    let mut n: i32 = 0
+    while p > 0 {
+        tmp[n] = (p % 10) as i8
+        p = p / 10
+        n = n + 1
+    }
+    dlen[0] = n
+    let mut i: i32 = 0
+    while i < n {
+        digs[i] = tmp[n - 1 - i]
+        i = i + 1
+    }
+    free(tmp)
+}
+
+function dig_sum(st: i64, dlen: i32, digs_arr: ptr<i8>) -> i32 {
+    let mut s: i32 = 0
+    let mut i: i32 = 0
+    while i < dlen {
+        s = s + (digs_arr[st * 12 + (i as i64)] as i32)
+        i = i + 1
+    }
+    return s
+}
+
+function try_transition(
+    st: i64, dlen: i32, sum_d: i32, uncovered: i32, digit: i32,
+    digs_arr: ptr<i8>, odlen: ptr<i32>, odigs: ptr<i8>, ou: ptr<i32>
+) -> i32 {
+    let nd: ptr<i8> = calloc(16, 1)
+    if nd == null { return 0 }
+    let mut i: i32 = 0
+    while i < dlen {
+        nd[i] = digs_arr[st * 12 + (i as i64)]
+        i = i + 1
+    }
+    nd[dlen] = digit as i8
+    let mut nlen: i32 = dlen + 1
+    let mut nu: i32 = uncovered + 1
+    let mut nsum: i32 = sum_d + digit
+    while nsum > 10 {
+        if nlen == nu { free(nd); return 0 }
+        nsum = nsum - (nd[0] as i32)
+        let mut j: i32 = 0
+        while j + 1 < nlen {
+            nd[j] = nd[j + 1]
+            j = j + 1
+        }
+        nlen = nlen - 1
+    }
+    if nsum == 10 { nu = 0 }
+    odlen[0] = nlen
+    i = 0
+    while i < nlen {
+        odigs[i] = nd[i]
+        i = i + 1
+    }
+    ou[0] = nu
+    free(nd)
+    return 1
+}
+
+function poly_mul_mod(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>, L: i64, REC: ptr<i64>) -> void {
+    let tmp: ptr<i64> = calloc(2 * L, 8)
+    if tmp == null { return }
+    let mut i: i64 = 0
+    while i < 2 * L { tmp[i] = 0; i = i + 1 }
+    i = 0
+    while i < L {
+        let mut j: i64 = 0
+        while j < L {
+            tmp[i + j] = (tmp[i + j] + ((a[i] as i128) * (b[j] as i128) % (MOD as i128)) as i64) % MOD
+            j = j + 1
+        }
+        i = i + 1
+    }
+    i = 2 * L - 2
+    while i >= L {
+        let c: i64 = tmp[i]
+        if c != 0 {
+            let mut k: i64 = 0
+            while k < L {
+                tmp[i - 1 - k] = (tmp[i - 1 - k] + ((c as i128) * (REC[k] as i128) % (MOD as i128)) as i64) % MOD
+                k = k + 1
+            }
+        }
+        i = i - 1
+    }
+    i = 0
+    while i < L {
+        out[i] = tmp[i] % MOD
+        i = i + 1
+    }
+    free(tmp)
+}
+
+function main() -> i32 {
+    let sk: ptr<i64> = calloc(CAP, 8)
+    let su: ptr<i8> = calloc(CAP, 1)
+    let sid: ptr<i32> = calloc(CAP, 4)
+    let trans: ptr<i32> = calloc(MAXS * 9, 4)
+    let accept: ptr<i8> = calloc(MAXS, 1)
+    let uncovered_arr: ptr<i32> = calloc(MAXS, 4)
+    let dlen_arr: ptr<i32> = calloc(MAXS, 4)
+    let digs_arr: ptr<i8> = calloc(MAXS * 12, 1)
+    if sk == null || trans == null { return 1 }
+    let start_key: i64 = 0
+    let s0: i64 = hslot(start_key, sk, su)
+    su[s0] = 1
+    sk[s0] = start_key
+    sid[s0] = 0
+    uncovered_arr[0] = 0
+    dlen_arr[0] = 0
+    let mut ns: i32 = 1
+    let mut q: ptr<i64> = calloc(MAXS, 8)
+    q[0] = 0
+    let mut qh: i64 = 0
+    let mut qt: i64 = 1
+    while qh < qt {
+        let cur: i64 = q[qh]
+        qh = qh + 1
+        let sum_d: i32 = dig_sum(cur, dlen_arr[cur as i32], digs_arr)
+        let dlen: i32 = dlen_arr[cur as i32]
+        let uncovered: i32 = uncovered_arr[cur as i32]
+        if dlen > 0 && uncovered == 0 { accept[cur] = 1 }
+        let mut digit: i32 = 1
+        while digit <= 9 {
+            let odlen: ptr<i32> = calloc(1, 4)
+            let odigs: ptr<i8> = calloc(12, 1)
+            let ou: ptr<i32> = calloc(1, 4)
+            if try_transition(cur, dlen, sum_d, uncovered, digit, digs_arr, odlen, odigs, ou) == 1 {
+                let nkey: i64 = pack_key(odlen[0], odigs, ou[0])
+                let sl: i64 = hslot(nkey, sk, su)
+                let mut nid: i32 = 0
+                if su[sl] == 0 {
+                    su[sl] = 1
+                    sk[sl] = nkey
+                    sid[sl] = ns
+                    uncovered_arr[ns] = ou[0]
+                    dlen_arr[ns] = odlen[0]
+                    let mut di: i32 = 0
+                    while di < odlen[0] {
+                        digs_arr[ns * 12 + di] = odigs[di]
+                        di = di + 1
+                    }
+                    q[qt] = ns as i64
+                    qt = qt + 1
+                    nid = ns
+                    ns = ns + 1
+                } else {
+                    nid = sid[sl]
+                }
+                trans[cur * 9 + (digit - 1)] = nid
+            } else {
+                trans[cur * 9 + (digit - 1)] = -1
+            }
+            free(odlen); free(odigs); free(ou)
+            digit = digit + 1
+        }
+    }
+    let S: i32 = ns
+    let nterms: i32 = 2 * S + 5
+    let E: ptr<i64> = calloc(nterms as i64, 8)
+    let dp: ptr<i64> = calloc(S as i64, 8)
+    let ndp: ptr<i64> = calloc(S as i64, 8)
+    if E == null || dp == null { return 1 }
+    dp[0] = 1
+    let mut t: i32 = 1
+    while t < nterms {
+        let mut i: i32 = 0
+        while i < S {
+            ndp[i] = 0
+            i = i + 1
+        }
+        i = 0
+        while i < S {
+            let v: i64 = dp[i]
+            if v != 0 {
+                let mut d: i32 = 1
+                while d <= 9 {
+                    let j: i32 = trans[i * 9 + (d - 1)]
+                    if j >= 0 {
+                        ndp[j] = (ndp[j] + v) % MOD
+                    }
+                    d = d + 1
+                }
+            }
+            i = i + 1
+        }
+        let mut tot: i64 = 0
+        i = 0
+        while i < S {
+            if accept[i] == 1 { tot = (tot + ndp[i]) % MOD }
+            dp[i] = ndp[i]
+            i = i + 1
+        }
+        E[t] = tot
+        t = t + 1
+    }
+    # Berlekamp-Massey
+    let C: ptr<i64> = calloc(1024, 8)
+    let B: ptr<i64> = calloc(1024, 8)
+    C[0] = 1
+    B[0] = 1
+    let mut clen: i64 = 1
+    let mut blen: i64 = 1
+    let mut Lbm: i64 = 0
+    let mut m: i64 = 1
+    let mut bval: i64 = 1
+    let mut nn: i64 = 0
+    let mut jj: i64 = 0
+    while nn < (nterms as i64) {
+        let mut d: i64 = E[nn]
+        jj = 1
+        while jj <= Lbm {
+            d = (d + ((C[jj] as i128) * (E[nn - jj] as i128) % (MOD as i128)) as i64) % MOD
+            jj = jj + 1
+        }
+        if d == 0 {
+            m = m + 1
+        } else {
+            let coef: i64 = ((d as i128) * (modpow(bval, MOD - 2, MOD) as i128) % (MOD as i128)) as i64
+            let T: ptr<i64> = calloc(1024, 8)
+            let tlen: i64 = clen
+            jj = 0
+            while jj < tlen { T[jj] = C[jj]; jj = jj + 1 }
+            jj = 0
+            while jj < blen {
+                let idx: i64 = jj + m
+                while clen <= idx { C[clen] = 0; clen = clen + 1 }
+                C[idx] = (C[idx] - ((coef as i128) * (B[jj] as i128) % (MOD as i128)) as i64) % MOD
+                if C[idx] < 0 { C[idx] = C[idx] + MOD }
+                jj = jj + 1
+            }
+            if 2 * Lbm <= nn {
+                jj = 0
+                while jj < tlen { B[jj] = T[jj]; jj = jj + 1 }
+                blen = tlen
+                Lbm = nn + 1 - Lbm
+                bval = d
+                m = 1
+            } else {
+                m = m + 1
+            }
+            free(T)
+        }
+        nn = nn + 1
+    }
+    let L: i64 = Lbm
+    let REC: ptr<i64> = calloc(L, 8)
+    jj = 1
+    while jj <= L {
+        REC[jj - 1] = (-C[jj]) % MOD
+        if REC[jj - 1] < 0 { REC[jj - 1] = REC[jj - 1] + MOD }
+        jj = jj + 1
+    }
+    free(C); free(B)
+    let base: ptr<i64> = calloc(L, 8)
+    let res: ptr<i64> = calloc(L, 8)
+    let tmp: ptr<i64> = calloc(L, 8)
+    let tmp2: ptr<i64> = calloc(L, 8)
+    base[0] = 1
+    if L > 1 { base[1] = 1 }
+    res[0] = 1
+    let mut e: i64 = N_EXP
+    let mut i2: i64 = 0
+    while e > 0 {
+        if (e & 1) == 1 {
+            poly_mul_mod(res, base, tmp, L, REC)
+            i2 = 0
+            while i2 < L { res[i2] = tmp[i2]; i2 = i2 + 1 }
+        }
+        poly_mul_mod(base, base, tmp2, L, REC)
+        i2 = 0
+        while i2 < L { base[i2] = tmp2[i2]; i2 = i2 + 1 }
+        e = e / 2
+    }
+    let mut ans: i64 = 0
+    i2 = 0
+    while i2 < L {
+        ans = (ans + ((res[i2] as i128) * (E[i2] as i128) % (MOD as i128)) as i64) % MOD
+        i2 = i2 + 1
+    }
+    printf("%lld\n", ans)
+    free(sk); free(su); free(sid); free(trans); free(accept)
+    free(uncovered_arr); free(dlen_arr); free(digs_arr); free(q)
+    free(E); free(dp); free(ndp); free(REC)
+    free(base); free(res); free(tmp); free(tmp2)
+    return 0
+}

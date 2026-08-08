@@ -1,0 +1,242 @@
+# Project Euler 590
+# Sets with a Given LCM — HL(50000) mod 1e9 (CRT: 0 mod 512, value mod 5^9).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD2: i64 = 512
+const MOD5: i64 = 1953125
+const PHI5: i64 = 1562500
+
+function modpow(base0: i64, exp0: i64, modv: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % modv
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            result = ((result as i128) * (base as i128) % (modv as i128)) as i64
+        }
+        base = ((base as i128) * (base as i128) % (modv as i128)) as i64
+        exp = exp >> 1
+    }
+    return result
+}
+
+function modinv_coprime(a0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    if a < 0 { a = a + m }
+    let mut mm: i64 = m
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while mm != 0 {
+        let q: i64 = a / mm
+        let na: i64 = mm
+        mm = a - q * mm
+        a = na
+        let nx: i64 = x1
+        x1 = x0 - q * x1
+        x0 = nx
+    }
+    let mut inv: i64 = x0 % m
+    if inv < 0 { inv = inv + m }
+    return inv
+}
+
+function sieve(limit: i64, primes: ptr<i64>) -> i64 {
+    let s: ptr<i8> = calloc(limit + 1, 1)
+    let mut i: i64 = 0
+    while i <= limit { s[i] = 1; i = i + 1 }
+    s[0] = 0
+    s[1] = 0
+    i = 2
+    while i * i <= limit {
+        if s[i] != 0 {
+            let mut j: i64 = i * i
+            while j <= limit { s[j] = 0; j = j + i }
+        }
+        i = i + 1
+    }
+    let mut m: i64 = 0
+    i = 2
+    while i <= limit {
+        if s[i] != 0 { primes[m] = i; m = m + 1 }
+        i = i + 1
+    }
+    free(s)
+    return m
+}
+
+function max_power_exp(p: i64, n: i64) -> i64 {
+    let mut e: i64 = 1
+    let mut pp: i64 = p
+    while pp * p <= n {
+        pp = pp * p
+        e = e + 1
+    }
+    return e
+}
+
+# C(n,k) mod 5^9 via stripping factors of 5
+function binom_mod5(n: i64, k: i64) -> i64 {
+    if k < 0 || k > n { return 0 }
+    if k == 0 || k == n { return 1 }
+    if k > n - k { k = n - k }
+    let mut num: i64 = 1
+    let mut den: i64 = 1
+    let mut val: i64 = 0
+    let mut i: i64 = 1
+    while i <= k {
+        let mut a: i64 = n - k + i
+        let mut b: i64 = i
+        while a % 5 == 0 {
+            a = a / 5
+            val = val + 1
+        }
+        while b % 5 == 0 {
+            b = b / 5
+            val = val - 1
+        }
+        num = ((num as i128) * (a as i128) % (MOD5 as i128)) as i64
+        den = ((den as i128) * (b as i128) % (MOD5 as i128)) as i64
+        i = i + 1
+    }
+    if val >= 9 { return 0 }
+    let inv: i64 = modinv_coprime(den, MOD5)
+    let mut res: i64 = ((num as i128) * (inv as i128) % (MOD5 as i128)) as i64
+    let mut p: i64 = 0
+    while p < val {
+        res = (res * 5) % MOD5
+        p = p + 1
+    }
+    return res
+}
+
+function HL_50000() -> i64 {
+    let N: i64 = 50000
+    let primes: ptr<i64> = calloc(10000, 8)
+    let np: i64 = sieve(N, primes)
+    let mut r: i64 = 0
+    let counts: ptr<i64> = calloc(32, 8)
+    let mut i: i64 = 0
+    while i < np {
+        let ae: i64 = max_power_exp(primes[i], N)
+        if ae == 1 {
+            r = r + 1
+        } else {
+            counts[ae] = counts[ae] + 1
+        }
+        i = i + 1
+    }
+
+    let CAP: i64 = 4000003
+    let mut keys: ptr<i64> = calloc(CAP, 8)
+    let mut vals: ptr<i64> = calloc(CAP, 8)
+    let mut used: ptr<i8> = calloc(CAP, 1)
+    let mut h: i64 = 1 % CAP
+    used[h] = 1
+    keys[h] = 1
+    vals[h] = 1
+
+    let mut ae: i64 = 2
+    while ae < 32 {
+        let c: i64 = counts[ae]
+        if c > 0 {
+            let terms_mul: ptr<i64> = calloc(c + 1, 8)
+            let terms_w: ptr<i64> = calloc(c + 1, 8)
+            let mut t: i64 = 0
+            while t <= c {
+                let mul: i64 = (modpow(ae, t, PHI5) * modpow(ae + 1, c - t, PHI5)) % PHI5
+                let mut w: i64 = binom_mod5(c, t)
+                if (t & 1) != 0 {
+                    w = (MOD5 - w) % MOD5
+                }
+                terms_mul[t] = mul
+                terms_w[t] = w
+                t = t + 1
+            }
+            let nkeys: ptr<i64> = calloc(CAP, 8)
+            let nvals: ptr<i64> = calloc(CAP, 8)
+            let nused: ptr<i8> = calloc(CAP, 1)
+            i = 0
+            while i < CAP {
+                if used[i] != 0 {
+                    let x_prev: i64 = keys[i]
+                    let w_prev: i64 = vals[i]
+                    t = 0
+                    while t <= c {
+                        let new_x: i64 = (x_prev * terms_mul[t]) % PHI5
+                        let add: i64 = ((w_prev as i128) * (terms_w[t] as i128) % (MOD5 as i128)) as i64
+                        let mut hh: i64 = new_x % CAP
+                        if hh < 0 { hh = -hh }
+                        while nused[hh] != 0 && nkeys[hh] != new_x {
+                            hh = hh + 1
+                            if hh >= CAP { hh = 0 }
+                        }
+                        if nused[hh] == 0 {
+                            nused[hh] = 1
+                            nkeys[hh] = new_x
+                            nvals[hh] = add
+                        } else {
+                            nvals[hh] = (nvals[hh] + add) % MOD5
+                        }
+                        t = t + 1
+                    }
+                }
+                i = i + 1
+            }
+            free(keys); free(vals); free(used)
+            free(terms_mul); free(terms_w)
+            keys = nkeys
+            vals = nvals
+            used = nused
+        }
+        ae = ae + 1
+    }
+
+    let coeffs: ptr<i64> = calloc(r + 1, 8)
+    let mut k: i64 = 0
+    while k <= r {
+        let ck: i64 = binom_mod5(r, k)
+        if ((r - k) & 1) == 0 {
+            coeffs[k] = ck
+        } else {
+            coeffs[k] = (MOD5 - ck) % MOD5
+        }
+        k = k + 1
+    }
+
+    let mut total_mod5: i64 = 0
+    i = 0
+    while i < CAP {
+        if used[i] != 0 {
+            let w: i64 = vals[i]
+            if w != 0 {
+                let x_mod: i64 = keys[i]
+                let mut p: i64 = modpow(2, x_mod, MOD5)
+                let mut acc: i64 = 0
+                k = 0
+                while k <= r {
+                    acc = acc + coeffs[k] * p
+                    if (k & 63) == 63 { acc = acc % MOD5 }
+                    p = ((p as i128) * (p as i128) % (MOD5 as i128)) as i64
+                    k = k + 1
+                }
+                total_mod5 = (total_mod5 + ((w as i128) * ((acc % MOD5) as i128) % (MOD5 as i128)) as i64) % MOD5
+            }
+        }
+        i = i + 1
+    }
+
+    let inv: i64 = modinv_coprime(MOD2, MOD5)
+    let tt: i64 = ((total_mod5 as i128) * (inv as i128) % (MOD5 as i128)) as i64
+    let ans: i64 = (MOD2 * tt) % 1000000000
+    free(primes); free(counts); free(keys); free(vals); free(used); free(coeffs)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", HL_50000())
+    return 0
+}

@@ -1,0 +1,160 @@
+# Project Euler 416
+# f(10, 10^12) mod 10^9: frog jumps of length 1..20 with miss tracking.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000
+    let M: i64 = 10
+    let N: i64 = 1000000000000
+    let K: i64 = 2 * M
+    # states (a,c) a+c<=K
+    let SIZE: i64 = (K + 1) * (K + 2) / 2
+    let idx: ptr<i32> = calloc((K + 1) * (K + 1), 4)
+    let sa: ptr<i32> = calloc(SIZE, 4)
+    let sc: ptr<i32> = calloc(SIZE, 4)
+    if idx == null || sa == null || sc == null { return 1 }
+    let mut nstates: i64 = 0
+    let mut a: i64 = 0
+    while a <= K {
+        let mut c: i64 = 0
+        while c <= K - a {
+            idx[a * (K + 1) + c] = nstates as i32
+            sa[nstates] = a as i32
+            sc[nstates] = c as i32
+            nstates = nstates + 1
+            c = c + 1
+        }
+        a = a + 1
+    }
+
+    let comb: ptr<i64> = calloc((K + 1) * (K + 1), 8)
+    let mut n: i64 = 0
+    while n <= K {
+        comb[n * (K + 1) + 0] = 1
+        comb[n * (K + 1) + n] = 1
+        let mut r: i64 = 1
+        while r < n {
+            comb[n * (K + 1) + r] = comb[(n - 1) * (K + 1) + (r - 1)] + comb[(n - 1) * (K + 1) + r]
+            r = r + 1
+        }
+        n = n + 1
+    }
+
+    let A: ptr<i64> = calloc(SIZE * SIZE, 8)
+    let B: ptr<i64> = calloc(SIZE * SIZE, 8)
+    if A == null || B == null { return 1 }
+
+    let mut s: i64 = 0
+    while s < SIZE {
+        let aa: i64 = sa[s] as i64
+        let cc: i64 = sc[s] as i64
+        let bb: i64 = K - aa - cc
+        let mut a0: i64 = 0
+        while a0 <= aa {
+            let mut a1: i64 = 0
+            while a1 <= aa - a0 {
+                let a2: i64 = aa - a0 - a1
+                let coeff: i64 = comb[aa * (K + 1) + a0] * comb[(aa - a0) * (K + 1) + a1] % MOD
+                let a_new: i64 = a0 + bb
+                let c_new: i64 = a2
+                let j: i64 = idx[a_new * (K + 1) + c_new] as i64
+                if a_new == 0 {
+                    B[s * SIZE + j] = (B[s * SIZE + j] + coeff) % MOD
+                } else {
+                    A[s * SIZE + j] = (A[s * SIZE + j] + coeff) % MOD
+                }
+                a1 = a1 + 1
+            }
+            a0 = a0 + 1
+        }
+        s = s + 1
+    }
+
+    let target: i64 = idx[K * (K + 1) + 0] as i64
+    # Matrix expo of pair (A,B): (ra,rb) = (ra,rb)*(ba,bb)
+    let RA: ptr<i64> = calloc(SIZE * SIZE, 8)
+    let RB: ptr<i64> = calloc(SIZE * SIZE, 8)
+    let BA: ptr<i64> = calloc(SIZE * SIZE, 8)
+    let BB: ptr<i64> = calloc(SIZE * SIZE, 8)
+    let T1: ptr<i64> = calloc(SIZE * SIZE, 8)
+    let T2: ptr<i64> = calloc(SIZE * SIZE, 8)
+    let mut i: i64 = 0
+    while i < SIZE {
+        RA[i * SIZE + i] = 1
+        i = i + 1
+    }
+    i = 0
+    while i < SIZE * SIZE {
+        BA[i] = A[i]
+        BB[i] = B[i]
+        i = i + 1
+    }
+
+    # matmul helpers inline
+    let mut exp: i64 = N - 1
+    while exp > 0 {
+        if (exp & 1) == 1 {
+            # (RA,RB) = (RA,RB)*(BA,BB)
+            # ra' = RA*BA; rb' = RB*BA + RA*BB
+            let mut ii: i64 = 0
+            while ii < SIZE {
+                let mut jj: i64 = 0
+                while jj < SIZE {
+                    let mut sa1: i128 = 0
+                    let mut sb1: i128 = 0
+                    let mut kk: i64 = 0
+                    while kk < SIZE {
+                        sa1 = sa1 + (RA[ii * SIZE + kk] as i128) * (BA[kk * SIZE + jj] as i128)
+                        sb1 = sb1 + (RB[ii * SIZE + kk] as i128) * (BA[kk * SIZE + jj] as i128) + (RA[ii * SIZE + kk] as i128) * (BB[kk * SIZE + jj] as i128)
+                        kk = kk + 1
+                    }
+                    T1[ii * SIZE + jj] = (sa1 % (MOD as i128)) as i64
+                    T2[ii * SIZE + jj] = (sb1 % (MOD as i128)) as i64
+                    jj = jj + 1
+                }
+                ii = ii + 1
+            }
+            ii = 0
+            while ii < SIZE * SIZE {
+                RA[ii] = T1[ii]
+                RB[ii] = T2[ii]
+                ii = ii + 1
+            }
+        }
+        # square (BA,BB)
+        let mut ii2: i64 = 0
+        while ii2 < SIZE {
+            let mut jj2: i64 = 0
+            while jj2 < SIZE {
+                let mut sa2: i128 = 0
+                let mut sb2: i128 = 0
+                let mut kk2: i64 = 0
+                while kk2 < SIZE {
+                    sa2 = sa2 + (BA[ii2 * SIZE + kk2] as i128) * (BA[kk2 * SIZE + jj2] as i128)
+                    sb2 = sb2 + (BB[ii2 * SIZE + kk2] as i128) * (BA[kk2 * SIZE + jj2] as i128) + (BA[ii2 * SIZE + kk2] as i128) * (BB[kk2 * SIZE + jj2] as i128)
+                    kk2 = kk2 + 1
+                }
+                T1[ii2 * SIZE + jj2] = (sa2 % (MOD as i128)) as i64
+                T2[ii2 * SIZE + jj2] = (sb2 % (MOD as i128)) as i64
+                jj2 = jj2 + 1
+            }
+            ii2 = ii2 + 1
+        }
+        ii2 = 0
+        while ii2 < SIZE * SIZE {
+            BA[ii2] = T1[ii2]
+            BB[ii2] = T2[ii2]
+            ii2 = ii2 + 1
+        }
+        exp = exp >> 1
+    }
+
+    # start vector e_target * (RA,RB)
+    let mut ans: i64 = (RA[target * SIZE + target] + RB[target * SIZE + target]) % MOD
+    printf("%09lld\n", ans)
+    return 0
+}

@@ -1,0 +1,95 @@
+# Project Euler 127
+# Sum of c for abc-hits with c < 120000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function main() -> i32 {
+    let limit: i64 = 120000
+    let rad: ptr<i64> = calloc(limit, 8)
+    if rad == null { return 1 }
+    let mut i: i64 = 0
+    while i < limit {
+        rad[i] = 1
+        i = i + 1
+    }
+    i = 2
+    while i < limit {
+        if rad[i] == 1 {
+            let mut j: i64 = i
+            while j < limit {
+                rad[j] = rad[j] * i
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    # pairs (rad, n) sorted by rad via counting into buckets is heavy;
+    # collect indices 1..limit-1 and sort by rad (insertion on small groups / shell)
+    let idx: ptr<i64> = calloc(limit, 8)
+    if idx == null { free(rad); return 1 }
+    let mut m: i64 = 0
+    i = 1
+    while i < limit {
+        idx[m] = i
+        m = m + 1
+        i = i + 1
+    }
+
+    # shell sort by rad[idx[k]]
+    let mut gap: i64 = m / 2
+    while gap > 0 {
+        let mut k: i64 = gap
+        while k < m {
+            let v: i64 = idx[k]
+            let mut j: i64 = k
+            while j >= gap && rad[idx[j - gap]] > rad[v] {
+                idx[j] = idx[j - gap]
+                j = j - gap
+            }
+            idx[j] = v
+            k = k + 1
+        }
+        gap = gap / 2
+    }
+
+    let mut total: i64 = 0
+    let mut c: i64 = 3
+    while c < limit {
+        let radc: i64 = rad[c]
+        let cutoff: i64 = c / radc
+        let mut t: i64 = 0
+        while t < m {
+            let a: i64 = idx[t]
+            let rada: i64 = rad[a]
+            if rada >= cutoff { break }
+            if 2 * a < c {
+                let b: i64 = c - a
+                if rada * rad[b] * radc < c && gcd(rada, rad[b]) == 1 {
+                    total = total + c
+                }
+            }
+            t = t + 1
+        }
+        c = c + 1
+    }
+
+    printf("%lld\n", total)
+    free(idx)
+    free(rad)
+    return 0
+}

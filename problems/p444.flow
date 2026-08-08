@@ -1,0 +1,47 @@
+# Project Euler 444
+# S_20(10^14) = C(N+k,k)*(H_{N+k}-H_k) in scientific notation.
+
+extern {
+    function log(x: f64) -> f64
+    function pow(x: f64, y: f64) -> f64
+}
+
+function main() -> i32 {
+    let N: f64 = 100000000000000.0
+    let K: i32 = 20
+    let mut log_binom: f64 = 0.0
+    let mut i: i32 = 1
+    while i <= K {
+        log_binom = log_binom + log(N + (i as f64)) - log(i as f64)
+        i = i + 1
+    }
+    let GAMMA: f64 = 0.5772156649015328606
+    let n1: f64 = N + (K as f64)
+    let inv: f64 = 1.0 / n1
+    let inv2: f64 = inv * inv
+    let inv4: f64 = inv2 * inv2
+    let inv6: f64 = inv4 * inv2
+    let inv8: f64 = inv4 * inv4
+    let inv10: f64 = inv8 * inv2
+    let Hnk: f64 = log(n1) + GAMMA + inv / 2.0 - inv2 / 12.0 + inv4 / 120.0 - inv6 / 252.0 + inv8 / 240.0 - 5.0 * inv10 / 660.0
+    let H20: f64 = 3.597739657143682
+    let diff: f64 = Hnk - H20
+    let log_ans: f64 = log_binom + log(diff)
+    let LN10: f64 = 2.302585092994046
+    let log10_ans: f64 = log_ans / LN10
+    let mut exp10: i64 = log10_ans as i64
+    if (exp10 as f64) > log10_ans {
+        exp10 = exp10 - 1
+    }
+    let mant: f64 = pow(10.0, log10_ans - (exp10 as f64))
+    let scaled: f64 = mant * 1000000000.0 + 0.5
+    let mut iscaled: i64 = scaled as i64
+    if iscaled >= 10000000000 {
+        iscaled = iscaled / 10
+        exp10 = exp10 + 1
+    }
+    let whole: i64 = iscaled / 1000000000
+    let frac: i64 = iscaled % 1000000000
+    printf("%lld.%09llde%lld\n", whole, frac, exp10)
+    return 0
+}

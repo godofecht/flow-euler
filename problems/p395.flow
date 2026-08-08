@@ -1,0 +1,242 @@
+# Project Euler 395
+# Bounding-box area of infinite 3-4-5 Pythagorean tree, 10 decimals.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+# K_U=16/25, K_V=12/25, EPS=1e-12, RADIUS=5*sqrt(13/10) computed in main
+
+function hypot2(x: f64, y: f64) -> f64 {
+    return sqrt(x * x + y * y)
+}
+
+function heap_push(hs: ptr<f64>, hp0: ptr<f64>, hp1: ptr<f64>,
+                   hu0: ptr<f64>, hu1: ptr<f64>, hv0: ptr<f64>, hv1: ptr<f64>,
+                   n: ptr<i64>, s: f64, p0: f64, p1: f64, u0: f64, u1: f64, v0: f64, v1: f64) -> void {
+    let mut i: i64 = n[0]
+    n[0] = i + 1
+    hs[i] = s
+    hp0[i] = p0
+    hp1[i] = p1
+    hu0[i] = u0
+    hu1[i] = u1
+    hv0[i] = v0
+    hv1[i] = v1
+    while i > 0 {
+        let parent: i64 = (i - 1) / 2
+        if hs[parent] >= hs[i] { break }
+        # swap
+        let ts: f64 = hs[parent]
+        hs[parent] = hs[i]
+        hs[i] = ts
+        let t0: f64 = hp0[parent]
+        hp0[parent] = hp0[i]
+        hp0[i] = t0
+        let t1: f64 = hp1[parent]
+        hp1[parent] = hp1[i]
+        hp1[i] = t1
+        let tu0: f64 = hu0[parent]
+        hu0[parent] = hu0[i]
+        hu0[i] = tu0
+        let tu1: f64 = hu1[parent]
+        hu1[parent] = hu1[i]
+        hu1[i] = tu1
+        let tv0: f64 = hv0[parent]
+        hv0[parent] = hv0[i]
+        hv0[i] = tv0
+        let tv1: f64 = hv1[parent]
+        hv1[parent] = hv1[i]
+        hv1[i] = tv1
+        i = parent
+    }
+}
+
+function heap_pop(hs: ptr<f64>, hp0: ptr<f64>, hp1: ptr<f64>,
+                  hu0: ptr<f64>, hu1: ptr<f64>, hv0: ptr<f64>, hv1: ptr<f64>,
+                  n: ptr<i64>,
+                  out_s: ptr<f64>, out_p0: ptr<f64>, out_p1: ptr<f64>,
+                  out_u0: ptr<f64>, out_u1: ptr<f64>, out_v0: ptr<f64>, out_v1: ptr<f64>) -> void {
+    let last: i64 = n[0] - 1
+    out_s[0] = hs[0]
+    out_p0[0] = hp0[0]
+    out_p1[0] = hp1[0]
+    out_u0[0] = hu0[0]
+    out_u1[0] = hu1[0]
+    out_v0[0] = hv0[0]
+    out_v1[0] = hv1[0]
+    hs[0] = hs[last]
+    hp0[0] = hp0[last]
+    hp1[0] = hp1[last]
+    hu0[0] = hu0[last]
+    hu1[0] = hu1[last]
+    hv0[0] = hv0[last]
+    hv1[0] = hv1[last]
+    n[0] = last
+    let mut i: i64 = 0
+    while 1 == 1 {
+        let l: i64 = 2 * i + 1
+        let r: i64 = 2 * i + 2
+        if l >= n[0] { break }
+        let mut best: i64 = l
+        if r < n[0] && hs[r] > hs[l] { best = r }
+        if hs[i] >= hs[best] { break }
+        let ts: f64 = hs[i]
+        hs[i] = hs[best]
+        hs[best] = ts
+        let t0: f64 = hp0[i]
+        hp0[i] = hp0[best]
+        hp0[best] = t0
+        let t1: f64 = hp1[i]
+        hp1[i] = hp1[best]
+        hp1[best] = t1
+        let tu0: f64 = hu0[i]
+        hu0[i] = hu0[best]
+        hu0[best] = tu0
+        let tu1: f64 = hu1[i]
+        hu1[i] = hu1[best]
+        hu1[best] = tu1
+        let tv0: f64 = hv0[i]
+        hv0[i] = hv0[best]
+        hv0[best] = tv0
+        let tv1: f64 = hv1[i]
+        hv1[i] = hv1[best]
+        hv1[best] = tv1
+        i = best
+    }
+}
+
+function make_child(P0: f64, P1: f64, Q0: f64, Q1: f64, R0: f64, R1: f64,
+                    out_p0: ptr<f64>, out_p1: ptr<f64>,
+                    out_u0: ptr<f64>, out_u1: ptr<f64>,
+                    out_v0: ptr<f64>, out_v1: ptr<f64>, out_s: ptr<f64>) -> void {
+    let mut p0: f64 = P0
+    let mut p1: f64 = P1
+    let mut q0: f64 = Q0
+    let mut q1: f64 = Q1
+    let mut u0: f64 = q0 - p0
+    let mut u1: f64 = q1 - p1
+    let cross: f64 = u0 * (R1 - p1) - u1 * (R0 - p0)
+    if cross > 0.0 {
+        let t0: f64 = p0
+        let t1: f64 = p1
+        p0 = q0
+        p1 = q1
+        q0 = t0
+        q1 = t1
+        u0 = 0.0 - u0
+        u1 = 0.0 - u1
+    }
+    let v0: f64 = 0.0 - u1
+    let v1: f64 = u0
+    out_p0[0] = p0
+    out_p1[0] = p1
+    out_u0[0] = u0
+    out_u1[0] = u1
+    out_v0[0] = v0
+    out_v1[0] = v1
+    out_s[0] = hypot2(u0, u1)
+}
+
+function push_children(p0: f64, p1: f64, u0: f64, u1: f64, v0: f64, v1: f64,
+                       hs: ptr<f64>, hp0: ptr<f64>, hp1: ptr<f64>,
+                       hu0: ptr<f64>, hu1: ptr<f64>, hv0: ptr<f64>, hv1: ptr<f64>, n: ptr<i64>) -> void {
+    let A0: f64 = p0 + v0
+    let A1: f64 = p1 + v1
+    let B0: f64 = p0 + u0 + v0
+    let B1: f64 = p1 + u1 + v1
+    let C0: f64 = A0 + (16.0 / 25.0) * u0 + (12.0 / 25.0) * v0
+    let C1: f64 = A1 + (16.0 / 25.0) * u1 + (12.0 / 25.0) * v1
+
+    let op0: array<f64, 1> = [0.0]
+    let op1: array<f64, 1> = [0.0]
+    let ou0: array<f64, 1> = [0.0]
+    let ou1: array<f64, 1> = [0.0]
+    let ov0: array<f64, 1> = [0.0]
+    let ov1: array<f64, 1> = [0.0]
+    let os: array<f64, 1> = [0.0]
+
+    make_child(A0, A1, C0, C1, B0, B1, op0, op1, ou0, ou1, ov0, ov1, os)
+    heap_push(hs, hp0, hp1, hu0, hu1, hv0, hv1, n, os[0], op0[0], op1[0], ou0[0], ou1[0], ov0[0], ov1[0])
+    make_child(B0, B1, C0, C1, A0, A1, op0, op1, ou0, ou1, ov0, ov1, os)
+    heap_push(hs, hp0, hp1, hu0, hu1, hv0, hv1, n, os[0], op0[0], op1[0], ou0[0], ou1[0], ov0[0], ov1[0])
+}
+
+function update_bounds(p0: f64, p1: f64, u0: f64, u1: f64, v0: f64, v1: f64,
+                       xmin: ptr<f64>, xmax: ptr<f64>, ymin: ptr<f64>, ymax: ptr<f64>) -> void {
+    let xs: array<f64, 4> = [p0, p0 + u0, p0 + u0 + v0, p0 + v0]
+    let ys: array<f64, 4> = [p1, p1 + u1, p1 + u1 + v1, p1 + v1]
+    let mut i: i64 = 0
+    while i < 4 {
+        if xs[i] < xmin[0] { xmin[0] = xs[i] }
+        if xs[i] > xmax[0] { xmax[0] = xs[i] }
+        if ys[i] < ymin[0] { ymin[0] = ys[i] }
+        if ys[i] > ymax[0] { ymax[0] = ys[i] }
+        i = i + 1
+    }
+}
+
+function main() -> i32 {
+    let EPS: f64 = 0.000000000001
+    let RADIUS: f64 = 5.0 * sqrt(13.0 / 10.0)
+    let CAP: i64 = 100000
+    let hs: ptr<f64> = calloc(CAP, 8)
+    let hp0: ptr<f64> = calloc(CAP, 8)
+    let hp1: ptr<f64> = calloc(CAP, 8)
+    let hu0: ptr<f64> = calloc(CAP, 8)
+    let hu1: ptr<f64> = calloc(CAP, 8)
+    let hv0: ptr<f64> = calloc(CAP, 8)
+    let hv1: ptr<f64> = calloc(CAP, 8)
+    let nbox: ptr<i64> = calloc(1, 8)
+    if hs == null || hp0 == null || hp1 == null || hu0 == null || hu1 == null { return 1 }
+    if hv0 == null || hv1 == null || nbox == null { return 1 }
+
+    let xmin: array<f64, 1> = [0.0]
+    let xmax: array<f64, 1> = [1.0]
+    let ymin: array<f64, 1> = [0.0]
+    let ymax: array<f64, 1> = [1.0]
+
+    push_children(0.0, 0.0, 1.0, 0.0, 0.0, 1.0, hs, hp0, hp1, hu0, hu1, hv0, hv1, nbox)
+
+    let os: array<f64, 1> = [0.0]
+    let op0: array<f64, 1> = [0.0]
+    let op1: array<f64, 1> = [0.0]
+    let ou0: array<f64, 1> = [0.0]
+    let ou1: array<f64, 1> = [0.0]
+    let ov0: array<f64, 1> = [0.0]
+    let ov1: array<f64, 1> = [0.0]
+
+    while nbox[0] > 0 {
+        heap_pop(hs, hp0, hp1, hu0, hu1, hv0, hv1, nbox, os, op0, op1, ou0, ou1, ov0, ov1)
+        let s: f64 = os[0]
+        let p0: f64 = op0[0]
+        let p1: f64 = op1[0]
+        let u0: f64 = ou0[0]
+        let u1: f64 = ou1[0]
+        let v0: f64 = ov0[0]
+        let v1: f64 = ov1[0]
+        let cx: f64 = p0 + 0.5 * (u0 + v0)
+        let cy: f64 = p1 + 0.5 * (u1 + v1)
+        let rad: f64 = s * RADIUS
+        if cx + rad <= xmax[0] + EPS && cx - rad >= xmin[0] - EPS && cy + rad <= ymax[0] + EPS && cy - rad >= ymin[0] - EPS {
+            continue
+        }
+        update_bounds(p0, p1, u0, u1, v0, v1, xmin, xmax, ymin, ymax)
+        push_children(p0, p1, u0, u1, v0, v1, hs, hp0, hp1, hu0, hu1, hv0, hv1, nbox)
+    }
+
+    let area: f64 = (xmax[0] - xmin[0]) * (ymax[0] - ymin[0])
+    printf("%.10f\n", area)
+
+    free(nbox)
+    free(hv1)
+    free(hv0)
+    free(hu1)
+    free(hu0)
+    free(hp1)
+    free(hp0)
+    free(hs)
+    return 0
+}

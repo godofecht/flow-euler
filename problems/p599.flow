@@ -1,0 +1,95 @@
+# Project Euler 599
+# Distinct Colourings of a Rubik's Cube (2x2x2)
+# Burnside on corner wreath product: |G|=8!*3^7, n=10 colours.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function ipow128(base: i64, exp0: i64) -> i128 {
+    let mut r: i128 = 1
+    let mut e: i64 = exp0
+    let mut b: i128 = base as i128
+    while e > 0 {
+        if (e & 1) != 0 { r = r * b }
+        b = b * b
+        e = e >> 1
+    }
+    return r
+}
+
+function comb(n: i64, k0: i64) -> i64 {
+    if k0 < 0 || k0 > n { return 0 }
+    let mut k: i64 = k0
+    if k > n - k { k = n - k }
+    let mut r: i64 = 1
+    let mut i: i64 = 1
+    while i <= k {
+        r = r * (n - k + i) / i
+        i = i + 1
+    }
+    return r
+}
+
+function distinct_colourings(n: i64) -> i64 {
+    let dp: ptr<i64> = calloc(81, 8)
+    if dp == null { return -1 }
+    dp[0] = 1
+    let mut i: i64 = 1
+    while i <= 8 {
+        let mut k: i64 = 1
+        while k <= i {
+            dp[i * 9 + k] = dp[(i - 1) * 9 + (k - 1)] + (i - 1) * dp[(i - 1) * 9 + k]
+            k = k + 1
+        }
+        i = i + 1
+    }
+
+    let B: ptr<i64> = calloc(9, 8)
+    let dpr: ptr<i64> = calloc(27, 8)
+    if B == null || dpr == null { free(dp); return -1 }
+    dpr[0] = 1
+    let mut r: i64 = 0
+    while r < 8 {
+        let mut s: i64 = 0
+        while s < 3 {
+            dpr[(r + 1) * 3 + ((s + 1) % 3)] = dpr[(r + 1) * 3 + ((s + 1) % 3)] + dpr[r * 3 + s]
+            dpr[(r + 1) * 3 + ((s + 2) % 3)] = dpr[(r + 1) * 3 + ((s + 2) % 3)] + dpr[r * 3 + s]
+            s = s + 1
+        }
+        r = r + 1
+    }
+    r = 0
+    while r <= 8 {
+        B[r] = dpr[r * 3]
+        r = r + 1
+    }
+
+    let mut numerator: i128 = 0
+    let mut m: i64 = 1
+    while m <= 8 {
+        let factor: i128 = ipow128(3, 8 - m)
+        let mut term_m: i128 = 0
+        let mut z: i64 = 0
+        while z <= m {
+            let rr: i64 = m - z
+            let count_vectors: i128 = (comb(m, z) * B[rr]) as i128
+            let cycles: i64 = m + 2 * z
+            term_m = term_m + count_vectors * ipow128(n, cycles)
+            z = z + 1
+        }
+        numerator = numerator + (dp[8 * 9 + m] as i128) * factor * term_m
+        m = m + 1
+    }
+    free(dpr)
+    free(B)
+    free(dp)
+    let denom: i128 = (40320 as i128) * ipow128(3, 7)
+    return (numerator / denom) as i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", distinct_colourings(10))
+    return 0
+}

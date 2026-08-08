@@ -1,0 +1,282 @@
+# Project Euler 594
+# Rhombus Tilings — LGV determinantal count for octagon O_{4,2}.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function binom(n0: i64, k0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut k: i64 = k0
+    if n < 0 || k < 0 || k > n { return 0 }
+    if k == 0 || k == n { return 1 }
+    if k > n - k { k = n - k }
+    let mut res: i64 = 1
+    let mut i: i64 = 1
+    while i <= k {
+        res = res * (n - k + i) / i
+        i = i + 1
+    }
+    return res
+}
+
+function det_bareiss(a: ptr<i64>, n: i64) -> i64 {
+    # a is n*n row-major, mutated in place
+    if n == 0 { return 1 }
+    if n == 1 { return a[0] }
+    let mut sign: i64 = 1
+    let mut prev: i64 = 1
+    let mut k: i64 = 0
+    while k < n - 1 {
+        if a[k * n + k] == 0 {
+            let mut swap: i64 = -1
+            let mut i: i64 = k + 1
+            while i < n {
+                if a[i * n + k] != 0 { swap = i; break }
+                i = i + 1
+            }
+            if swap < 0 { return 0 }
+            let mut j: i64 = 0
+            while j < n {
+                let t: i64 = a[k * n + j]
+                a[k * n + j] = a[swap * n + j]
+                a[swap * n + j] = t
+                j = j + 1
+            }
+            sign = 0 - sign
+        }
+        let pivot: i64 = a[k * n + k]
+        let mut i: i64 = k + 1
+        while i < n {
+            let mut j: i64 = k + 1
+            while j < n {
+                a[i * n + j] = (a[i * n + j] * pivot - a[i * n + k] * a[k * n + j]) / prev
+                j = j + 1
+            }
+            i = i + 1
+        }
+        prev = pivot
+        i = k + 1
+        while i < n {
+            a[i * n + k] = 0
+            i = i + 1
+        }
+        k = k + 1
+    }
+    return sign * a[(n - 1) * n + (n - 1)]
+}
+
+# Monotone matrices for (rows=b=2, cols=d=2, max=a=4) and (max=c=4): enumerate recursively
+let mut MATS: ptr<i64> = null
+let mut NMATS: i64 = 0
+let mut CUR: ptr<i64> = null
+let mut ROWS: i64 = 0
+let mut COLS: i64 = 0
+let mut MAXV: i64 = 0
+
+function mat_rec(pos: i64) -> void {
+    if pos == ROWS * COLS {
+        let base: i64 = NMATS * ROWS * COLS
+        let mut t: i64 = 0
+        while t < ROWS * COLS {
+            MATS[base + t] = CUR[t]
+            t = t + 1
+        }
+        NMATS = NMATS + 1
+        return
+    }
+    let i: i64 = pos / COLS
+    let j: i64 = pos % COLS
+    let mut lo: i64 = 0
+    if i > 0 {
+        let v: i64 = CUR[(i - 1) * COLS + j]
+        if v > lo { lo = v }
+    }
+    if j > 0 {
+        let v: i64 = CUR[i * COLS + (j - 1)]
+        if v > lo { lo = v }
+    }
+    let mut v: i64 = lo
+    while v <= MAXV {
+        CUR[pos] = v
+        mat_rec(pos + 1)
+        v = v + 1
+    }
+}
+
+function count_tilings(a: i64, b: i64, c: i64, d: i64) -> i64 {
+    # Cap for matrix storage: C(a+b*d, b*d) rough; for a=4,b=2,d=2 plenty with 20000
+    let cap: i64 = 50000
+    MATS = calloc(cap * b * d, 8)
+    CUR = calloc(b * d, 8)
+    if MATS == null || CUR == null { return -1 }
+    ROWS = b
+    COLS = d
+    MAXV = a
+    NMATS = 0
+    mat_rec(0)
+    let NX: i64 = NMATS
+    let Xstore: ptr<i64> = MATS
+    # Generate Y by regenerating with max=c then reverse rows into Ystore
+    MATS = calloc(cap * b * d, 8)
+    MAXV = c
+    NMATS = 0
+    mat_rec(0)
+    let NY: i64 = NMATS
+    let Yraw: ptr<i64> = MATS
+    let Ystore: ptr<i64> = calloc(NY * b * d, 8)
+    if Ystore == null { return -1 }
+    let mut yi: i64 = 0
+    while yi < NY {
+        let mut i: i64 = 0
+        while i < b {
+            let mut j: i64 = 0
+            while j < d {
+                Ystore[yi * b * d + i * d + j] = Yraw[yi * b * d + (b - 1 - i) * d + j]
+                j = j + 1
+            }
+            i = i + 1
+        }
+        yi = yi + 1
+    }
+
+    let x_full: ptr<i64> = calloc((b + 2) * (d + 2), 8)
+    let y_full: ptr<i64> = calloc((b + 2) * (d + 2), 8)
+    let Mbuf: ptr<i64> = calloc(b * b, 8)
+    let Pbuf: ptr<i64> = calloc(d * d, 8)
+    if x_full == null || y_full == null || Mbuf == null || Pbuf == null { return -1 }
+
+    let mut total: i64 = 0
+    let mut xi: i64 = 0
+    while xi < NX {
+        # fill x_full
+        let mut k: i64 = 0
+        while k < b + 2 {
+            let mut l: i64 = 0
+            while l < d + 2 {
+                x_full[k * (d + 2) + l] = 0
+                l = l + 1
+            }
+            k = k + 1
+        }
+        k = 1
+        while k <= b {
+            let mut l: i64 = 1
+            while l <= d {
+                x_full[k * (d + 2) + l] = Xstore[xi * b * d + (k - 1) * d + (l - 1)]
+                l = l + 1
+            }
+            x_full[k * (d + 2) + 0] = 0
+            x_full[k * (d + 2) + (d + 1)] = a
+            k = k + 1
+        }
+        let mut l: i64 = 0
+        while l < d + 2 {
+            x_full[0 * (d + 2) + l] = 0
+            x_full[(b + 1) * (d + 2) + l] = a
+            l = l + 1
+        }
+
+        yi = 0
+        while yi < NY {
+            k = 0
+            while k < b + 2 {
+                l = 0
+                while l < d + 2 {
+                    y_full[k * (d + 2) + l] = 0
+                    l = l + 1
+                }
+                k = k + 1
+            }
+            k = 1
+            while k <= b {
+                l = 1
+                while l <= d {
+                    y_full[k * (d + 2) + l] = Ystore[yi * b * d + (k - 1) * d + (l - 1)]
+                    l = l + 1
+                }
+                y_full[k * (d + 2) + 0] = 0
+                y_full[k * (d + 2) + (d + 1)] = c
+                k = k + 1
+            }
+            l = 0
+            while l < d + 2 {
+                y_full[0 * (d + 2) + l] = c
+                y_full[(b + 1) * (d + 2) + l] = 0
+                l = l + 1
+            }
+
+            let mut prod: i64 = 1
+            let mut u: i64 = 1
+            while u <= d + 1 {
+                let mut i: i64 = 1
+                while i <= b {
+                    let mut j: i64 = 1
+                    while j <= b {
+                        let A: i64 = (x_full[j * (d + 2) + u] - x_full[i * (d + 2) + (u - 1)]) + (y_full[j * (d + 2) + u] - y_full[i * (d + 2) + (u - 1)])
+                        let B: i64 = (x_full[j * (d + 2) + u] - x_full[i * (d + 2) + (u - 1)]) + (j - i)
+                        Mbuf[(i - 1) * b + (j - 1)] = binom(A, B)
+                        j = j + 1
+                    }
+                    i = i + 1
+                }
+                # copy Mbuf for det (det mutates)
+                let Mcopy: ptr<i64> = calloc(b * b, 8)
+                let mut t: i64 = 0
+                while t < b * b {
+                    Mcopy[t] = Mbuf[t]
+                    t = t + 1
+                }
+                prod = prod * det_bareiss(Mcopy, b)
+                free(Mcopy)
+                if prod == 0 { break }
+                u = u + 1
+            }
+            if prod != 0 {
+                let mut v: i64 = 1
+                while v <= b + 1 {
+                    let mut i: i64 = 1
+                    while i <= d {
+                        let mut j: i64 = 1
+                        while j <= d {
+                            let A: i64 = (x_full[v * (d + 2) + j] - x_full[(v - 1) * (d + 2) + i]) + (y_full[(v - 1) * (d + 2) + i] - y_full[v * (d + 2) + j])
+                            let B: i64 = (x_full[v * (d + 2) + j] - x_full[(v - 1) * (d + 2) + i]) + (j - i)
+                            Pbuf[(i - 1) * d + (j - 1)] = binom(A, B)
+                            j = j + 1
+                        }
+                        i = i + 1
+                    }
+                    let Pcopy: ptr<i64> = calloc(d * d, 8)
+                    let mut t: i64 = 0
+                    while t < d * d {
+                        Pcopy[t] = Pbuf[t]
+                        t = t + 1
+                    }
+                    prod = prod * det_bareiss(Pcopy, d)
+                    free(Pcopy)
+                    if prod == 0 { break }
+                    v = v + 1
+                }
+                total = total + prod
+            }
+            yi = yi + 1
+        }
+        xi = xi + 1
+    }
+
+    free(Xstore)
+    free(Yraw)
+    free(Ystore)
+    free(CUR)
+    free(x_full)
+    free(y_full)
+    free(Mbuf)
+    free(Pbuf)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", count_tilings(4, 2, 4, 2))
+    return 0
+}

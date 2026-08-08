@@ -1,0 +1,22 @@
+# Project Euler 015
+# Lattice paths through a 20×20 grid (only right/down).
+# Central binomial C(40, 20) via multiplicative formula.
+
+function binomial(n: i64, k0: i64) -> i64 {
+    let mut k: i64 = k0
+    if k > n - k {
+        k = n - k
+    }
+    let mut result: i64 = 1
+    let mut i: i64 = 1
+    while i <= k {
+        result = result * (n - k + i) / i
+        i = i + 1
+    }
+    return result
+}
+
+function main() -> i32 {
+    printf("%lld\n", binomial(40, 20))
+    return 0
+}

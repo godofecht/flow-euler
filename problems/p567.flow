@@ -1,0 +1,79 @@
+# Project Euler 567
+# Reciprocal Games I
+# S(m) = 4*H_m - 2*sum 2^{-i}/i - (J_A(m)+J_B(m)), m=123456789.
+
+extern {
+    function log(x: f64) -> f64
+    function ldexp(x: f64, exp: i32) -> f64
+}
+
+function harmonic(n: i64) -> f64 {
+    if n < 1000000 {
+        let mut s: f64 = 0.0
+        let mut k: i64 = 1
+        while k <= n {
+            s = s + 1.0 / (k as f64)
+            k = k + 1
+        }
+        return s
+    }
+    let x: f64 = n as f64
+    let inv: f64 = 1.0 / x
+    let inv2: f64 = inv * inv
+    let gamma: f64 = 0.5772156649015329
+    return log(x) + gamma + 0.5 * inv - inv2 / 12.0 + (inv2 * inv2) / 120.0
+        - (inv2 * inv2 * inv2) / 252.0 + (inv2 * inv2 * inv2 * inv2) / 240.0
+}
+
+function pow2_over_i_sum(m: i64) -> f64 {
+    if m <= 60 {
+        let mut s: f64 = 0.0
+        let mut i: i64 = 1
+        while i <= m {
+            s = s + ldexp(1.0, (0 - i) as i32) / (i as f64)
+            i = i + 1
+        }
+        return s
+    }
+    return log(2.0)
+}
+
+function j_a(n: i64) -> f64 {
+    let h: f64 = harmonic(n)
+    let mut s: f64 = 0.0
+    let mut j: i64 = 0
+    while j <= 80 {
+        s = s + ldexp(1.0, (0 - j) as i32) / ((n - j) as f64)
+        j = j + 1
+    }
+    # H_n / 2^n underflows for huge n
+    if n < 1000 {
+        s = s - ldexp(h, (0 - n) as i32)
+    }
+    return s
+}
+
+function j_b(n: i64) -> f64 {
+    let N: i64 = n - 1
+    let K: i64 = 25
+    let mut inv: f64 = 1.0
+    let mut edge: f64 = 1.0
+    let mut j: i64 = 1
+    while j <= K {
+        inv = inv * (j as f64) / ((N - j + 1) as f64)
+        edge = edge + inv
+        j = j + 1
+    }
+    return (2.0 * edge) / (n as f64)
+}
+
+function S(m: i64) -> f64 {
+    let h: f64 = harmonic(m)
+    let p: f64 = pow2_over_i_sum(m)
+    return 4.0 * h - 2.0 * p - (j_a(m) + j_b(m))
+}
+
+function main() -> i32 {
+    printf("%.8f\n", S(123456789))
+    return 0
+}

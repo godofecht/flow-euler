@@ -1,0 +1,18 @@
+# Project Euler 120
+# Sum of r_max for 3 ≤ a ≤ 1000, where r_max is max remainder of
+# (a-1)^n + (a+1)^n mod a^2.
+
+# For odd n: 2*a*n mod a^2 → max when n = a-1 if a odd? 
+# r_max = a^2 - a if a even? Actually r_max = 2*a*((a-1)/2) = a*(a-1) if a odd? 
+# Known: r_max = a * a - 2*a if? Formula: r_max = 2*a*floor((a-1)/2)
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut a: i64 = 3
+    while a <= 1000 {
+        total = total + 2 * a * ((a - 1) / 2)
+        a = a + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

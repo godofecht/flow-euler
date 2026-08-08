@@ -1,0 +1,50 @@
+# Project Euler 122
+# Sum of m(k) for 1≤k≤200 — minimal multiplication-chain length to reach k.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function dfs(chain: ptr<i32>, len: i32, depth: i32, limit: i32, best: ptr<i32>) -> void {
+    let cur: i32 = chain[len - 1]
+    if depth > best[cur] {
+        return
+    }
+    best[cur] = depth
+    let mut i: i32 = len - 1
+    while i >= 0 {
+        let nxt: i32 = cur + chain[i]
+        if nxt <= limit {
+            if depth + 1 <= best[nxt] {
+                chain[len] = nxt
+                dfs(chain, len + 1, depth + 1, limit, best)
+            }
+        }
+        i = i - 1
+    }
+}
+
+function main() -> i32 {
+    let limit: i32 = 200
+    let best: ptr<i32> = calloc((limit + 1) as i64, 4)
+    let chain: ptr<i32> = calloc(64, 4)
+    if best == null || chain == null { return 1 }
+    let mut i: i32 = 0
+    while i <= limit {
+        best[i] = 999
+        i = i + 1
+    }
+    chain[0] = 1
+    dfs(chain, 1, 0, limit, best)
+    let mut total: i64 = 0
+    i = 1
+    while i <= limit {
+        total = total + (best[i] as i64)
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    free(chain)
+    free(best)
+    return 0
+}

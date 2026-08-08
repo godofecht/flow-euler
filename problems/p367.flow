@@ -1,0 +1,277 @@
+# Project Euler 367
+# Expected 3-shuffle bozo-sort steps for n=11, rounded nearest.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function floor(x: f64) -> f64
+}
+
+function factorial_f(n: i64) -> f64 {
+    let mut r: f64 = 1.0
+    let mut i: i64 = 2
+    while i <= n {
+        r = r * (i as f64)
+        i = i + 1
+    }
+    return r
+}
+
+function dim_part(parts: ptr<i32>, plen: i64) -> f64 {
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < plen {
+        n = n + (parts[i] as i64)
+        i = i + 1
+    }
+    if n == 0 { return 1.0 }
+    let mut maxc: i64 = 0
+    i = 0
+    while i < plen {
+        if (parts[i] as i64) > maxc { maxc = parts[i] as i64 }
+        i = i + 1
+    }
+    let col_lens: ptr<i32> = calloc(maxc, 4)
+    let mut c: i64 = 0
+    while c < maxc {
+        let mut cnt: i64 = 0
+        i = 0
+        while i < plen {
+            if (parts[i] as i64) > c { cnt = cnt + 1 }
+            i = i + 1
+        }
+        col_lens[c] = cnt as i32
+        c = c + 1
+    }
+    let mut prod: f64 = 1.0
+    i = 0
+    while i < plen {
+        let ln: i64 = parts[i] as i64
+        c = 0
+        while c < ln {
+            let hook: f64 = ((ln - c) + (col_lens[c] as i64) - i - 1) as f64
+            prod = prod * hook
+            c = c + 1
+        }
+        i = i + 1
+    }
+    free(col_lens)
+    return factorial_f(n) / prod
+}
+
+function cell_in(cells: ptr<i32>, ncells: i64, r: i32, c: i32) -> bool {
+    let mut i: i64 = 0
+    while i < ncells {
+        if cells[2 * i] == r && cells[2 * i + 1] == c { return true }
+        i = i + 1
+    }
+    return false
+}
+
+function is_connected(cells: ptr<i32>, ncells: i64) -> bool {
+    if ncells == 0 { return false }
+    let seen: ptr<i8> = calloc(ncells, 1)
+    let stack: ptr<i64> = calloc(ncells, 8)
+    stack[0] = 0
+    seen[0] = 1
+    let mut top: i64 = 1
+    let mut count: i64 = 1
+    while top > 0 {
+        top = top - 1
+        let idx: i64 = stack[top]
+        let r: i32 = cells[2 * idx]
+        let c: i32 = cells[2 * idx + 1]
+        let mut d: i64 = 0
+        while d < 4 {
+            let mut nr: i32 = r
+            let mut nc: i32 = c
+            if d == 0 { nr = r + 1 }
+            elif d == 1 { nr = r - 1 }
+            elif d == 2 { nc = c + 1 }
+            else { nc = c - 1 }
+            let mut j: i64 = 0
+            while j < ncells {
+                if cells[2 * j] == nr && cells[2 * j + 1] == nc {
+                    if seen[j] == 0 {
+                        seen[j] = 1
+                        stack[top] = j
+                        top = top + 1
+                        count = count + 1
+                    }
+                    break
+                }
+                j = j + 1
+            }
+            d = d + 1
+        }
+    }
+    free(stack)
+    free(seen)
+    return count == ncells
+}
+
+function has_2x2(cells: ptr<i32>, ncells: i64) -> bool {
+    let mut i: i64 = 0
+    while i < ncells {
+        let r: i32 = cells[2 * i]
+        let c: i32 = cells[2 * i + 1]
+        if cell_in(cells, ncells, r + 1, c) && cell_in(cells, ncells, r, c + 1) && cell_in(cells, ncells, r + 1, c + 1) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+function remaining_partition(parts: ptr<i32>, plen: i64, cells: ptr<i32>, ncells: i64,
+                             out: ptr<i32>, out_len: ptr<i64>) -> bool {
+    let mut new_len: i64 = 0
+    let mut r: i64 = 0
+    while r < plen {
+        let ln: i64 = parts[r] as i64
+        let mut max_rem: i64 = 0 - 1
+        let mut c: i64 = 0
+        while c < ln {
+            if !cell_in(cells, ncells, r as i32, c as i32) {
+                if c > max_rem { max_rem = c }
+            }
+            c = c + 1
+        }
+        let mut nrow: i64 = 0
+        if max_rem >= 0 {
+            nrow = max_rem + 1
+            c = 0
+            while c < nrow {
+                if cell_in(cells, ncells, r as i32, c as i32) {
+                    return false
+                }
+                c = c + 1
+            }
+        }
+        out[new_len] = nrow as i32
+        new_len = new_len + 1
+        r = r + 1
+    }
+    while new_len > 0 && out[new_len - 1] == 0 {
+        new_len = new_len - 1
+    }
+    let mut i: i64 = 0
+    while i + 1 < new_len {
+        if out[i] < out[i + 1] { return false }
+        i = i + 1
+    }
+    out_len[0] = new_len
+    return true
+}
+
+function character_cycle_k(parts: ptr<i32>, plen: i64, k: i64) -> f64 {
+    let cells_all: ptr<i32> = calloc(2 * 64, 4)
+    let mut nall: i64 = 0
+    let mut r: i64 = 0
+    while r < plen {
+        let mut c: i64 = 0
+        while c < (parts[r] as i64) {
+            cells_all[2 * nall] = r as i32
+            cells_all[2 * nall + 1] = c as i32
+            nall = nall + 1
+            c = c + 1
+        }
+        r = r + 1
+    }
+    if k > nall {
+        free(cells_all)
+        return 0.0
+    }
+    let mut total: f64 = 0.0
+    let limit: i64 = 1 << nall
+    let mut mask: i64 = 0
+    while mask < limit {
+        let mut bits: i64 = 0
+        let mut t: i64 = mask
+        while t > 0 {
+            bits = bits + (t & 1)
+            t = t >> 1
+        }
+        if bits == k {
+            let strip: ptr<i32> = calloc(2 * k, 4)
+            let mut si: i64 = 0
+            let mut i: i64 = 0
+            while i < nall {
+                if ((mask >> i) & 1) == 1 {
+                    strip[2 * si] = cells_all[2 * i]
+                    strip[2 * si + 1] = cells_all[2 * i + 1]
+                    si = si + 1
+                }
+                i = i + 1
+            }
+            let out: ptr<i32> = calloc(16, 4)
+            let out_len: ptr<i64> = calloc(1, 8)
+            if remaining_partition(parts, plen, strip, k, out, out_len) {
+                if is_connected(strip, k) {
+                    if !has_2x2(strip, k) {
+                        let mut rows_used: i64 = 0
+                        let seen_r: ptr<i8> = calloc(16, 1)
+                        i = 0
+                        while i < k {
+                            let rr: i32 = strip[2 * i]
+                            if seen_r[rr] == 0 {
+                                seen_r[rr] = 1
+                                rows_used = rows_used + 1
+                            }
+                            i = i + 1
+                        }
+                        free(seen_r)
+                        let height: i64 = rows_used - 1
+                        let dnu: f64 = dim_part(out, out_len[0])
+                        let mut sign: f64 = 1.0
+                        if (height % 2) == 1 { sign = 0.0 - 1.0 }
+                        total = total + sign * dnu
+                    }
+                }
+            }
+            free(out_len)
+            free(out)
+            free(strip)
+        }
+        mask = mask + 1
+    }
+    free(cells_all)
+    return total
+}
+
+function process_partition(parts: ptr<i32>, plen: i64, n: i64) -> f64 {
+    if plen == 1 && (parts[0] as i64) == n { return 0.0 }
+    let d: f64 = dim_part(parts, plen)
+    let chi2: f64 = character_cycle_k(parts, plen, 2)
+    let chi3: f64 = character_cycle_k(parts, plen, 3)
+    let r2: f64 = chi2 / d
+    let r3: f64 = chi3 / d
+    let lam: f64 = 1.0 / 6.0 + 0.5 * r2 + (1.0 / 3.0) * r3
+    return (d * d) / (1.0 - lam)
+}
+
+function gen_and_sum(parts: ptr<i32>, plen: i64, rem: i64, maxp: i64, n: i64) -> f64 {
+    if rem == 0 {
+        return process_partition(parts, plen, n)
+    }
+    let mut total: f64 = 0.0
+    let mut first: i64 = maxp
+    if first > rem { first = rem }
+    while first >= 1 {
+        parts[plen] = first as i32
+        total = total + gen_and_sum(parts, plen + 1, rem - first, first, n)
+        first = first - 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    let parts: ptr<i32> = calloc(11, 4)
+    let x: f64 = gen_and_sum(parts, 0, 11, 11, 11)
+    free(parts)
+    let mut ans: i64 = floor(x) as i64
+    let frac: f64 = x - (ans as f64)
+    if frac >= 0.5 { ans = ans + 1 }
+    printf("%lld\n", ans)
+    return 0
+}

@@ -1,0 +1,105 @@
+# Project Euler 350
+# f(10^6, 10^12, 10^18) mod 101^4.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let G: i64 = 1000000
+    let L: i64 = 1000000000000
+    let N: i64 = 1000000000000000000
+    let mod: i64 = 104060401
+    let n: i64 = L / G
+    let mut max_e: i64 = 0
+    let mut t: i64 = n
+    while t > 1 {
+        t = t / 2
+        max_e = max_e + 1
+    }
+    let pow_cache: ptr<i64> = calloc(max_e + 3, 8)
+    let a: ptr<i64> = calloc(max_e + 1, 8)
+    let mut e: i64 = 0
+    while e <= max_e + 1 {
+        pow_cache[e] = modpow(e, N, mod)
+        e = e + 1
+    }
+    e = 1
+    while e <= max_e {
+        a[e] = (pow_cache[e + 1] - 2 * pow_cache[e] + pow_cache[e - 1] + 2 * mod) % mod
+        e = e + 1
+    }
+    let spf: ptr<i32> = calloc(n + 1, 4)
+    let primes: ptr<i32> = calloc(n / 5 + 10, 4)
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= n {
+        if spf[i] == 0 {
+            spf[i] = i as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            if p > (spf[i] as i64) || i * p > n { break }
+            spf[i * p] = p as i32
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let expv: ptr<i8> = calloc(n + 1, 1)
+    let rest: ptr<i32> = calloc(n + 1, 4)
+    let c: ptr<i32> = calloc(n + 1, 4)
+    let pref: ptr<i32> = calloc(n + 1, 4)
+    if expv == null || rest == null || c == null || pref == null { return 1 }
+    rest[1] = 1
+    c[1] = 1
+    i = 2
+    while i <= n {
+        let p: i64 = spf[i] as i64
+        let m: i64 = i / p
+        if (spf[m] as i64) == p {
+            expv[i] = expv[m] + 1
+            rest[i] = rest[m]
+        } else {
+            expv[i] = 1
+            rest[i] = m as i32
+        }
+        c[i] = ((c[rest[i]] as i64) * a[expv[i]] % mod) as i32
+        i = i + 1
+    }
+    let mut s: i64 = 0
+    i = 1
+    while i <= n {
+        s = (s + (c[i] as i64)) % mod
+        pref[i] = s as i32
+        i = i + 1
+    }
+    let mut ans: i64 = 0
+    let mut d: i64 = G
+    while d <= L {
+        let q: i64 = L / d
+        let r: i64 = L / q
+        let cnt: i64 = r - d + 1
+        ans = (ans + (cnt % mod) * (pref[q] as i64)) % mod
+        d = r + 1
+    }
+    printf("%lld\n", ans)
+    free(pow_cache); free(a); free(spf); free(primes)
+    free(expv); free(rest); free(c); free(pref)
+    return 0
+}

@@ -1,0 +1,119 @@
+# Project Euler 273
+# Sum of a for squarefree n<=150 = product of distinct 4k+1 primes.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function abs64(a: i64) -> i64 {
+    if a < 0 { return -a }
+    return a
+}
+
+function is_prime(p: i64) -> bool {
+    if p < 2 { return false }
+    if p % 2 == 0 { return p == 2 }
+    let mut i: i64 = 3
+    while i * i <= p {
+        if p % i == 0 { return false }
+        i = i + 2
+    }
+    return true
+}
+
+function find_ab(prime: i64, a_out: ptr<i64>, b_out: ptr<i64>) -> void {
+    let mut b: i64 = 1
+    while b * b < prime {
+        let mut a: i64 = 1
+        while a < b {
+            if a * a + b * b == prime {
+                a_out[0] = a
+                b_out[0] = b
+                return
+            }
+            a = a + 1
+        }
+        b = b + 1
+    }
+}
+
+function search(sols_a: ptr<i64>, sols_b: ptr<i64>, sc: i64, primes_a: ptr<i64>, primes_b: ptr<i64>, pc: i64, index: i64) -> i64 {
+    if index == pc {
+        let mut sum: i64 = 0
+        let mut i: i64 = 0
+        while i < sc {
+            # skip seed (0,1)
+            if !(sols_a[i] == 0 && sols_b[i] == 1) {
+                sum = sum + sols_a[i]
+            }
+            i = i + 1
+        }
+        return sum
+    }
+    let ca: i64 = primes_a[index]
+    let cb: i64 = primes_b[index]
+    let next_a: ptr<i64> = calloc(sc * 2 + 2, 8)
+    let next_b: ptr<i64> = calloc(sc * 2 + 2, 8)
+    let mut nc: i64 = 0
+    let mut i: i64 = 0
+    while i < sc {
+        let sa: i64 = sols_a[i]
+        let sb: i64 = sols_b[i]
+        let mut x: i64 = sa * ca + sb * cb
+        let mut y: i64 = abs64(sa * cb - sb * ca)
+        if x > y {
+            let t: i64 = x
+            x = y
+            y = t
+        }
+        next_a[nc] = x
+        next_b[nc] = y
+        nc = nc + 1
+        if !(sa == 0 && sb == 1) {
+            x = abs64(sa * ca - sb * cb)
+            y = sa * cb + sb * ca
+            if x > y {
+                let t2: i64 = x
+                x = y
+                y = t2
+            }
+            next_a[nc] = x
+            next_b[nc] = y
+            nc = nc + 1
+        }
+        i = i + 1
+    }
+    let without: i64 = search(sols_a, sols_b, sc, primes_a, primes_b, pc, index + 1)
+    let withv: i64 = search(next_a, next_b, nc, primes_a, primes_b, pc, index + 1)
+    free(next_a)
+    free(next_b)
+    return withv + without
+}
+
+function main() -> i32 {
+    let limit: i64 = 150
+    let primes_a: ptr<i64> = calloc(40, 8)
+    let primes_b: ptr<i64> = calloc(40, 8)
+    let mut pc: i64 = 0
+    let mut i: i64 = 5
+    while i <= limit {
+        if i % 4 == 1 && is_prime(i) {
+            let a: ptr<i64> = calloc(1, 8)
+            let b: ptr<i64> = calloc(1, 8)
+            find_ab(i, a, b)
+            primes_a[pc] = a[0]
+            primes_b[pc] = b[0]
+            pc = pc + 1
+            free(a); free(b)
+        }
+        i = i + 4
+    }
+    let sols_a: ptr<i64> = calloc(1, 8)
+    let sols_b: ptr<i64> = calloc(1, 8)
+    sols_a[0] = 0
+    sols_b[0] = 1
+    printf("%lld\n", search(sols_a, sols_b, 1, primes_a, primes_b, pc, 0))
+    free(sols_a); free(sols_b); free(primes_a); free(primes_b)
+    return 0
+}

@@ -1,0 +1,56 @@
+# Project Euler 214
+# Sum of primes < 40e6 with totient chain length 25.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 40000000
+    let MAX_STEPS: i32 = 25
+    let tot: ptr<i32> = calloc(LIMIT, 4)
+    let chain: ptr<i16> = calloc(LIMIT, 2)
+    if tot == null || chain == null { return 1 }
+
+    let mut i: i64 = 0
+    while i < LIMIT {
+        tot[i] = i as i32
+        i = i + 1
+    }
+    i = 2
+    while i < LIMIT {
+        if tot[i] == i as i32 {
+            let mut j: i64 = i
+            while j < LIMIT {
+                tot[j] = tot[j] - tot[j] / (i as i32)
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    chain[1] = 1
+    i = 2
+    while i < LIMIT {
+        chain[i] = (chain[tot[i] as i64] as i32 + 1) as i16
+        i = i + 1
+    }
+
+    let mut result: i64 = 0
+    i = 2
+    while i < LIMIT {
+        if tot[i] == i as i32 - 1 {
+            # prime: totient(p)=p-1
+            if chain[i] as i32 == MAX_STEPS {
+                result = result + i
+            }
+        }
+        i = i + 1
+    }
+    # Wait: for prime p, tot[p] should be p-1 after sieve. Check: initially tot[p]=p, then tot[p]=p-p/p=p-1. Yes.
+    # But condition tot[i]==i-1 identifies primes. Good.
+    printf("%lld\n", result)
+    free(tot); free(chain)
+    return 0
+}

@@ -1,0 +1,78 @@
+# Project Euler 172
+# 18-digit numbers where no digit occurs more than 3 times.
+
+function multinomial_div(n: i64, parts: ptr<i32>, nparts: i32) -> i64 {
+    # Compute n! / (p0! p1! ... ) carefully
+    let mut result: i64 = 1
+    let mut denom_counts: array<i32, 20> = [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ]
+    let mut i: i32 = 0
+    while i < nparts {
+        let p: i32 = parts[i]
+        let mut k: i32 = 2
+        while k <= p {
+            denom_counts[k] = denom_counts[k] + 1
+            k = k + 1
+        }
+        i = i + 1
+    }
+    # Expand factorials into prime... simpler: multiply 1..n dividing when divisible
+    let mut next: i64 = 2
+    while next <= n {
+        result = result * next
+        # divide out any pending factors
+        let mut d: i32 = 2
+        while d <= 18 {
+            while denom_counts[d] > 0 && result % (d as i64) == 0 {
+                result = result / (d as i64)
+                denom_counts[d] = denom_counts[d] - 1
+            }
+            d = d + 1
+        }
+        next = next + 1
+    }
+    return result
+}
+
+function count_ways(freqs: ptr<i32>) -> i64 {
+    let mut histogram: array<i32, 4> = [0, 0, 0, 0]
+    let mut i: i32 = 0
+    while i < 10 {
+        histogram[freqs[i]] = histogram[freqs[i]] + 1
+        i = i + 1
+    }
+    # 10! / (h0! h1! h2! h3!)
+    let mut hist_parts: array<i32, 4> = [histogram[0], histogram[1], histogram[2], histogram[3]]
+    let ways_assign: i64 = multinomial_div(10, hist_parts, 4)
+    # 18! / (f0! ... f9!)
+    let ways_perm: i64 = multinomial_div(18, freqs, 10)
+    return ways_assign * ways_perm
+}
+
+function partition(sum: i32, maxv: i32, terms: ptr<i32>, len: i32) -> i64 {
+    if len == 10 {
+        if sum == 0 {
+            return count_ways(terms)
+        }
+        return 0
+    }
+    let mut result: i64 = 0
+    let mut lim: i32 = maxv
+    if sum < lim { lim = sum }
+    let mut i: i32 = lim
+    while i >= 0 {
+        terms[len] = i
+        result = result + partition(sum - i, i, terms, len + 1)
+        i = i - 1
+    }
+    return result
+}
+
+function main() -> i32 {
+    let mut terms: array<i32, 10> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let ans0: i64 = partition(18, 3, terms, 0)
+    let ans: i64 = ans0 * 9 / 10
+    printf("%lld\n", ans)
+    return 0
+}

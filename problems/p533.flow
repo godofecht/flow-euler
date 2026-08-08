@@ -1,0 +1,198 @@
+# Project Euler 533
+# Minimum Values of the Carmichael Function — L(2*10^7) mod 10^9.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log(x: f64) -> f64
+}
+
+const MOD: i64 = 1000000000
+const TARGET: i64 = 20000000
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function is_odd_prime(x: i64, isp: ptr<i8>) -> i32 {
+    if x == 2 { return 1 }
+    if x < 2 || (x & 1) == 0 { return 0 }
+    return isp[x / 2] as i32
+}
+
+function factorize(n0: i64, pf: ptr<i64>, pe: ptr<i32>, out_n: ptr<i32>) -> void {
+    let mut n: i64 = n0
+    let mut cnt: i32 = 0
+    if (n & 1) == 0 {
+        let mut e: i32 = 0
+        while (n & 1) == 0 {
+            n = n / 2
+            e = e + 1
+        }
+        pf[cnt] = 2
+        pe[cnt] = e
+        cnt = cnt + 1
+    }
+    let mut p: i64 = 3
+    while p * p <= n {
+        if n % p == 0 {
+            let mut e2: i32 = 0
+            while n % p == 0 {
+                n = n / p
+                e2 = e2 + 1
+            }
+            pf[cnt] = p
+            pe[cnt] = e2
+            cnt = cnt + 1
+        }
+        p = p + 2
+    }
+    if n > 1 {
+        pf[cnt] = n
+        pe[cnt] = 1
+        cnt = cnt + 1
+    }
+    out_n[0] = cnt
+}
+
+function N_mod(m: i64, isp: ptr<i8>) -> i64 {
+    let pf: ptr<i64> = calloc(32, 8)
+    let pe: ptr<i32> = calloc(32, 4)
+    let fc: ptr<i32> = calloc(1, 4)
+    let divs: ptr<i64> = calloc(4096, 8)
+    if pf == null || pe == null || fc == null || divs == null { return 0 }
+    factorize(m, pf, pe, fc)
+    let nf: i32 = fc[0]
+    let mut nd: i64 = 1
+    divs[0] = 1
+    let mut fi: i32 = 0
+    while fi < nf {
+        let p: i64 = pf[fi]
+        let e: i32 = pe[fi]
+        let base: i64 = nd
+        let mut pe2: i64 = 1
+        let mut ei: i32 = 0
+        while ei < e {
+            pe2 = pe2 * p
+            let mut j: i64 = 0
+            while j < base {
+                divs[nd] = divs[j] * pe2
+                nd = nd + 1
+                j = j + 1
+            }
+            ei = ei + 1
+        }
+        fi = fi + 1
+    }
+    let mut e2: i64 = 1
+    if (m & 1) == 0 {
+        let mut v2: i64 = 0
+        let mut t: i64 = m
+        while (t & 1) == 0 {
+            t = t / 2
+            v2 = v2 + 1
+        }
+        e2 = v2 + 2
+    }
+    let mut res: i64 = modpow(2, e2, MOD)
+    let mut di: i64 = 0
+    while di < nd {
+        let d: i64 = divs[di]
+        let p2: i64 = d + 1
+        if p2 != 2 && (p2 & 1) == 1 && is_odd_prime(p2, isp) == 1 {
+            let mut t2: i64 = m / d
+            let mut e3: i64 = 1
+            while t2 % p2 == 0 {
+                t2 = t2 / p2
+                e3 = e3 + 1
+            }
+            res = ((res as i128) * (modpow(p2, e3, MOD) as i128) % (MOD as i128)) as i64
+        }
+        di = di + 1
+    }
+    free(pf); free(pe); free(fc); free(divs)
+    return res
+}
+
+function main() -> i32 {
+    let limit: i64 = TARGET - 1
+    let size: i64 = limit + 1
+    let isp: ptr<i8> = calloc((limit + 2) / 2 + 1, 1)
+    let score: ptr<f64> = calloc(size, 8)
+    if isp == null || score == null { return 1 }
+    let mut p: i64 = 3
+    let r: i64 = 4472  # isqrt(limit+1) approx
+    isp[0] = 0
+    let mut idx: i64 = 1
+    while idx < (limit + 2) / 2 + 1 {
+        isp[idx] = 1
+        idx = idx + 1
+    }
+    p = 3
+    while p <= r {
+        if isp[p / 2] == 1 {
+            let mut j: i64 = p * p
+            while j <= limit + 1 {
+                if (j & 1) == 1 { isp[j / 2] = 0 }
+                j = j + 2 * p
+            }
+        }
+        p = p + 2
+    }
+    let ln2: f64 = log(2.0)
+    let mut i: i64 = 2
+    while i <= limit {
+        score[i] = score[i] + ln2
+        i = i + 2
+    }
+    let mut pow2: i64 = 2
+    while pow2 <= limit {
+        i = pow2
+        while i <= limit {
+            score[i] = score[i] + ln2
+            i = i + pow2
+        }
+        pow2 = pow2 << 1
+    }
+    idx = 1
+    while idx < (limit + 2) / 2 + 1 {
+        if isp[idx] == 1 {
+            let p2: i64 = 2 * idx + 1
+            let lnp: f64 = log(p2 as f64)
+            let mut step: i64 = p2 - 1
+            while step <= limit {
+                i = step
+                while i <= limit {
+                    score[i] = score[i] + lnp
+                    i = i + step
+                }
+                step = step * p2
+            }
+        }
+        idx = idx + 1
+    }
+    let mut best_m: i64 = 1
+    let mut best_s: f64 = score[1]
+    i = 2
+    while i <= limit {
+        if score[i] > best_s {
+            best_s = score[i]
+            best_m = i
+        }
+        i = i + 1
+    }
+    let ans: i64 = (N_mod(best_m, isp) + 1) % MOD
+    printf("%lld\n", ans)
+    free(isp); free(score)
+    return 0
+}

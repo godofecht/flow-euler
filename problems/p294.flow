@@ -1,0 +1,176 @@
+# Project Euler 294
+# S(11^12) mod 10^9.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function poly_clear(p: ptr<i64>, n: i64) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        p[i] = 0
+        i = i + 1
+    }
+}
+
+function poly_copy(dst: ptr<i64>, src: ptr<i64>, n: i64) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function poly_mul(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>, mod: i64) -> void {
+    let DEG: i64 = 24
+    let BASE: i64 = 23
+    poly_clear(out, DEG * BASE)
+    let mut da: i64 = 0
+    while da < DEG {
+        let mut db: i64 = 0
+        while db < DEG - da {
+            let mut ra: i64 = 0
+            while ra < BASE {
+                let av: i64 = a[da * BASE + ra]
+                if av != 0 {
+                    let mut rb: i64 = 0
+                    while rb < BASE {
+                        let bv: i64 = b[db * BASE + rb]
+                        if bv != 0 {
+                            let idx: i64 = (da + db) * BASE + ((ra + rb) % BASE)
+                            out[idx] = (out[idx] + av * bv) % mod
+                        }
+                        rb = rb + 1
+                    }
+                }
+                ra = ra + 1
+            }
+            db = db + 1
+        }
+        da = da + 1
+    }
+}
+
+function mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000
+    let BASE: i64 = 23
+    let DEG: i64 = 24
+    let PERIOD: i64 = 22
+    let SZ: i64 = DEG * BASE
+    let q: i64 = 142655835305
+    let r0: i64 = 11
+
+    let comb_q: ptr<i64> = calloc(24, 8)
+    comb_q[0] = 1
+    comb_q[1] = 655835305
+    comb_q[2] = 314303860
+    comb_q[3] = 752389860
+    comb_q[4] = 263709430
+    comb_q[5] = 880117686
+    comb_q[6] = 105519300
+    comb_q[7] = 95110100
+    comb_q[8] = 97038725
+    comb_q[9] = 225652925
+    comb_q[10] = 86064080
+    comb_q[11] = 481427600
+    comb_q[12] = 465476200
+    comb_q[13] = 539348200
+    comb_q[14] = 302619600
+    comb_q[15] = 95220240
+    comb_q[16] = 607141850
+    comb_q[17] = 568161450
+    comb_q[18] = 343958200
+    comb_q[19] = 674368600
+    comb_q[20] = 82520980
+    comb_q[21] = 306513300
+    comb_q[22] = 52512600
+    comb_q[23] = 690524600
+    let comb_q1: ptr<i64> = calloc(24, 8)
+    comb_q1[0] = 1
+    comb_q1[1] = 655835306
+    comb_q1[2] = 970139165
+    comb_q1[3] = 66693720
+    comb_q1[4] = 16099290
+    comb_q1[5] = 143827116
+    comb_q1[6] = 985636986
+    comb_q1[7] = 200629400
+    comb_q1[8] = 192148825
+    comb_q1[9] = 322691650
+    comb_q1[10] = 311717005
+    comb_q1[11] = 567491680
+    comb_q1[12] = 946903800
+    comb_q1[13] = 4824400
+    comb_q1[14] = 841967800
+    comb_q1[15] = 397839840
+    comb_q1[16] = 702362090
+    comb_q1[17] = 175303300
+    comb_q1[18] = 912119650
+    comb_q1[19] = 18326800
+    comb_q1[20] = 756889580
+    comb_q1[21] = 389034280
+    comb_q1[22] = 359025900
+    comb_q1[23] = 743037200
+
+    let acc: ptr<i64> = calloc(SZ, 8)
+    acc[0] = 1
+    let tmp: ptr<i64> = calloc(SZ, 8)
+    let H: ptr<i64> = calloc(SZ, 8)
+    let cur: ptr<i64> = calloc(SZ, 8)
+    let hpow: ptr<i64> = calloc(SZ, 8)
+    let nxt: ptr<i64> = calloc(SZ, 8)
+
+    let mut r: i64 = 0
+    while r < PERIOD {
+        let Nn: i64 = q
+        if r < r0 { Nn = q + 1 }
+        let weight: i64 = mod_pow(10, r, BASE)
+        poly_clear(H, SZ)
+        let mut d: i64 = 1
+        while d <= 9 {
+            H[d * BASE + ((d * weight) % BASE)] = 1
+            d = d + 1
+        }
+        # cur = (1+H)^Nn = sum_m C(Nn,m) H^m
+        poly_clear(cur, SZ)
+        cur[0] = 1
+        poly_copy(hpow, H, SZ)
+        let mut m: i64 = 1
+        while m < DEG {
+            let c: i64 = comb_q[m]
+            if Nn == q + 1 { c = comb_q1[m] }
+            if c != 0 {
+                let mut i: i64 = 0
+                while i < SZ {
+                    if hpow[i] != 0 {
+                        cur[i] = (cur[i] + hpow[i] * c) % MOD
+                    }
+                    i = i + 1
+                }
+            }
+            if m + 1 < DEG {
+                poly_mul(hpow, H, nxt, MOD)
+                poly_copy(hpow, nxt, SZ)
+            }
+            m = m + 1
+        }
+        poly_mul(acc, cur, tmp, MOD)
+        poly_copy(acc, tmp, SZ)
+        r = r + 1
+    }
+    printf("%lld\n", acc[23 * BASE + 0])
+    free(comb_q); free(comb_q1); free(acc); free(tmp); free(H); free(cur); free(hpow); free(nxt)
+    return 0
+}

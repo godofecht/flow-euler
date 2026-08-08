@@ -1,0 +1,210 @@
+# Project Euler 282
+# Sum A(n,n) for n=0..6 mod 14^8.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    if mod == 1 { return 0 }
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if exp % 2 == 1 { result = (result * base) % mod }
+        base = (base * base) % mod
+        exp = exp / 2
+    }
+    return result
+}
+
+function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    let mut b: i64 = b0 % mod
+    if a < 0 { a = a + mod }
+    if b < 0 { b = b + mod }
+    let mut result: i64 = 0
+    while b > 0 {
+        if b % 2 == 1 {
+            result = result + a
+            if result >= mod { result = result - mod }
+        }
+        a = a + a
+        if a >= mod { a = a - mod }
+        b = b / 2
+    }
+    return result
+}
+
+function mod_inverse(a0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    let mut b: i64 = m
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = a % b
+        a = b
+        b = t
+        let tx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = tx
+    }
+    if x0 < 0 { x0 = x0 + m }
+    return x0
+}
+
+function carmichael(n0: i64) -> i64 {
+    if n0 == 1 { return 1 }
+    let mut n: i64 = n0
+    let mut lam: i64 = 1
+    let mut p: i64 = 2
+    while p * p <= n {
+        if n % p == 0 {
+            let mut k: i64 = 0
+            let mut pk: i64 = 1
+            while n % p == 0 {
+                n = n / p
+                k = k + 1
+                pk = pk * p
+            }
+            let mut pk_lam: i64 = 0
+            if p == 2 {
+                if k == 1 { pk_lam = 1 }
+                elif k == 2 { pk_lam = 2 }
+                else {
+                    let mut t: i64 = 1
+                    let mut i: i64 = 0
+                    while i < k - 2 {
+                        t = t * 2
+                        i = i + 1
+                    }
+                    pk_lam = t
+                }
+            } else {
+                pk_lam = (p - 1) * (pk / p)
+            }
+            # lcm
+            lam = lam / gcd(lam, pk_lam) * pk_lam
+        }
+        if p == 2 { p = 3 } else { p = p + 2 }
+    }
+    if n > 1 {
+        let pk_lam2: i64 = n - 1
+        lam = lam / gcd(lam, pk_lam2) * pk_lam2
+    }
+    return lam
+}
+
+function crt_pair(a1: i64, m1: i64, a2: i64, m2: i64) -> i64 {
+    let inv: i64 = mod_inverse(m1 % m2, m2)
+    let k: i64 = mulmod(((a2 - a1) % m2 + m2) % m2, inv, m2)
+    return (a1 + mulmod(k, m1, m1 * m2)) % (m1 * m2)
+}
+
+function tower_geq(h: i64, limit: i64) -> bool {
+    if limit <= 1 { return true }
+    let mut v: i64 = 2
+    if h == 1 { return v >= limit }
+    let mut i: i64 = 2
+    while i <= h {
+        if v >= 60 { return true }
+        # 2^v
+        if v >= 63 { return true }
+        let one: i64 = 1
+        v = one << v
+        if v >= limit { return true }
+        i = i + 1
+    }
+    return v >= limit
+}
+
+function tetration_exact(h: i64) -> i64 {
+    let mut v: i64 = 2
+    let mut i: i64 = 2
+    while i <= h {
+        let one: i64 = 1
+        v = one << v
+        i = i + 1
+    }
+    return v
+}
+
+# Memo for tetration_mod: height up to 60, few mods — use recursive without cache (small depth)
+function tetration_mod(height: i64, mod: i64) -> i64 {
+    if mod == 1 { return 0 }
+    if height == 1 { return 2 % mod }
+    let mut m: i64 = mod
+    let mut k: i64 = 0
+    while m % 2 == 0 {
+        k = k + 1
+        m = m / 2
+    }
+    let mut r2: i64 = 0
+    if k > 0 {
+        let one: i64 = 1
+        let mod2: i64 = one << k
+        if tower_geq(height - 1, k) {
+            r2 = 0
+        } else {
+            let exp: i64 = tetration_exact(height - 1)
+            if exp >= k { r2 = 0 }
+            else { r2 = (one << exp) % mod2 }
+        }
+        if m == 1 { return r2 }
+    }
+    let lam: i64 = carmichael(m)
+    let exp2: i64 = tetration_mod(height - 1, lam)
+    let rodd: i64 = mod_pow(2, exp2, m)
+    if k == 0 { return rodd }
+    let one2: i64 = 1
+    return crt_pair(r2, one2 << k, rodd, m)
+}
+
+function main() -> i32 {
+    let mut mod: i64 = 1
+    let mut i: i64 = 0
+    while i < 8 {
+        mod = mod * 14
+        i = i + 1
+    }
+    let a0: i64 = 1 % mod
+    let a1: i64 = 3 % mod
+    let a2: i64 = 7 % mod
+    let a3: i64 = 61 % mod
+    let a4: i64 = (tetration_mod(7, mod) - 3) % mod
+    if a4 < 0 { a4 = a4 + mod }
+
+    # find fixed point of tetration
+    let mut prev: i64 = tetration_mod(1, mod)
+    let mut fixed_h: i64 = 1
+    let mut h: i64 = 2
+    while h <= 60 {
+        let cur: i64 = tetration_mod(h, mod)
+        if cur == prev {
+            fixed_h = h - 1
+            break
+        }
+        prev = cur
+        h = h + 1
+    }
+    let fixed_val: i64 = (tetration_mod(fixed_h, mod) - 3) % mod
+    if fixed_val < 0 { fixed_val = fixed_val + mod }
+    let a5: i64 = fixed_val
+    let a6: i64 = fixed_val
+    let ans: i64 = (a0 + a1 + a2 + a3 + a4 + a5 + a6) % mod
+    printf("%lld\n", ans)
+    return 0
+}

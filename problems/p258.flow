@@ -1,0 +1,84 @@
+# Project Euler 258
+# g_{10^18} mod 20092010 for lagged Fibonacci.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mul_poly(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>) -> void {
+    let MOD: i64 = 20092010
+    let D: i64 = 2000
+    let mut c: ptr<i64> = calloc(2 * D - 1, 8)
+    let mut i: i64 = 0
+    while i < D {
+        if a[i] != 0 {
+            let mut j: i64 = 0
+            while j < D {
+                if b[j] != 0 {
+                    c[i + j] = c[i + j] + a[i] * b[j]
+                }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    # fold x^D = x + 1
+    i = 0
+    while i < D {
+        out[i] = c[i] % MOD
+        i = i + 1
+    }
+    i = 0
+    while i < D - 1 {
+        let hi: i64 = c[D + i] % MOD
+        out[i] = (out[i] + hi) % MOD
+        out[i + 1] = (out[i + 1] + hi) % MOD
+        i = i + 1
+    }
+    # one more fold pass in case of carry into degree D
+    # after first fold, degrees stay < D; but sums may need another fold if we added to create overflow in sense of poly - actually max degree stays D-1
+    free(c)
+}
+
+function main() -> i32 {
+    let MOD: i64 = 20092010
+    let D: i64 = 2000
+    let n: i64 = 1000000000000000000
+    let a: ptr<i64> = calloc(D, 8)
+    let r: ptr<i64> = calloc(D, 8)
+    let tmp: ptr<i64> = calloc(D, 8)
+    if a == null || r == null || tmp == null { return 1 }
+    # a = x = [0,1,0,...]
+    a[1] = 1
+    # r = 1
+    r[0] = 1
+    let mut e: i64 = n
+    while e > 0 {
+        if e % 2 == 1 {
+            mul_poly(r, a, tmp)
+            let mut i: i64 = 0
+            while i < D {
+                r[i] = tmp[i]
+                i = i + 1
+            }
+        }
+        mul_poly(a, a, tmp)
+        let mut i: i64 = 0
+        while i < D {
+            a[i] = tmp[i]
+            i = i + 1
+        }
+        e = e / 2
+    }
+    # g_n = sum of coefficients (initial all 1s)
+    let mut sum: i64 = 0
+    let mut i: i64 = 0
+    while i < D {
+        sum = (sum + r[i]) % MOD
+        i = i + 1
+    }
+    printf("%lld\n", sum)
+    free(a); free(r); free(tmp)
+    return 0
+}

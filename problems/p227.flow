@@ -1,0 +1,100 @@
+# Project Euler 227
+# Expected turns for The Chase with 100 players.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fabs(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let N: i32 = 100
+    let n: i32 = N - 1
+    let mut i: i32 = 0
+    let A: ptr<f64> = calloc((n as i64) * (n as i64), 8)
+    let b: ptr<f64> = calloc(n as i64, 8)
+    if A == null || b == null { return 1 }
+    let p_m2: f64 = 1.0 / 36.0
+    let p_m1: f64 = 2.0 / 9.0
+    let p_0: f64 = 0.5
+    let p_p1: f64 = 2.0 / 9.0
+    let p_p2: f64 = 1.0 / 36.0
+    let mut d: i32 = 1
+    while d < N {
+        let r: i32 = d - 1
+        A[(r as i64) * (n as i64) + (r as i64)] = 1.0
+        b[r] = 1.0
+        let mut k: i32 = 0
+        while k < 5 {
+            let mut delta: i32 = 0
+            let mut p: f64 = 0.0
+            if k == 0 { delta = 0 - 2; p = p_m2 }
+            elif k == 1 { delta = 0 - 1; p = p_m1 }
+            elif k == 2 { delta = 0; p = p_0 }
+            elif k == 3 { delta = 1; p = p_p1 }
+            else { delta = 2; p = p_p2 }
+            let mut d2: i32 = (d + delta) % N
+            if d2 < 0 { d2 = d2 + N }
+            if d2 != 0 {
+                let c: i32 = d2 - 1
+                let idx: i64 = (r as i64) * (n as i64) + (c as i64)
+                A[idx] = A[idx] - p
+            }
+            k = k + 1
+        }
+        d = d + 1
+    }
+    let mut col: i32 = 0
+    while col < n {
+        let mut piv: i32 = col
+        let mut best: f64 = fabs(A[(col as i64) * (n as i64) + (col as i64)])
+        i = col + 1
+        while i < n {
+            let v: f64 = fabs(A[(i as i64) * (n as i64) + (col as i64)])
+            if v > best { best = v; piv = i }
+            i = i + 1
+        }
+        if piv != col {
+            let mut j: i32 = 0
+            while j < n {
+                let tmp: f64 = A[(col as i64) * (n as i64) + (j as i64)]
+                A[(col as i64) * (n as i64) + (j as i64)] = A[(piv as i64) * (n as i64) + (j as i64)]
+                A[(piv as i64) * (n as i64) + (j as i64)] = tmp
+                j = j + 1
+            }
+            let tb: f64 = b[col]
+            b[col] = b[piv]
+            b[piv] = tb
+        }
+        let diag: f64 = A[(col as i64) * (n as i64) + (col as i64)]
+        i = col + 1
+        while i < n {
+            let f: f64 = A[(i as i64) * (n as i64) + (col as i64)] / diag
+            let mut j: i32 = col
+            while j < n {
+                let ij: i64 = (i as i64) * (n as i64) + (j as i64)
+                let cj: i64 = (col as i64) * (n as i64) + (j as i64)
+                A[ij] = A[ij] - f * A[cj]
+                j = j + 1
+            }
+            b[i] = b[i] - f * b[col]
+            i = i + 1
+        }
+        col = col + 1
+    }
+    let x: ptr<f64> = calloc(n as i64, 8)
+    i = n - 1
+    while i >= 0 {
+        let mut s: f64 = b[i]
+        let mut j: i32 = i + 1
+        while j < n {
+            s = s - A[(i as i64) * (n as i64) + (j as i64)] * x[j]
+            j = j + 1
+        }
+        x[i] = s / A[(i as i64) * (n as i64) + (i as i64)]
+        i = i - 1
+    }
+    printf("%.6f\n", x[N / 2 - 1])
+    free(A); free(b); free(x)
+    return 0
+}

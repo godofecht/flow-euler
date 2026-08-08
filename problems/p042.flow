@@ -1,0 +1,52 @@
+# Project Euler 042
+# How many triangle words in data/p042.txt?
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+}
+
+function is_triangle(x: i64) -> bool {
+    # n(n+1)/2 = x ⇒ 8x+1 perfect square and odd root
+    let mut s: i64 = 1
+    while s * s < 8 * x + 1 {
+        s = s + 1
+    }
+    if s * s != 8 * x + 1 { return false }
+    return (s - 1) % 2 == 0
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p042.txt", "r")
+    if f == null {
+        printf("failed to read data/p042.txt\n")
+        return 1
+    }
+    let mut count: i64 = 0
+    let mut score: i64 = 0
+    let mut in_word: bool = false
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        if c == 34 {
+            if in_word {
+                if is_triangle(score) {
+                    count = count + 1
+                }
+                score = 0
+                in_word = false
+            } else {
+                in_word = true
+                score = 0
+            }
+        } elif in_word {
+            if c >= 65 && c <= 90 {
+                score = score + ((c - 64) as i64)
+            }
+        }
+        c = fgetc(f)
+    }
+    fclose(f)
+    printf("%lld\n", count)
+    return 0
+}

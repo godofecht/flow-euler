@@ -1,0 +1,288 @@
+# Project Euler 345
+# Maximum matrix sum with distinct rows/columns (15x15).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let n: i32 = 15
+    let mat: ptr<i32> = calloc(225, 4)
+    if mat == null { return 1 }
+    mat[0] = 7;
+    mat[1] = 53;
+    mat[2] = 183;
+    mat[3] = 439;
+    mat[4] = 863;
+    mat[5] = 497;
+    mat[6] = 383;
+    mat[7] = 563;
+    mat[8] = 79;
+    mat[9] = 973;
+    mat[10] = 287;
+    mat[11] = 63;
+    mat[12] = 343;
+    mat[13] = 169;
+    mat[14] = 583;
+    mat[15] = 627;
+    mat[16] = 343;
+    mat[17] = 773;
+    mat[18] = 959;
+    mat[19] = 943;
+    mat[20] = 767;
+    mat[21] = 473;
+    mat[22] = 103;
+    mat[23] = 699;
+    mat[24] = 303;
+    mat[25] = 957;
+    mat[26] = 703;
+    mat[27] = 583;
+    mat[28] = 639;
+    mat[29] = 913;
+    mat[30] = 447;
+    mat[31] = 283;
+    mat[32] = 463;
+    mat[33] = 29;
+    mat[34] = 23;
+    mat[35] = 487;
+    mat[36] = 463;
+    mat[37] = 993;
+    mat[38] = 119;
+    mat[39] = 883;
+    mat[40] = 327;
+    mat[41] = 493;
+    mat[42] = 423;
+    mat[43] = 159;
+    mat[44] = 743;
+    mat[45] = 217;
+    mat[46] = 623;
+    mat[47] = 3;
+    mat[48] = 399;
+    mat[49] = 853;
+    mat[50] = 407;
+    mat[51] = 103;
+    mat[52] = 983;
+    mat[53] = 89;
+    mat[54] = 463;
+    mat[55] = 290;
+    mat[56] = 516;
+    mat[57] = 212;
+    mat[58] = 462;
+    mat[59] = 350;
+    mat[60] = 960;
+    mat[61] = 376;
+    mat[62] = 682;
+    mat[63] = 962;
+    mat[64] = 300;
+    mat[65] = 780;
+    mat[66] = 486;
+    mat[67] = 502;
+    mat[68] = 912;
+    mat[69] = 800;
+    mat[70] = 250;
+    mat[71] = 346;
+    mat[72] = 172;
+    mat[73] = 812;
+    mat[74] = 350;
+    mat[75] = 870;
+    mat[76] = 456;
+    mat[77] = 192;
+    mat[78] = 162;
+    mat[79] = 593;
+    mat[80] = 473;
+    mat[81] = 915;
+    mat[82] = 45;
+    mat[83] = 989;
+    mat[84] = 873;
+    mat[85] = 823;
+    mat[86] = 965;
+    mat[87] = 425;
+    mat[88] = 329;
+    mat[89] = 803;
+    mat[90] = 973;
+    mat[91] = 965;
+    mat[92] = 905;
+    mat[93] = 919;
+    mat[94] = 133;
+    mat[95] = 673;
+    mat[96] = 665;
+    mat[97] = 235;
+    mat[98] = 509;
+    mat[99] = 613;
+    mat[100] = 673;
+    mat[101] = 815;
+    mat[102] = 165;
+    mat[103] = 992;
+    mat[104] = 326;
+    mat[105] = 322;
+    mat[106] = 148;
+    mat[107] = 972;
+    mat[108] = 962;
+    mat[109] = 286;
+    mat[110] = 255;
+    mat[111] = 941;
+    mat[112] = 541;
+    mat[113] = 265;
+    mat[114] = 323;
+    mat[115] = 925;
+    mat[116] = 281;
+    mat[117] = 601;
+    mat[118] = 95;
+    mat[119] = 973;
+    mat[120] = 445;
+    mat[121] = 721;
+    mat[122] = 11;
+    mat[123] = 525;
+    mat[124] = 473;
+    mat[125] = 65;
+    mat[126] = 511;
+    mat[127] = 164;
+    mat[128] = 138;
+    mat[129] = 672;
+    mat[130] = 18;
+    mat[131] = 428;
+    mat[132] = 154;
+    mat[133] = 448;
+    mat[134] = 848;
+    mat[135] = 414;
+    mat[136] = 456;
+    mat[137] = 310;
+    mat[138] = 312;
+    mat[139] = 798;
+    mat[140] = 104;
+    mat[141] = 566;
+    mat[142] = 520;
+    mat[143] = 302;
+    mat[144] = 248;
+    mat[145] = 694;
+    mat[146] = 976;
+    mat[147] = 430;
+    mat[148] = 392;
+    mat[149] = 198;
+    mat[150] = 184;
+    mat[151] = 829;
+    mat[152] = 373;
+    mat[153] = 181;
+    mat[154] = 631;
+    mat[155] = 101;
+    mat[156] = 969;
+    mat[157] = 613;
+    mat[158] = 840;
+    mat[159] = 740;
+    mat[160] = 778;
+    mat[161] = 458;
+    mat[162] = 284;
+    mat[163] = 760;
+    mat[164] = 390;
+    mat[165] = 821;
+    mat[166] = 461;
+    mat[167] = 843;
+    mat[168] = 513;
+    mat[169] = 17;
+    mat[170] = 901;
+    mat[171] = 711;
+    mat[172] = 993;
+    mat[173] = 293;
+    mat[174] = 157;
+    mat[175] = 274;
+    mat[176] = 94;
+    mat[177] = 192;
+    mat[178] = 156;
+    mat[179] = 574;
+    mat[180] = 34;
+    mat[181] = 124;
+    mat[182] = 4;
+    mat[183] = 878;
+    mat[184] = 450;
+    mat[185] = 476;
+    mat[186] = 712;
+    mat[187] = 914;
+    mat[188] = 838;
+    mat[189] = 669;
+    mat[190] = 875;
+    mat[191] = 299;
+    mat[192] = 823;
+    mat[193] = 329;
+    mat[194] = 699;
+    mat[195] = 815;
+    mat[196] = 559;
+    mat[197] = 813;
+    mat[198] = 459;
+    mat[199] = 522;
+    mat[200] = 788;
+    mat[201] = 168;
+    mat[202] = 586;
+    mat[203] = 966;
+    mat[204] = 232;
+    mat[205] = 308;
+    mat[206] = 833;
+    mat[207] = 251;
+    mat[208] = 631;
+    mat[209] = 107;
+    mat[210] = 813;
+    mat[211] = 883;
+    mat[212] = 451;
+    mat[213] = 509;
+    mat[214] = 615;
+    mat[215] = 77;
+    mat[216] = 281;
+    mat[217] = 613;
+    mat[218] = 459;
+    mat[219] = 205;
+    mat[220] = 380;
+    mat[221] = 274;
+    mat[222] = 302;
+    mat[223] = 35;
+    mat[224] = 805;
+    # dp[mask] = best sum using set of columns for first popcount(mask) rows
+    # Only keep current layer: iterate by number of bits
+    # Full 2^15 = 32768 — store best for each mask at its row = popcount
+    let dp: ptr<i32> = calloc(32768, 4)
+    let ndp: ptr<i32> = calloc(32768, 4)
+    if dp == null || ndp == null { return 1 }
+    # mark unused as -1
+    let mut i: i64 = 0
+    while i < 32768 {
+        dp[i] = -1
+        i = i + 1
+    }
+    dp[0] = 0
+    let mut row: i32 = 0
+    while row < n {
+        i = 0
+        while i < 32768 {
+            ndp[i] = -1
+            i = i + 1
+        }
+        let mut mask: i32 = 0
+        while mask < 32768 {
+            if dp[mask] >= 0 {
+                let mut col: i32 = 0
+                while col < n {
+                    let bit: i32 = 1 << col
+                    if (mask & bit) == 0 {
+                        let nmask: i32 = mask | bit
+                        let val: i32 = dp[mask] + mat[row * 15 + col]
+                        if val > ndp[nmask] {
+                            ndp[nmask] = val
+                        }
+                    }
+                    col = col + 1
+                }
+            }
+            mask = mask + 1
+        }
+        # swap
+        i = 0
+        while i < 32768 {
+            dp[i] = ndp[i]
+            i = i + 1
+        }
+        row = row + 1
+    }
+    let ans: i32 = dp[32767]
+    printf("%d\n", ans)
+    free(mat); free(dp); free(ndp)
+    return 0
+}

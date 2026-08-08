@@ -1,0 +1,59 @@
+# Project Euler 250
+# Subsets of {1^1..250250^250250} with sum divisible by 250; last 16 digits.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 250250
+    let MOD: i64 = 10000000000000000
+    let arr: ptr<i64> = calloc(250, 8)
+    let nxt: ptr<i64> = calloc(250, 8)
+    if arr == null || nxt == null { return 1 }
+    arr[0] = 1
+
+    let mut i: i64 = 1
+    while i <= LIMIT {
+        let x: i64 = modpow(i, i, 250)
+        let mut y: i64 = 0
+        while y < 250 {
+            nxt[y] = 0
+            y = y + 1
+        }
+        y = 0
+        while y < 250 {
+            let a: i64 = arr[y]
+            if a != 0 {
+                nxt[y] = (nxt[y] + a) % MOD
+                let z: i64 = (x + y) % 250
+                nxt[z] = (nxt[z] + a) % MOD
+            }
+            y = y + 1
+        }
+        y = 0
+        while y < 250 {
+            arr[y] = nxt[y]
+            y = y + 1
+        }
+        i = i + 1
+    }
+    let mut ans: i64 = arr[0] - 1
+    if ans < 0 { ans = ans + MOD }
+    printf("%lld\n", ans)
+    free(arr); free(nxt)
+    return 0
+}

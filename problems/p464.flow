@@ -1,0 +1,143 @@
+# Project Euler 464
+# Möbius intervals C(2·10^7): linear sieve μ + Fenwick on prefix walks.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function fenwick_sum(bit: ptr<i32>, idx0: i64) -> i64 {
+    let mut idx: i64 = idx0
+    let mut s: i64 = 0
+    while idx > 0 {
+        s = s + (bit[idx] as i64)
+        idx = idx & (idx - 1)
+    }
+    return s
+}
+
+function fenwick_add(bit: ptr<i32>, size: i64, idx0: i64, delta: i32) -> void {
+    let mut idx: i64 = idx0
+    while idx <= size {
+        bit[idx] = bit[idx] + delta
+        idx = idx + (idx & (0 - idx))
+    }
+}
+
+function compute_C(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mu: ptr<i8> = calloc(n + 1, 1)
+    let lp: ptr<i32> = calloc(n + 1, 4)
+    let primes: ptr<i32> = calloc(n / 5 + 16, 4)
+    if mu == null || lp == null || primes == null { return 0 }
+    mu[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= n {
+        if lp[i] == 0 {
+            lp[i] = i as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+            mu[i] = 0 - 1
+        }
+        let li: i64 = lp[i] as i64
+        let mi: i64 = mu[i] as i64
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            if p > li { break }
+            let ip: i64 = i * p
+            if ip > n { break }
+            lp[ip] = p as i32
+            if p == li {
+                mu[ip] = 0
+                break
+            }
+            mu[ip] = (0 - mi) as i8
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let mut prefix_a: i64 = 0
+    let mut prefix_b: i64 = 0
+    let mut min_a: i64 = 0
+    let mut max_a: i64 = 0
+    let mut min_b: i64 = 0
+    let mut max_b: i64 = 0
+    let mut pos: i64 = 1
+    while pos <= n {
+        let m: i64 = mu[pos] as i64
+        if m == 1 {
+            prefix_a = prefix_a + 99
+            prefix_b = prefix_b - 100
+        } elif m == 0 - 1 {
+            prefix_a = prefix_a - 100
+            prefix_b = prefix_b + 99
+        }
+        if prefix_a < min_a { min_a = prefix_a }
+        elif prefix_a > max_a { max_a = prefix_a }
+        if prefix_b < min_b { min_b = prefix_b }
+        elif prefix_b > max_b { max_b = prefix_b }
+        pos = pos + 1
+    }
+
+    let range_a: i64 = max_a - min_a + 1
+    let range_b: i64 = max_b - min_b + 1
+    let limit_a: i64 = range_a + 1
+    let limit_b: i64 = range_b + 1
+    let bit_a: ptr<i32> = calloc(limit_a + 2, 4)
+    let bit_b: ptr<i32> = calloc(limit_b + 2, 4)
+    if bit_a == null || bit_b == null { return 0 }
+    let offset_a: i64 = 1 - min_a
+    let offset_b: i64 = 1 - min_b
+
+    fenwick_add(bit_a, limit_a, offset_a, 1)
+    fenwick_add(bit_b, limit_b, offset_b, 1)
+
+    prefix_a = 0
+    prefix_b = 0
+    let mut bad_a: i64 = 0
+    let mut bad_b: i64 = 0
+    pos = 1
+    while pos <= n {
+        let m: i64 = mu[pos] as i64
+        if m == 1 {
+            prefix_a = prefix_a + 99
+            prefix_b = prefix_b - 100
+        } elif m == 0 - 1 {
+            prefix_a = prefix_a - 100
+            prefix_b = prefix_b + 99
+        }
+
+        let idx_a: i64 = prefix_a + offset_a
+        bad_a = bad_a + fenwick_sum(bit_a, idx_a - 1)
+        fenwick_add(bit_a, limit_a, idx_a, 1)
+
+        let idx_b: i64 = prefix_b + offset_b
+        bad_b = bad_b + fenwick_sum(bit_b, idx_b - 1)
+        fenwick_add(bit_b, limit_b, idx_b, 1)
+
+        pos = pos + 1
+    }
+
+    free(bit_a)
+    free(bit_b)
+    free(mu)
+    free(lp)
+    free(primes)
+    return n * (n + 1) / 2 - bad_a - bad_b
+}
+
+function main() -> i32 {
+    if compute_C(10) != 13 {
+        printf("%lld\n", compute_C(10))
+        return 1
+    }
+    if compute_C(500) != 16676 {
+        printf("%lld\n", compute_C(500))
+        return 1
+    }
+    printf("%lld\n", compute_C(20000000))
+    return 0
+}

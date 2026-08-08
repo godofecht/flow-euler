@@ -1,0 +1,237 @@
+# Project Euler 456
+# Triangles Containing Origin II — C(2_000_000).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = 0 - a }
+    if b < 0 { b = 0 - b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function comb3(n: i64) -> i64 {
+    if n < 3 { return 0 }
+    return n * (n - 1) * (n - 2) / 6
+}
+
+function half(x: i64, y: i64) -> i32 {
+    if y > 0 { return 0 }
+    if y == 0 {
+        if x > 0 { return 0 }
+    }
+    return 1
+}
+
+# True if polar angle of a is strictly less than polar angle of b.
+function angle_less(ax: i64, ay: i64, bx: i64, by: i64) -> bool {
+    let ha: i32 = half(ax, ay)
+    let hb: i32 = half(bx, by)
+    if ha != hb { return ha < hb }
+    let cross: i64 = ax * by - ay * bx
+    if cross != 0 { return cross > 0 }
+    let da: i64 = ax * ax + ay * ay
+    let db: i64 = bx * bx + by * by
+    return da < db
+}
+
+# Open angle from a to b is in (0, pi).
+function open_lt_pi(ax: i64, ay: i64, bx: i64, by: i64) -> bool {
+    let cross: i64 = ax * by - ay * bx
+    if cross > 0 { return true }
+    if cross < 0 { return false }
+    let dot: i64 = ax * bx + ay * by
+    return dot > 0
+}
+
+function sort_points(xs: ptr<i64>, ys: ptr<i64>, n: i64) -> void {
+    let lo: ptr<i64> = calloc(64, 8)
+    let hi: ptr<i64> = calloc(64, 8)
+    let mut sp: i32 = 0
+    lo[0] = 0
+    hi[0] = n - 1
+    sp = 1
+    while sp > 0 {
+        sp = sp - 1
+        let l: i64 = lo[sp]
+        let h: i64 = hi[sp]
+        if l >= h { continue }
+        let mid: i64 = (l + h) / 2
+        let px: i64 = xs[mid]
+        let py: i64 = ys[mid]
+        let mut i: i64 = l
+        let mut j: i64 = h
+        while i <= j {
+            while angle_less(xs[i], ys[i], px, py) { i = i + 1 }
+            while angle_less(px, py, xs[j], ys[j]) { j = j - 1 }
+            if i <= j {
+                let tx: i64 = xs[i]
+                xs[i] = xs[j]
+                xs[j] = tx
+                let ty: i64 = ys[i]
+                ys[i] = ys[j]
+                ys[j] = ty
+                i = i + 1
+                j = j - 1
+            }
+        }
+        if l < j {
+            lo[sp] = l
+            hi[sp] = j
+            sp = sp + 1
+        }
+        if i < h {
+            lo[sp] = i
+            hi[sp] = h
+            sp = sp + 1
+        }
+    }
+    free(lo)
+    free(hi)
+}
+
+function main() -> i32 {
+    let n: i64 = 2000000
+    let xs: ptr<i64> = calloc(n, 8)
+    let ys: ptr<i64> = calloc(n, 8)
+    if xs == null || ys == null { return 1 }
+
+    let SHIFT: i64 = 21
+    let MASK: i64 = (1 << SHIFT) - 1
+    let HS: i64 = 1 << 22
+    let hdx: ptr<i64> = calloc(HS, 8)
+    let hdy: ptr<i64> = calloc(HS, 8)
+    let hpack: ptr<i64> = calloc(HS, 8)
+    let hused: ptr<i8> = calloc(HS, 1)
+    if hdx == null || hdy == null || hpack == null || hused == null { return 1 }
+
+    let modx: i64 = 32323
+    let mody: i64 = 30103
+    let ax: i64 = 1248
+    let ay: i64 = 8421
+    let mut x: i64 = 1
+    let mut y: i64 = 1
+    let mut m: i64 = 0
+    let mut t: i64 = 0
+    while t < n {
+        x = (x * ax) % modx
+        y = (y * ay) % mody
+        let px: i64 = x - 16161
+        let py: i64 = y - 15051
+        if !(px == 0 && py == 0) {
+            xs[m] = px
+            ys[m] = py
+            m = m + 1
+
+            let g: i64 = gcd(px, py)
+            let mut dx: i64 = px / g
+            let mut dy: i64 = py / g
+            let mut side0: bool = true
+            if dx > 0 {
+                side0 = true
+            } else {
+                if dx == 0 {
+                    if dy > 0 {
+                        side0 = true
+                    } else {
+                        side0 = false
+                        dx = 0 - dx
+                        dy = 0 - dy
+                    }
+                } else {
+                    side0 = false
+                    dx = 0 - dx
+                    dy = 0 - dy
+                }
+            }
+
+            let mut h: i64 = (dx * 1315423911 + dy * 2654435761) % HS
+            if h < 0 { h = h + HS }
+            while hused[h] == 1 {
+                if hdx[h] == dx {
+                    if hdy[h] == dy { break }
+                }
+                h = h + 1
+                if h >= HS { h = 0 }
+            }
+            if hused[h] == 0 {
+                hused[h] = 1
+                hdx[h] = dx
+                hdy[h] = dy
+                hpack[h] = 0
+            }
+            if side0 {
+                hpack[h] = hpack[h] + 1
+            } else {
+                hpack[h] = hpack[h] + (1 << SHIFT)
+            }
+        }
+        t = t + 1
+    }
+
+    if m < 3 {
+        printf("%lld\n", 0 as i64)
+        return 0
+    }
+
+    sort_points(xs, ys, m)
+
+    let mut open_semi: i64 = 0
+    let mut j: i64 = 1
+    let mut i: i64 = 0
+    while i < m {
+        if j < i + 1 { j = i + 1 }
+        let xi: i64 = xs[i]
+        let yi: i64 = ys[i]
+        while j < i + m {
+            let xj: i64 = xs[j % m]
+            let yj: i64 = ys[j % m]
+            if open_lt_pi(xi, yi, xj, yj) {
+                j = j + 1
+            } else {
+                break
+            }
+        }
+        let k: i64 = j - i - 1
+        open_semi = open_semi + k * (k - 1) / 2
+        i = i + 1
+    }
+
+    let mut antipodal: i64 = 0
+    let mut hi: i64 = 0
+    while hi < HS {
+        if hused[hi] == 1 {
+            let packed: i64 = hpack[hi]
+            let a: i64 = packed & MASK
+            let b: i64 = packed >> SHIFT
+            if a > 0 {
+                if b > 0 {
+                    let tt: i64 = a + b
+                    antipodal = antipodal + a * b * (m - tt)
+                    antipodal = antipodal + comb3(tt) - comb3(a) - comb3(b)
+                }
+            }
+        }
+        hi = hi + 1
+    }
+
+    let total: i64 = comb3(m)
+    printf("%lld\n", total - open_semi - antipodal)
+
+    free(xs)
+    free(ys)
+    free(hdx)
+    free(hdy)
+    free(hpack)
+    free(hused)
+    return 0
+}

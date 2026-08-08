@@ -1,0 +1,67 @@
+# Project Euler 381
+# sum_p S(p) for 5 ≤ p < 10^8, S(p)=(p-1)!+...+(p-5)! mod p.
+# Closed form: S(p) ≡ -3 * 8^{-1} (mod p).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modinv(a0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    let mut t: i64 = 0
+    let mut newt: i64 = 1
+    let mut r: i64 = m
+    let mut newr: i64 = a
+    while newr != 0 {
+        let q: i64 = r / newr
+        let tmp: i64 = t - q * newt
+        t = newt
+        newt = tmp
+        let tmp2: i64 = r - q * newr
+        r = newr
+        newr = tmp2
+    }
+    if t < 0 { t = t + m }
+    return t
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 100000000
+    let sieve: ptr<i8> = calloc(LIMIT, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i < LIMIT {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    let mut p: i64 = 2
+    while p * p < LIMIT {
+        if sieve[p] == 1 {
+            let mut m: i64 = p * p
+            while m < LIMIT {
+                sieve[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let mut total: i64 = 0
+    p = 5
+    while p < LIMIT {
+        if sieve[p] == 1 {
+            let inv8: i64 = modinv(8, p)
+            let s: i64 = (0 - 3 * inv8) % p
+            if s < 0 { s = s + p }
+            total = total + s
+        }
+        p = p + 1
+    }
+
+    printf("%lld\n", total)
+    free(sieve)
+    return 0
+}

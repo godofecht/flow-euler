@@ -1,0 +1,262 @@
+# Project Euler 585
+# Nested Square Roots
+# F(n)=A(n)+(C1(n)-C3(n))/2 with primitive-pair phi via totient.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function grouped_sum_floor(n: i64, Sphi: ptr<i64>) -> i64 {
+    let mut res: i64 = 0
+    let mut i: i64 = 1
+    while i <= n {
+        let q: i64 = n / i
+        let j: i64 = n / q
+        res = res + q * (Sphi[j] - Sphi[i - 1])
+        i = j + 1
+    }
+    return res
+}
+
+function compute_C3(n: i64) -> i64 {
+    let lim: i64 = isqrt(n)
+    let is_sf: ptr<i8> = calloc(lim + 1, 1)
+    if is_sf == null { return -1 }
+    let mut i: i64 = 0
+    while i <= lim {
+        is_sf[i] = 1
+        i = i + 1
+    }
+    is_sf[0] = 0
+    let r: i64 = isqrt(lim)
+    let mut p: i64 = 2
+    while p <= r {
+        let sq: i64 = p * p
+        let mut k: i64 = sq
+        while k <= lim {
+            is_sf[k] = 0
+            k = k + sq
+        }
+        p = p + 1
+    }
+
+    let mut cnt3: i64 = 0
+    let mut pp: i64 = 1
+    while pp < lim {
+        if (pp + 1) * (pp + 1) > n { break }
+        if is_sf[pp] != 0 {
+            let mut q: i64 = 1
+            while q <= lim {
+                if is_sf[q] != 0 && gcd(pp, q) == 1 {
+                    if (pp * q + 1) * (pp + q) > n { break }
+                    let pq: i64 = pp * q
+                    let mut rr: i64 = 1
+                    while rr <= lim {
+                        if is_sf[rr] != 0 && gcd(pq, rr) == 1 {
+                            if (pq + rr) * (pp * rr + q) > n { break }
+                            let pr: i64 = pp * rr
+                            let pqr: i64 = pq * rr
+                            let mut s: i64 = 1
+                            while s <= lim {
+                                if is_sf[s] != 0 && gcd(pqr, s) == 1 {
+                                    if (pq + rr * s) * (pr + q * s) > n { break }
+                                    let u: i64 = pq
+                                    let v: i64 = rr * s
+                                    let aa: i64 = pr
+                                    let bb: i64 = q * s
+                                    if u != v && aa != bb {
+                                        let ab_sum: i64 = aa + bb
+                                        let mut w1: i64 = 1
+                                        while (u * w1 * w1 + v) * ab_sum <= n {
+                                            let u_w1: i64 = u * w1
+                                            let u_w1_sq: i64 = u_w1 * w1
+                                            let mut w2: i64 = 1
+                                            while (u_w1_sq + v * w2 * w2) * ab_sum <= n {
+                                                let v_w2: i64 = v * w2
+                                                let s1: i64 = u_w1_sq + v_w2 * w2
+                                                let mut w3: i64 = 1
+                                                while s1 * (aa * w3 * w3 + bb) <= n {
+                                                    let a_w3: i64 = aa * w3
+                                                    let a_w3_sq: i64 = a_w3 * w3
+                                                    let mut w4: i64 = 1
+                                                    while s1 * (a_w3_sq + bb * w4 * w4) <= n {
+                                                        let b_w4: i64 = bb * w4
+                                                        let s2: i64 = a_w3_sq + b_w4 * w4
+                                                        if u_w1_sq > v_w2 * w2 && a_w3_sq > b_w4 * w4 {
+                                                            if gcd(u_w1, v_w2) == 1 && gcd(a_w3, b_w4) == 1 {
+                                                                cnt3 = cnt3 + (n / s1) / s2
+                                                            }
+                                                        }
+                                                        w4 = w4 + 1
+                                                    }
+                                                    w3 = w3 + 1
+                                                }
+                                                w2 = w2 + 1
+                                            }
+                                            w1 = w1 + 1
+                                        }
+                                    }
+                                }
+                                s = s + 1
+                            }
+                        }
+                        rr = rr + 1
+                    }
+                }
+                q = q + 1
+            }
+        }
+        pp = pp + 1
+    }
+    free(is_sf)
+    return cnt3
+}
+
+function F(n: i64) -> i64 {
+    let tot: ptr<i32> = calloc(n + 1, 4)
+    let is_comp: ptr<i8> = calloc(n + 1, 1)
+    let primes: ptr<i32> = calloc(n / 5 + 10, 4)
+    if tot == null || is_comp == null || primes == null { return -1 }
+    let mut np: i64 = 0
+    tot[1] = 1
+    let mut i: i64 = 2
+    while i <= n {
+        if is_comp[i] == 0 {
+            primes[np] = i as i32
+            np = np + 1
+            tot[i] = (i - 1) as i32
+        }
+        let mut j: i64 = 0
+        while j < np {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > n { break }
+            is_comp[ip] = 1
+            if i % p == 0 {
+                tot[ip] = (tot[i] as i64 * p) as i32
+                break
+            } else {
+                tot[ip] = (tot[i] as i64 * (p - 1)) as i32
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let phi: ptr<i32> = calloc(n + 1, 4)
+    if phi == null { return -1 }
+    i = 3
+    while i <= n {
+        phi[i] = (tot[i] as i64 / 2) as i32
+        i = i + 1
+    }
+    let lim: i64 = isqrt(n)
+    let mut a: i64 = 2
+    while a <= lim {
+        let a2: i64 = a * a
+        let maxb: i64 = isqrt(n - a2)
+        let mut b: i64 = 1
+        let bmax: i64 = a
+        if maxb + 1 < bmax { bmax = maxb + 1 }
+        while b < bmax {
+            if gcd(a, b) == 1 {
+                phi[a2 + b * b] = phi[a2 + b * b] - 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let Sphi: ptr<i64> = calloc(n + 1, 8)
+    if Sphi == null { return -1 }
+    let mut acc: i64 = 0
+    i = 0
+    while i <= n {
+        acc = acc + (phi[i] as i64)
+        Sphi[i] = acc
+        i = i + 1
+    }
+
+    let A: i64 = grouped_sum_floor(n, Sphi)
+
+    # C1 with memo on floor values via open addressing
+    let CAP: i64 = 200003
+    let ckey: ptr<i64> = calloc(CAP, 8)
+    let cval: ptr<i64> = calloc(CAP, 8)
+    let cused: ptr<i8> = calloc(CAP, 1)
+    if ckey == null || cval == null || cused == null { return -1 }
+
+    let mut C1: i64 = 0
+    i = 1
+    while i <= n {
+        let q: i64 = n / i
+        let j: i64 = n / q
+        let sum_phi: i64 = Sphi[j] - Sphi[i - 1]
+        # P(q)
+        let mut h: i64 = q % CAP
+        if h < 0 { h = -h }
+        let mut Pq: i64 = 0
+        let mut found: i32 = 0
+        let mut probes: i64 = 0
+        while probes < 10000 {
+            if cused[h] == 0 {
+                Pq = grouped_sum_floor(q, Sphi)
+                cused[h] = 1
+                ckey[h] = q
+                cval[h] = Pq
+                found = 1
+                break
+            }
+            if ckey[h] == q {
+                Pq = cval[h]
+                found = 1
+                break
+            }
+            h = h + 1
+            if h >= CAP { h = 0 }
+            probes = probes + 1
+        }
+        if found == 0 { Pq = grouped_sum_floor(q, Sphi) }
+        C1 = C1 + sum_phi * Pq
+        i = j + 1
+    }
+
+    let C3: i64 = compute_C3(n)
+    free(tot)
+    free(is_comp)
+    free(primes)
+    free(phi)
+    free(Sphi)
+    free(ckey)
+    free(cval)
+    free(cused)
+    return A + (C1 - C3) / 2
+}
+
+function main() -> i32 {
+    printf("%lld\n", F(5000000))
+    return 0
+}

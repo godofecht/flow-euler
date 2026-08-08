@@ -1,0 +1,155 @@
+# Project Euler 281
+# Sum f(m,n) for f(m,n) <= 10^15.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function phi(n0: i64) -> i64 {
+    if n0 == 1 { return 1 }
+    let mut n: i64 = n0
+    let mut result: i64 = 1
+    let mut d: i64 = 2
+    while n > 1 {
+        let mut count: i64 = 0
+        while n % d == 0 {
+            count = count + 1
+            n = n / d
+        }
+        if count > 0 {
+            let mut p: i64 = 1
+            let mut i: i64 = 0
+            while i < count - 1 {
+                p = p * d
+                i = i + 1
+            }
+            result = result * p * (d - 1)
+        }
+        d = d + 1
+        if d * d > n {
+            if n > 1 {
+                result = result * (n - 1)
+            }
+            break
+        }
+    }
+    return result
+}
+
+function factorial(n: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i64 = 2
+    while i <= n {
+        r = r * i
+        i = i + 1
+    }
+    return r
+}
+
+function f_mn(m: i64, n: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut d: i64 = 1
+    while d <= n {
+        if n % d == 0 {
+            # phi(n/d) * (m*d)! / (d!)^m
+            let ph: i64 = phi(n / d)
+            let mut num: i64 = factorial(m * d)
+            let den_one: i64 = factorial(d)
+            let mut den: i64 = 1
+            let mut i: i64 = 0
+            while i < m {
+                den = den * den_one
+                i = i + 1
+            }
+            total = total + ph * (num / den)
+        }
+        d = d + 1
+    }
+    return total / (m * n)
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000000000000
+    let mut total: i64 = 0
+    let mut m: i64 = 2
+    while m < 100 {
+        let mut n: i64 = 1
+        while n < 100 {
+            # avoid factorial overflow: m*d with d|n, m*n small enough
+            if m * n > 20 {
+                # factorials get huge; use careful multiplicative formula
+                break
+            }
+            let t: i64 = f_mn(m, n)
+            if t <= limit {
+                total = total + t
+            } else {
+                break
+            }
+            n = n + 1
+        }
+        m = m + 1
+    }
+    # Recompute properly with big-safe multiplicative binomial-style
+    # Restart with safer f
+    total = 0
+    m = 2
+    while m < 40 {
+        let mut n: i64 = 1
+        while n < 40 {
+            let mut s: i64 = 0
+            let mut d: i64 = 1
+            let mut overflow: bool = false
+            while d <= n {
+                if n % d == 0 {
+                    let ph: i64 = phi(n / d)
+                    # compute (m*d)! / (d!)^m multiplicatively
+                    let mut val: i64 = 1
+                    let md: i64 = m * d
+                    # val = C(md, d) * C(md-d, d) * ... * C(d, d) = (md)!/(d!)^m
+                    let mut take: i64 = 0
+                    while take < m {
+                        let start: i64 = take * d + 1
+                        let end: i64 = (take + 1) * d
+                        # multiply by C(end, d) wait: sequential
+                        # Better: multiply (take*d+1)..(take*d+d) / 1..d
+                        let mut num_i: i64 = 1
+                        while num_i <= d {
+                            # multiply (take*d + num_i) / num_i
+                            # check overflow
+                            let mul: i64 = take * d + num_i
+                            if val > 2000000000000000000 / mul {
+                                overflow = true
+                                break
+                            }
+                            val = val * mul / num_i
+                            num_i = num_i + 1
+                        }
+                        if overflow { break }
+                        take = take + 1
+                    }
+                    if overflow { break }
+                    if ph > 0 && val > 2000000000000000000 / ph {
+                        overflow = true
+                        break
+                    }
+                    s = s + ph * val
+                }
+                d = d + 1
+            }
+            if overflow { break }
+            let t: i64 = s / (m * n)
+            if t <= 0 { break }
+            if t <= limit {
+                total = total + t
+            } else {
+                break
+            }
+            n = n + 1
+        }
+        m = m + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

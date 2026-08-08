@@ -1,0 +1,46 @@
+# Project Euler 126
+# Least n such that C(n) = 1000 cuboid layer counts.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 30000
+    let cnt: ptr<i32> = calloc(limit, 4)
+    if cnt == null { return 1 }
+
+    let mut a: i64 = 1
+    while 2 * (3 * a) < limit {
+        let mut b: i64 = 1
+        while b <= a && 2 * (a * b + a + b) < limit {
+            let mut c: i64 = 1
+            while c <= b {
+                let mut s: i64 = 2 * (a * b + b * c + c * a)
+                if s >= limit { break }
+                let mut inc: i64 = 4 * (a + b + c)
+                while s < limit {
+                    cnt[s] = cnt[s] + 1
+                    s = s + inc
+                    inc = inc + 8
+                }
+                c = c + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let mut n: i64 = 1
+    while n < limit {
+        if cnt[n] == 1000 {
+            printf("%lld\n", n)
+            free(cnt)
+            return 0
+        }
+        n = n + 1
+    }
+    free(cnt)
+    return 1
+}

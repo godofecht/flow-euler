@@ -1,0 +1,62 @@
+# Project Euler 101
+# Sum of FITs for the degree-10 generating function u_n = 1 - n + n^2 - ... + n^10.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function u(n: i64) -> i64 {
+    # sum_{k=0}^{10} (-n)^k
+    let mut term: i64 = 1
+    let mut s: i64 = 0
+    let mut k: i64 = 0
+    while k <= 10 {
+        s = s + term
+        term = term * (-n)
+        k = k + 1
+    }
+    return s
+}
+
+# Lagrange interpolation of first k terms, evaluated at x = k+1.
+function fit(k: i32, ys: ptr<i64>) -> i64 {
+    let x: i64 = (k + 1) as i64
+    let mut res: i64 = 0
+    let mut i: i32 = 0
+    while i < k {
+        let mut num: i64 = 1
+        let mut den: i64 = 1
+        let mut j: i32 = 0
+        while j < k {
+            if i != j {
+                num = num * (x - ((j + 1) as i64))
+                den = den * (((i + 1) as i64) - ((j + 1) as i64))
+            }
+            j = j + 1
+        }
+        res = res + ys[i] * num / den
+        i = i + 1
+    }
+    return res
+}
+
+function main() -> i32 {
+    let ys: ptr<i64> = calloc(11, 8)
+    if ys == null { return 1 }
+    let mut n: i64 = 1
+    while n <= 10 {
+        ys[n - 1] = u(n)
+        n = n + 1
+    }
+
+    let mut total: i64 = 0
+    let mut k: i32 = 1
+    while k <= 10 {
+        total = total + fit(k, ys)
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    free(ys)
+    return 0
+}

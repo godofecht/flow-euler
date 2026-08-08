@@ -1,0 +1,121 @@
+# Project Euler 517
+# A Real Recursion — sum G(p) for primes in (10^7, 10^7+10^4) mod 1e9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const LOW: i64 = 10000000
+const HIGH: i64 = 10010000
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function comb(n: i64, k: i64, fact: ptr<i64>, invfact: ptr<i64>) -> i64 {
+    if k < 0 || k > n { return 0 }
+    let a: i128 = (fact[n] as i128) * (invfact[k] as i128) % (MOD as i128)
+    return (a * (invfact[n - k] as i128) % (MOD as i128)) as i64
+}
+
+function G(n: i64, fact: ptr<i64>, invfact: ptr<i64>, u: ptr<i64>) -> i64 {
+    let a_floor: i64 = isqrt(n)
+    let mut m: i64 = 1
+    while m <= a_floor + 1 {
+        u[m] = n - isqrt(m * m * n) - 1
+        m = m + 1
+    }
+    let mut ans: i64 = 0
+    m = 1
+    while m <= a_floor {
+        let c: i64 = u[m]
+        let i: i64 = m - 1
+        ans = (ans + comb(c + i, i, fact, invfact)) % MOD
+        m = m + 1
+    }
+    let mut c0: i64 = 0
+    while c0 <= a_floor - 1 {
+        let upper: i64 = u[c0 + 1]
+        if upper >= 0 {
+            let mut lower: i64 = u[c0 + 2] + 1
+            if lower < 0 { lower = 0 }
+            if lower <= upper {
+                ans = (ans + comb(c0 + upper + 1, c0 + 1, fact, invfact)) % MOD
+                if lower > 0 {
+                    ans = (ans - comb(c0 + lower, c0 + 1, fact, invfact) + MOD) % MOD
+                }
+            }
+        }
+        c0 = c0 + 1
+    }
+    return ans % MOD
+}
+
+function is_prime(x: i64) -> i32 {
+    if x < 2 { return 0 }
+    let mut i: i64 = 2
+    while i * i <= x {
+        if x % i == 0 { return 0 }
+        i = i + 1
+    }
+    return 1
+}
+
+function main() -> i32 {
+    let maxn: i64 = HIGH
+    let fact: ptr<i64> = calloc(maxn + 1, 8)
+    let invfact: ptr<i64> = calloc(maxn + 1, 8)
+    let u: ptr<i64> = calloc(maxn + 4, 8)
+    if fact == null || invfact == null || u == null { return 1 }
+
+    fact[0] = 1
+    let mut i: i64 = 1
+    while i <= maxn {
+        fact[i] = (fact[i - 1] * i) % MOD
+        i = i + 1
+    }
+    invfact[maxn] = modpow(fact[maxn], MOD - 2, MOD)
+    i = maxn
+    while i > 0 {
+        invfact[i - 1] = (invfact[i] * i) % MOD
+        i = i - 1
+    }
+
+    let mut total: i64 = 0
+    let mut pr: i64 = LOW + 1
+    while pr < HIGH {
+        if is_prime(pr) == 1 {
+            total = (total + G(pr, fact, invfact, u)) % MOD
+        }
+        pr = pr + 1
+    }
+
+    printf("%lld\n", total)
+    free(fact)
+    free(invfact)
+    free(u)
+    return 0
+}

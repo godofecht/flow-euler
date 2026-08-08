@@ -1,0 +1,89 @@
+# Project Euler 251
+# Count Cardano triplets with a+b+c <= 110000000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+    function pow(x: f64, y: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function mod_inverse(a0: i64, m: i64) -> i64 {
+    # extended Euclid
+    let mut a: i64 = a0 % m
+    let mut b: i64 = m
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = a % b
+        a = b
+        b = t
+        let tx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = tx
+    }
+    if x0 < 0 { x0 = x0 + m }
+    return x0
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let limit_sum: i64 = 110000000
+    let L: i64 = limit_sum + 1
+    let q_max: i64 = isqrt(limit_sum)
+    let mut total: i64 = 0
+    let mut q: i64 = 1
+    while q <= q_max {
+        let q2: i64 = q * q
+        let den: i64 = 8 * q * q2 + 3 * q + 1
+        let p_max: i64 = (L + 3 * q2) / den
+        total = total + p_max
+
+        let r_max_f: f64 = pow(8.0 * (q as f64) * (L as f64), 1.0/3.0) + 3.0
+        let mut r_max: i64 = floor(r_max_f) as i64
+        if r_max % 2 == 0 { r_max = r_max + 1 }
+
+        let mut r: i64 = 3
+        while r <= r_max {
+            if gcd(q, r) == 1 {
+                let r2: i64 = r * r
+                let inv: i64 = mod_inverse((8 * q) % r2, r2)
+                let mut p0: i64 = (3 * inv) % r2
+                if p0 == 0 { p0 = r2 }
+                let s0: i64 = (8 * p0 * q - 3) / r2
+                let base: i64 = p0 * (3 * q + r) + s0 * q2
+                if base <= L {
+                    let step: i64 = r2 * (3 * q + r) + 8 * q * q2
+                    total = total + (L - base) / step + 1
+                }
+            }
+            r = r + 2
+        }
+        q = q + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

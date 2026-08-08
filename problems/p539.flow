@@ -1,0 +1,72 @@
+# Project Euler 539
+# Odd Elimination — S(10^18) mod 987654321 via memoized recurrence.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 987654321
+const CAP: i64 = 1048576
+
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
+    let mut h: i64 = key % CAP
+    if h < 0 { h = h + CAP }
+    while used[h] == 1 && keys[h] != key {
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function P(n: i64, pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>) -> i64 {
+    if n == 1 { return 1 }
+    let s: i64 = hslot(n, pk, pu)
+    if pu[s] == 1 { return pv[s] }
+    let val: i64 = 2 * (1 + n / 2 - P(n / 2, pk, pv, pu))
+    pu[s] = 1
+    pk[s] = n
+    pv[s] = val
+    return val
+}
+
+function S(n: i64, sk: ptr<i64>, sv: ptr<i64>, su: ptr<i8>,
+          pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>) -> i64 {
+    if n <= 0 { return 0 }
+    if n == 1 { return 1 }
+    let s: i64 = hslot(n, sk, su)
+    if su[s] == 1 { return sv[s] }
+    let mut val: i64 = 0
+    if (n & 1) == 1 {
+        let q: i64 = n / 2
+        let t: i128 = (1 as i128) + (2 as i128) * (q as i128) * ((q + 3) as i128)
+            - (4 as i128) * (S(q, sk, sv, su, pk, pv, pu) as i128)
+        val = ((t % (MOD as i128) + (MOD as i128)) % (MOD as i128)) as i64
+    } else {
+        let q: i64 = n / 2
+        let t: i128 = (2 as i128) * (q as i128) * (q as i128) + (4 as i128) * (q as i128) - (1 as i128)
+            - (4 as i128) * (S(q - 1, sk, sv, su, pk, pv, pu) as i128)
+            - (2 as i128) * ((P(q, pk, pv, pu) % MOD) as i128)
+        val = ((t % (MOD as i128) + (MOD as i128)) % (MOD as i128)) as i64
+    }
+    su[s] = 1
+    sk[s] = n
+    sv[s] = val
+    return val
+}
+
+function main() -> i32 {
+    let pk: ptr<i64> = calloc(CAP, 8)
+    let pv: ptr<i64> = calloc(CAP, 8)
+    let pu: ptr<i8> = calloc(CAP, 1)
+    let sk: ptr<i64> = calloc(CAP, 8)
+    let sv: ptr<i64> = calloc(CAP, 8)
+    let su: ptr<i8> = calloc(CAP, 1)
+    if pk == null || pv == null || pu == null || sk == null || sv == null || su == null {
+        return 1
+    }
+    let ans: i64 = S(1000000000000000000, sk, sv, su, pk, pv, pu)
+    printf("%lld\n", ans)
+    free(pk); free(pv); free(pu); free(sk); free(sv); free(su)
+    return 0
+}

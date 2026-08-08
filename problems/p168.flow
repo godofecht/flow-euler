@@ -1,0 +1,47 @@
+# Project Euler 168
+# Right-rotations that are multiples; sum last 5 digits of all such numbers
+# with 2..100 digits.
+
+function search(num_digits0: i32, multiplier: i32, last_digit: i32, modulo: i64) -> i64 {
+    let mut num_digits: i32 = num_digits0
+    let mut shift: i64 = 10
+    let mut carry: i32 = 0
+    let mut current: i32 = last_digit
+    let mut result: i64 = last_digit as i64
+
+    while num_digits > 1 {
+        num_digits = num_digits - 1
+        let next_val: i32 = multiplier * current + carry
+        carry = next_val / 10
+        current = next_val % 10
+        if shift < modulo {
+            result = result + (current as i64) * shift
+            shift = shift * 10
+        }
+    }
+    let first: i32 = multiplier * current + carry
+    if current == 0 || first != last_digit {
+        return 0
+    }
+    return result
+}
+
+function main() -> i32 {
+    let modulo: i64 = 100000
+    let mut result: i64 = 0
+    let mut num_digits: i32 = 2
+    while num_digits <= 100 {
+        let mut multiplier: i32 = 1
+        while multiplier <= 9 {
+            let mut last_digit: i32 = 1
+            while last_digit <= 9 {
+                result = result + search(num_digits, multiplier, last_digit, modulo)
+                last_digit = last_digit + 1
+            }
+            multiplier = multiplier + 1
+        }
+        num_digits = num_digits + 1
+    }
+    printf("%lld\n", result % modulo)
+    return 0
+}

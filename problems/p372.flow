@@ -1,0 +1,215 @@
+# Project Euler 372
+# R(2e6, 1e9): count pairs with floor((y/x)^2) odd.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function igcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = 0 - a }
+    if b < 0 { b = 0 - b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function floor_sum(n0: i64, m0: i64, a0: i64, b0: i64) -> i64 {
+    let mut res: i64 = 0
+    let mut n: i64 = n0
+    let mut m: i64 = m0
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while 1 == 1 {
+        if a >= m {
+            res = res + (n - 1) * n * (a / m) / 2
+            a = a % m
+        }
+        if b >= m {
+            res = res + n * (b / m)
+            b = b % m
+        }
+        let y_max: i64 = a * n + b
+        if y_max < m { break }
+        n = y_max / m
+        b = y_max % m
+        let tmp: i64 = a
+        a = m
+        m = tmp
+    }
+    return res
+}
+
+function isqrt128(n: i128) -> i64 {
+    if n <= (0 as i128) { return 0 }
+    if n < (2 as i128) { return n as i64 }
+    let mut x: i128 = n
+    let mut y: i128 = (x + (1 as i128)) / (2 as i128)
+    while y < x {
+        x = y
+        y = (x + n / x) / (2 as i128)
+    }
+    return x as i64
+}
+
+function floor_surd(a: i64, b: i64, c: i64, k: i64) -> i64 {
+    if b == 0 || k == 0 { return a / c }
+    let mut bb: i64 = b
+    if bb < 0 { bb = 0 - bb }
+    let bbk: i128 = (bb as i128) * (bb as i128) * (k as i128)
+    let s: i64 = isqrt128(bbk)
+    if b > 0 {
+        let t: i64 = (a + s) / c
+        let u: i64 = (t + 1) * c - a
+        if u <= 0 { return t + 1 }
+        if (u as i128) * (u as i128) <= bbk { return t + 1 }
+        return t
+    }
+    let t2: i64 = (a - s - 1) / c
+    let d: i64 = a - (t2 + 1) * c
+    if d >= 0 && (d as i128) * (d as i128) >= bbk { return t2 + 1 }
+    return t2
+}
+
+function normalize(a0: i64, b0: i64, c0: i64, out_a: ptr<i64>, out_b: ptr<i64>, out_c: ptr<i64>) -> void {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    let mut c: i64 = c0
+    if c < 0 {
+        a = 0 - a
+        b = 0 - b
+        c = 0 - c
+    }
+    let g: i64 = igcd(igcd(a, b), c)
+    if g > 1 {
+        a = a / g
+        b = b / g
+        c = c / g
+    }
+    out_a[0] = a
+    out_b[0] = b
+    out_c[0] = c
+}
+
+function sum_floor_mul_surd(a0: i64, b0: i64, c0: i64, k: i64, n0: i64) -> i64 {
+    if n0 <= 0 { return 0 }
+    if b0 == 0 || k == 0 {
+        let p: i64 = a0
+        let q: i64 = c0
+        if p >= 0 {
+            return floor_sum(n0, q, p, p)
+        }
+        let pp: i64 = 0 - p
+        return 0 - floor_sum(n0, q, pp, pp + q - 1)
+    }
+
+    let mut aa: i64 = a0
+    let mut bb: i64 = b0
+    let mut cc: i64 = c0
+    let mut nn: i64 = n0
+    let mut res: i64 = 0
+    let mut sign: i64 = 1
+    let box_a: array<i64, 1> = [0]
+    let box_b: array<i64, 1> = [0]
+    let box_c: array<i64, 1> = [0]
+
+    while nn > 0 {
+        let q_int: i64 = floor_surd(aa, bb, cc, k)
+        if q_int != 0 {
+            res = res + sign * q_int * nn * (nn + 1) / 2
+            aa = aa - q_int * cc
+        }
+        if aa == 0 && bb == 0 { break }
+        let m: i64 = floor_surd(aa * nn, bb * nn, cc, k)
+        if m == 0 { break }
+        res = res + sign * nn * m
+
+        # reciprocal
+        let mut A: i64 = cc * aa
+        let mut B: i64 = 0 - cc * bb
+        let mut C: i64 = aa * aa - bb * bb * k
+        if C < 0 {
+            A = 0 - A
+            B = 0 - B
+            C = 0 - C
+        }
+        normalize(A, B, C, box_a, box_b, box_c)
+        aa = box_a[0]
+        bb = box_b[0]
+        cc = box_c[0]
+        nn = m
+        sign = 0 - sign
+    }
+    return res
+}
+
+function P_func(k: i64, L: i64, U: i64, len_side: i64, total_pairs: i64, U2m1: i64, Lm1: i64) -> i64 {
+    if k == 1 {
+        return len_side * (len_side - 1) / 2
+    }
+    let r: i64 = isqrt(k)
+    if r * r == k {
+        let s: i64 = r
+        let mut b: i64 = U / s
+        if b < L { return total_pairs }
+        if b > U { b = U }
+        let cnt: i64 = b - L + 1
+        let sum_x: i64 = (L + b) * cnt / 2
+        let partial: i64 = s * sum_x - L * cnt
+        let full_cnt: i64 = U - b
+        return partial + full_cnt * len_side
+    }
+
+    let mut b2: i64 = isqrt(U2m1 / k)
+    if b2 < L { return total_pairs }
+    if b2 > U { b2 = U }
+    let cnt2: i64 = b2 - L + 1
+    let sum_floor: i64 = sum_floor_mul_surd(0, 1, 1, k, b2) - sum_floor_mul_surd(0, 1, 1, k, Lm1)
+    let partial2: i64 = sum_floor - (L - 1) * cnt2
+    let full_cnt2: i64 = U - b2
+    return partial2 + full_cnt2 * len_side
+}
+
+function solve(M: i64, N: i64) -> i64 {
+    let L: i64 = M + 1
+    let U: i64 = N
+    if L > U { return 0 }
+    let len_side: i64 = U - L + 1
+    let total_pairs: i64 = len_side * len_side
+    let k_max: i64 = (U * U) / (L * L)
+    let mut last_odd: i64 = k_max
+    if (k_max & 1) == 0 { last_odd = k_max - 1 }
+    let U2m1: i64 = U * U - 1
+    let Lm1: i64 = L - 1
+
+    let mut ans: i64 = 0
+    let mut n: i64 = 1
+    while n <= last_odd {
+        ans = ans + P_func(n + 1, L, U, len_side, total_pairs, U2m1, Lm1) - P_func(n, L, U, len_side, total_pairs, U2m1, Lm1)
+        n = n + 2
+    }
+    return ans
+}
+
+function main() -> i32 {
+    let ans: i64 = solve(2000000, 1000000000)
+    printf("%lld\n", ans)
+    return 0
+}

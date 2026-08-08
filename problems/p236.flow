@@ -1,0 +1,100 @@
+# Project Euler 236
+# Luxury Hysteresis: maximal m as reduced fraction.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function main() -> i32 {
+    let A1: i64 = 5248
+    let A2: i64 = 1312
+    let A3: i64 = 2624
+    let A4: i64 = 5760
+    let A5: i64 = 3936
+    let B1: i64 = 640
+    let B2: i64 = 1888
+    let B3: i64 = 3776
+    let B4: i64 = 3776
+    let B5: i64 = 5664
+    let SA: i64 = A1 + A2 + A3 + A4 + A5
+    let SB: i64 = B1 + B2 + B3 + B4 + B5
+    let mut max_num: i64 = 0
+    let mut max_den: i64 = 1
+    let mut s: i64 = 1
+    while s <= A2 {
+        let r_start: i64 = (59 * s) / 41 + 1
+        if r_start <= B2 {
+            let mut r: i64 = r_start
+            while r <= B2 {
+                if gcd(r, s) == 1 {
+                    let mut t2: i64 = A2 / s
+                    if B2 / r < t2 { t2 = B2 / r }
+                    let mut t3: i64 = A3 / s
+                    if B3 / r < t3 { t3 = B3 / r }
+                    let mut t5: i64 = A5 / s
+                    if B5 / r < t5 { t5 = B5 / r }
+                    if t2 >= 1 && t3 >= 1 && t5 >= 1 {
+                        let T_max: i64 = t2 + t3 + t5
+                        let d1: i64 = gcd(59 * s, 5 * r)
+                        let a1_base: i64 = (59 * s) / d1
+                        let b1_base: i64 = (5 * r) / d1
+                        let mut t1_max: i64 = A1 / a1_base
+                        if B1 / b1_base < t1_max { t1_max = B1 / b1_base }
+                        if t1_max >= 1 {
+                            let d4: i64 = gcd(90 * s, 41 * r)
+                            let a4_base: i64 = (90 * s) / d4
+                            let b4_base: i64 = (41 * r) / d4
+                            let mut t4_max: i64 = A4 / a4_base
+                            if B4 / b4_base < t4_max { t4_max = B4 / b4_base }
+                            if t4_max >= 1 {
+                                let L: i64 = SB * 59 * s
+                                let R: i64 = SA * 41 * r
+                                let denom: i64 = s * L - r * R
+                                if denom != 0 {
+                                    let c1: i64 = b1_base * R - a1_base * L
+                                    let c4: i64 = b4_base * R - a4_base * L
+                                    let mut found: bool = false
+                                    let mut t1: i64 = 1
+                                    while t1 <= t1_max && !found {
+                                        let base: i64 = c1 * t1
+                                        let mut t4: i64 = 1
+                                        while t4 <= t4_max {
+                                            let num: i64 = base + c4 * t4
+                                            if num % denom == 0 {
+                                                let T: i64 = num / denom
+                                                if T >= 3 && T <= T_max {
+                                                    let g: i64 = gcd(41 * r, 59 * s)
+                                                    let mn: i64 = (41 * r) / g
+                                                    let md: i64 = (59 * s) / g
+                                                    if mn * max_den > max_num * md {
+                                                        max_num = mn
+                                                        max_den = md
+                                                    }
+                                                    found = true
+                                                    break
+                                                }
+                                            }
+                                            t4 = t4 + 1
+                                        }
+                                        t1 = t1 + 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                r = r + 1
+            }
+        }
+        s = s + 1
+    }
+    printf("%lld/%lld\n", max_num, max_den)
+    return 0
+}

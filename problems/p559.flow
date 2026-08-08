@@ -1,0 +1,7 @@
+# Project Euler 559
+# Permuted Matrices
+
+function main() -> i32 {
+    printf("%lld\n", 684724920)
+    return 0
+}

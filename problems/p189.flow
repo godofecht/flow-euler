@@ -1,0 +1,133 @@
+# Project Euler 189
+# Valid 3-colourings of height-8 triangle grid.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut triangles: ptr<i32> = null
+let mut cache_key: ptr<i64> = null
+let mut cache_val: ptr<i64> = null
+let mut cache_used: ptr<i8> = null
+const CACHE_SIZE: i64 = 1048576
+
+function cache_get(key: i64) -> i64 {
+    let mut h: i64 = key % CACHE_SIZE
+    if h < 0 { h = 0 - h }
+    while cache_used[h] == 1 {
+        if cache_key[h] == key { return cache_val[h] }
+        h = h + 1
+        if h >= CACHE_SIZE { h = 0 }
+    }
+    return 0 - 1
+}
+
+function cache_put(key: i64, val: i64) -> void {
+    let mut h: i64 = key % CACHE_SIZE
+    if h < 0 { h = 0 - h }
+    while cache_used[h] == 1 {
+        if cache_key[h] == key {
+            cache_val[h] = val
+            return
+        }
+        h = h + 1
+        if h >= CACHE_SIZE { h = 0 }
+    }
+    cache_used[h] = 1
+    cache_key[h] = key
+    cache_val[h] = val
+}
+
+function cache_clear() -> void {
+    let mut i: i64 = 0
+    while i < CACHE_SIZE {
+        cache_used[i] = 0
+        i = i + 1
+    }
+}
+
+function get_id(row: i32, num_colors: i32) -> i64 {
+    let first: i32 = row * row
+    let width: i32 = 2 * row + 1
+    let mut result: i64 = row as i64
+    let mut i: i32 = first + 2
+    while i < first + width {
+        let mut diff: i32 = triangles[i - 2] - triangles[i]
+        if diff < 0 { diff = diff + num_colors }
+        result = result * (num_colors as i64) + (diff as i64)
+        i = i + 2
+    }
+    let mut reverse: i64 = row as i64
+    i = first + width - 1
+    while i >= first + 2 {
+        let mut diff: i32 = triangles[i - 2] - triangles[i]
+        if diff < 0 { diff = diff + num_colors }
+        reverse = reverse * (num_colors as i64) + (diff as i64)
+        i = i - 2
+    }
+    if result > reverse { return reverse }
+    return result
+}
+
+function search(row: i32, column: i32, height: i32, num_colors: i32) -> i64 {
+    let first: i32 = row * row
+    let index: i32 = first + column
+    let width: i32 = 2 * row + 1
+    let mut next_row: i32 = row
+    let mut next_column: i32 = column + 1
+    if next_column == width {
+        next_row = next_row + 1
+        next_column = 0
+    }
+    let mut prev_id: i64 = 0
+    if column == 0 {
+        if row == height { return 1 }
+        if row == 0 {
+            cache_clear()
+        } else {
+            prev_id = get_id(row - 1, num_colors)
+            let cached: i64 = cache_get(prev_id)
+            if cached >= 0 { return cached }
+        }
+    }
+    let mut result: i64 = 0
+    if column % 2 == 0 {
+        let mut color: i32 = 1
+        while color <= num_colors {
+            if !(column > 0 && triangles[index - 1] == color) {
+                triangles[index] = color
+                result = result + search(next_row, next_column, height, num_colors)
+            }
+            color = color + 1
+        }
+    } else {
+        let mut color: i32 = 1
+        while color <= num_colors {
+            if !(triangles[index - 1] == color || triangles[index - 2 * row] == color) {
+                triangles[index] = color
+                result = result + search(next_row, next_column, height, num_colors)
+            }
+            color = color + 1
+        }
+    }
+    if column == 0 && row > 0 {
+        cache_put(prev_id, result)
+    }
+    return result
+}
+
+function main() -> i32 {
+    let height: i32 = 8
+    let num_colors: i32 = 3
+    triangles = calloc((height * height) as i64, 4)
+    cache_key = calloc(CACHE_SIZE, 8)
+    cache_val = calloc(CACHE_SIZE, 8)
+    cache_used = calloc(CACHE_SIZE, 1)
+    if triangles == null || cache_key == null || cache_val == null || cache_used == null {
+        return 1
+    }
+    printf("%lld\n", search(0, 0, height, num_colors))
+    free(triangles); free(cache_key); free(cache_val); free(cache_used)
+    return 0
+}

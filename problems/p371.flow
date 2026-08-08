@@ -1,0 +1,41 @@
+# Project Euler 371
+# Expected number of plates until 000/500 pair (mod 1000).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let num_plates: i32 = 1000
+    let max_have: i32 = num_plates / 2 - 1
+    let plates: f64 = num_plates as f64
+
+    let have500: ptr<f64> = calloc((max_have + 1) as i64, 8)
+    let no500: ptr<f64> = calloc((max_have + 1) as i64, 8)
+    if have500 == null || no500 == null { return 1 }
+
+    let mut prob_duplicate: f64 = (max_have as f64) / plates
+    let prob_zero: f64 = 1.0 / plates
+    let prob_500: f64 = 1.0 / plates
+    let mut prob_unchanged: f64 = prob_duplicate + prob_zero
+
+    have500[max_have] = 1.0 / (1.0 - prob_unchanged)
+    no500[max_have] = (1.0 + prob_500 * have500[max_have]) / (1.0 - prob_unchanged)
+
+    let mut have: i32 = max_have - 1
+    while have >= 0 {
+        let num_new: f64 = plates - 2.0 * (have as f64) - 2.0
+        let prob_new: f64 = num_new / plates
+        prob_duplicate = (have as f64) / plates
+        prob_unchanged = prob_duplicate + prob_zero
+        have500[have] = (1.0 + prob_new * have500[have + 1]) / (1.0 - prob_unchanged)
+        no500[have] = (1.0 + prob_500 * have500[have] + prob_new * no500[have + 1]) / (1.0 - prob_unchanged)
+        have = have - 1
+    }
+
+    printf("%.8f\n", no500[0])
+    free(no500)
+    free(have500)
+    return 0
+}

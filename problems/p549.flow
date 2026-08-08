@@ -1,0 +1,114 @@
+# Project Euler 549
+# Divisibility of Factorials — S(10^8) via prime-power sieve.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function fact_val(n0: i64, p: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut total: i64 = 0
+    while n > 0 {
+        n = n / p
+        total = total + n
+    }
+    return total
+}
+
+function threshold(p: i64, exponent: i64) -> i64 {
+    let mut lo: i64 = 1
+    let mut hi: i64 = p * exponent
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if fact_val(mid, p) >= exponent {
+            hi = mid
+        } else {
+            lo = mid + 1
+        }
+    }
+    return lo
+}
+
+function main() -> i32 {
+    let limit: i64 = 100000000
+    let values: ptr<i32> = calloc(limit + 1, 4)
+    let sieve: ptr<i8> = calloc(limit + 1, 1)
+    if values == null || sieve == null { return 1 }
+
+    let mut i: i64 = 2
+    while i <= limit {
+        sieve[i] = 1
+        i = i + 1
+    }
+    i = 2
+    while i * i <= limit {
+        if sieve[i] == 1 {
+            let mut j: i64 = i * i
+            while j <= limit {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    # Initial: s(p*k) at least p for prime p
+    let mut p: i64 = 2
+    while p <= limit {
+        if sieve[p] == 1 {
+            let mut m: i64 = p
+            while m <= limit {
+                values[m] = p as i32
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let root: i64 = isqrt(limit)
+    p = 2
+    while p <= root {
+        if sieve[p] == 1 {
+            let mut power: i64 = p * p
+            let mut exponent: i64 = 2
+            while power <= limit {
+                let thr: i64 = threshold(p, exponent)
+                let mut m: i64 = power
+                while m <= limit {
+                    if (values[m] as i64) < thr {
+                        values[m] = thr as i32
+                    }
+                    m = m + power
+                }
+                # careful overflow for large p^e
+                if power > limit / p { break }
+                power = power * p
+                exponent = exponent + 1
+            }
+        }
+        p = p + 1
+    }
+
+    let mut total: i64 = 0
+    i = 2
+    while i <= limit {
+        total = total + (values[i] as i64)
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    free(values)
+    free(sieve)
+    return 0
+}

@@ -1,0 +1,88 @@
+# Project Euler 082
+# Minimal path sum: start any left cell, end any right cell; move up/down/right.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+function read_int(f: ptr<void>) -> i32 {
+    let mut c: i32 = fgetc(f)
+    while c >= 0 && (c < 48 || c > 57) {
+        c = fgetc(f)
+    }
+    if c < 0 { return -1 }
+    let mut v: i32 = 0
+    while c >= 48 && c <= 57 {
+        v = v * 10 + (c - 48)
+        c = fgetc(f)
+    }
+    return v
+}
+
+function min2(a: i64, b: i64) -> i64 {
+    if a < b { return a }
+    return b
+}
+
+function main() -> i32 {
+    let n: i32 = 80
+    let a: ptr<i64> = calloc((n * n) as i64, 8)
+    let col: ptr<i64> = calloc(n as i64, 8)
+    let prev: ptr<i64> = calloc(n as i64, 8)
+    if a == null || col == null || prev == null { return 1 }
+
+    let f: ptr<void> = fopen("data/p082.txt", "r")
+    if f == null {
+        printf("failed to read data/p082.txt\n")
+        return 1
+    }
+    let mut i: i32 = 0
+    while i < n * n {
+        a[i] = read_int(f) as i64
+        i = i + 1
+    }
+    fclose(f)
+
+    # prev[r] = min cost to reach (r,0) from left column start = a[r][0]
+    let mut r: i32 = 0
+    while r < n {
+        prev[r] = a[r * n]
+        r = r + 1
+    }
+
+    let mut c: i32 = 1
+    while c < n {
+        # downward pass
+        col[0] = prev[0] + a[0 * n + c]
+        r = 1
+        while r < n {
+            col[r] = a[r * n + c] + min2(prev[r], col[r - 1])
+            r = r + 1
+        }
+        # upward pass
+        r = n - 2
+        while r >= 0 {
+            col[r] = min2(col[r], col[r + 1] + a[r * n + c])
+            r = r - 1
+        }
+        memcpy(prev, col, (n as i64) * 8)
+        c = c + 1
+    }
+
+    let mut best: i64 = prev[0]
+    r = 1
+    while r < n {
+        best = min2(best, prev[r])
+        r = r + 1
+    }
+    printf("%lld\n", best)
+    free(a)
+    free(col)
+    free(prev)
+    return 0
+}

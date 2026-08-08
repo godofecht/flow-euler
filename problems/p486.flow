@@ -1,0 +1,84 @@
+# Project Euler 486
+# Palindrome-containing Strings — D(10^18) via period-6 free counts + CRT.
+
+function modinv(a0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    let mut b: i64 = m
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = a - q * b
+        a = b
+        b = t
+        let tx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = tx
+    }
+    if x0 < 0 { x0 = x0 + m }
+    return x0
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = (r * b) % mod
+        }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let m: i64 = 87654321
+    let L: i64 = 1000000000000000000
+    let B6: i64 = 85
+    let o64: i64 = 1216562
+    let period_q: i64 = m * o64
+    let inv200: i64 = modinv(200, m)
+    let inv_o: i64 = modinv(o64, m)
+    let PREFIX: array<i64, 6> = [0, 32, 64, 96, 130, 166]
+    let pow2: array<i64, 6> = [0, 0, 0, 0, 0, 0]
+    let C: array<i64, 6> = [0, 0, 0, 0, 0, 0]
+    let Rlist: array<i64, 6> = [0, 0, 0, 0, 0, 0]
+    let mut base: i64 = 0
+    let mut r: i64 = 0
+    while r < 6 {
+        pow2[r] = modpow(2, r + 7, m)
+        C[r] = (1 + B6 + PREFIX[r]) % m
+        let qmax: i64 = (L - r - 6) / 6
+        let N: i64 = qmax + 1
+        let Q: i64 = N / period_q
+        base = base + Q * o64
+        Rlist[r] = N - Q * period_q
+        r = r + 1
+    }
+    let mut extra: i64 = 0
+    let mut pow64: i64 = 1
+    let mut k: i64 = 0
+    while k < o64 {
+        r = 0
+        while r < 6 {
+            let Lval: i64 = (pow2[r] * pow64) % m
+            let mut q0: i64 = ((Lval - C[r]) % m + m) % m
+            q0 = (q0 * inv200) % m
+            let mut diff: i64 = q0 - k
+            if diff < 0 { diff = diff + m }
+            let t: i64 = (diff * inv_o) % m
+            let q_res: i64 = k + o64 * t
+            if q_res < Rlist[r] {
+                extra = extra + 1
+            }
+            r = r + 1
+        }
+        pow64 = (pow64 * 64) % m
+        k = k + 1
+    }
+    # F5(5)=8, 8 % m != 0, so no add5
+    printf("%lld\n", base + extra)
+    return 0
+}

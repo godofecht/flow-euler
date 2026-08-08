@@ -1,0 +1,202 @@
+# Project Euler 385
+# A(10^9): sum of areas of integer triangles with Steiner foci at (±√13, 0).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function igcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = 0 - a }
+    if b < 0 { b = 0 - b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function iabs(x: i64) -> i64 {
+    if x < 0 { return 0 - x }
+    return x
+}
+
+function pt_less(ax: i64, ay: i64, bx: i64, by: i64) -> i64 {
+    if ax < bx { return 1 }
+    if ax > bx { return 0 }
+    if ay < by { return 1 }
+    return 0
+}
+
+function tri_seen(sx: ptr<i64>, sy: ptr<i64>, nseen: i64,
+                  x1: i64, y1: i64, x2: i64, y2: i64, x3: i64, y3: i64) -> i64 {
+    let mut i: i64 = 0
+    while i < nseen {
+        let b: i64 = i * 3
+        if sx[b] == x1 && sy[b] == y1 && sx[b + 1] == x2 && sy[b + 1] == y2 && sx[b + 2] == x3 && sy[b + 2] == y3 {
+            return 1
+        }
+        i = i + 1
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let N: i64 = 1000000000
+    # Pell seeds packed: K, then pairs (s,t). We hardcode the four K groups.
+    let seeds_k: array<i64, 4> = [468, 117, 36, 9]
+    let seeds_s: array<i64, 6> = [24, 30, 12, 15, 6, 3]
+    let seeds_t: array<i64, 6> = [6, 12, 3, 6, 0, 0]
+    let seeds_cnt: array<i64, 4> = [2, 2, 1, 1]
+    let seeds_off: array<i64, 4> = [0, 2, 4, 5]
+
+    let sx: ptr<i64> = calloc(500 * 3, 8)
+    let sy: ptr<i64> = calloc(500 * 3, 8)
+    if sx == null || sy == null { return 1 }
+    let mut nseen: i64 = 0
+    let mut total: i128 = 0
+
+    let mut m: i64 = 0 - 12
+    while m <= 12 {
+        let mut n: i64 = 0 - 21
+        while n <= 21 {
+            if m == 0 && n == 0 {
+                n = n + 1
+                continue
+            }
+            if igcd(iabs(m), iabs(n)) != 1 {
+                n = n + 1
+                continue
+            }
+            let D: i64 = n * n + 3 * m * m
+            if D == 0 || 468 % D != 0 {
+                n = n + 1
+                continue
+            }
+            let K: i64 = 468 / D
+            let mut ki: i64 = 0
+            let mut found: i64 = 0
+            while ki < 4 {
+                if seeds_k[ki] == K {
+                    found = 1
+                    break
+                }
+                ki = ki + 1
+            }
+            if found == 0 {
+                n = n + 1
+                continue
+            }
+
+            let cnt: i64 = seeds_cnt[ki]
+            let off: i64 = seeds_off[ki]
+            let mut si: i64 = 0
+            while si < cnt {
+                let mut s: i64 = seeds_s[off + si]
+                let mut t: i64 = seeds_t[off + si]
+                while 1 == 1 {
+                    let mut mx: i64 = s
+                    if t > mx { mx = t }
+                    if mx > 6 * N + 10 { break }
+
+                    if s != 0 && t != 0 {
+                        let mut ssign: i64 = 0
+                        while ssign < 2 {
+                            let mut tsign: i64 = 0
+                            while tsign < 2 {
+                                let mut ss: i64 = s
+                                if ssign == 1 { ss = 0 - s }
+                                let mut tt: i64 = t
+                                if tsign == 1 { tt = 0 - t }
+
+                                if (ss * n) % 3 == 0 {
+                                    let a: i64 = ss * m
+                                    let b: i64 = 0 - tt * n
+                                    let c: i64 = (ss * n) / 3
+                                    let d: i64 = tt * m
+                                    if ((a + c) & 1) == 0 && ((b + d) & 1) == 0 {
+                                        let x1: i64 = (a + c) / 2
+                                        let y1: i64 = (b + d) / 2
+                                        let x2: i64 = (c - a) / 2
+                                        let y2: i64 = (d - b) / 2
+                                        let x3: i64 = 0 - c
+                                        let y3: i64 = 0 - d
+                                        let mut big: i64 = iabs(x1)
+                                        if iabs(y1) > big { big = iabs(y1) }
+                                        if iabs(x2) > big { big = iabs(x2) }
+                                        if iabs(y2) > big { big = iabs(y2) }
+                                        if iabs(x3) > big { big = iabs(x3) }
+                                        if iabs(y3) > big { big = iabs(y3) }
+                                        if big <= N {
+                                            # sort three points
+                                            let mut p1x: i64 = x1
+                                            let mut p1y: i64 = y1
+                                            let mut p2x: i64 = x2
+                                            let mut p2y: i64 = y2
+                                            let mut p3x: i64 = x3
+                                            let mut p3y: i64 = y3
+                                            if pt_less(p2x, p2y, p1x, p1y) == 1 {
+                                                let tx: i64 = p1x
+                                                let ty: i64 = p1y
+                                                p1x = p2x
+                                                p1y = p2y
+                                                p2x = tx
+                                                p2y = ty
+                                            }
+                                            if pt_less(p3x, p3y, p2x, p2y) == 1 {
+                                                let tx2: i64 = p2x
+                                                let ty2: i64 = p2y
+                                                p2x = p3x
+                                                p2y = p3y
+                                                p3x = tx2
+                                                p3y = ty2
+                                            }
+                                            if pt_less(p2x, p2y, p1x, p1y) == 1 {
+                                                let tx3: i64 = p1x
+                                                let ty3: i64 = p1y
+                                                p1x = p2x
+                                                p1y = p2y
+                                                p2x = tx3
+                                                p2y = ty3
+                                            }
+                                            if tri_seen(sx, sy, nseen, p1x, p1y, p2x, p2y, p3x, p3y) == 0 {
+                                                let bidx: i64 = nseen * 3
+                                                sx[bidx] = p1x
+                                                sy[bidx] = p1y
+                                                sx[bidx + 1] = p2x
+                                                sy[bidx + 1] = p2y
+                                                sx[bidx + 2] = p3x
+                                                sy[bidx + 2] = p3y
+                                                nseen = nseen + 1
+                                                let prod: i128 = (D as i128) * (iabs(s) as i128) * (iabs(t) as i128)
+                                                total = total + prod
+                                            }
+                                        }
+                                    }
+                                }
+                                tsign = tsign + 1
+                            }
+                            ssign = ssign + 1
+                        }
+                    }
+                    let ns: i64 = 2 * s + 3 * t
+                    let nt: i64 = s + 2 * t
+                    s = ns
+                    t = nt
+                }
+                si = si + 1
+            }
+            n = n + 1
+        }
+        m = m + 1
+    }
+
+    let ans: i64 = (total / (4 as i128)) as i64
+    printf("%lld\n", ans)
+    free(sy)
+    free(sx)
+    return 0
+}

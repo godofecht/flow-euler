@@ -1,0 +1,73 @@
+# Project Euler 050
+# Prime below one million that can be written as the sum of the most
+# consecutive primes.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let sieve: ptr<i8> = calloc(limit, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    # collect primes
+    let primes: ptr<i64> = calloc(80000, 8)
+    if primes == null { free(sieve); return 1 }
+    let mut pc: i32 = 0
+    let mut i: i64 = 2
+    while i < limit {
+        if sieve[i] == 0 {
+            primes[pc] = i
+            pc = pc + 1
+        }
+        i = i + 1
+    }
+
+    # prefix sums
+    let pref: ptr<i64> = calloc((pc + 1) as i64, 8)
+    if pref == null { free(primes); free(sieve); return 1 }
+    let mut j: i32 = 0
+    while j < pc {
+        pref[j + 1] = pref[j] + primes[j]
+        j = j + 1
+    }
+
+    let mut best_len: i32 = 0
+    let mut best_prime: i64 = 0
+    let mut start: i32 = 0
+    while start < pc {
+        let mut end: i32 = start + best_len + 1
+        while end <= pc {
+            let s: i64 = pref[end] - pref[start]
+            if s >= limit { break }
+            let len: i32 = end - start
+            if len > best_len && sieve[s] == 0 {
+                best_len = len
+                best_prime = s
+            }
+            end = end + 1
+        }
+        start = start + 1
+    }
+
+    printf("%lld\n", best_prime)
+    free(pref)
+    free(primes)
+    free(sieve)
+    return 0
+}

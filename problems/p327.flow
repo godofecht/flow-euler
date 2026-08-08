@@ -1,0 +1,33 @@
+# Project Euler 327
+# Rooms of Doom: sum M(C,30) for C=3..40.
+
+function search(cards: i64, rooms: i64) -> i64 {
+    let mut need: i64 = 1
+    let transport: i64 = cards - 2
+    let mut current: i64 = rooms
+    while current > 0 {
+        let mut consumed: i64 = 0
+        if need >= cards {
+            let mut moves: i64 = (need - cards) / transport
+            if need - moves * transport >= cards {
+                moves = moves + 1
+            }
+            need = need - moves * transport
+            consumed = consumed + moves * cards
+        }
+        need = need + consumed + 1
+        current = current - 1
+    }
+    return need
+}
+
+function main() -> i32 {
+    let mut result: i64 = 0
+    let mut c: i64 = 3
+    while c <= 40 {
+        result = result + search(c, 30)
+        c = c + 1
+    }
+    printf("%lld\n", result)
+    return 0
+}

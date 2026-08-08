@@ -1,0 +1,149 @@
+# Project Euler 507
+# Shortest Lattice Vector — sum S(n) for n=1..20_000_000.
+
+const MOD: i64 = 10000000
+const LIMIT: i64 = 20000000
+
+function abs64(x: i64) -> i64 {
+    if x < 0 { return -x }
+    return x
+}
+
+function floordiv(a: i64, b: i64) -> i64 {
+    if b == 0 { return 0 }
+    let q: i64 = a / b
+    let r: i64 = a - q * b
+    if r != 0 && ((r > 0) != (b > 0)) { q = q - 1 }
+    return q
+}
+
+function best_reduction(a1: i64, a2: i64, a3: i64, b1: i64, b2: i64, b3: i64, nb: i64) -> i64 {
+    let mut best_m: i64 = 0
+    let mut best_v: i64 = nb
+
+    if a1 != 0 {
+        let mut q: i64 = floordiv(b1, a1)
+        let mut v: i64 = abs64(b1 - q * a1) + abs64(b2 - q * a2) + abs64(b3 - q * a3)
+        if v < best_v {
+            best_v = v
+            best_m = q
+        }
+        q = q + 1
+        v = abs64(b1 - q * a1) + abs64(b2 - q * a2) + abs64(b3 - q * a3)
+        if v < best_v {
+            best_v = v
+            best_m = q
+        }
+    }
+    if a2 != 0 {
+        let mut q2: i64 = floordiv(b2, a2)
+        let mut v2: i64 = abs64(b1 - q2 * a1) + abs64(b2 - q2 * a2) + abs64(b3 - q2 * a3)
+        if v2 < best_v {
+            best_v = v2
+            best_m = q2
+        }
+        q2 = q2 + 1
+        v2 = abs64(b1 - q2 * a1) + abs64(b2 - q2 * a2) + abs64(b3 - q2 * a3)
+        if v2 < best_v {
+            best_v = v2
+            best_m = q2
+        }
+    }
+    if a3 != 0 {
+        let mut q3: i64 = floordiv(b3, a3)
+        let mut v3: i64 = abs64(b1 - q3 * a1) + abs64(b2 - q3 * a2) + abs64(b3 - q3 * a3)
+        if v3 < best_v {
+            best_v = v3
+            best_m = q3
+        }
+        q3 = q3 + 1
+        v3 = abs64(b1 - q3 * a1) + abs64(b2 - q3 * a2) + abs64(b3 - q3 * a3)
+        if v3 < best_v {
+            best_v = v3
+            best_m = q3
+        }
+    }
+    return best_m
+}
+
+function shortest_l1(v1: i64, v2: i64, v3: i64, w1: i64, w2: i64, w3: i64) -> i64 {
+    let mut a1: i64 = v1
+    let mut a2: i64 = v2
+    let mut a3: i64 = v3
+    let mut b1: i64 = w1
+    let mut b2: i64 = w2
+    let mut b3: i64 = w3
+
+    if (a1 | a2 | a3) == 0 {
+        return abs64(b1) + abs64(b2) + abs64(b3)
+    }
+    if (b1 | b2 | b3) == 0 {
+        return abs64(a1) + abs64(a2) + abs64(a3)
+    }
+
+    while true {
+        let na: i64 = abs64(a1) + abs64(a2) + abs64(a3)
+        let nb: i64 = abs64(b1) + abs64(b2) + abs64(b3)
+        if nb < na {
+            let ta1: i64 = a1
+            a1 = b1
+            b1 = ta1
+            let ta2: i64 = a2
+            a2 = b2
+            b2 = ta2
+            let ta3: i64 = a3
+            a3 = b3
+            b3 = ta3
+        }
+        let m: i64 = best_reduction(a1, a2, a3, b1, b2, b3, nb)
+        let reduced: i64 = abs64(b1 - m * a1) + abs64(b2 - m * a2) + abs64(b3 - m * a3)
+        if reduced >= nb { break }
+        b1 = b1 - m * a1
+        b2 = b2 - m * a2
+        b3 = b3 - m * a3
+    }
+
+    let s: i64 = abs64(a1) + abs64(a2) + abs64(a3)
+    let t: i64 = abs64(b1) + abs64(b2) + abs64(b3)
+    if t != 0 && t < s { return t }
+    return s
+}
+
+function main() -> i32 {
+    let mut prev2: i64 = 1
+    let mut prev1: i64 = 0
+    let mut cur: i64 = 0
+    let mut pos: i64 = 0
+    let mut total: i128 = 0
+
+    let b0: ptr<i64> = calloc(12, 8)
+    if b0 == null { return 1 }
+
+    let mut step: i64 = 0
+    let max_step: i64 = LIMIT * 12
+    while step < max_step {
+        b0[pos] = cur
+        pos = pos + 1
+        if pos == 12 {
+            let s: i64 = shortest_l1(
+                b0[0] - b0[1], b0[2] + b0[3], b0[4] * b0[5],
+                b0[6] - b0[7], b0[8] + b0[9], b0[10] * b0[11]
+            )
+            total = total + (s as i128)
+            pos = 0
+        }
+        let mut nxt: i64 = prev2 + prev1 + cur
+        if nxt >= MOD {
+            nxt = nxt - MOD
+            if nxt >= MOD { nxt = nxt - MOD }
+        }
+        prev2 = prev1
+        prev1 = cur
+        cur = nxt
+        step = step + 1
+    }
+
+    printf("%lld\n", total as i64)
+    free(b0)
+    return 0
+}

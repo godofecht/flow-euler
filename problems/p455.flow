@@ -1,0 +1,45 @@
+# Project Euler 455
+# Powers with Trailing Digits — sum f(n) for n=2..10^6, f = fixed point of x↦n^x mod 10^9.
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function f_n(n: i64, modulo: i64) -> i64 {
+    let mut exponent: i64 = n
+    let mut guard: i32 = 0
+    while guard < 64 {
+        let next_value: i64 = modpow(n, exponent, modulo)
+        if next_value == 0 || next_value == exponent {
+            return next_value
+        }
+        exponent = next_value
+        guard = guard + 1
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000
+    let modulo: i64 = 1000000000
+    let mut total: i64 = 0
+    let mut i: i64 = 2
+    while i <= limit {
+        total = total + f_n(i, modulo)
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

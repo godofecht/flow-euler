@@ -1,0 +1,23 @@
+# Project Euler 555
+# McCarthy 91 Function
+# S(p,m) = sum over admissible (k,s) of SF(m,k,s). Closed form:
+# sum_{d=1}^{p-1} sum_{s=d,2d,...}^{p-d} d*(2m+d-2s+1)/2
+
+function S(p: i64, m: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut d: i64 = 1
+    while d < p {
+        let mut s: i64 = d
+        while s <= p - d {
+            total = total + (d * (2 * m + d - 2 * s + 1)) / 2
+            s = s + d
+        }
+        d = d + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(1000000, 1000000))
+    return 0
+}

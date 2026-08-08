@@ -1,0 +1,139 @@
+# Project Euler 440
+# S(2000) mod 987898789 for gcd of tiling counts T(c^a), T(c^b).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mul_pair(a0: i64, a1: i64, b0: i64, b1: i64, mod: i64, P: i64, o0: ptr<i64>, o1: ptr<i64>) -> void {
+    let t: i64 = (b1 - P * b0) % mod
+    if t < 0 { t = t + mod }
+    o0[0] = (a1 * b0 + a0 * t) % mod
+    o1[0] = (a1 * b1 + a0 * b0) % mod
+}
+
+function sq_pair(a0: i64, a1: i64, mod: i64, P: i64, o0: ptr<i64>, o1: ptr<i64>) -> void {
+    let v: i64 = (2 * a1 - P * a0) % mod
+    if v < 0 { v = v + mod }
+    o0[0] = (a0 * v) % mod
+    o1[0] = (a1 * a1 + a0 * a0) % mod
+}
+
+function main() -> i32 {
+    let MOD: i64 = 987898789
+    let P: i64 = 10
+    let L: i64 = 2000
+
+    let mu: ptr<i8> = calloc(L + 1, 1)
+    let is_comp: ptr<i8> = calloc(L + 1, 1)
+    let primes: ptr<i32> = calloc(L, 4)
+    if mu == null { return 1 }
+    mu[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= L {
+        if is_comp[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            mu[i] = -1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > L { break }
+            is_comp[ip] = 1
+            if i % p == 0 { mu[ip] = 0; break }
+            mu[ip] = (0 - (mu[i] as i64)) as i8
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let f: ptr<i64> = calloc(L + 1, 8)
+    let mut n: i64 = 1
+    while n <= L {
+        let mut s: i64 = 0
+        let mut d: i64 = 1
+        while d <= n {
+            let md: i64 = mu[d] as i64
+            if md != 0 {
+                let t: i64 = (n / d + 1) / 2
+                s = s + md * t * t
+            }
+            d = d + 2
+        }
+        f[n] = s
+        n = n + 1
+    }
+
+    let Ncnt: ptr<i64> = calloc(L + 1, 8)
+    let mut sumN: i64 = 0
+    let mut g: i64 = 1
+    while g <= L {
+        Ncnt[g] = f[L / g]
+        sumN = sumN + Ncnt[g]
+        g = g + 1
+    }
+    let rest: i64 = L * L - sumN
+
+    let U: ptr<i64> = calloc(L + 2, 8)
+    U[0] = 0
+    U[1] = 1
+    i = 2
+    while i <= L + 1 {
+        U[i] = (P * U[i - 1] + U[i - 2]) % MOD
+        i = i + 1
+    }
+
+    let bits: ptr<i8> = calloc(64, 1)
+    let o0: i64 = 0
+    let o1: i64 = 0
+    let mut total: i64 = 0
+    let mut c: i64 = 1
+    while c <= L {
+        let mut nbits: i64 = 0
+        let mut x: i64 = c
+        while x > 0 {
+            bits[nbits] = (x & 1) as i8
+            x = x >> 1
+            nbits = nbits + 1
+        }
+        let mut pair0: i64 = U[c]
+        let mut pair1: i64 = U[c + 1]
+        let mut small: i64 = 1
+        if (c & 1) == 1 { small = U[2] }
+        let mut contrib: i64 = (rest % MOD) * small % MOD
+        g = 1
+        while g <= L {
+            contrib = (contrib + (Ncnt[g] % MOD) * pair1) % MOD
+            # pow_pair_by_bits
+            let mut r0: i64 = 0
+            let mut r1: i64 = 1
+            let mut b0: i64 = pair0
+            let mut b1: i64 = pair1
+            let mut bi: i64 = 0
+            while bi < nbits {
+                if bits[bi] != 0 {
+                    mul_pair(r0, r1, b0, b1, MOD, P, &o0, &o1)
+                    r0 = o0
+                    r1 = o1
+                }
+                if bi != nbits - 1 {
+                    sq_pair(b0, b1, MOD, P, &o0, &o1)
+                    b0 = o0
+                    b1 = o1
+                }
+                bi = bi + 1
+            }
+            pair0 = r0
+            pair1 = r1
+            g = g + 1
+        }
+        total = (total + contrib) % MOD
+        c = c + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

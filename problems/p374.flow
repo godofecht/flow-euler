@@ -1,0 +1,118 @@
+# Project Euler 374
+# S(10^14) = sum f(n)*m(n) mod 982451653.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n < 0 { return 0 }
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function max_base_k(n: i64) -> i64 {
+    let d: i64 = 1 + 8 * (n + 1)
+    let s: i64 = isqrt(d)
+    let mut k: i64 = (s - 1) / 2
+    while k * (k + 1) / 2 - 1 > n {
+        k = k - 1
+    }
+    while (k + 1) * (k + 2) / 2 - 1 <= n {
+        k = k + 1
+    }
+    return k
+}
+
+function main() -> i32 {
+    let p: i64 = 982451653
+    let limit: i64 = 100000000000000
+    let inv2: i64 = (p + 1) / 2
+
+    let mut ans: i64 = 1
+    let k_last: i64 = max_base_k(limit)
+    let r_max: i64 = limit - (k_last * (k_last + 1) / 2 - 1)
+
+    let inv_size: i64 = k_last + 1
+    if inv_size < 3 { inv_size = 3 }
+    let inv: ptr<i64> = calloc(inv_size, 8)
+    if inv == null { return 1 }
+    inv[1] = 1
+    let mut i: i64 = 2
+    while i < inv_size {
+        inv[i] = p - (p / i) * inv[p % i] % p
+        i = i + 1
+    }
+
+    let mut upto: i64 = 4
+    if limit < 4 { upto = limit }
+    if upto >= 2 {
+        let cnt: i64 = upto - 1
+        ans = ans + (2 + upto) * cnt / 2
+    }
+    ans = ans % p
+
+    if k_last < 3 {
+        printf("%lld\n", ans)
+        free(inv)
+        return 0
+    }
+
+    let mut fact: i64 = 2
+    let mut sum_inv3: i64 = 0
+    let mut prefix_Lm1: i64 = 0
+    let mut need_prefix: i64 = 0
+    if r_max >= 1 && r_max <= k_last - 2 { need_prefix = 1 }
+    let capture_k: i64 = k_last - r_max
+    let mut k: i64 = 3
+    while k < k_last {
+        fact = (fact * k) % p
+        sum_inv3 = sum_inv3 + inv[k]
+        if sum_inv3 >= p { sum_inv3 = sum_inv3 - p }
+
+        let tmp: i64 = (1 + (k + 1) % p * (sum_inv3 % p) % p + (2 * k + 3) % p * inv2 % p) % p
+        let sum_f_block: i64 = (fact * tmp) % p
+        ans = (ans + (k - 1) % p * sum_f_block % p) % p
+        if need_prefix == 1 && k == capture_k {
+            prefix_Lm1 = sum_inv3
+        }
+        k = k + 1
+    }
+
+    k = k_last
+    fact = (fact * k) % p
+    sum_inv3 = sum_inv3 + inv[k]
+    if sum_inv3 >= p { sum_inv3 = sum_inv3 - p }
+
+    let mut sum_f: i64 = 0
+    if r_max <= k - 2 {
+        if r_max == 0 {
+            sum_f = fact
+        } else {
+            let mut sum_inv_range: i64 = (sum_inv3 - prefix_Lm1) % p
+            if sum_inv_range < 0 { sum_inv_range = sum_inv_range + p }
+            let tmp2: i64 = (1 + (k + 1) * sum_inv_range) % p
+            sum_f = (fact * tmp2) % p
+        }
+    } else {
+        if r_max == k - 1 {
+            let tmp3: i64 = (1 + (k + 1) * sum_inv3 + (k + 1) * inv2) % p
+            sum_f = (fact * tmp3) % p
+        } else {
+            let tmp4: i64 = (1 + (k + 1) * sum_inv3 + (2 * k + 3) * inv2) % p
+            sum_f = (fact * tmp4) % p
+        }
+    }
+
+    ans = (ans + (k - 1) * sum_f) % p
+    printf("%lld\n", ans)
+    free(inv)
+    return 0
+}

@@ -1,0 +1,224 @@
+# Project Euler 233
+# Sum of N <= 10^11 with f(N)=420 lattice points on circle.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function iroot(n: i64, k: i32) -> i64 {
+    if n <= 1 || k == 1 { return n }
+    let mut x: i64 = 1
+    # rough init via sqrt repeatedly
+    if k == 3 {
+        x = isqrt(isqrt(n)) + 2
+    } elif k == 7 {
+        x = isqrt(isqrt(isqrt(n))) + 2
+    } else {
+        x = isqrt(n)
+    }
+    while true {
+        let mut p: i64 = 1
+        let mut i: i32 = 0
+        let mut overflow: bool = false
+        while i < k {
+            if p > n / x { overflow = true; break }
+            p = p * x
+            i = i + 1
+        }
+        if !overflow && p <= n {
+            let mut p2: i64 = 1
+            let mut ok: bool = true
+            i = 0
+            while i < k {
+                if p2 > n / (x + 1) { ok = false; break }
+                p2 = p2 * (x + 1)
+                i = i + 1
+            }
+            if ok && p2 <= n {
+                x = x + 1
+                continue
+            }
+            return x
+        }
+        x = x - 1
+        if x <= 0 { return 0 }
+    }
+    return x
+}
+
+function bisect_right(a: ptr<i64>, n: i64, v: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = n
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if a[mid] <= v { lo = mid + 1 }
+        else { hi = mid }
+    }
+    return lo
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 100000000000
+    let max_prime: i64 = LIMIT / (125 * 169)
+    let sieve: ptr<i8> = calloc(max_prime + 1, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i <= max_prime {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0; sieve[1] = 0
+    i = 2
+    while i * i <= max_prime {
+        if sieve[i] == 1 {
+            let mut j: i64 = i * i
+            while j <= max_prime {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let primes1: ptr<i64> = calloc(max_prime / 5, 8)
+    let mut np: i64 = 0
+    i = 5
+    while i <= max_prime {
+        if sieve[i] == 1 && (i & 3) == 1 {
+            primes1[np] = i
+            np = np + 1
+        }
+        i = i + 2
+    }
+
+    let gmax: i64 = LIMIT / (125 * 169 * 17)
+    let allowed: ptr<i8> = calloc(gmax + 1, 1)
+    let prefix: ptr<i64> = calloc(gmax + 1, 8)
+    if allowed == null || prefix == null { return 1 }
+    i = 0
+    while i <= gmax {
+        allowed[i] = 1
+        i = i + 1
+    }
+    allowed[0] = 0
+    i = 0
+    while i < np {
+        let p: i64 = primes1[i]
+        if p > gmax { break }
+        let mut j: i64 = p
+        while j <= gmax {
+            allowed[j] = 0
+            j = j + p
+        }
+        i = i + 1
+    }
+    let mut s: i64 = 0
+    i = 1
+    while i <= gmax {
+        if allowed[i] == 1 { s = s + i }
+        prefix[i] = s
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+
+    # Pattern (10,2): 5^10 * q^2
+    let p10: i64 = 5 * 5 * 5 * 5 * 5 * 5 * 5 * 5 * 5 * 5
+    if p10 <= LIMIT {
+        let qmax: i64 = isqrt(LIMIT / p10)
+        let iq: i64 = bisect_right(primes1, np, qmax)
+        let mut j: i64 = 0
+        while j < iq {
+            let q: i64 = primes1[j]
+            if q != 5 {
+                let base: i64 = p10 * q * q
+                let m: i64 = LIMIT / base
+                if m > gmax { m = gmax }
+                total = total + base * prefix[m]
+            }
+            j = j + 1
+        }
+    }
+
+    # Pattern (7,3)
+    let amax: i64 = iroot(LIMIT, 7)
+    let ia: i64 = bisect_right(primes1, np, amax)
+    let mut ii: i64 = 0
+    while ii < ia {
+        let a: i64 = primes1[ii]
+        let mut a7: i64 = 1
+        let mut t: i32 = 0
+        while t < 7 {
+            a7 = a7 * a
+            t = t + 1
+        }
+        if a7 > LIMIT { break }
+        let bmax: i64 = iroot(LIMIT / a7, 3)
+        let ib: i64 = bisect_right(primes1, np, bmax)
+        let mut j: i64 = 0
+        while j < ib {
+            let b: i64 = primes1[j]
+            if b != a {
+                let base: i64 = a7 * b * b * b
+                if base <= LIMIT {
+                    let m: i64 = LIMIT / base
+                    if m > gmax { m = gmax }
+                    total = total + base * prefix[m]
+                }
+            }
+            j = j + 1
+        }
+        ii = ii + 1
+    }
+
+    # Pattern (3,2,1)
+    let p3max: i64 = iroot(LIMIT, 3)
+    let ip3: i64 = bisect_right(primes1, np, p3max)
+    ii = 0
+    while ii < ip3 {
+        let p3: i64 = primes1[ii]
+        let p3_3: i64 = p3 * p3 * p3
+        if p3_3 > LIMIT { break }
+        let q2max: i64 = isqrt(LIMIT / p3_3)
+        let iq: i64 = bisect_right(primes1, np, q2max)
+        let mut j: i64 = 0
+        while j < iq {
+            let q: i64 = primes1[j]
+            if q != p3 {
+                let base_pq: i64 = p3_3 * q * q
+                if base_pq <= LIMIT {
+                    let rmax: i64 = LIMIT / base_pq
+                    let ir: i64 = bisect_right(primes1, np, rmax)
+                    let mut kk: i64 = 0
+                    while kk < ir {
+                        let r: i64 = primes1[kk]
+                        if r != p3 && r != q {
+                            let base: i64 = base_pq * r
+                            let m: i64 = LIMIT / base
+                            if m > gmax { m = gmax }
+                            total = total + base * prefix[m]
+                        }
+                        kk = kk + 1
+                    }
+                }
+            }
+            j = j + 1
+        }
+        ii = ii + 1
+    }
+
+    printf("%lld\n", total)
+    free(sieve); free(primes1); free(allowed); free(prefix)
+    return 0
+}

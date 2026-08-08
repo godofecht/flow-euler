@@ -1,0 +1,21 @@
+# Project Euler 163
+# Cross-hatched triangles in size-36 triangular grid (closed form).
+
+function fun(n: i64) -> i64 {
+    let n2: i64 = n * n
+    let n3: i64 = n2 * n
+    let t1: i64 = (2 * n3 + 5 * n2 + 2 * n) / 8
+    let t2: i64 = 2 * (n3 / 2 - n / 6)
+    let s1: i64 = (n * (n + 1) * (n + 2)) / 6
+    let s2: i64 = (2 * n3 + 5 * n2 + 2 * n) / 8
+    let s3: i64 = (2 * n3 + 3 * n2 - 3 * n) / 18
+    let s4: i64 = (2 * n3 + 3 * n2 - 3 * n) / 10
+    let t3: i64 = 6 * (s1 + s2 + s3 + s4)
+    let t4: i64 = 3 * ((22 * n3 + 45 * n2 - 4 * n) / 48)
+    return t1 + t2 + t3 + t4
+}
+
+function main() -> i32 {
+    printf("%lld\n", fun(36))
+    return 0
+}

@@ -1,0 +1,43 @@
+# Project Euler 048
+# Last ten digits of 1^1 + 2^2 + … + 1000^1000.
+# Use mulmod to avoid i64 overflow when reducing mod 10^10.
+
+function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    let mut b: i64 = b0 % mod
+    let mut result: i64 = 0
+    while b > 0 {
+        if b % 2 == 1 {
+            result = (result + a) % mod
+        }
+        a = (a * 2) % mod
+        b = b / 2
+    }
+    return result
+}
+
+function mod_pow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            result = mulmod(result, b, mod)
+        }
+        b = mulmod(b, b, mod)
+        e = e / 2
+    }
+    return result
+}
+
+function main() -> i32 {
+    let mod: i64 = 10000000000
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n <= 1000 {
+        total = (total + mod_pow(n, n, mod)) % mod
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

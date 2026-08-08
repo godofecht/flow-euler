@@ -1,0 +1,101 @@
+# Project Euler 348
+# Sum of five smallest palindromes that are square+cube in exactly 4 ways.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function ipow10(e: i32) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i32 = 0
+    while i < e {
+        r = r * 10
+        i = i + 1
+    }
+    return r
+}
+
+function reverse_int(n0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut r: i64 = 0
+    while n > 0 {
+        r = 10 * r + n % 10
+        n = n / 10
+    }
+    return r
+}
+
+function digit_len(n0: i64) -> i32 {
+    let mut n: i64 = n0
+    let mut L: i32 = 0
+    while n > 0 {
+        L = L + 1
+        n = n / 10
+    }
+    return L
+}
+
+function make_pal(prefix: i64, odd: bool) -> i64 {
+    if odd {
+        let L: i32 = digit_len(prefix)
+        return prefix * ipow10(L - 1) + reverse_int(prefix / 10)
+    }
+    let L: i32 = digit_len(prefix)
+    return prefix * ipow10(L) + reverse_int(prefix)
+}
+
+function count_ways(n: i64) -> i32 {
+    let mut ways: i32 = 0
+    let mut b: i64 = 2
+    while b * b * b <= n - 4 {
+        let rem: i64 = n - b * b * b
+        let r: i64 = isqrt(rem)
+        if r >= 2 && r * r == rem {
+            ways = ways + 1
+            if ways > 4 { return ways }
+        }
+        b = b + 1
+    }
+    return ways
+}
+
+function main() -> i32 {
+    let mut found: i64 = 0
+    let mut sum: i64 = 0
+    let mut digits: i32 = 1
+    while found < 5 {
+        let half: i32 = (digits + 1) / 2
+        let mut start: i64 = 1
+        if half > 1 { start = ipow10(half - 1) }
+        let stop: i64 = ipow10(half)
+        let odd: bool = digits % 2 == 1
+        let mut prefix: i64 = start
+        while prefix < stop {
+            let n: i64 = make_pal(prefix, odd)
+            if n >= 12 {
+                if count_ways(n) == 4 {
+                    sum = sum + n
+                    found = found + 1
+                    if found == 5 { break }
+                }
+            }
+            prefix = prefix + 1
+        }
+        if found == 5 { break }
+        digits = digits + 1
+    }
+    printf("%lld\n", sum)
+    return 0
+}

@@ -1,0 +1,16 @@
+# Project Euler 301
+# Count n ≤ 2^30 with n XOR 2n XOR 3n = 0 (no consecutive 1-bits → Fib(32)).
+
+function main() -> i32 {
+    let mut a: i64 = 0
+    let mut b: i64 = 1
+    let mut i: i32 = 0
+    while i < 32 {
+        let t: i64 = a + b
+        a = b
+        b = t
+        i = i + 1
+    }
+    printf("%lld\n", a)
+    return 0
+}

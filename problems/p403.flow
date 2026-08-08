@@ -1,0 +1,157 @@
+# Project Euler 403
+# S(10^12) mod 10^8. All polys evaluated mod 24*(2*10^8) then /24.
+
+function modmul(a: i64, b: i64, mod: i64) -> i64 {
+    let r: i128 = (a as i128) * (b as i128) % (mod as i128)
+    if r < (0 as i128) { return (r + (mod as i128)) as i64 }
+    return r as i64
+}
+
+function modadd(a: i64, b: i64, mod: i64) -> i64 {
+    let mut s: i64 = a + b
+    s = s % mod
+    if s < 0 { s = s + mod }
+    return s
+}
+
+function g_mod(n: i64, m2: i64) -> i64 {
+    # g(n)=(n^3+5n+6)/6  ; work mod 6*m2
+    let mod: i64 = 6 * m2
+    let n1: i64 = n % mod
+    if n1 < 0 { n1 = n1 + mod }
+    let n2: i64 = modmul(n1, n1, mod)
+    let n3: i64 = modmul(n2, n1, mod)
+    let num: i64 = modadd(modadd(n3, modmul(5, n1, mod), mod), 6, mod)
+    return num / 6
+}
+
+function G_mod(n: i64, m2: i64) -> i64 {
+    if n < 0 { return 0 }
+    let mod: i64 = 24 * m2
+    let n1: i64 = n % mod
+    let n2: i64 = modmul(n1, n1, mod)
+    let n3: i64 = modmul(n2, n1, mod)
+    let n4: i64 = modmul(n2, n2, mod)
+    let mut num: i64 = n4
+    num = modadd(num, modmul(2, n3, mod), mod)
+    num = modadd(num, modmul(11, n2, mod), mod)
+    num = modadd(num, modmul(34, n1, mod), mod)
+    num = modadd(num, 24, mod)
+    return num / 24
+}
+
+function H_mod(n: i64, m2: i64) -> i64 {
+    if n < 0 { return 0 }
+    let mod: i64 = 24 * m2
+    let n1: i64 = n % mod
+    # s1 = n(n+1)/2
+    let s1_num: i64 = modmul(n1, n1 + 1, 2 * mod)
+    # use exact division carefully via mod 2*mod then /2 - ensure even
+    let s1: i64 = (s1_num % (2 * mod)) / 2
+    s1 = s1 % mod
+    # s2 = n(n+1)(2n+1)/6
+    let t2: i64 = modmul(modmul(n1, n1 + 1, 6 * mod), (2 * n1 + 1) % (6 * mod), 6 * mod)
+    let s2: i64 = t2 / 6
+    s2 = s2 % mod
+    let s3: i64 = modmul(s1, s1, mod)
+    # s4 = n(n+1)(2n+1)(3n^2+3n-1)/30
+    let u: i64 = modmul(n1, n1 + 1, 30 * mod)
+    u = modmul(u, (2 * n1 + 1) % (30 * mod), 30 * mod)
+    let v: i64 = (modmul(3, modmul(n1, n1, 30 * mod), 30 * mod) + modmul(3, n1, 30 * mod) - 1) % (30 * mod)
+    if v < 0 { v = v + 30 * mod }
+    let t4: i64 = modmul(u, v, 30 * mod)
+    let s4: i64 = t4 / 30
+    s4 = s4 % mod
+    let mut num: i64 = s4
+    num = modadd(num, modmul(2, s3, mod), mod)
+    num = modadd(num, modmul(11, s2, mod), mod)
+    num = modadd(num, modmul(34, s1, mod), mod)
+    num = modadd(num, modmul(24, n1 + 1, mod), mod)
+    return num / 24
+}
+
+function sum_G_mod(l: i64, r: i64, m2: i64) -> i64 {
+    if l > r { return 0 }
+    let mut v: i64 = H_mod(r, m2) - H_mod(l - 1, m2)
+    v = v % m2
+    if v < 0 { v = v + m2 }
+    return v
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function min64(a: i64, b: i64) -> i64 {
+    if a < b { return a }
+    return b
+}
+
+function main() -> i32 {
+    let MOD: i64 = 100000000
+    let M2: i64 = 2 * MOD
+    let N: i64 = 1000000000000
+    let s: i64 = isqrt(N)
+    let mut total: i64 = (2 * G_mod(N, M2) - 1) % M2
+    if total < 0 { total = total + M2 }
+
+    if N >= 1 {
+        let f1: i64 = (G_mod(N + 1, M2) + G_mod(N - 2, M2) - 1) % M2
+        if f1 < 0 { f1 = f1 + M2 }
+        total = (total + 2 * f1) % M2
+    }
+    if N >= 2 {
+        let fn: i64 = (g_mod(N, M2) + g_mod(N + 1, M2)) % M2
+        total = (total + 2 * fn) % M2
+    }
+
+    let hi: i64 = min64(s, N - 1)
+    if hi >= 2 {
+        let mut small_sum: i64 = 0
+        let mut p: i64 = 2
+        while p <= hi {
+            let m: i64 = N / p
+            let term: i64 = (G_mod(m + p, M2) + G_mod(m - p, M2) - 1) % M2
+            if term < 0 { term = term + M2 }
+            small_sum = (small_sum + term) % M2
+            p = p + 1
+        }
+        total = (total + 2 * small_sum) % M2
+    }
+
+    let mut large_sum: i64 = 0
+    let mut m: i64 = 1
+    while m <= s {
+        let mut l: i64 = N / (m + 1) + 1
+        let r: i64 = N / m
+        if r > s {
+            if l <= s { l = s + 1 }
+            if l <= r {
+                let mut term: i64 = 0
+                if r == N && N >= l {
+                    if l <= N - 1 {
+                        term = (sum_G_mod(l + m, N - 1 + m, M2) - sum_G_mod(l - m - 1, N - 1 - m - 1, M2)) % M2
+                    }
+                } else {
+                    term = (sum_G_mod(l + m, r + m, M2) - sum_G_mod(l - m - 1, r - m - 1, M2)) % M2
+                }
+                if term < 0 { term = term + M2 }
+                large_sum = (large_sum + term) % M2
+            }
+        }
+        m = m + 1
+    }
+    total = (total + 2 * large_sum) % M2
+    let diag: i64 = 2 * min64(N / 2, isqrt(N)) + 1
+    total = (total + diag % M2) % M2
+    let ans: i64 = (total / 2) % MOD
+    printf("%lld\n", ans)
+    return 0
+}

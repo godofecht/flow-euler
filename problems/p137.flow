@@ -1,0 +1,20 @@
+# Project Euler 137
+# Fifteenth golden nugget of the Fibonacci generating function.
+
+function main() -> i32 {
+    # nugget_k = F(2k) * F(2k+1); 10th is F20*F21 = 74049690
+    let mut f_prev: i64 = 0
+    let mut f_cur: i64 = 1
+    let mut i: i64 = 1
+    while i < 30 {
+        let nxt: i64 = f_prev + f_cur
+        f_prev = f_cur
+        f_cur = nxt
+        i = i + 1
+    }
+    # now f_cur = F30, f_prev = F29; need F30 and F31
+    let f30: i64 = f_cur
+    let f31: i64 = f_prev + f_cur
+    printf("%lld\n", f30 * f31)
+    return 0
+}

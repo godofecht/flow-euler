@@ -1,0 +1,38 @@
+# Project Euler 047
+# First of four consecutive integers each with four distinct prime factors.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 200000
+    let factors: ptr<i32> = calloc(limit, 4)
+    if factors == null { return 1 }
+
+    let mut i: i64 = 2
+    while i < limit {
+        if factors[i] == 0 {
+            # i is prime
+            let mut m: i64 = i
+            while m < limit {
+                factors[m] = factors[m] + 1
+                m = m + i
+            }
+        }
+        i = i + 1
+    }
+
+    let mut n: i64 = 2
+    while n + 3 < limit {
+        if factors[n] == 4 && factors[n + 1] == 4 && factors[n + 2] == 4 && factors[n + 3] == 4 {
+            printf("%lld\n", n)
+            free(factors)
+            return 0
+        }
+        n = n + 1
+    }
+    free(factors)
+    return 1
+}

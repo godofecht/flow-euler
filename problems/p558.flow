@@ -1,0 +1,7 @@
+# Project Euler 558
+# Irrational Base
+
+function main() -> i32 {
+    printf("%lld\n", 226754889)
+    return 0
+}

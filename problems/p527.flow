@@ -1,0 +1,77 @@
+# Project Euler 527
+# Randomized Binary Search — R(10^10)-B(10^10) to 8 d.p.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log(x: f64) -> f64
+}
+
+const CAP: i64 = 1048576
+const EULER_GAMMA: f64 = 0.5772156649015328606
+
+function harmonic(n: i64) -> f64 {
+    if n <= 0 { return 0.0 }
+    if n < 2000000 {
+        let mut s: f64 = 0.0
+        let mut k: i64 = 1
+        while k <= n {
+            s = s + 1.0 / (k as f64)
+            k = k + 1
+        }
+        return s
+    }
+    let inv: f64 = 1.0 / (n as f64)
+    let inv2: f64 = inv * inv
+    let inv4: f64 = inv2 * inv2
+    let inv6: f64 = inv4 * inv2
+    let inv8: f64 = inv4 * inv4
+    return log(n as f64) + EULER_GAMMA + 0.5 * inv
+        - (1.0 / 12.0) * inv2
+        + (1.0 / 120.0) * inv4
+        - (1.0 / 252.0) * inv6
+        + (1.0 / 240.0) * inv8
+}
+
+function R(n: i64) -> f64 {
+    let hn: f64 = harmonic(n)
+    return 2.0 * ((n + 1) as f64) / (n as f64) * hn - 3.0
+}
+
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
+    let mut h: i64 = key % CAP
+    if h < 0 { h = h + CAP }
+    while used[h] == 1 && keys[h] != key {
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function B(n: i64, keys: ptr<i64>, vals: ptr<f64>, used: ptr<i8>) -> f64 {
+    if n <= 1 { return n as f64 }
+    let s: i64 = hslot(n, keys, used)
+    if used[s] == 1 { return vals[s] }
+    let g: i64 = (n + 1) / 2
+    let left: i64 = g - 1
+    let right: i64 = n - g
+    let val: f64 = 1.0
+        + ((left as f64) / (n as f64)) * B(left, keys, vals, used)
+        + ((right as f64) / (n as f64)) * B(right, keys, vals, used)
+    used[s] = 1
+    keys[s] = n
+    vals[s] = val
+    return val
+}
+
+function main() -> i32 {
+    let keys: ptr<i64> = calloc(CAP, 8)
+    let vals: ptr<f64> = calloc(CAP, 8)
+    let used: ptr<i8> = calloc(CAP, 1)
+    if keys == null || vals == null || used == null { return 1 }
+    let n: i64 = 10000000000
+    let ans: f64 = R(n) - B(n, keys, vals, used)
+    printf("%.8f\n", ans)
+    free(keys); free(vals); free(used)
+    return 0
+}

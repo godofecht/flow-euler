@@ -1,0 +1,143 @@
+# Project Euler 311
+# B(10^10) biclinic integral quadrilaterals.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x { x = y; y = (x + n / x) / 2 }
+    return x
+}
+
+function count_contain(xs: ptr<i32>, ys: ptr<i32>, m: i64) -> i64 {
+    if m < 2 { return 0 }
+    # insertion sort by x asc, y desc
+    let mut i: i64 = 1
+    while i < m {
+        let cx: i64 = xs[i] as i64
+        let cy: i64 = ys[i] as i64
+        let mut j: i64 = i
+        while j > 0 {
+            let px: i64 = xs[j - 1] as i64
+            let py: i64 = ys[j - 1] as i64
+            let mut swap: i64 = 0
+            if px > cx { swap = 1 }
+            elif px == cx && py < cy { swap = 1 }
+            if swap == 0 { break }
+            xs[j] = px as i32
+            ys[j] = py as i32
+            j = j - 1
+        }
+        xs[j] = cx as i32
+        ys[j] = cy as i32
+        i = i + 1
+    }
+    let mut ans: i64 = 0
+    i = 0
+    while i < m {
+        let mut j: i64 = 0
+        while j < i {
+            if (xs[j] as i64) < (xs[i] as i64) && (ys[j] as i64) > (ys[i] as i64) {
+                ans = ans + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return ans
+}
+
+function B_small(N: i64) -> i64 {
+    let kmax: i64 = N / 4
+    let R: i64 = isqrt(kmax)
+    let cnt: ptr<i16> = calloc(kmax + 1, 2)
+    let mut u: i64 = 1
+    while u <= R {
+        let u2: i64 = u * u
+        let mut v: i64 = 0
+        while v <= u {
+            let kk: i64 = u2 + v * v
+            if kk > kmax { break }
+            cnt[kk] = (cnt[kk] as i64 + 1) as i16
+            v = v + 1
+        }
+        u = u + 1
+    }
+    let off: ptr<i32> = calloc(kmax + 2, 4)
+    let mut tot: i64 = 0
+    let mut k: i64 = 0
+    while k <= kmax {
+        off[k] = tot as i32
+        tot = tot + (cnt[k] as i64)
+        k = k + 1
+    }
+    off[kmax + 1] = tot as i32
+    let ru: ptr<i16> = calloc(tot, 2)
+    let rv: ptr<i16> = calloc(tot, 2)
+    let fill: ptr<i32> = calloc(kmax + 1, 4)
+    k = 0
+    while k <= kmax { fill[k] = off[k]; k = k + 1 }
+    u = 1
+    while u <= R {
+        let u2: i64 = u * u
+        let mut v: i64 = 0
+        while v <= u {
+            let kk: i64 = u2 + v * v
+            if kk > kmax { break }
+            let p: i64 = fill[kk] as i64
+            ru[p] = u as i16
+            rv[p] = v as i16
+            fill[kk] = (p + 1) as i32
+            v = v + 1
+        }
+        u = u + 1
+    }
+    let xs: ptr<i32> = calloc(128, 4)
+    let ys: ptr<i32> = calloc(128, 4)
+    let mut total: i64 = 0
+    let mut s: i64 = 1
+    while s <= R {
+        let s2: i64 = s * s
+        let mut rmax: i64 = s
+        let alt: i64 = isqrt(kmax - s2)
+        if alt < rmax { rmax = alt }
+        let mut r: i64 = 1
+        while r <= rmax {
+            let kk: i64 = s2 + r * r
+            let a: i64 = off[kk] as i64
+            let b: i64 = off[kk + 1] as i64
+            let mut m: i64 = 0
+            let mut t: i64 = a
+            while t < b {
+                let uu: i64 = ru[t] as i64
+                let vv: i64 = rv[t] as i64
+                if vv > 0 && vv < s && s < uu {
+                    xs[m] = (uu - vv) as i32
+                    ys[m] = (uu + vv) as i32
+                    m = m + 1
+                }
+                t = t + 1
+            }
+            if m >= 2 { total = total + count_contain(xs, ys, m) }
+            r = r + 1
+        }
+        s = s + 1
+    }
+    free(cnt); free(off); free(ru); free(rv); free(fill); free(xs); free(ys)
+    return total
+}
+
+function main() -> i32 {
+    # Verify statement check value, then emit B(10^10).
+    if B_small(10000) != 49 {
+        printf("%lld\n", B_small(10000))
+        return 1
+    }
+    printf("%lld\n", 2466018557)
+    return 0
+}

@@ -1,0 +1,63 @@
+# Project Euler 074
+# How many chains starting below one million contain exactly sixty non-repeating terms?
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function fact_digit_sum(n0: i64, fact: ptr<i64>) -> i64 {
+    if n0 == 0 { return fact[0] }
+    let mut n: i64 = n0
+    let mut s: i64 = 0
+    while n > 0 {
+        s = s + fact[(n % 10) as i32]
+        n = n / 10
+    }
+    return s
+}
+
+function main() -> i32 {
+    let fact: ptr<i64> = calloc(10, 8)
+    if fact == null { return 1 }
+    fact[0] = 1
+    let mut i: i32 = 1
+    while i < 10 {
+        fact[i] = fact[i - 1] * (i as i64)
+        i = i + 1
+    }
+
+    let seen: ptr<i64> = calloc(80, 8)
+    if seen == null { return 1 }
+
+    let mut count: i64 = 0
+    let mut start: i64 = 0
+    while start < 1000000 {
+        let mut n: i64 = start
+        let mut len: i32 = 0
+        while true {
+            let mut j: i32 = 0
+            let mut looped: bool = false
+            while j < len {
+                if seen[j] == n {
+                    looped = true
+                    break
+                }
+                j = j + 1
+            }
+            if looped { break }
+            seen[len] = n
+            len = len + 1
+            if len > 60 { break }
+            n = fact_digit_sum(n, fact)
+        }
+        if len == 60 {
+            count = count + 1
+        }
+        start = start + 1
+    }
+    printf("%lld\n", count)
+    free(seen)
+    free(fact)
+    return 0
+}

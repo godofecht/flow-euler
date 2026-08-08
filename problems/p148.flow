@@ -1,0 +1,55 @@
+# Project Euler 148
+# Entries not divisible by 7 in the first one billion rows of Pascal's triangle.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let N: i64 = 1000000000
+    let digs: ptr<i64> = calloc(20, 8)
+    let pow28: ptr<i64> = calloc(20, 8)
+    if digs == null || pow28 == null { return 1 }
+
+    let mut n: i64 = N
+    let mut len: i32 = 0
+    # collect digits least-significant first then reverse
+    let tmp: ptr<i64> = calloc(20, 8)
+    if tmp == null { return 1 }
+    while n > 0 {
+        tmp[len] = n % 7
+        n = n / 7
+        len = len + 1
+    }
+    let mut i: i32 = 0
+    while i < len {
+        digs[i] = tmp[len - 1 - i]
+        i = i + 1
+    }
+
+    pow28[0] = 1
+    i = 1
+    while i <= len {
+        pow28[i] = pow28[i - 1] * 28
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut prefix: i64 = 1
+    i = 0
+    while i < len {
+        let digit: i64 = digs[i]
+        let remaining: i32 = len - i - 1
+        let smaller: i64 = digit * (digit + 1) / 2
+        total = total + prefix * smaller * pow28[remaining]
+        prefix = prefix * (digit + 1)
+        i = i + 1
+    }
+
+    printf("%lld\n", total)
+    free(tmp)
+    free(pow28)
+    free(digs)
+    return 0
+}

@@ -1,0 +1,76 @@
+# Project Euler 384
+# Rudin–Shapiro: sum_{t=2..45} g(F_t, F_{t-1}).
+
+function bit_length(n0: i64) -> i32 {
+    let mut n: i64 = n0
+    let mut b: i32 = 0
+    while n > 0 {
+        b = b + 1
+        n = n / 2
+    }
+    return b
+}
+
+function g_index(t0: i64, c0: i64) -> i64 {
+    let mut t: i64 = t0
+    let mut c: i64 = c0
+    let mut acc: i64 = 0
+    while true {
+        if t == 1 {
+            return acc
+        }
+        let h: i64 = 1 << (bit_length(t) - 1)
+        let d: i64 = t - h
+        if d == 0 {
+            if c <= t / 2 {
+                acc = acc + t * t / 4
+                t = t / 2
+            } else {
+                acc = acc + t * t / 2
+                c = c - t / 2
+            }
+        } elif c > h {
+            acc = acc + h * h
+            t = 2 * h - d
+            c = c - h
+        } elif c > h - d {
+            acc = acc + h * h
+            t = d
+            c = c + d - h
+        } elif c <= d {
+            acc = acc + h * h / 2
+            t = d
+        } else {
+            acc = acc + h * h / 2
+            t = 2 * h - t
+        }
+    }
+    return acc
+}
+
+function main() -> i32 {
+    let F: ptr<i64> = calloc(46, 8)
+    if F == null { return 1 }
+    F[0] = 1
+    F[1] = 1
+    let mut i: i32 = 2
+    while i <= 45 {
+        F[i] = F[i - 1] + F[i - 2]
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut t: i32 = 2
+    while t <= 45 {
+        total = total + g_index(F[t], F[t - 1])
+        t = t + 1
+    }
+    printf("%lld\n", total)
+    free(F)
+    return 0
+}
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}

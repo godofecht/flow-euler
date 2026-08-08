@@ -1,0 +1,52 @@
+# Project Euler 286
+# Find q such that P(exactly 20 hits in 50 shots) = 0.02.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function probability(q: f64, made: i32, distance: i32, cache: ptr<f64>, seen: ptr<i8>) -> f64 {
+    let threshold: i32 = 20
+    let max_distance: i32 = 50
+    if made > threshold { return 0.0 }
+    if distance > max_distance {
+        if made == threshold { return 1.0 }
+        return 0.0
+    }
+    let id: i32 = made * (max_distance + 1) + distance
+    # cache keyed only on (made,distance) for fixed q — caller clears between q
+    if seen[id] == 1 { return cache[id] }
+    let chance_hit: f64 = 1.0 - (distance as f64) / q
+    let chance_miss: f64 = 1.0 - chance_hit
+    let result: f64 = chance_hit * probability(q, made + 1, distance + 1, cache, seen) + chance_miss * probability(q, made, distance + 1, cache, seen)
+    cache[id] = result
+    seen[id] = 1
+    return result
+}
+
+function main() -> i32 {
+    let cache: ptr<f64> = calloc(21 * 52, 8)
+    let seen: ptr<i8> = calloc(21 * 52, 1)
+    if cache == null || seen == null { return 1 }
+    let mut low: f64 = 50.0
+    let mut high: f64 = 100.0
+    let accuracy: f64 = 0.0000000001
+    while high - low > accuracy {
+        let mid: f64 = (high + low) * 0.5
+        # clear cache
+        let mut i: i32 = 0
+        while i < 21 * 52 {
+            seen[i] = 0
+            i = i + 1
+        }
+        if probability(mid, 0, 1, cache, seen) < 0.02 {
+            high = mid
+        } else {
+            low = mid
+        }
+    }
+    printf("%.10f\n", low)
+    free(cache); free(seen)
+    return 0
+}

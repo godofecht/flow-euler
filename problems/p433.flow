@@ -1,0 +1,62 @@
+# Project Euler 433
+# S(N)=sum_{x,y<=N} E(x,y). Use S = sum_{k>=1} #{E>=k}.
+# #{E>=1}=N^2; for k>=2 count via reverse-Euclid forest with multiples:
+# s = sum_{reduced nodes} steps*floor(N/x), answer = 2s + N(N+1)/2.
+# Enumerate reduced reverse-Euclid tree from (1,0) iteratively.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function realloc(p: ptr<void>, size: i64) -> ptr<void>
+}
+
+function main() -> i32 {
+    let N: i64 = 5000000
+
+    # Explicit stack of (x,y,steps)
+    let mut cap: i64 = 1 << 20
+    let xs: ptr<i32> = calloc(cap, 4)
+    let ys: ptr<i32> = calloc(cap, 4)
+    let ss: ptr<i8> = calloc(cap, 1)
+    if xs == null || ys == null || ss == null { return 1 }
+
+    let mut sp: i64 = 0
+    xs[0] = 1
+    ys[0] = 0
+    ss[0] = 0
+    sp = 1
+
+    let mut ssum: i64 = 0
+    while sp > 0 {
+        sp = sp - 1
+        let x: i64 = xs[sp] as i64
+        let y: i64 = ys[sp] as i64
+        let steps: i64 = ss[sp] as i64
+        ssum = ssum + steps * (N / x)
+
+        let k0: i64 = 2
+        if y > 0 { k0 = 1 }
+        let mut z: i64 = y + k0 * x
+        while z <= N {
+            if sp >= cap {
+                cap = cap * 2
+                xs = realloc(xs as ptr<void>, cap * 4) as ptr<i32>
+                ys = realloc(ys as ptr<void>, cap * 4) as ptr<i32>
+                ss = realloc(ss as ptr<void>, cap) as ptr<i8>
+                if xs == null || ys == null || ss == null { return 1 }
+            }
+            xs[sp] = z as i32
+            ys[sp] = x as i32
+            ss[sp] = (steps + 1) as i8
+            sp = sp + 1
+            z = z + x
+        }
+    }
+
+    let ans: i64 = 2 * ssum + N * (N + 1) / 2
+    printf("%lld\n", ans)
+    free(ss)
+    free(ys)
+    free(xs)
+    return 0
+}

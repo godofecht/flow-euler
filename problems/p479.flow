@@ -1,0 +1,43 @@
+# Project Euler 479
+# Roots on the Rise — S(10^6) mod 10^9+7.
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    if b < 0 { b = b + mod }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function modinv(a0: i64, mod: i64) -> i64 {
+    return modpow(a0, mod - 2, mod)
+}
+
+function main() -> i32 {
+    let n: i64 = 1000000
+    let mod: i64 = 1000000007
+    let mut total: i64 = 0
+    let mut k: i64 = 2
+    while k <= n {
+        let t: i64 = 1 - k * k
+        let mut tmod: i64 = t % mod
+        if tmod < 0 { tmod = tmod + mod }
+        let mut denom: i64 = (1 - tmod) % mod
+        if denom < 0 { denom = denom + mod }
+        let term: i64 = (1 - modpow(tmod, n, mod) + mod) % mod
+        let num: i64 = (term * tmod) % mod
+        total = (total + num * modinv(denom, mod)) % mod
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

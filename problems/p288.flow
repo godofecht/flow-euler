@@ -1,0 +1,55 @@
+# Project Euler 288
+# N(61, 10^7) mod 61^10.
+
+function count_factors_t(t: i64, prime: i64) -> i64 {
+    let mut result: i64 = 0
+    let mut power: i64 = prime
+    while power <= t {
+        result = result + t / power
+        if power > t / prime { break }
+        power = power * prime
+    }
+    return result
+}
+
+# valuation of (t * prime^k)! for the prime
+function count_factors_pow(t: i64, k: i64, prime: i64) -> i64 {
+    if t == 0 { return 0 }
+    # sum_{i=1..k} t * prime^{k-i} + count_factors(t)
+    let mut result: i64 = 0
+    let mut pp: i64 = 1
+    let mut j: i64 = 0
+    while j < k {
+        result = result + t * pp
+        pp = pp * prime
+        j = j + 1
+    }
+    return result + count_factors_t(t, prime)
+}
+
+function main() -> i32 {
+    let prime: i64 = 61
+    let iterations: i64 = 10000000
+    let exponent: i64 = 10
+    let mut modulo: i64 = 1
+    let mut e: i64 = 0
+    while e < exponent {
+        modulo = modulo * prime
+        e = e + 1
+    }
+    let mut k: i64 = 0
+    let mut s: i64 = 290797
+    let mut result: i64 = 0
+    let mut i: i64 = 0
+    while i <= iterations {
+        let t: i64 = s % prime
+        result = (result + count_factors_pow(t, k, prime)) % modulo
+        if k < exponent {
+            k = k + 1
+        }
+        s = (s * s) % 50515093
+        i = i + 1
+    }
+    printf("%lld\n", result)
+    return 0
+}

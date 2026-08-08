@@ -1,0 +1,184 @@
+# Project Euler 538
+# Maximum Quadrilaterals — sum f(U_n) for n=4..3_000_000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 3000000
+
+function popcount(x0: i64) -> i32 {
+    let mut x: i64 = x0
+    let mut c: i32 = 0
+    while x > 0 {
+        if (x & 1) != 0 { c = c + 1 }
+        x = x >> 1
+    }
+    return c
+}
+
+function merge(a: ptr<i64>, tmp: ptr<i64>, lo: i64, mid: i64, hi: i64) -> void {
+    let mut i: i64 = lo
+    let mut j: i64 = mid
+    let mut k: i64 = lo
+    while i < mid && j < hi {
+        if a[i] <= a[j] { tmp[k] = a[i]; i = i + 1 }
+        else { tmp[k] = a[j]; j = j + 1 }
+        k = k + 1
+    }
+    while i < mid { tmp[k] = a[i]; i = i + 1; k = k + 1 }
+    while j < hi { tmp[k] = a[j]; j = j + 1; k = k + 1 }
+    i = lo
+    while i < hi { a[i] = tmp[i]; i = i + 1 }
+}
+
+function merge_sort_iter(a: ptr<i64>, tmp: ptr<i64>, n: i64) -> void {
+    let mut width: i64 = 1
+    while width < n {
+        let mut i: i64 = 0
+        while i < n {
+            let mid: i64 = i + width
+            if mid >= n { break }
+            let mut hi: i64 = i + 2 * width
+            if hi > n { hi = n }
+            merge(a, tmp, i, mid, hi)
+            i = i + 2 * width
+        }
+        width = width * 2
+    }
+}
+
+function better(prod_new: i128, per_new: i64, prod_best: i128, per_best: i64) -> i32 {
+    if prod_new > prod_best { return 1 }
+    if prod_new == prod_best && per_new > per_best { return 1 }
+    return 0
+}
+
+function main() -> i32 {
+    let pow3: ptr<i64> = calloc(25, 8)
+    let u: ptr<i64> = calloc(N + 1, 8)
+    let sorted: ptr<i64> = calloc(N, 8)
+    let tmp: ptr<i64> = calloc(N, 8)
+    if pow3 == null || u == null || sorted == null { return 1 }
+    pow3[0] = 1
+    let mut k: i64 = 1
+    while k < 25 { pow3[k] = pow3[k - 1] * 3; k = k + 1 }
+    let mut n: i64 = 1
+    while n <= N {
+        u[n] = (1 << popcount(3 * n)) + pow3[popcount(n) as i64] + (popcount(n + 1) as i64)
+        sorted[n - 1] = u[n]
+        n = n + 1
+    }
+    merge_sort_iter(sorted, tmp, N)
+    let uniq: ptr<i64> = calloc(N + 1, 8)
+    let idx_of: ptr<i32> = calloc(N + 1, 4)
+    let mut nu: i64 = 0
+    let mut prev: i64 = -1
+    let mut i: i64 = 0
+    while i < N {
+        if sorted[i] != prev { uniq[nu] = sorted[i]; nu = nu + 1; prev = sorted[i] }
+        i = i + 1
+    }
+    n = 1
+    while n <= N {
+        let v: i64 = u[n]
+        let mut lo: i64 = 0
+        let mut hi: i64 = nu
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if uniq[mid] < v { lo = mid + 1 } else { hi = mid }
+        }
+        idx_of[n] = lo as i32
+        n = n + 1
+    }
+    free(sorted); free(tmp)
+    let counts: ptr<i32> = calloc(nu, 4)
+    let active: ptr<i32> = calloc(nu, 4)
+    let left: ptr<i64> = calloc(3, 8)
+    let right: ptr<i64> = calloc(3, 8)
+    let around: ptr<i64> = calloc(7, 8)
+    if counts == null || active == null { return 1 }
+    let mut an: i64 = 0
+    let mut best_prod: i128 = -1 as i128
+    let mut best_per: i64 = 0
+    let mut total: i64 = 0
+    n = 1
+    while n <= N {
+        let idx: i64 = idx_of[n] as i64
+        let c_before: i32 = counts[idx]
+        if c_before == 0 {
+            let mut pos: i64 = 0
+            while pos < an && active[pos] < (idx as i32) { pos = pos + 1 }
+            let mut sh: i64 = an
+            while sh > pos { active[sh] = active[sh - 1]; sh = sh - 1 }
+            active[pos] = idx as i32
+            an = an + 1
+        }
+        counts[idx] = c_before + 1
+        let mut pos: i64 = 0
+        while pos < an {
+            if active[pos] == (idx as i32) { break }
+            pos = pos + 1
+        }
+        let v: i64 = u[n]
+        let mut ln: i64 = 0
+        let mut t: i64 = c_before as i64
+        if t > 3 { t = 3 }
+        while ln < t { left[ln] = v; ln = ln + 1 }
+        let mut q: i64 = pos - 1
+        while ln < 3 && q >= 0 {
+            let idx2: i64 = active[q] as i64
+            let v2: i64 = uniq[idx2]
+            let mut take: i64 = counts[idx2] as i64
+            if take > 3 - ln { take = 3 - ln }
+            let mut ti: i64 = 0
+            while ti < take { left[ln] = v2; ln = ln + 1; ti = ti + 1 }
+            q = q - 1
+        }
+        let mut rn: i64 = 0
+        q = pos + 1
+        while rn < 3 && q < an {
+            let idx3: i64 = active[q] as i64
+            let v3: i64 = uniq[idx3]
+            let mut take2: i64 = counts[idx3] as i64
+            if take2 > 3 - rn { take2 = 3 - rn }
+            let mut ti2: i64 = 0
+            while ti2 < take2 { right[rn] = v3; rn = rn + 1; ti2 = ti2 + 1 }
+            q = q + 1
+        }
+        let mut alen: i64 = 0
+        let mut li: i64 = ln - 1
+        while li >= 0 { around[alen] = left[li]; alen = alen + 1; li = li - 1 }
+        around[alen] = v
+        alen = alen + 1
+        let mut ri: i64 = 0
+        while ri < rn { around[alen] = right[ri]; alen = alen + 1; ri = ri + 1 }
+        let pidx: i64 = alen - rn - 1
+        let mut start: i64 = pidx - 3
+        while start <= pidx {
+            if start >= 0 && start + 4 <= alen {
+                let a: i64 = around[start]
+                let b: i64 = around[start + 1]
+                let c: i64 = around[start + 2]
+                let d: i64 = around[start + 3]
+                if d < a + b + c {
+                    let P: i64 = a + b + c + d
+                    let prod: i128 = ((P - 2 * a) as i128) * ((P - 2 * b) as i128)
+                        * ((P - 2 * c) as i128) * ((P - 2 * d) as i128)
+                    if better(prod, P, best_prod, best_per) == 1 {
+                        best_prod = prod
+                        best_per = P
+                    }
+                }
+            }
+            start = start + 1
+        }
+        if n >= 4 { total = total + best_per }
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    free(pow3); free(u); free(uniq); free(idx_of); free(counts); free(active)
+    free(left); free(right); free(around)
+    return 0
+}

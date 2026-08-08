@@ -1,0 +1,31 @@
+# Project Euler 389
+# Variance of nested Platonic dice: 1d4→d6→d8→d12→d20, 4 decimals.
+
+function main() -> i32 {
+    # mean = (s+1)/2, var = (s^2-1)/12 as rationals tracked by numer/denom
+    # Use f64 with enough precision for final 4 decimals (exact fractions are small).
+    let mut mean: f64 = (4.0 + 1.0) / 2.0
+    let mut var: f64 = (16.0 - 1.0) / 12.0
+    let sides: ptr<i32> = calloc(4, 4)
+    if sides == null { return 1 }
+    sides[0] = 6; sides[1] = 8; sides[2] = 12; sides[3] = 20
+    let mut i: i32 = 0
+    while i < 4 {
+        let s: f64 = sides[i] as f64
+        let y_mean: f64 = (s + 1.0) / 2.0
+        let y_var: f64 = (s * s - 1.0) / 12.0
+        let n_mean: f64 = mean
+        let n_var: f64 = var
+        mean = n_mean * y_mean
+        var = n_mean * y_var + n_var * y_mean * y_mean
+        i = i + 1
+    }
+    printf("%.4f\n", var)
+    free(sides)
+    return 0
+}
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}

@@ -1,0 +1,41 @@
+# Project Euler 239
+# Probability twenty-two prime discs are deranged among 100.
+
+function factorial(n: i32) -> f64 {
+    let mut result: f64 = 1.0
+    let mut i: i32 = n
+    while i > 1 {
+        result = result * (i as f64)
+        i = i - 1
+    }
+    return result
+}
+
+function choose(n: i32, k: i32) -> f64 {
+    return factorial(n) / (factorial(n - k) * factorial(k))
+}
+
+function derangements(move0: i32, dont_care: i32) -> f64 {
+    let mut move: i32 = move0
+    if move < 1 {
+        return factorial(dont_care)
+    }
+    move = move - 1
+    let mut result: f64 = (dont_care as f64) * derangements(move, dont_care)
+    if move > 0 {
+        result = result + (move as f64) * derangements(move - 1, dont_care + 1)
+    }
+    return result
+}
+
+function main() -> i32 {
+    let disks: i32 = 100
+    let primes: i32 = 25
+    let moved: i32 = 22
+    let unchanged: i32 = primes - moved
+    let mut result: f64 = derangements(moved, disks - primes)
+    result = result * choose(primes, unchanged)
+    result = result / factorial(disks)
+    printf("%.12f\n", result)
+    return 0
+}

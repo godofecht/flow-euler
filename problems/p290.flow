@@ -1,0 +1,59 @@
+# Project Euler 290
+# Count n < 10^18 with digit_sum(n) = digit_sum(137*n).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digit_sum(x0: i64) -> i64 {
+    let mut x: i64 = x0
+    let mut result: i64 = 0
+    while x > 0 {
+        result = result + x % 10
+        x = x / 10
+    }
+    return result
+}
+
+function search(num_digits: i64, u: i64, v: i64, cache: ptr<i64>) -> i64 {
+    let SIGNATURE: i64 = 137
+    let idx: i64 = ((num_digits * 137 + u) * 240) + (v + 120)
+    if cache[idx] != -1 { return cache[idx] }
+    if num_digits == 1 {
+        let mut result: i64 = 0
+        let mut digit: i64 = 0
+        while digit < 10 {
+            if digit_sum(SIGNATURE * digit + u) + v == digit {
+                result = result + 1
+            }
+            digit = digit + 1
+        }
+        cache[idx] = result
+        return result
+    }
+    let mut result: i64 = 0
+    let mut digit: i64 = 0
+    while digit < 10 {
+        let next_u: i64 = (SIGNATURE * digit + u) / 10
+        let next_v: i64 = (SIGNATURE * digit + u) % 10 + v - digit
+        result = result + search(num_digits - 1, next_u, next_v, cache)
+        digit = digit + 1
+    }
+    cache[idx] = result
+    return result
+}
+
+function main() -> i32 {
+    let size: i64 = (18 + 1) * 137 * 240
+    let cache: ptr<i64> = calloc(size, 8)
+    if cache == null { return 1 }
+    let mut i: i64 = 0
+    while i < size {
+        cache[i] = -1
+        i = i + 1
+    }
+    printf("%lld\n", search(18, 0, 0, cache))
+    free(cache)
+    return 0
+}

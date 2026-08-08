@@ -1,0 +1,105 @@
+# Project Euler 443
+# g(10^15): jump via least prime factor of 2n-1.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function is_prime(n: i64) -> bool {
+    if n < 2 { return false }
+    let small: array<i64, 12> = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
+    let mut i: i32 = 0
+    while i < 12 {
+        let p: i64 = small[i]
+        if n == p { return true }
+        if n % p == 0 { return false }
+        i = i + 1
+    }
+    let mut d: i64 = n - 1
+    let mut s: i32 = 0
+    while d % 2 == 0 {
+        d = d / 2
+        s = s + 1
+    }
+    let bases: array<i64, 7> = [2, 325, 9375, 28178, 450775, 9780504, 1795265022]
+    i = 0
+    while i < 7 {
+        let a: i64 = bases[i] % n
+        if a != 0 {
+            let mut x: i64 = modpow(a, d, n)
+            if x != 1 && x != n - 1 {
+                let mut r: i32 = 1
+                let mut ok: bool = false
+                while r < s {
+                    let t: i128 = (x as i128) * (x as i128) % (n as i128)
+                    x = t as i64
+                    if x == n - 1 {
+                        ok = true
+                        break
+                    }
+                    r = r + 1
+                }
+                if !ok { return false }
+            }
+        }
+        i = i + 1
+    }
+    return true
+}
+
+function smallest_prime_factor(n0: i64) -> i64 {
+    if is_prime(n0) { return n0 }
+    if n0 % 3 == 0 { return 3 }
+    let mut f: i64 = 5
+    let mut step: i64 = 2
+    while f * f <= n0 {
+        if n0 % f == 0 { return f }
+        f = f + step
+        step = 6 - step
+    }
+    return n0
+}
+
+function main() -> i32 {
+    let N: i64 = 1000000000000000
+    let mut idx: i64 = 9
+    let mut ans: i64 = 0
+    while true {
+        let p: i64 = smallest_prime_factor(2 * idx - 1)
+        let next: i64 = idx + (p - 1) / 2
+        if next > N {
+            ans = N + 2 * idx
+            break
+        }
+        if next == N {
+            ans = 3 * N
+            break
+        }
+        idx = next
+    }
+    printf("%lld\n", ans)
+    return 0
+}

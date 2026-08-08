@@ -1,0 +1,144 @@
+# Project Euler 500
+# Smallest n with 2^500500 divisors, mod 500500507.
+# Min-heap keyed by log(value); residues track the modular multiplier.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let TARGET: i64 = 500500
+    let MOD: i64 = 500500507
+    let SIEVE_N: i64 = 7376508
+    let half: i64 = (SIEVE_N >> 1) + 1
+    let sieve: ptr<i8> = calloc(half, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    let mut i: i64 = 1
+    while 2 * i * i < half {
+        if sieve[i] == 0 {
+            let mut current: i64 = 3 * i + 1
+            let step: i64 = 2 * i + 1
+            while current < half {
+                sieve[current] = 1
+                current = current + step
+            }
+        }
+        i = i + 1
+    }
+
+    let heap_log: ptr<f64> = calloc(TARGET + 64, 8)
+    let heap_res: ptr<i64> = calloc(TARGET + 64, 8)
+    let heap_fresh: ptr<i8> = calloc(TARGET + 64, 1)
+    if heap_log == null || heap_res == null || heap_fresh == null { return 1 }
+    let mut hs: i64 = 0
+
+    let mut nextprime: i64 = 2
+    heap_log[0] = log(2.0)
+    heap_res[0] = 2
+    heap_fresh[0] = 1
+    hs = 1
+
+    let mut ans: i64 = 1
+    let mut step: i64 = 0
+    while step < TARGET {
+        let lg: f64 = heap_log[0]
+        let item: i64 = heap_res[0]
+        let fresh: i8 = heap_fresh[0]
+        hs = hs - 1
+        if hs > 0 {
+            heap_log[0] = heap_log[hs]
+            heap_res[0] = heap_res[hs]
+            heap_fresh[0] = heap_fresh[hs]
+            let mut idx: i64 = 0
+            while true {
+                let l: i64 = 2 * idx + 1
+                let r: i64 = l + 1
+                let mut smallest: i64 = idx
+                if l < hs && heap_log[l] < heap_log[smallest] { smallest = l }
+                if r < hs && heap_log[r] < heap_log[smallest] { smallest = r }
+                if smallest == idx { break }
+                let tl: f64 = heap_log[idx]
+                let tr: i64 = heap_res[idx]
+                let tf: i8 = heap_fresh[idx]
+                heap_log[idx] = heap_log[smallest]
+                heap_res[idx] = heap_res[smallest]
+                heap_fresh[idx] = heap_fresh[smallest]
+                heap_log[smallest] = tl
+                heap_res[smallest] = tr
+                heap_fresh[smallest] = tf
+                idx = smallest
+            }
+        }
+        let tmul: i128 = (ans as i128) * (item as i128) % (MOD as i128)
+        ans = tmul as i64
+
+        # push square of this contribution
+        let mut idx2: i64 = hs
+        heap_log[idx2] = lg + lg
+        let tsq: i128 = (item as i128) * (item as i128) % (MOD as i128)
+        heap_res[idx2] = tsq as i64
+        heap_fresh[idx2] = 0
+        hs = hs + 1
+        while idx2 > 0 {
+            let parent: i64 = (idx2 - 1) / 2
+            if heap_log[parent] <= heap_log[idx2] { break }
+            let tl: f64 = heap_log[idx2]
+            let tr: i64 = heap_res[idx2]
+            let tf: i8 = heap_fresh[idx2]
+            heap_log[idx2] = heap_log[parent]
+            heap_res[idx2] = heap_res[parent]
+            heap_fresh[idx2] = heap_fresh[parent]
+            heap_log[parent] = tl
+            heap_res[parent] = tr
+            heap_fresh[parent] = tf
+            idx2 = parent
+        }
+
+        if fresh != 0 {
+            nextprime = nextprime + 1
+            while true {
+                let mut is_p: bool = false
+                if nextprime == 2 {
+                    is_p = true
+                } else {
+                    if (nextprime & 1) != 0 {
+                        if sieve[nextprime >> 1] == 0 {
+                            is_p = true
+                        }
+                    }
+                }
+                if is_p { break }
+                nextprime = nextprime + 1
+            }
+            let mut idx3: i64 = hs
+            heap_log[idx3] = log(nextprime as f64)
+            heap_res[idx3] = nextprime % MOD
+            heap_fresh[idx3] = 1
+            hs = hs + 1
+            while idx3 > 0 {
+                let parent: i64 = (idx3 - 1) / 2
+                if heap_log[parent] <= heap_log[idx3] { break }
+                let tl: f64 = heap_log[idx3]
+                let tr: i64 = heap_res[idx3]
+                let tf: i8 = heap_fresh[idx3]
+                heap_log[idx3] = heap_log[parent]
+                heap_res[idx3] = heap_res[parent]
+                heap_fresh[idx3] = heap_fresh[parent]
+                heap_log[parent] = tl
+                heap_res[parent] = tr
+                heap_fresh[parent] = tf
+                idx3 = parent
+            }
+        }
+        step = step + 1
+    }
+    printf("%lld\n", ans)
+    free(heap_fresh)
+    free(heap_res)
+    free(heap_log)
+    free(sieve)
+    return 0
+}

@@ -1,0 +1,42 @@
+# Project Euler 183
+# Sum D(N) for N=5..10000; D=N if (N/k*)^k* non-terminating else -N.
+
+extern {
+    function round(x: f64) -> f64
+}
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function is_terminating(n: i64, k: i64) -> bool {
+    let g: i64 = gcd(n, k)
+    let mut d: i64 = k / g
+    while d % 2 == 0 { d = d / 2 }
+    while d % 5 == 0 { d = d / 5 }
+    return d == 1
+}
+
+function main() -> i32 {
+    let E: f64 = 2.718281828459045
+    let mut total: i64 = 0
+    let mut n: i64 = 5
+    while n <= 10000 {
+        let k: i64 = round((n as f64) / E) as i64
+        if is_terminating(n, k) {
+            total = total - n
+        } else {
+            total = total + n
+        }
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

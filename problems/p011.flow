@@ -1,0 +1,106 @@
+# Project Euler 011
+# Greatest product of four adjacent numbers in the 20×20 grid.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function read_int(f: ptr<void>) -> i32 {
+    let mut c: i32 = fgetc(f)
+    while c >= 0 && (c < 48 || c > 57) {
+        c = fgetc(f)
+    }
+    if c < 0 {
+        return -1
+    }
+    let mut v: i32 = 0
+    while c >= 48 && c <= 57 {
+        v = v * 10 + (c - 48)
+        c = fgetc(f)
+    }
+    return v
+}
+
+function at(grid: ptr<i32>, n: i32, r: i32, c: i32) -> i64 {
+    return grid[r * n + c] as i64
+}
+
+function solve(grid: ptr<i32>, n: i32, k: i32) -> i64 {
+    let mut best: i64 = 0
+    let mut r: i32 = 0
+    while r < n {
+        let mut c: i32 = 0
+        while c < n {
+            if c + k <= n {
+                let mut p: i64 = 1
+                let mut i: i32 = 0
+                while i < k {
+                    p = p * at(grid, n, r, c + i)
+                    i = i + 1
+                }
+                if p > best { best = p }
+            }
+            if r + k <= n {
+                let mut p: i64 = 1
+                let mut i: i32 = 0
+                while i < k {
+                    p = p * at(grid, n, r + i, c)
+                    i = i + 1
+                }
+                if p > best { best = p }
+            }
+            if r + k <= n && c + k <= n {
+                let mut p: i64 = 1
+                let mut i: i32 = 0
+                while i < k {
+                    p = p * at(grid, n, r + i, c + i)
+                    i = i + 1
+                }
+                if p > best { best = p }
+            }
+            if r + k <= n && c - k + 1 >= 0 {
+                let mut p: i64 = 1
+                let mut i: i32 = 0
+                while i < k {
+                    p = p * at(grid, n, r + i, c - i)
+                    i = i + 1
+                }
+                if p > best { best = p }
+            }
+            c = c + 1
+        }
+        r = r + 1
+    }
+    return best
+}
+
+function main() -> i32 {
+    let n: i32 = 20
+    let grid: ptr<i32> = calloc((n * n) as i64, 4)
+    if grid == null {
+        return 1
+    }
+    let f: ptr<void> = fopen("data/p011.txt", "r")
+    if f == null {
+        printf("failed to read data/p011.txt\n")
+        free(grid)
+        return 1
+    }
+    let mut i: i32 = 0
+    while i < n * n {
+        let v: i32 = read_int(f)
+        if v < 0 {
+            break
+        }
+        grid[i] = v
+        i = i + 1
+    }
+    fclose(f)
+    printf("%lld\n", solve(grid, n, 4))
+    free(grid)
+    return 0
+}

@@ -1,0 +1,154 @@
+# Project Euler 408
+# Admissible paths (0,0)->(n,n) avoiding square-sum obstacles, mod 10^9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000
+    let MOD: i64 = 1000000007
+    let m: i64 = isqrt(N)
+    let max_sum: i64 = isqrt(2 * N)
+
+    # Mark which numbers are perfect squares up to 2N
+    let is_sq: ptr<i8> = calloc(2 * N + 1, 1)
+    if is_sq == null { return 1 }
+    let mut i: i64 = 1
+    while i <= max_sum {
+        is_sq[i * i] = 1
+        i = i + 1
+    }
+
+    let xs: ptr<i64> = calloc(20000, 8)
+    let ys: ptr<i64> = calloc(20000, 8)
+    if xs == null || ys == null { return 1 }
+    let mut k: i64 = 0
+    let mut a: i64 = 1
+    while a <= m {
+        let a2: i64 = a * a
+        let mut b: i64 = 1
+        while b <= m {
+            let b2: i64 = b * b
+            if is_sq[a2 + b2] != 0 {
+                xs[k] = a2
+                ys[k] = b2
+                k = k + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    # sort by x+y, then x (shell sort)
+    let mut gap: i64 = k / 2
+    while gap > 0 {
+        i = gap
+        while i < k {
+            let mut j: i64 = i
+            while j >= gap {
+                let s1: i64 = xs[j] + ys[j]
+                let s0: i64 = xs[j - gap] + ys[j - gap]
+                if s1 < s0 || (s1 == s0 && xs[j] < xs[j - gap]) {
+                    let tx: i64 = xs[j]
+                    xs[j] = xs[j - gap]
+                    xs[j - gap] = tx
+                    let ty: i64 = ys[j]
+                    ys[j] = ys[j - gap]
+                    ys[j - gap] = ty
+                    j = j - gap
+                } else {
+                    break
+                }
+            }
+            i = i + 1
+        }
+        gap = gap / 2
+    }
+
+    let limit: i64 = 2 * N
+    let fact: ptr<i64> = calloc(limit + 1, 8)
+    let invfact: ptr<i64> = calloc(limit + 1, 8)
+    if fact == null || invfact == null { return 1 }
+    fact[0] = 1
+    i = 1
+    while i <= limit {
+        fact[i] = ((fact[i - 1] as i128) * (i as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+    invfact[limit] = modpow(fact[limit], MOD - 2, MOD)
+    i = limit
+    while i > 0 {
+        invfact[i - 1] = ((invfact[i] as i128) * (i as i128) % (MOD as i128)) as i64
+        i = i - 1
+    }
+
+    let ways: ptr<i64> = calloc(k, 8)
+    if ways == null { return 1 }
+    i = 0
+    while i < k {
+        let xi: i64 = xs[i]
+        let yi: i64 = ys[i]
+        let mut total: i64 = ((fact[xi + yi] as i128) * (invfact[xi] as i128) % (MOD as i128) * (invfact[yi] as i128) % (MOD as i128)) as i64
+        let mut j: i64 = 0
+        while j < i {
+            let xj: i64 = xs[j]
+            let yj: i64 = ys[j]
+            if xj <= xi && yj <= yi {
+                let dx: i64 = xi - xj
+                let dy: i64 = yi - yj
+                let w: i64 = ((fact[dx + dy] as i128) * (invfact[dx] as i128) % (MOD as i128) * (invfact[dy] as i128) % (MOD as i128)) as i64
+                total = (total - ((ways[j] as i128) * (w as i128) % (MOD as i128)) as i64) % MOD
+            }
+            j = j + 1
+        }
+        if total < 0 { total = total + MOD }
+        ways[i] = total
+        i = i + 1
+    }
+
+    let mut total_paths: i64 = ((fact[2 * N] as i128) * (invfact[N] as i128) % (MOD as i128) * (invfact[N] as i128) % (MOD as i128)) as i64
+    i = 0
+    while i < k {
+        let xi: i64 = xs[i]
+        let yi: i64 = ys[i]
+        let w: i64 = ((fact[N - xi + N - yi] as i128) * (invfact[N - xi] as i128) % (MOD as i128) * (invfact[N - yi] as i128) % (MOD as i128)) as i64
+        total_paths = (total_paths - ((ways[i] as i128) * (w as i128) % (MOD as i128)) as i64) % MOD
+        i = i + 1
+    }
+    if total_paths < 0 { total_paths = total_paths + MOD }
+    printf("%lld\n", total_paths)
+
+    free(ways)
+    free(invfact)
+    free(fact)
+    free(ys)
+    free(xs)
+    free(is_sq)
+    return 0
+}

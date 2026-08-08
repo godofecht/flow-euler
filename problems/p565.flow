@@ -1,0 +1,291 @@
+# Project Euler 565
+# Divisibility of Sum of Divisors
+# Sum of n<=10^11 with sigma(n) divisible by 2017, via inclusion of trigger powers.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function realloc(p: ptr<void>, size: i64) -> ptr<void>
+}
+
+function triangular(n: i64) -> i64 {
+    return n * (n + 1) / 2
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            result = ((result as i128) * (base as i128) % (mod as i128)) as i64
+        }
+        base = ((base as i128) * (base as i128) % (mod as i128)) as i64
+        exp = exp >> 1
+    }
+    return result
+}
+
+function prime_factors_into(n0: i64, out: ptr<i64>) -> i64 {
+    let mut n: i64 = n0
+    let mut c: i64 = 0
+    let mut d: i64 = 2
+    while d * d <= n {
+        if n % d == 0 {
+            out[c] = d
+            c = c + 1
+            while n % d == 0 { n = n / d }
+        }
+        if d == 2 { d = 3 } else { d = d + 2 }
+    }
+    if n > 1 {
+        out[c] = n
+        c = c + 1
+    }
+    return c
+}
+
+function multiplicative_order(base: i64, modulo: i64, factors: ptr<i64>, nf: i64) -> i64 {
+    let mut order: i64 = modulo - 1
+    let residue: i64 = base % modulo
+    let mut i: i64 = 0
+    while i < nf {
+        let factor: i64 = factors[i]
+        while order % factor == 0 && modpow(residue, order / factor, modulo) == 1 {
+            order = order / factor
+        }
+        i = i + 1
+    }
+    return order
+}
+
+function single_event_sum(limit: i64, q: i64, q_power: i64) -> i64 {
+    let m: i64 = limit / q_power
+    return q_power * (triangular(m) - q * triangular(m / q))
+}
+
+function pair_event_sum(limit: i64, q: i64, q_power: i64, r: i64, r_power: i64) -> i64 {
+    let base: i64 = q_power * r_power
+    let m: i64 = limit / base
+    return base * (triangular(m) - q * triangular(m / q) - r * triangular(m / r) + q * r * triangular(m / (q * r)))
+}
+
+function search(limit: i64, modulo: i64) -> i64 {
+    let sqrt_lim: i64 = isqrt(limit)
+    let sieve: ptr<i8> = calloc(sqrt_lim + 1, 1)
+    if sieve == null { return -1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p <= sqrt_lim {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m <= sqrt_lim {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut small_cap: i64 = 200000
+    let small_primes: ptr<i64> = calloc(small_cap, 8)
+    let mut nsp: i64 = 0
+    p = 2
+    while p <= sqrt_lim {
+        if sieve[p] == 0 {
+            small_primes[nsp] = p
+            nsp = nsp + 1
+        }
+        p = p + 1
+    }
+    free(sieve)
+
+    let factors: ptr<i64> = calloc(32, 8)
+    let nf: i64 = prime_factors_into(modulo - 1, factors)
+
+    # linear events: primes q <= limit with q ≡ -1 (mod modulo)
+    let max_k: i64 = (limit + 1) / modulo
+    let ksieve: ptr<i8> = calloc(max_k + 1, 1)
+    if ksieve == null { return -1 }
+    ksieve[0] = 1
+    let mut ii: i64 = 0
+    while ii < nsp {
+        let pp: i64 = small_primes[ii]
+        if pp != modulo {
+            let residue: i64 = modpow(modulo % pp, pp - 2, pp)
+            let min_k: i64 = (pp * pp + 1 + modulo - 1) / modulo
+            let mut res: i64 = residue
+            if res < min_k {
+                res = res + ((min_k - res + pp - 1) / pp) * pp
+            }
+            let mut kk: i64 = res
+            while kk <= max_k {
+                ksieve[kk] = 1
+                kk = kk + pp
+            }
+        }
+        ii = ii + 1
+    }
+    let mut lin_cap: i64 = max_k / 10 + 1000
+    let linear: ptr<i64> = calloc(lin_cap, 8)
+    let mut nlin: i64 = 0
+    let mut k: i64 = 1
+    while k <= max_k {
+        if ksieve[k] == 0 {
+            if nlin >= lin_cap {
+                lin_cap = lin_cap * 2
+                linear = realloc(linear, lin_cap * 8)
+            }
+            linear[nlin] = modulo * k - 1
+            nlin = nlin + 1
+        }
+        k = k + 1
+    }
+    free(ksieve)
+
+    # higher trigger powers
+    let mut hi_cap: i64 = 100000
+    let hq: ptr<i64> = calloc(hi_cap, 8)
+    let hp: ptr<i64> = calloc(hi_cap, 8)
+    let mut nhi: i64 = 0
+    ii = 0
+    while ii < nsp {
+        let q: i64 = small_primes[ii]
+        if q != modulo {
+            let residue: i64 = q % modulo
+            if residue != 1 {
+                let order: i64 = multiplicative_order(q, modulo, factors, nf)
+                let mut power: i64 = 1
+                let mut exponent: i64 = 0
+                while power <= limit / q {
+                    power = power * q
+                    exponent = exponent + 1
+                    if (exponent + 1) % order == 0 {
+                        if !(order == 2 && exponent == 1) {
+                            if nhi >= hi_cap {
+                                hi_cap = hi_cap * 2
+                                hq = realloc(hq, hi_cap * 8)
+                                hp = realloc(hp, hi_cap * 8)
+                            }
+                            hq[nhi] = q
+                            hp[nhi] = power
+                            nhi = nhi + 1
+                        }
+                    }
+                }
+            }
+        }
+        ii = ii + 1
+    }
+    # sort higher by power (insertion sort; nhi small)
+    let mut a: i64 = 1
+    while a < nhi {
+        let mut b: i64 = a
+        while b > 0 && hp[b - 1] > hp[b] {
+            let tq: i64 = hq[b]
+            let tp: i64 = hp[b]
+            hq[b] = hq[b - 1]
+            hp[b] = hp[b - 1]
+            hq[b - 1] = tq
+            hp[b - 1] = tp
+            b = b - 1
+        }
+        a = a + 1
+    }
+
+    let mut total: i64 = 0
+    ii = 0
+    while ii < nlin {
+        let q: i64 = linear[ii]
+        total = total + single_event_sum(limit, q, q)
+        ii = ii + 1
+    }
+    ii = 0
+    while ii < nhi {
+        total = total + single_event_sum(limit, hq[ii], hp[ii])
+        ii = ii + 1
+    }
+
+    ii = 0
+    while ii < nlin {
+        let q: i64 = linear[ii]
+        if q * q > limit { break }
+        # bisect_right linear for limit/q
+        let mut lo: i64 = ii + 1
+        let mut hi: i64 = nlin
+        let key: i64 = limit / q
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if linear[mid] <= key { lo = mid + 1 } else { hi = mid }
+        }
+        let mut jj: i64 = ii + 1
+        while jj < lo {
+            total = total - pair_event_sum(limit, q, q, linear[jj], linear[jj])
+            jj = jj + 1
+        }
+        ii = ii + 1
+    }
+
+    ii = 0
+    while ii < nhi {
+        let q: i64 = hq[ii]
+        let q_power: i64 = hp[ii]
+        let mut lo: i64 = 0
+        let mut hi: i64 = nlin
+        let key: i64 = limit / q_power
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if linear[mid] <= key { lo = mid + 1 } else { hi = mid }
+        }
+        let mut jj: i64 = 0
+        while jj < lo {
+            let r: i64 = linear[jj]
+            if r != q {
+                total = total - pair_event_sum(limit, q, q_power, r, r)
+            }
+            jj = jj + 1
+        }
+        ii = ii + 1
+    }
+
+    ii = 0
+    while ii < nhi {
+        let q: i64 = hq[ii]
+        let q_power: i64 = hp[ii]
+        if q_power * q_power > limit { break }
+        let mut jj: i64 = ii + 1
+        while jj < nhi {
+            let r: i64 = hq[jj]
+            let r_power: i64 = hp[jj]
+            if q_power * r_power > limit { break }
+            if q != r {
+                total = total - pair_event_sum(limit, q, q_power, r, r_power)
+            }
+            jj = jj + 1
+        }
+        ii = ii + 1
+    }
+
+    free(hp)
+    free(hq)
+    free(linear)
+    free(factors)
+    free(small_primes)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", search(100000000000, 2017))
+    return 0
+}

@@ -1,0 +1,199 @@
+# Project Euler 548
+# Gozinta Chains — sum n <= 10^16 with g(n)=n.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const LIMIT: i64 = 10000000000000000
+const MAX_EXP_SUM: i64 = 54
+const MAX_N: i64 = 110
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function init_comb(comb: ptr<i64>, binom: ptr<i64>) -> void {
+    let mut n: i64 = 0
+    while n <= MAX_N {
+        comb[n * MAX_N + 0] = 1
+        let mut k: i64 = 1
+        while k <= n {
+            if k < n {
+                comb[n * MAX_N + k] = comb[(n - 1) * MAX_N + (k - 1)] + comb[(n - 1) * MAX_N + k]
+            } else {
+                comb[n * MAX_N + k] = 1
+            }
+            k = k + 1
+        }
+        n = n + 1
+    }
+    n = 0
+    while n <= MAX_EXP_SUM {
+        let mut k: i64 = 0
+        while k <= n {
+            binom[n * (MAX_EXP_SUM + 1) + k] = comb[n * MAX_N + k]
+            k = k + 1
+        }
+        n = n + 1
+    }
+}
+
+function gozinta_from_sig(sig: ptr<i64>, sig_len: i64, comb: ptr<i64>, binom: ptr<i64>, lim: i64) -> i64 {
+    let mut s: i64 = 0
+    let mut i: i64 = 0
+    while i < sig_len { s = s + sig[i]; i = i + 1 }
+    if s == 0 { return 1 }
+    let P: ptr<i64> = calloc(s + 2, 8)
+    if P == null { return 0 }
+    let mut t: i64 = 1
+    while t <= s {
+        let mut prod: i64 = 1
+        let tt: i64 = t - 1
+        i = 0
+        while i < sig_len {
+            let a: i64 = sig[i]
+            prod = prod * comb[(a + t - 1) * MAX_N + tt]
+            i = i + 1
+        }
+        P[t] = prod
+        t = t + 1
+    }
+    let mut total: i64 = 0
+    let mut m: i64 = 1
+    while m <= s {
+        let mut A_m: i64 = 0
+        t = 1
+        while t <= m {
+            let term: i64 = binom[m * (MAX_EXP_SUM + 1) + t] * P[t]
+            if ((m - t) & 1) != 0 { A_m = A_m - term } else { A_m = A_m + term }
+            t = t + 1
+        }
+        total = total + A_m
+        if lim > 0 && total > lim { free(P); return lim + 1 }
+        m = m + 1
+    }
+    free(P)
+    return total
+}
+
+function sig_equals_g(sig: ptr<i64>, sig_len: i64, comb: ptr<i64>, binom: ptr<i64>) -> bool {
+    let g: i64 = gozinta_from_sig(sig, sig_len, comb, binom, LIMIT)
+    if g > LIMIT { return false }
+    let gs: ptr<i64> = calloc(16, 8)
+    if gs == null { return false }
+    let mut n: i64 = g
+    let mut glen: i64 = 0
+    if n == 1 {
+        free(gs)
+        if sig_len == 0 { return true }
+        return false
+    }
+    let mut p: i64 = 2
+    while p * p <= n {
+        if n % p == 0 {
+            let mut e: i64 = 0
+            while n % p == 0 {
+                n = n / p
+                e = e + 1
+            }
+            let mut j: i64 = glen
+            while j > 0 && gs[j - 1] < e {
+                gs[j] = gs[j - 1]
+                j = j - 1
+            }
+            gs[j] = e
+            glen = glen + 1
+        }
+        p = p + 1
+    }
+    if n > 1 {
+        let mut j: i64 = glen
+        while j > 0 && gs[j - 1] < 1 {
+            gs[j] = gs[j - 1]
+            j = j - 1
+        }
+        gs[j] = 1
+        glen = glen + 1
+    }
+    if glen != sig_len { free(gs); return false }
+    let mut i: i64 = 0
+    while i < sig_len {
+        if sig[i] != gs[i] { free(gs); return false }
+        i = i + 1
+    }
+    free(gs)
+    return true
+}
+
+function enumerate_sigs(first_primes: ptr<i64>, sig: ptr<i64>, sig_len: i64,
+                        pos: i64, prev_e: i64, sum_used: i64, prod: i64,
+                        comb: ptr<i64>, binom: ptr<i64>, total: ptr<i64>) -> void {
+    if sig_len > 0 {
+        if sig_equals_g(sig, sig_len, comb, binom) {
+            let g: i64 = gozinta_from_sig(sig, sig_len, comb, binom, LIMIT)
+            if g <= LIMIT { total[0] = total[0] + g }
+        }
+    }
+    if sum_used == MAX_EXP_SUM || pos >= 60 { return }
+    let p: i64 = first_primes[pos]
+    let max_e: i64 = prev_e
+    let rem: i64 = MAX_EXP_SUM - sum_used
+    let mut me: i64 = max_e
+    if rem < me { me = rem }
+    let mut power: i64 = p
+    let mut e: i64 = 1
+    while e <= me {
+        let new_prod: i64 = prod * power
+        if new_prod > LIMIT { break }
+        sig[sig_len] = e
+        enumerate_sigs(first_primes, sig, sig_len + 1, pos + 1, e, sum_used + e, new_prod, comb, binom, total)
+        if power > LIMIT / p { break }
+        power = power * p
+        e = e + 1
+    }
+}
+
+function main() -> i32 {
+    let comb: ptr<i64> = calloc((MAX_N + 1) * (MAX_N + 1), 8)
+    let binom: ptr<i64> = calloc((MAX_EXP_SUM + 1) * (MAX_EXP_SUM + 2), 8)
+    let first_primes: ptr<i64> = calloc(60, 8)
+    let sig: ptr<i64> = calloc(16, 8)
+    let total: ptr<i64> = calloc(1, 8)
+    if comb == null || binom == null || first_primes == null || sig == null || total == null {
+        return 1
+    }
+    init_comb(comb, binom)
+    total[0] = 1
+    let mut np: i64 = 0
+    let mut p: i64 = 2
+    while np < 60 {
+        if p == 2 || p == 3 || (p > 3 && (p % 2) != 0 && (p % 3) != 0) {
+            let mut ok: i32 = 1
+            if p > 3 {
+                let mut d: i64 = 5
+                while d * d <= p {
+                    if p % d == 0 || p % (d + 2) == 0 { ok = 0; break }
+                    d = d + 6
+                }
+            }
+            if ok == 1 {
+                first_primes[np] = p
+                np = np + 1
+            }
+        }
+        p = p + 1
+    }
+    enumerate_sigs(first_primes, sig, 0, 0, MAX_EXP_SUM, 0, 1, comb, binom, total)
+    printf("%lld\n", total[0])
+    free(comb); free(binom); free(first_primes); free(sig); free(total)
+    return 0
+}

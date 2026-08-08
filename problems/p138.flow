@@ -1,0 +1,18 @@
+# Project Euler 138
+# Sum of L for the twelve smallest isosceles triangles with |h-L|=1.
+
+function main() -> i32 {
+    let mut previous: i64 = 1
+    let mut current: i64 = 17
+    let mut total: i64 = 17
+    let mut i: i32 = 2
+    while i <= 12 {
+        let nxt: i64 = current * 18 - previous
+        previous = current
+        current = nxt
+        total = total + current
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

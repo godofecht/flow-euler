@@ -1,0 +1,67 @@
+# Project Euler 340
+# Crazy Function S(21^7, 7^21, 12^7) mod 10^9.
+
+function ipow(base: i64, exp: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = r * b }
+        b = b * b
+        e = e / 2
+    }
+    return r
+}
+
+function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut a: i64 = ((a0 % mod) + mod) % mod
+    let mut b: i64 = ((b0 % mod) + mod) % mod
+    let mut r: i64 = 0
+    while b > 0 {
+        if b % 2 == 1 {
+            r = r + a
+            if r >= mod { r = r - mod }
+        }
+        a = a * 2
+        if a >= mod { a = a - mod }
+        b = b / 2
+    }
+    return r
+}
+
+function half_prod(x: i64, y: i64, mod: i64) -> i64 {
+    # (x*y/2) % mod with x*y even
+    if x % 2 == 0 {
+        return mulmod(x / 2, y, mod)
+    }
+    return mulmod(x, y / 2, mod)
+}
+
+function main() -> i32 {
+    let mod: i64 = 1000000000
+    let a0: i64 = ipow(21, 7)
+    let b0: i64 = ipow(7, 21)
+    let c0: i64 = ipow(12, 7)
+    let k: i64 = b0 / a0
+    let a: i64 = a0 % mod
+    let b: i64 = b0 % mod
+    let c: i64 = c0 % mod
+
+    # sum n from 0..b = b*(b+1)/2
+    let mut total: i64 = half_prod(b, b + 1, mod)
+
+    # sum_{k=0..K} a*(4(k+1)a - (3k+4)c) with K=b/a
+    # = ((K-1)K/2)*(4a^2 - 3ac) + 4a*K*(a-c)
+    let term_k: i64 = half_prod(k - 1, k, mod)
+    let coef: i64 = (mulmod(4, mulmod(a, a, mod), mod) - mulmod(3, mulmod(a, c, mod), mod) + mod) % mod
+    total = (total + mulmod(term_k, coef, mod)) % mod
+    total = (total + mulmod(mulmod(4, a, mod), mulmod(k, (a - c + mod) % mod, mod), mod)) % mod
+
+    # remaining partial bucket for k=K: length (b - K*a + 1)
+    let rem_len: i64 = (b0 - k * a0 + 1) % mod
+    let fconst: i64 = (mulmod(4, mulmod(k + 1, a, mod), mod) - mulmod(3 * k + 4, c, mod) + mod * 4) % mod
+    total = (total + mulmod(rem_len, fconst, mod)) % mod
+
+    printf("%lld\n", total)
+    return 0
+}

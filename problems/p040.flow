@@ -1,0 +1,37 @@
+# Project Euler 040
+# Champernowne's constant digit product d1 × d10 × d100 × … × d1000000.
+
+function digit_at(target: i64) -> i64 {
+    # find the digit at 1-based position target in Champernowne
+    let mut remaining: i64 = target
+    let mut digits: i64 = 1
+    let mut count: i64 = 9
+    let mut start: i64 = 1
+    while remaining > digits * count {
+        remaining = remaining - digits * count
+        digits = digits + 1
+        count = count * 10
+        start = start * 10
+    }
+    let number: i64 = start + (remaining - 1) / digits
+    let pos_from_left: i64 = (remaining - 1) % digits
+    # extract digit
+    let mut n: i64 = number
+    let mut skip: i64 = digits - 1 - pos_from_left
+    while skip > 0 {
+        n = n / 10
+        skip = skip - 1
+    }
+    return n % 10
+}
+
+function main() -> i32 {
+    let mut prod: i64 = 1
+    let mut p: i64 = 1
+    while p <= 1000000 {
+        prod = prod * digit_at(p)
+        p = p * 10
+    }
+    printf("%lld\n", prod)
+    return 0
+}

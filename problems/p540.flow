@@ -1,0 +1,130 @@
+# Project Euler 540
+# Counting Primitive Pythagorean Triples — P(3141592653589793).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 3141592653589793
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function icbrt(n: i64) -> i64 {
+    if n <= 1 { return n }
+    let mut r: i64 = 1
+    while r * r * r <= n {
+        let r1: i64 = r + 1
+        if r1 * r1 * r1 > n { break }
+        r = r1
+    }
+    while r * r * r > n { r = r - 1 }
+    return r
+}
+
+function odd_ge3_count_le(n: i64) -> i64 {
+    if n < 3 { return 0 }
+    return (n - 1) / 2
+}
+
+function raw_opposite_parity_count(limit: i64) -> i64 {
+    if limit < 5 { return 0 }
+    let mut full: i64 = (1 + isqrt(2 * limit - 1)) / 2
+    while (full + 1) * (full + 1) + full * full <= limit { full = full + 1 }
+    while full * full + (full - 1) * (full - 1) > limit { full = full - 1 }
+    let k: i64 = full / 2
+    let mut total: i64 = k * k
+    let mut m: i64 = 2 * k + 1
+    if m * m > limit { return total }
+    let mut y: i64 = isqrt(limit - m * m)
+    while m * m + 1 <= limit {
+        let rem: i64 = limit - m * m
+        while y * y > rem { y = y - 1 }
+        let mut nmax: i64 = y
+        if nmax >= m { nmax = m - 1 }
+        if (m & 1) != 0 {
+            total = total + nmax / 2
+        } else {
+            total = total + (nmax + 1) / 2
+        }
+        m = m + 1
+    }
+    return total
+}
+
+function build_small_table(cube: i64, small: ptr<i64>) -> void {
+    let mut x: i64 = 1
+    while x <= cube {
+        let mut total: i64 = raw_opposite_parity_count(x)
+        let max_d: i64 = isqrt(x)
+        let split: i64 = icbrt(x)
+        let mut d: i64 = 3
+        while d <= max_d && d <= split {
+            total = total - small[x / (d * d)]
+            d = d + 2
+        }
+        if d <= max_d {
+            let max_z: i64 = x / (d * d)
+            let mut z: i64 = 1
+            while z <= max_z {
+                let hi: i64 = odd_ge3_count_le(isqrt(x / z))
+                let lo: i64 = odd_ge3_count_le(isqrt(x / (z + 1)))
+                total = total - (hi - lo) * small[z]
+                z = z + 1
+            }
+        }
+        small[x] = total
+        x = x + 1
+    }
+}
+
+function main() -> i32 {
+    let cube: i64 = icbrt(N)
+    let small: ptr<i64> = calloc(cube + 1, 8)
+    let tail: ptr<i64> = calloc(cube + 1, 8)
+    let transformed: ptr<i64> = calloc(cube + 1, 8)
+    if small == null || tail == null || transformed == null { return 1 }
+    build_small_table(cube, small)
+    let s_max: i64 = isqrt(N / 5)
+    let mut t: i64 = 1
+    while t <= cube {
+        let mut s: i64 = (cube / t + 1) * t
+        if (s & 1) == 0 { s = s + t }
+        let mut acc: i64 = 0
+        let step: i64 = 2 * t
+        while s <= s_max {
+            acc = acc + small[N / (s * s)]
+            s = s + step
+        }
+        tail[t] = acc
+        t = t + 2
+    }
+    let mut start: i64 = cube
+    if (start & 1) == 0 { start = start - 1 }
+    t = start
+    while t > 0 {
+        let x: i64 = N / (t * t)
+        let mut total: i64 = raw_opposite_parity_count(x)
+        let mut s: i64 = 3 * t
+        let step: i64 = 2 * t
+        while s <= cube {
+            total = total - transformed[s]
+            s = s + step
+        }
+        total = total - tail[t]
+        transformed[t] = total
+        t = t - 2
+    }
+    printf("%lld\n", transformed[1])
+    free(small); free(tail); free(transformed)
+    return 0
+}

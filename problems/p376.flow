@@ -1,0 +1,173 @@
+# Project Euler 376
+# Nontransitive dice: count sets for face values 1..30.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let WIN: i64 = 20
+    let WIN_SPACE: i64 = 8000
+    let THRESH: i64 = 19
+    let NABC: i64 = 343
+    let MAX_OPT: i64 = 343
+    let STATE_SPACE: i64 = NABC * WIN_SPACE
+
+    let tr_count: ptr<i32> = calloc(NABC, 4)
+    let tr_next: ptr<i32> = calloc(NABC * MAX_OPT, 4)
+    let tr_na: ptr<i8> = calloc(NABC * MAX_OPT, 1)
+    let tr_nb: ptr<i8> = calloc(NABC * MAX_OPT, 1)
+    let tr_nc: ptr<i8> = calloc(NABC * MAX_OPT, 1)
+    let tr_dba: ptr<i8> = calloc(NABC * MAX_OPT, 1)
+    let tr_dcb: ptr<i8> = calloc(NABC * MAX_OPT, 1)
+    let tr_dac: ptr<i8> = calloc(NABC * MAX_OPT, 1)
+    if tr_count == null || tr_next == null || tr_na == null || tr_nb == null || tr_nc == null {
+        return 1
+    }
+    if tr_dba == null || tr_dcb == null || tr_dac == null { return 1 }
+
+    let mut a_used: i64 = 0
+    while a_used <= 6 {
+        let mut b_used: i64 = 0
+        while b_used <= 6 {
+            let mut c_used: i64 = 0
+            while c_used <= 6 {
+                let abc: i64 = (a_used * 7 + b_used) * 7 + c_used
+                let mut cnt: i64 = 0
+                let mut da: i64 = 0
+                while da <= 6 - a_used {
+                    let mut db: i64 = 0
+                    while db <= 6 - b_used {
+                        let mut dc: i64 = 0
+                        while dc <= 6 - c_used {
+                            let na: i64 = a_used + da
+                            let nb: i64 = b_used + db
+                            let nc: i64 = c_used + dc
+                            let next_base: i64 = ((na * 7 + nb) * 7 + nc) * WIN_SPACE
+                            let idx: i64 = abc * MAX_OPT + cnt
+                            tr_next[idx] = next_base as i32
+                            tr_na[idx] = na as i8
+                            tr_nb[idx] = nb as i8
+                            tr_nc[idx] = nc as i8
+                            tr_dba[idx] = (db * a_used) as i8
+                            tr_dcb[idx] = (dc * b_used) as i8
+                            tr_dac[idx] = (da * c_used) as i8
+                            cnt = cnt + 1
+                            dc = dc + 1
+                        }
+                        db = db + 1
+                    }
+                    da = da + 1
+                }
+                tr_count[abc] = cnt as i32
+                c_used = c_used + 1
+            }
+            b_used = b_used + 1
+        }
+        a_used = a_used + 1
+    }
+
+    let acc: ptr<i64> = calloc(STATE_SPACE, 8)
+    let cur_keys: ptr<i32> = calloc(20000, 4)
+    let cur_vals: ptr<i64> = calloc(20000, 8)
+    let nxt_keys: ptr<i32> = calloc(20000, 4)
+    if acc == null || cur_keys == null || cur_vals == null || nxt_keys == null { return 1 }
+
+    let mut n_cur: i64 = 1
+    cur_keys[0] = 0
+    cur_vals[0] = 1
+
+    let N: i64 = 30
+    let mut value: i64 = 1
+    while value <= N {
+        let mut n_next: i64 = 0
+        let mut is_last: i64 = 0
+        if value == N { is_last = 1 }
+
+        let mut si: i64 = 0
+        while si < n_cur {
+            let state: i64 = cur_keys[si] as i64
+            let ways: i64 = cur_vals[si]
+            let ac: i64 = state % WIN
+            let mut tmp: i64 = state / WIN
+            let cb: i64 = tmp % WIN
+            tmp = tmp / WIN
+            let ba: i64 = tmp % WIN
+            let abc: i64 = tmp / WIN
+            let opts: i64 = tr_count[abc] as i64
+            let mut oi: i64 = 0
+            while oi < opts {
+                let idx: i64 = abc * MAX_OPT + oi
+                let na: i64 = tr_na[idx] as i64
+                let nb: i64 = tr_nb[idx] as i64
+                let nc: i64 = tr_nc[idx] as i64
+                let mut nba: i64 = ba + (tr_dba[idx] as i64)
+                if nba > 19 { nba = 19 }
+                let mut ncb: i64 = cb + (tr_dcb[idx] as i64)
+                if ncb > 19 { ncb = 19 }
+                let mut nac: i64 = ac + (tr_dac[idx] as i64)
+                if nac > 19 { nac = 19 }
+
+                let mut ok: i64 = 1
+                if nba + 6 * (6 - nb) < THRESH { ok = 0 }
+                if ncb + 6 * (6 - nc) < THRESH { ok = 0 }
+                if nac + 6 * (6 - na) < THRESH { ok = 0 }
+                if is_last == 1 {
+                    if na != 6 { ok = 0 }
+                    if nb != 6 { ok = 0 }
+                    if nc != 6 { ok = 0 }
+                }
+                if ok == 1 {
+                    let key: i64 = (tr_next[idx] as i64) + nba * 400 + ncb * 20 + nac
+                    if acc[key] == 0 {
+                        nxt_keys[n_next] = key as i32
+                        n_next = n_next + 1
+                    }
+                    acc[key] = acc[key] + ways
+                }
+                oi = oi + 1
+            }
+            si = si + 1
+        }
+
+        let mut j: i64 = 0
+        while j < n_next {
+            let k: i64 = nxt_keys[j] as i64
+            cur_keys[j] = k as i32
+            cur_vals[j] = acc[k]
+            acc[k] = 0
+            j = j + 1
+        }
+        n_cur = n_next
+        value = value + 1
+    }
+
+    let goal_abc: i64 = (6 * 7 + 6) * 7 + 6
+    let goal: i64 = ((goal_abc * WIN + 19) * WIN + 19) * WIN + 19
+    let mut ans: i64 = 0
+    let mut gi: i64 = 0
+    while gi < n_cur {
+        if (cur_keys[gi] as i64) == goal {
+            ans = cur_vals[gi] / 3
+            break
+        }
+        gi = gi + 1
+    }
+
+    printf("%lld\n", ans)
+
+    free(nxt_keys)
+    free(cur_vals)
+    free(cur_keys)
+    free(acc)
+    free(tr_dac)
+    free(tr_dcb)
+    free(tr_dba)
+    free(tr_nc)
+    free(tr_nb)
+    free(tr_na)
+    free(tr_next)
+    free(tr_count)
+    return 0
+}

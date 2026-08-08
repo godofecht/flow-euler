@@ -1,0 +1,252 @@
+# Project Euler 459
+# Flipping Cards — tartan theorem + 1D Grundy prefixes + nim-product matching.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 1000000
+const M: i64 = 1024
+const MEMO_CAP: i64 = 2097152
+
+let mut G_mk1: ptr<i64> = null
+let mut G_mk2: ptr<i64> = null
+let mut G_mv: ptr<i64> = null
+let mut G_mu: ptr<i8> = null
+
+function memo_get(a: i64, b: i64) -> i64 {
+    # returns -1 if miss
+    let mut h: i64 = (a * 1315423911 + b) % MEMO_CAP
+    if h < 0 { h = h + MEMO_CAP }
+    while G_mu[h] != 0 {
+        if G_mk1[h] == a && G_mk2[h] == b {
+            return G_mv[h]
+        }
+        h = h + 1
+        if h == MEMO_CAP { h = 0 }
+    }
+    return -1
+}
+
+function memo_put(a: i64, b: i64, v: i64) -> void {
+    let mut h: i64 = (a * 1315423911 + b) % MEMO_CAP
+    if h < 0 { h = h + MEMO_CAP }
+    while G_mu[h] != 0 {
+        if G_mk1[h] == a && G_mk2[h] == b {
+            G_mv[h] = v
+            return
+        }
+        h = h + 1
+        if h == MEMO_CAP { h = 0 }
+    }
+    G_mu[h] = 1
+    G_mk1[h] = a
+    G_mk2[h] = b
+    G_mv[h] = v
+}
+
+function fermat(i: i64) -> i64 {
+    # F_i = 2^(2^i)
+    return 1 << (1 << i)
+}
+
+function fermat_index(x: i64) -> i64 {
+    let mut i: i64 = 0
+    while i + 1 < 7 && fermat(i + 1) <= x {
+        i = i + 1
+    }
+    return i
+}
+
+function nim_mul(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a == 0 || b == 0 { return 0 }
+    if a == 1 { return b }
+    if b == 1 { return a }
+    if a < b {
+        let t: i64 = a
+        a = b
+        b = t
+    }
+    let cached: i64 = memo_get(a, b)
+    if cached >= 0 { return cached }
+    let m: i64 = fermat_index(a)
+    let n: i64 = fermat_index(b)
+    let mut r: i64 = 0
+    if m != n {
+        if m > n {
+            let Fm: i64 = fermat(m)
+            let shift: i64 = 1 << m
+            let a1: i64 = a / Fm
+            let a2: i64 = a % Fm
+            r = (nim_mul(a1, b) << shift) ^ nim_mul(a2, b)
+        } else {
+            let Fn: i64 = fermat(n)
+            let shift: i64 = 1 << n
+            let b1: i64 = b / Fn
+            let b2: i64 = b % Fn
+            r = (nim_mul(a, b1) << shift) ^ nim_mul(a, b2)
+        }
+    } else {
+        let Fn: i64 = fermat(n)
+        let shift: i64 = 1 << n
+        let a1: i64 = a / Fn
+        let a2: i64 = a % Fn
+        let b1: i64 = b / Fn
+        let b2: i64 = b % Fn
+        let p1: i64 = nim_mul(a1, b1)
+        let p2: i64 = nim_mul(a2, b2)
+        let p3: i64 = nim_mul(a1 ^ a2, b1 ^ b2)
+        let p4: i64 = nim_mul(p1, Fn / 2)
+        let p5: i64 = p3 ^ p2
+        r = (p5 << shift) ^ p2 ^ p4
+    }
+    memo_put(a, b, r)
+    return r
+}
+
+function nim_pow(a0: i64, e0: i64) -> i64 {
+    let mut res: i64 = 1
+    let mut base: i64 = a0
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 {
+            res = nim_mul(res, base)
+        }
+        e = e / 2
+        if e > 0 {
+            base = nim_mul(base, base)
+        }
+    }
+    return res
+}
+
+function nim_inv(a: i64) -> i64 {
+    return nim_pow(a, 65534)
+}
+
+function compute_1d(n: i64, L: ptr<i64>, Llen: i64, freq: ptr<i64>) -> i64 {
+    # returns C[n]; fills freq[0..M)
+    let C: ptr<i32> = calloc(n + 1, 4)
+    let mark: ptr<i32> = calloc(M, 4)
+    let cnt: ptr<i32> = calloc(M, 4)
+    let touched: ptr<i32> = calloc(M, 4)
+    if C == null || mark == null || cnt == null || touched == null { return 0 }
+    let mut mi: i64 = 0
+    let mut x: i64 = 1
+    while x <= n {
+        while mi < Llen && L[mi] <= x {
+            mi = mi + 1
+        }
+        let cx_prev: i64 = C[x - 1] as i64
+        let mut tlen: i64 = 0
+        let mut j: i64 = 0
+        while j < mi {
+            let v: i64 = cx_prev ^ (C[x - L[j]] as i64)
+            if (mark[v] as i64) != x {
+                mark[v] = x as i32
+                cnt[v] = 1
+                touched[tlen] = v as i32
+                tlen = tlen + 1
+            } else {
+                cnt[v] = cnt[v] + 1
+            }
+            j = j + 1
+        }
+        let mut t: i64 = 0
+        while (mark[t] as i64) == x {
+            t = t + 1
+        }
+        let cx: i64 = cx_prev ^ t
+        C[x] = cx as i32
+        let mut i2: i64 = 0
+        while i2 < tlen {
+            let v2: i64 = touched[i2] as i64
+            freq[v2 ^ t] = freq[v2 ^ t] + (cnt[v2] as i64)
+            i2 = i2 + 1
+        }
+        x = x + 1
+    }
+    let cn: i64 = C[n] as i64
+    free(touched)
+    free(cnt)
+    free(mark)
+    free(C)
+    return cn
+}
+
+function main() -> i32 {
+    G_mk1 = calloc(MEMO_CAP, 8)
+    G_mk2 = calloc(MEMO_CAP, 8)
+    G_mv = calloc(MEMO_CAP, 8)
+    G_mu = calloc(MEMO_CAP, 1)
+    let squares: ptr<i64> = calloc(1024, 8)
+    let tris: ptr<i64> = calloc(2048, 8)
+    let freq_sq: ptr<i64> = calloc(M, 8)
+    let freq_tr: ptr<i64> = calloc(M, 8)
+    if G_mk1 == null || G_mk2 == null || G_mv == null || G_mu == null { return 1 }
+    if squares == null || tris == null || freq_sq == null || freq_tr == null { return 1 }
+
+    let mut ns: i64 = 0
+    let mut k: i64 = 1
+    while k * k <= N {
+        squares[ns] = k * k
+        ns = ns + 1
+        k = k + 1
+    }
+    let mut nt: i64 = 0
+    k = 1
+    while true {
+        let t: i64 = k * (k + 1) / 2
+        if t > N { break }
+        tris[nt] = t
+        nt = nt + 1
+        k = k + 1
+    }
+
+    let Csq: i64 = compute_1d(N, squares, ns, freq_sq)
+    let Ctr: i64 = compute_1d(N, tris, nt, freq_tr)
+    let board: i64 = nim_mul(Csq, Ctr)
+
+    let mut sum_sq: i64 = 0
+    let mut sum_tr: i64 = 0
+    let mut a: i64 = 0
+    while a < M {
+        sum_sq = sum_sq + freq_sq[a]
+        sum_tr = sum_tr + freq_tr[a]
+        a = a + 1
+    }
+
+    let mut total: i64 = 0
+    if board == 0 {
+        let a0: i64 = freq_sq[0]
+        let b0: i64 = freq_tr[0]
+        total = a0 * sum_tr + (sum_sq - a0) * b0
+    } else {
+        a = 1
+        while a < M {
+            let fa: i64 = freq_sq[a]
+            if fa != 0 {
+                let inva: i64 = nim_inv(a)
+                let b: i64 = nim_mul(board, inva)
+                if b < M {
+                    total = total + fa * freq_tr[b]
+                }
+            }
+            a = a + 1
+        }
+    }
+
+    printf("%lld\n", total)
+    free(freq_tr)
+    free(freq_sq)
+    free(tris)
+    free(squares)
+    free(G_mu)
+    free(G_mv)
+    free(G_mk2)
+    free(G_mk1)
+    return 0
+}

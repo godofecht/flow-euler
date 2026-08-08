@@ -1,0 +1,106 @@
+# Project Euler 336
+# 2011th maximix arrangement for 11 carriages.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function next_perm(a: ptr<i8>, n: i32) -> bool {
+    let mut i: i32 = n - 2
+    while i >= 0 && a[i] >= a[i + 1] {
+        i = i - 1
+    }
+    if i < 0 { return false }
+    let mut j: i32 = n - 1
+    while a[j] <= a[i] {
+        j = j - 1
+    }
+    let t: i8 = a[i]
+    a[i] = a[j]
+    a[j] = t
+    let mut L: i32 = i + 1
+    let mut R: i32 = n - 1
+    while L < R {
+        let u: i8 = a[L]
+        a[L] = a[R]
+        a[R] = u
+        L = L + 1
+        R = R - 1
+    }
+    return true
+}
+
+function reverse_range(a: ptr<i8>, L0: i32, R0: i32) -> i32 {
+    let mut L: i32 = L0
+    let mut R: i32 = R0
+    while L < R {
+        let t: i8 = a[L]
+        a[L] = a[R]
+        a[R] = t
+        L = L + 1
+        R = R - 1
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let length: i32 = 11
+    let stop: i32 = 2011
+    let train: ptr<i8> = calloc(length as i64, 1)
+    let current: ptr<i8> = calloc(length as i64, 1)
+    if train == null || current == null { return 1 }
+    # CABDEFGHIJK
+    train[0]=67; train[1]=65; train[2]=66
+    let mut i: i32 = 3
+    while i < length {
+        train[i] = (65 + i) as i8  # D=68 at i=3 ... 
+        i = i + 1
+    }
+    # Fix: should be C A B D E F G H I J K
+    train[0]=67; train[1]=65; train[2]=66; train[3]=68; train[4]=69
+    train[5]=70; train[6]=71; train[7]=72; train[8]=73; train[9]=74; train[10]=75
+
+    let max_rot: i32 = (length - 1) * 2 - 1
+    let mut num_found: i32 = 0
+    while true {
+        i = 0
+        while i < length {
+            current[i] = train[i]
+            i = i + 1
+        }
+        let mut want: i8 = 65
+        let mut rotations: i32 = 0
+        let mut pos: i32 = 0
+        while pos < length - 1 {
+            if current[pos] == want { break }
+            if current[length - 1] == want && pos != length - 2 { break }
+            let mut j: i32 = pos + 1
+            while current[j] != want {
+                j = j + 1
+            }
+            if j < length - 1 {
+                reverse_range(current, j, length - 1)
+                rotations = rotations + 1
+            }
+            reverse_range(current, pos, length - 1)
+            rotations = rotations + 1
+            want = want + 1
+            pos = pos + 1
+        }
+        if rotations == max_rot {
+            num_found = num_found + 1
+            if num_found == stop { break }
+        }
+        if !next_perm(train, length) { break }
+    }
+    # print train as string
+    let mut k: i32 = 0
+    while k < length {
+        printf("%c", train[k] as i32)
+        k = k + 1
+    }
+    printf("\n")
+    free(train); free(current)
+    return 0
+}

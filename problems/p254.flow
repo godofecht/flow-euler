@@ -1,0 +1,247 @@
+# Project Euler 254
+# sum_{i=1..150} sg(i) for digit-factorial sf maps.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digit_sum(n0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut s: i64 = 0
+    if n < 0 { n = -n }
+    while n > 0 {
+        s = s + (n % 10)
+        n = n / 10
+    }
+    return s
+}
+
+function min_number_digit_sum(s: i64) -> i64 {
+    # smallest positive int with digit sum s
+    let q: i64 = s / 9
+    let r: i64 = s % 9
+    let mut ans: i64 = 0
+    if r == 0 {
+        let mut i: i64 = 0
+        while i < q {
+            ans = ans * 10 + 9
+            i = i + 1
+        }
+    } else {
+        ans = r
+        let mut i: i64 = 0
+        while i < q {
+            ans = ans * 10 + 9
+            i = i + 1
+        }
+    }
+    return ans
+}
+
+function main() -> i32 {
+    let FACT9: i64 = 362880
+    let f1: i64 = 1
+    let f2: i64 = 2
+    let f3: i64 = 6
+    let f4: i64 = 24
+    let f5: i64 = 120
+    let f6: i64 = 720
+    let f7: i64 = 5040
+    let f8: i64 = 40320
+
+    let counts1: ptr<i8> = calloc(FACT9, 1)
+    let counts2: ptr<i8> = calloc(FACT9, 1)
+    let counts3: ptr<i8> = calloc(FACT9, 1)
+    let counts4: ptr<i8> = calloc(FACT9, 1)
+    let counts5: ptr<i8> = calloc(FACT9, 1)
+    let counts6: ptr<i8> = calloc(FACT9, 1)
+    let counts7: ptr<i8> = calloc(FACT9, 1)
+    let counts8: ptr<i8> = calloc(FACT9, 1)
+    let rem_len: ptr<i8> = calloc(FACT9, 1)
+    let rem_sg: ptr<i16> = calloc(FACT9, 2)
+    let bucket_sz: ptr<i32> = calloc(9, 4)
+    let packed: ptr<i64> = calloc(FACT9, 8)
+    let packed_mod: ptr<i8> = calloc(FACT9, 1)
+
+    let mut r: i64 = 0
+    while r < FACT9 {
+        let mut x: i64 = r
+        let a8: i64 = x / f8; x = x % f8
+        let a7: i64 = x / f7; x = x % f7
+        let a6: i64 = x / f6; x = x % f6
+        let a5: i64 = x / f5; x = x % f5
+        let a4: i64 = x / f4; x = x % f4
+        let a3: i64 = x / f3; x = x % f3
+        let a2: i64 = x / f2; x = x % f2
+        let a1: i64 = x / f1
+        counts1[r] = a1 as i8
+        counts2[r] = a2 as i8
+        counts3[r] = a3 as i8
+        counts4[r] = a4 as i8
+        counts5[r] = a5 as i8
+        counts6[r] = a6 as i8
+        counts7[r] = a7 as i8
+        counts8[r] = a8 as i8
+        let ln: i64 = a1+a2+a3+a4+a5+a6+a7+a8
+        rem_len[r] = ln as i8
+        rem_sg[r] = (1*a1+2*a2+3*a3+4*a4+5*a5+6*a6+7*a7+8*a8) as i16
+        let mut code: i64 = ln
+        code = code * 9 + (8 - a1)
+        code = code * 9 + (8 - a2)
+        code = code * 9 + (8 - a3)
+        code = code * 9 + (8 - a4)
+        code = code * 9 + (8 - a5)
+        code = code * 9 + (8 - a6)
+        code = code * 9 + (8 - a7)
+        code = code * 9 + (8 - a8)
+        packed[r] = (code << 19) | r
+        packed_mod[r] = (r % 9) as i8
+        bucket_sz[r % 9] = bucket_sz[r % 9] + 1
+        r = r + 1
+    }
+
+    # sort each bucket by packed key - insertion sort into buckets
+    let bucket_off: ptr<i32> = calloc(10, 4)
+    let mut m: i64 = 0
+    while m < 9 {
+        bucket_off[m + 1] = bucket_off[m] + bucket_sz[m]
+        m = m + 1
+    }
+    let buckets: ptr<i32> = calloc(FACT9, 4)
+    let fill: ptr<i32> = calloc(9, 4)
+    m = 0
+    while m < 9 { fill[m] = bucket_off[m]; m = m + 1 }
+    r = 0
+    while r < FACT9 {
+        let md: i64 = packed_mod[r] as i64
+        let at: i64 = fill[md] as i64
+        buckets[at] = r as i32
+        fill[md] = (at + 1) as i32
+        r = r + 1
+    }
+    # sort each bucket by packed[r]
+    m = 0
+    while m < 9 {
+        let lo: i64 = bucket_off[m] as i64
+        let hi: i64 = bucket_off[m + 1] as i64
+        let mut i: i64 = lo + 1
+        while i < hi {
+            let key: i64 = buckets[i] as i64
+            let pk: i64 = packed[key]
+            let mut j: i64 = i
+            while j > lo {
+                let prev: i64 = buckets[j - 1] as i64
+                if packed[prev] <= pk { break }
+                buckets[j] = prev as i32
+                j = j - 1
+            }
+            buckets[j] = key as i32
+            i = i + 1
+        }
+        m = m + 1
+    }
+
+    let low_lim: i64 = 1000000 + FACT9
+    let low_ds: ptr<i8> = calloc(low_lim, 1)
+    let mut n: i64 = 1
+    while n < low_lim {
+        low_ds[n] = (low_ds[n / 10] as i64 + (n % 10)) as i8
+        n = n + 1
+    }
+
+    let mut total: i64 = 0
+    let mut i: i64 = 1
+    while i <= 150 {
+        let kmin: i64 = min_number_digit_sum(i)
+        let qmin: i64 = kmin / FACT9
+        let residue: i64 = i % 9
+        let blo: i64 = bucket_off[residue] as i64
+        let bhi: i64 = bucket_off[residue + 1] as i64
+
+        let mut best_len: i64 = -1
+        let mut best_c1: i64 = 0
+        let mut best_c2: i64 = 0
+        let mut best_c3: i64 = 0
+        let mut best_c4: i64 = 0
+        let mut best_c5: i64 = 0
+        let mut best_c6: i64 = 0
+        let mut best_c7: i64 = 0
+        let mut best_c8: i64 = 0
+        let mut best_q: i64 = 0
+        let mut best_sg: i64 = -1
+        let mut have: bool = false
+
+        let mut delta: i64 = 0
+        while delta < 37 {
+            let q: i64 = qmin + delta
+            if have && q >= best_len { break }
+            let base: i64 = q * FACT9
+            let high: i64 = base / 1000000
+            let low: i64 = base % 1000000
+            let sum_high: i64 = digit_sum(high)
+            let sum_high1: i64 = digit_sum(high + 1)
+            let mut need0: i64 = i - sum_high
+            let mut need1: i64 = i - sum_high1
+            if need0 < 0 || need0 > 54 { need0 = -1 }
+            if need1 < 0 || need1 > 54 { need1 = -1 }
+            let mut found_r: i64 = -1
+            let mut bi: i64 = blo
+            while bi < bhi {
+                let rr: i64 = buckets[bi] as i64
+                let t: i64 = low + rr
+                if t < 1000000 {
+                    if need0 >= 0 && (low_ds[t] as i64) == need0 {
+                        found_r = rr
+                        break
+                    }
+                } else {
+                    if need1 >= 0 && (low_ds[t - 1000000] as i64) == need1 {
+                        found_r = rr
+                        break
+                    }
+                }
+                bi = bi + 1
+            }
+            if found_r >= 0 {
+                let ln: i64 = rem_len[found_r] as i64
+                let length_total: i64 = q + ln
+                let c1: i64 = counts1[found_r] as i64
+                let c2: i64 = counts2[found_r] as i64
+                let c3: i64 = counts3[found_r] as i64
+                let c4: i64 = counts4[found_r] as i64
+                let c5: i64 = counts5[found_r] as i64
+                let c6: i64 = counts6[found_r] as i64
+                let c7: i64 = counts7[found_r] as i64
+                let c8: i64 = counts8[found_r] as i64
+                let better: bool = false
+                if !have { better = true }
+                elif length_total < best_len { better = true }
+                elif length_total == best_len {
+                    if c1 > best_c1 { better = true }
+                    elif c1 == best_c1 && c2 > best_c2 { better = true }
+                    elif c1 == best_c1 && c2 == best_c2 && c3 > best_c3 { better = true }
+                    elif c1 == best_c1 && c2 == best_c2 && c3 == best_c3 && c4 > best_c4 { better = true }
+                    elif c1 == best_c1 && c2 == best_c2 && c3 == best_c3 && c4 == best_c4 && c5 > best_c5 { better = true }
+                    elif c1 == best_c1 && c2 == best_c2 && c3 == best_c3 && c4 == best_c4 && c5 == best_c5 && c6 > best_c6 { better = true }
+                    elif c1 == best_c1 && c2 == best_c2 && c3 == best_c3 && c4 == best_c4 && c5 == best_c5 && c6 == best_c6 && c7 > best_c7 { better = true }
+                    elif c1 == best_c1 && c2 == best_c2 && c3 == best_c3 && c4 == best_c4 && c5 == best_c5 && c6 == best_c6 && c7 == best_c7 && c8 > best_c8 { better = true }
+                    elif c1 == best_c1 && c2 == best_c2 && c3 == best_c3 && c4 == best_c4 && c5 == best_c5 && c6 == best_c6 && c7 == best_c7 && c8 == best_c8 && q > best_q { better = true }
+                }
+                if better {
+                    have = true
+                    best_len = length_total
+                    best_c1 = c1; best_c2 = c2; best_c3 = c3; best_c4 = c4
+                    best_c5 = c5; best_c6 = c6; best_c7 = c7; best_c8 = c8
+                    best_q = q
+                    best_sg = (rem_sg[found_r] as i64) + 9 * q
+                }
+            }
+            delta = delta + 1
+        }
+        total = total + best_sg
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

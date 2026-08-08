@@ -1,0 +1,130 @@
+# Project Euler 304
+# Sum F(p) mod 1234567891011 for first 100000 primes p > 10^14.
+
+function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    if a < 0 { a = a + mod }
+    let mut b: i64 = b0 % mod
+    if b < 0 { b = b + mod }
+    let mut r: i64 = 0
+    while b > 0 {
+        if (b & 1) == 1 {
+            r = r + a
+            if r >= mod { r = r - mod }
+        }
+        a = a * 2
+        if a >= mod { a = a - mod }
+        b = b >> 1
+    }
+    return r
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 { r = mulmod(r, b, mod) }
+        b = mulmod(b, b, mod)
+        e = e >> 1
+    }
+    return r
+}
+
+function is_prime(p: i64) -> bool {
+    if p < 2 { return false }
+    if p % 2 == 0 { return p == 2 }
+    if p % 3 == 0 { return p == 3 }
+    if p % 5 == 0 { return p == 5 }
+    if p % 7 == 0 { return p == 7 }
+    if p % 11 == 0 { return p == 11 }
+    if p % 13 == 0 { return p == 13 }
+    if p % 17 == 0 { return p == 17 }
+    let mut d: i64 = p - 1
+    let mut shift: i32 = 0
+    while (d & 1) == 0 {
+        d = d >> 1
+        shift = shift + 1
+    }
+    # bases for 64-bit
+    # fixed arrays may fail — use sequential checks
+    let mut bi: i32 = 0
+    while bi < 7 {
+        let base: i64 = 0
+        if bi == 0 { base = 2 }
+        elif bi == 1 { base = 325 }
+        elif bi == 2 { base = 9375 }
+        elif bi == 3 { base = 28178 }
+        elif bi == 4 { base = 450775 }
+        elif bi == 5 { base = 9780504 }
+        else { base = 1795265022 }
+        let a: i64 = base % p
+        if a == 0 {
+            bi = bi + 1
+            continue
+        }
+        let mut x: i64 = modpow(a, d, p)
+        if x == 1 || x == p - 1 {
+            bi = bi + 1
+            continue
+        }
+        let mut ok: bool = false
+        let mut r: i32 = 0
+        while r < shift - 1 {
+            x = mulmod(x, x, p)
+            if x == p - 1 {
+                ok = true
+                break
+            }
+            if x == 1 { return false }
+            r = r + 1
+        }
+        if !ok { return false }
+        bi = bi + 1
+    }
+    return true
+}
+
+function fibonacci(n0: i64, mod: i64) -> i64 {
+    if n0 == 0 { return 0 }
+    # find top bit
+    let mut bit: i64 = 1
+    while bit <= n0 / 2 {
+        bit = bit << 1
+    }
+    let mut a: i64 = 0
+    let mut b: i64 = 1
+    while bit > 0 {
+        let next_a: i64 = mulmod(a, (2 * b - a + mod) % mod, mod)
+        b = (mulmod(a, a, mod) + mulmod(b, b, mod)) % mod
+        a = next_a
+        if (n0 & bit) != 0 {
+            let na: i64 = b
+            b = (a + b) % mod
+            a = na
+        }
+        bit = bit >> 1
+    }
+    return a
+}
+
+function main() -> i32 {
+    let mod: i64 = 1234567891011
+    let mut n: i64 = 100000000000000
+    let mut last: i64 = fibonacci(n - 1, mod)
+    let mut current: i64 = fibonacci(n, mod)
+    let mut total: i64 = 0
+    let mut count: i64 = 0
+    while count < 100000 {
+        n = n + 1
+        let next_v: i64 = (last + current) % mod
+        last = current
+        current = next_v
+        if is_prime(n) {
+            total = (total + current) % mod
+            count = count + 1
+        }
+    }
+    printf("%lld\n", total)
+    return 0
+}

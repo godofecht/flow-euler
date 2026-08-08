@@ -1,0 +1,141 @@
+# Project Euler 369
+# Badugi: count n-card hands (4≤n≤13) containing a 4-suit matching.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function popcount4(x: i32) -> i32 {
+    return (x & 1) + ((x >> 1) & 1) + ((x >> 2) & 1) + ((x >> 3) & 1)
+}
+
+function update_reachable(reach: i32, suits_present: i32) -> i32 {
+    let mut new_reach: i32 = reach
+    let mut m: i32 = 0
+    while m < 16 {
+        if ((reach >> m) & 1) == 1 {
+            let mut b: i32 = suits_present & (0xF ^ m)
+            while b != 0 {
+                let lsb: i32 = b & (0 - b)
+                new_reach = new_reach | (1 << (m | lsb))
+                b = b - lsb
+            }
+        }
+        m = m + 1
+    }
+    return new_reach & 65535
+}
+
+function main() -> i32 {
+    let max_n: i32 = 13
+    # BFS reachable reach-bitsets
+    let states: ptr<i32> = calloc(128, 4)
+    let index_of: ptr<i32> = calloc(65536, 4)
+    if states == null || index_of == null { return 1 }
+    let mut i: i32 = 0
+    while i < 65536 {
+        index_of[i] = -1
+        i = i + 1
+    }
+    let start: i32 = 1
+    states[0] = start
+    index_of[start] = 0
+    let mut nstates: i32 = 1
+    let mut qi: i32 = 0
+    while qi < nstates {
+        let reach: i32 = states[qi]
+        let mut suits: i32 = 0
+        while suits < 16 {
+            let nxt: i32 = update_reachable(reach, suits)
+            if index_of[nxt] < 0 {
+                index_of[nxt] = nstates
+                states[nstates] = nxt
+                nstates = nstates + 1
+            }
+            suits = suits + 1
+        }
+        qi = qi + 1
+    }
+
+    let trans: ptr<i32> = calloc((nstates * 16) as i64, 4)
+    if trans == null { return 1 }
+    i = 0
+    while i < nstates {
+        let mut suits2: i32 = 0
+        while suits2 < 16 {
+            trans[i * 16 + suits2] = index_of[update_reachable(states[i], suits2)]
+            suits2 = suits2 + 1
+        }
+        i = i + 1
+    }
+
+    let dp: ptr<i64> = calloc((nstates * (max_n + 1)) as i64, 8)
+    let ndp: ptr<i64> = calloc((nstates * (max_n + 1)) as i64, 8)
+    if dp == null || ndp == null { return 1 }
+    dp[0 * (max_n + 1) + 0] = 1  # start_idx is 0
+
+    let mut rank: i32 = 0
+    while rank < 13 {
+        let mut z: i64 = 0
+        while z < (nstates * (max_n + 1)) as i64 {
+            ndp[z] = 0
+            z = z + 1
+        }
+        i = 0
+        while i < nstates {
+            let mut k: i32 = 0
+            let base: i32 = i * (max_n + 1)
+            let mut any: i32 = 0
+            while k <= max_n {
+                if dp[base + k] != 0 { any = 1; break }
+                k = k + 1
+            }
+            if any == 1 {
+                let mut suits3: i32 = 0
+                while suits3 < 16 {
+                    let j: i32 = trans[i * 16 + suits3]
+                    let add: i32 = popcount4(suits3)
+                    k = 0
+                    while k <= max_n {
+                        let v: i64 = dp[base + k]
+                        let nk: i32 = k + add
+                        if v != 0 && nk <= max_n {
+                            ndp[j * (max_n + 1) + nk] = ndp[j * (max_n + 1) + nk] + v
+                        }
+                        k = k + 1
+                    }
+                    suits3 = suits3 + 1
+                }
+            }
+            i = i + 1
+        }
+        z = 0
+        while z < (nstates * (max_n + 1)) as i64 {
+            dp[z] = ndp[z]
+            z = z + 1
+        }
+        rank = rank + 1
+    }
+
+    let full_bit: i32 = 1 << 15
+    let mut ans: i64 = 0
+    i = 0
+    while i < nstates {
+        if (states[i] & full_bit) != 0 {
+            let mut n: i32 = 4
+            while n <= max_n {
+                ans = ans + dp[i * (max_n + 1) + n]
+                n = n + 1
+            }
+        }
+        i = i + 1
+    }
+    printf("%lld\n", ans)
+    free(ndp)
+    free(dp)
+    free(trans)
+    free(index_of)
+    free(states)
+    return 0
+}

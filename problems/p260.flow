@@ -1,0 +1,57 @@
+# Project Euler 260
+# Sum x+y+z over losing stone-game configs with x<=y<=z<=1000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let max_pile: i64 = 1000
+    let size: i64 = (max_pile + 1) * (max_pile + 1)
+    let one: ptr<i8> = calloc(size, 1)
+    let two: ptr<i8> = calloc(size, 1)
+    let all: ptr<i8> = calloc(size, 1)
+    if one == null || two == null || all == null { return 1 }
+    # 0 = Won, 1 = Lost
+    let mut count: i64 = 0
+    let mut x: i64 = 0
+    while x <= max_pile {
+        let mut y: i64 = x
+        while y <= max_pile {
+            if one[x * (max_pile + 1) + y] == 1 {
+                y = y + 1
+                continue
+            }
+            let mut z: i64 = y
+            while z <= max_pile {
+                if one[y * (max_pile + 1) + z] == 1 || one[x * (max_pile + 1) + z] == 1 || one[x * (max_pile + 1) + y] == 1 {
+                    z = z + 1
+                    continue
+                }
+                if two[(y - x) * (max_pile + 1) + z] == 1 || two[(z - y) * (max_pile + 1) + x] == 1 || two[(z - x) * (max_pile + 1) + y] == 1 {
+                    z = z + 1
+                    continue
+                }
+                if all[(y - x) * (max_pile + 1) + (z - x)] == 1 {
+                    z = z + 1
+                    continue
+                }
+                count = count + x + y + z
+                one[y * (max_pile + 1) + z] = 1
+                one[x * (max_pile + 1) + z] = 1
+                one[x * (max_pile + 1) + y] = 1
+                two[(y - x) * (max_pile + 1) + z] = 1
+                two[(z - y) * (max_pile + 1) + x] = 1
+                two[(z - x) * (max_pile + 1) + y] = 1
+                all[(y - x) * (max_pile + 1) + (z - x)] = 1
+                z = z + 1
+            }
+            y = y + 1
+        }
+        x = x + 1
+    }
+    printf("%lld\n", count)
+    free(one); free(two); free(all)
+    return 0
+}

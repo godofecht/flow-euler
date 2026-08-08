@@ -1,0 +1,64 @@
+# Project Euler 104
+# Least Fibonacci index where first and last nine digits are 1-9 pandigital.
+
+function is_pandigital9(n: i64) -> bool {
+    if n < 100000000 || n > 999999999 { return false }
+    let mut seen: i32 = 0
+    let mut x: i64 = n
+    let mut i: i32 = 0
+    while i < 9 {
+        let d: i32 = (x % 10) as i32
+        if d == 0 { return false }
+        let bit: i32 = 1 << d
+        if (seen & bit) != 0 { return false }
+        seen = seen | bit
+        x = x / 10
+        i = i + 1
+    }
+    return seen == 1022  # bits 1..9 = 0x3FE
+}
+
+function first9_fib(k: i64) -> i64 {
+    # log10(F_k) ≈ k*log10(phi) - log10(sqrt(5))
+    let log_phi: f64 = 0.20898764024997873
+    let log_sqrt5: f64 = 0.3494850021680094
+    let t: f64 = (k as f64) * log_phi - log_sqrt5
+    let mut frac: f64 = t - ((t as i64) as f64)
+    if frac < 0.0 {
+        frac = frac + 1.0
+    }
+    # 10^frac via exp(frac * ln10)
+    let ln10: f64 = 2.302585092994046
+    let x: f64 = frac * ln10
+    let mut term: f64 = 1.0
+    let mut sum: f64 = 1.0
+    let mut n: i32 = 1
+    while n < 50 {
+        term = term * x / (n as f64)
+        sum = sum + term
+        n = n + 1
+    }
+    let val: f64 = sum * 100000000.0
+    return (val as i64)
+}
+
+function main() -> i32 {
+    let mod: i64 = 1000000000
+    let mut a: i64 = 1
+    let mut b: i64 = 1
+    let mut k: i64 = 2
+    while k < 2000000 {
+        k = k + 1
+        let c: i64 = (a + b) % mod
+        a = b
+        b = c
+        if is_pandigital9(b) {
+            if is_pandigital9(first9_fib(k)) {
+                printf("%lld\n", k)
+                return 0
+            }
+        }
+    }
+    printf("0\n")
+    return 1
+}

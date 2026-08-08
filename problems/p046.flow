@@ -1,0 +1,50 @@
+# Project Euler 046
+# Smallest odd composite that cannot be written as p + 2·k².
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let limit: i64 = 10000
+    let sieve: ptr<i8> = calloc(limit, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let mut n: i64 = 9
+    while n < limit {
+        if sieve[n] != 0 {  # composite
+            let mut ok: bool = false
+            let mut k: i64 = 1
+            while 2 * k * k < n {
+                let rem: i64 = n - 2 * k * k
+                if rem > 1 && sieve[rem] == 0 {
+                    ok = true
+                    break
+                }
+                k = k + 1
+            }
+            if !ok {
+                printf("%lld\n", n)
+                free(sieve)
+                return 0
+            }
+        }
+        n = n + 2
+    }
+    free(sieve)
+    return 1
+}

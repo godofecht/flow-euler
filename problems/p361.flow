@@ -1,0 +1,538 @@
+# Project Euler 361
+# Sum of A(10^k) for k=1..18, mod 10^9 (Thue-Morse factors).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function hget(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64) -> i64 {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 {
+        if keys[slot] == key { return vals[slot] }
+        slot = (slot + 1) & (cap - 1)
+    }
+    return 0 - 1
+}
+
+function hput(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, val: i64) -> void {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 && keys[slot] != key {
+        slot = (slot + 1) & (cap - 1)
+    }
+    used[slot] = 1
+    keys[slot] = key
+    vals[slot] = val
+}
+
+function count_start1(length: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    if length == 1 { return 1 }
+    if length == 2 { return 2 }
+    if length == 3 { return 3 }
+    let hit: i64 = hget(keys, vals, used, cap, length)
+    if hit >= 0 { return hit }
+    let mut res: i64 = 0
+    if (length % 2) == 0 {
+        let half: i64 = length / 2
+        res = count_start1(half, keys, vals, used, cap) + count_start1(half + 1, keys, vals, used, cap)
+    } else {
+        let half: i64 = length / 2
+        res = 2 * count_start1(half + 1, keys, vals, used, cap)
+    }
+    hput(keys, vals, used, cap, length, res)
+    return res
+}
+
+function count_prefix(length: i64, ck: ptr<i64>, cv: ptr<i64>, cu: ptr<i8>, cc: i64,
+                      pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>, pc: i64) -> i64 {
+    if length == 0 { return 0 }
+    if length == 1 { return 1 }
+    if length == 2 { return 3 }
+    if length == 3 { return 6 }
+    let hit: i64 = hget(pk, pv, pu, pc, length)
+    if hit >= 0 { return hit }
+    let mut res: i64 = 0
+    if (length % 2) == 0 {
+        let half: i64 = length / 2
+        res = 3 * count_prefix(half, ck, cv, cu, cc, pk, pv, pu, pc) + count_prefix(half + 1, ck, cv, cu, cc, pk, pv, pu, pc) - 4
+    } else {
+        let half: i64 = length / 2
+        res = count_prefix(2 * half, ck, cv, cu, cc, pk, pv, pu, pc) + 2 * count_start1(half + 1, ck, cv, cu, cc)
+    }
+    hput(pk, pv, pu, pc, length, res)
+    return res
+}
+
+function find_length(index: i64, ck: ptr<i64>, cv: ptr<i64>, cu: ptr<i8>, cc: i64,
+                     pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>, pc: i64) -> i64 {
+    let mut lo: i64 = 1
+    let mut hi: i64 = 1
+    while count_prefix(hi, ck, cv, cu, cc, pk, pv, pu, pc) < index {
+        hi = hi * 2
+    }
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if count_prefix(mid, ck, cv, cu, cc, pk, pv, pu, pc) >= index {
+            hi = mid
+        } else {
+            lo = mid + 1
+        }
+    }
+    return lo
+}
+
+function geom_sum(base: i64, count: i64, mod: i64, gk: ptr<i64>, gv: ptr<i64>, gu: ptr<i8>, gc: i64) -> i64 {
+    if count == 0 { return 0 }
+    if count == 1 { return 1 }
+    let key: i64 = base * 1000000007 + count
+    let hit: i64 = hget(gk, gv, gu, gc, key)
+    if hit >= 0 { return hit }
+    let mut res: i64 = 0
+    if (count % 2) == 0 {
+        let half: i64 = geom_sum(base, count / 2, mod, gk, gv, gu, gc)
+        res = (half + modpow(base, count / 2, mod) * half) % mod
+    } else {
+        res = (geom_sum(base, count - 1, mod, gk, gv, gu, gc) + modpow(base, count - 1, mod)) % mod
+    }
+    hput(gk, gv, gu, gc, key, res)
+    return res
+}
+
+function pow_x(k: i64, exp: i64, mod: i64, xpow: ptr<i64>, pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>, pc: i64) -> i64 {
+    let key: i64 = k * 1000000007 + exp
+    let hit: i64 = hget(pk, pv, pu, pc, key)
+    if hit >= 0 { return hit }
+    let val: i64 = modpow(xpow[k], exp, mod)
+    hput(pk, pv, pu, pc, key, val)
+    return val
+}
+
+# Arena node helpers. kind: 0=empty/lit-empty, 1=lit, 2=comp, 3=even, 4=odd
+# ncount stored at nc[0]
+
+function new_lit(val: i64, len: i64, kind: ptr<i8>, child: ptr<i32>, length: ptr<i32>, litval: ptr<i8>, nc: ptr<i64>) -> i64 {
+    let id: i64 = nc[0]
+    nc[0] = id + 1
+    kind[id] = 1
+    child[id] = 0
+    length[id] = len as i32
+    litval[id] = val as i8
+    return id
+}
+
+function new_comp(ch: i64, kind: ptr<i8>, child: ptr<i32>, length: ptr<i32>, litval: ptr<i8>, nc: ptr<i64>) -> i64 {
+    if length[ch] == 0 { return ch }
+    let id: i64 = nc[0]
+    nc[0] = id + 1
+    kind[id] = 2
+    child[id] = ch as i32
+    length[id] = length[ch]
+    litval[id] = 0
+    return id
+}
+
+function new_even(ch: i64, len: i64, kind: ptr<i8>, child: ptr<i32>, length: ptr<i32>, litval: ptr<i8>, nc: ptr<i64>) -> i64 {
+    let id: i64 = nc[0]
+    nc[0] = id + 1
+    kind[id] = 3
+    child[id] = ch as i32
+    length[id] = len as i32
+    litval[id] = 0
+    return id
+}
+
+function new_odd(ch: i64, len: i64, kind: ptr<i8>, child: ptr<i32>, length: ptr<i32>, litval: ptr<i8>, nc: ptr<i64>) -> i64 {
+    let id: i64 = nc[0]
+    nc[0] = id + 1
+    kind[id] = 4
+    child[id] = ch as i32
+    length[id] = len as i32
+    litval[id] = 0
+    return id
+}
+
+function first_bit(id: i64, kind: ptr<i8>, child: ptr<i32>, length: ptr<i32>, litval: ptr<i8>,
+                   fc: ptr<i8>, fv: ptr<i8>) -> i64 {
+    if fc[id] != 0 { return fv[id] as i64 }
+    let mut val: i64 = 0
+    let k: i64 = kind[id] as i64
+    if k == 1 {
+        let len: i64 = length[id] as i64
+        val = ((litval[id] as i64) >> (len - 1)) & 1
+    } elif k == 2 {
+        val = 1 - first_bit(child[id] as i64, kind, child, length, litval, fc, fv)
+    } elif k == 3 {
+        val = first_bit(child[id] as i64, kind, child, length, litval, fc, fv)
+    } else {
+        val = 1 - first_bit(child[id] as i64, kind, child, length, litval, fc, fv)
+    }
+    fc[id] = 1
+    fv[id] = val as i8
+    return val
+}
+
+function last_bit(id: i64, kind: ptr<i8>, child: ptr<i32>, length: ptr<i32>, litval: ptr<i8>,
+                  lc: ptr<i8>, lv: ptr<i8>, fc: ptr<i8>, fv: ptr<i8>) -> i64 {
+    if lc[id] != 0 { return lv[id] as i64 }
+    let mut val: i64 = 0
+    let k: i64 = kind[id] as i64
+    let len: i64 = length[id] as i64
+    if k == 1 {
+        val = (litval[id] as i64) & 1
+    } elif k == 2 {
+        val = 1 - last_bit(child[id] as i64, kind, child, length, litval, lc, lv, fc, fv)
+    } elif k == 3 {
+        let ch: i64 = child[id] as i64
+        if (len % 2) == 0 {
+            val = 1 - last_bit(ch, kind, child, length, litval, lc, lv, fc, fv)
+        } else {
+            val = last_bit(ch, kind, child, length, litval, lc, lv, fc, fv)
+        }
+    } else {
+        let ch: i64 = child[id] as i64
+        if (len % 2) == 0 {
+            val = last_bit(ch, kind, child, length, litval, lc, lv, fc, fv)
+        } else {
+            val = 1 - last_bit(ch, kind, child, length, litval, lc, lv, fc, fv)
+        }
+    }
+    lc[id] = 1
+    lv[id] = val as i8
+    return val
+}
+
+function drop_first(id: i64, kind: ptr<i8>, child: ptr<i32>, length: ptr<i32>, litval: ptr<i8>, nc: ptr<i64>,
+                    df: ptr<i32>, fc: ptr<i8>, fv: ptr<i8>, lc: ptr<i8>, lv: ptr<i8>) -> i64 {
+    let len: i64 = length[id] as i64
+    if len == 0 { return id }
+    if len == 1 { return 0 }
+    if df[id] >= 0 { return df[id] as i64 }
+    let mut res: i64 = 0
+    let k: i64 = kind[id] as i64
+    if k == 1 {
+        let v: i64 = litval[id] as i64
+        # drop high bit
+        let mask: i64 = (1 << (len - 1)) - 1
+        res = new_lit(v & mask, len - 1, kind, child, length, litval, nc)
+    } elif k == 2 {
+        res = new_comp(drop_first(child[id] as i64, kind, child, length, litval, nc, df, fc, fv, lc, lv), kind, child, length, litval, nc)
+    } elif k == 3 {
+        res = new_odd(child[id] as i64, len - 1, kind, child, length, litval, nc)
+    } else {
+        res = new_even(drop_first(child[id] as i64, kind, child, length, litval, nc, df, fc, fv, lc, lv), len - 1, kind, child, length, litval, nc)
+    }
+    df[id] = res as i32
+    return res
+}
+
+function drop_last(id: i64, kind: ptr<i8>, child: ptr<i32>, length: ptr<i32>, litval: ptr<i8>, nc: ptr<i64>,
+                   dl: ptr<i32>, df: ptr<i32>, fc: ptr<i8>, fv: ptr<i8>, lc: ptr<i8>, lv: ptr<i8>) -> i64 {
+    let len: i64 = length[id] as i64
+    if len == 0 { return id }
+    if len == 1 { return 0 }
+    if dl[id] >= 0 { return dl[id] as i64 }
+    let mut res: i64 = 0
+    let k: i64 = kind[id] as i64
+    if k == 1 {
+        let v: i64 = litval[id] as i64
+        res = new_lit(v >> 1, len - 1, kind, child, length, litval, nc)
+    } elif k == 2 {
+        res = new_comp(drop_last(child[id] as i64, kind, child, length, litval, nc, dl, df, fc, fv, lc, lv), kind, child, length, litval, nc)
+    } elif k == 3 {
+        let ch: i64 = child[id] as i64
+        if (len % 2) == 0 {
+            res = new_even(ch, len - 1, kind, child, length, litval, nc)
+        } else {
+            res = new_even(drop_last(ch, kind, child, length, litval, nc, dl, df, fc, fv, lc, lv), len - 1, kind, child, length, litval, nc)
+        }
+    } else {
+        let ch: i64 = child[id] as i64
+        if (len % 2) == 0 {
+            res = new_odd(drop_last(ch, kind, child, length, litval, nc, dl, df, fc, fv, lc, lv), len - 1, kind, child, length, litval, nc)
+        } else {
+            res = new_odd(ch, len - 1, kind, child, length, litval, nc)
+        }
+    }
+    dl[id] = res as i32
+    return res
+}
+
+function evals_node(id: i64, KLEN: i64, MOD: i64, xpow: ptr<i64>,
+                    kind: ptr<i8>, child: ptr<i32>, length: ptr<i32>, litval: ptr<i8>, nc: ptr<i64>,
+                    df: ptr<i32>, dl: ptr<i32>, fc: ptr<i8>, fv: ptr<i8>, lc: ptr<i8>, lv: ptr<i8>,
+                    ev: ptr<i32>, eok: ptr<i8>, mu: ptr<i32>, mok: ptr<i8>,
+                    gk: ptr<i64>, gv: ptr<i64>, gu: ptr<i8>, gc: i64,
+                    pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>, pc: i64) -> void {
+    if eok[id] != 0 { return }
+    let len: i64 = length[id] as i64
+    let knd: i64 = kind[id] as i64
+    if len == 0 {
+        let mut t: i64 = 0
+        while t < KLEN {
+            ev[id * KLEN + t] = 0
+            t = t + 1
+        }
+        eok[id] = 1
+        return
+    }
+    if knd == 1 {
+        let mut t: i64 = 0
+        while t < KLEN {
+            let mut val: i64 = 0
+            let mut b: i64 = len - 1
+            while b >= 0 {
+                let bit: i64 = ((litval[id] as i64) >> b) & 1
+                val = (val * xpow[t] + bit) % MOD
+                b = b - 1
+            }
+            ev[id * KLEN + t] = val as i32
+            t = t + 1
+        }
+    } elif knd == 2 {
+        let ch: i64 = child[id] as i64
+        evals_node(ch, KLEN, MOD, xpow, kind, child, length, litval, nc, df, dl, fc, fv, lc, lv, ev, eok, mu, mok, gk, gv, gu, gc, pk, pv, pu, pc)
+        let mut t: i64 = 0
+        while t < KLEN {
+            let total: i64 = geom_sum(xpow[t], len, MOD, gk, gv, gu, gc)
+            let cv: i64 = ev[ch * KLEN + t] as i64
+            ev[id * KLEN + t] = ((((total - cv) % MOD + MOD) % MOD) as i32)
+            t = t + 1
+        }
+    } elif knd == 3 {
+        let ch: i64 = child[id] as i64
+        if (len % 2) == 0 {
+            let len_u: i64 = len / 2
+            evals_node(ch, KLEN, MOD, xpow, kind, child, length, litval, nc, df, dl, fc, fv, lc, lv, ev, eok, mu, mok, gk, gv, gu, gc, pk, pv, pu, pc)
+            let mut t: i64 = 0
+            while t < KLEN {
+                let mut val: i64 = 0
+                if t + 1 < KLEN {
+                    let cv: i64 = ev[ch * KLEN + (t + 1)] as i64
+                    val = ((xpow[t] - 1) * cv + geom_sum((xpow[t] * xpow[t]) % MOD, len_u, MOD, gk, gv, gu, gc)) % MOD
+                    if val < 0 { val = val + MOD }
+                }
+                ev[id * KLEN + t] = val as i32
+                t = t + 1
+            }
+        } else {
+            let up: i64 = drop_last(ch, kind, child, length, litval, nc, dl, df, fc, fv, lc, lv)
+            let u_last: i64 = last_bit(ch, kind, child, length, litval, lc, lv, fc, fv)
+            # mu_evals(up)
+            evals_node(up, KLEN, MOD, xpow, kind, child, length, litval, nc, df, dl, fc, fv, lc, lv, ev, eok, mu, mok, gk, gv, gu, gc, pk, pv, pu, pc)
+            if mok[up] == 0 {
+                let mut t: i64 = 0
+                while t < KLEN {
+                    let mut val: i64 = 0
+                    if t + 1 < KLEN {
+                        let base: i64 = ev[up * KLEN + (t + 1)] as i64
+                        val = ((xpow[t] - 1) * base + geom_sum((xpow[t] * xpow[t]) % MOD, length[up] as i64, MOD, gk, gv, gu, gc)) % MOD
+                        if val < 0 { val = val + MOD }
+                    }
+                    mu[up * KLEN + t] = val as i32
+                    t = t + 1
+                }
+                mok[up] = 1
+            }
+            let mut t: i64 = 0
+            while t < KLEN {
+                let mv: i64 = mu[up * KLEN + t] as i64
+                ev[id * KLEN + t] = ((mv * xpow[t] + u_last) % MOD) as i32
+                t = t + 1
+            }
+        }
+    } else {
+        # odd
+        let ch: i64 = child[id] as i64
+        let half: i64 = len / 2
+        let u_first: i64 = first_bit(ch, kind, child, length, litval, fc, fv)
+        let u_last: i64 = last_bit(ch, kind, child, length, litval, lc, lv, fc, fv)
+        if (len % 2) == 1 {
+            let u_tail: i64 = drop_first(ch, kind, child, length, litval, nc, df, fc, fv, lc, lv)
+            evals_node(u_tail, KLEN, MOD, xpow, kind, child, length, litval, nc, df, dl, fc, fv, lc, lv, ev, eok, mu, mok, gk, gv, gu, gc, pk, pv, pu, pc)
+            if mok[u_tail] == 0 {
+                let mut t: i64 = 0
+                while t < KLEN {
+                    let mut val: i64 = 0
+                    if t + 1 < KLEN {
+                        let base: i64 = ev[u_tail * KLEN + (t + 1)] as i64
+                        val = ((xpow[t] - 1) * base + geom_sum((xpow[t] * xpow[t]) % MOD, length[u_tail] as i64, MOD, gk, gv, gu, gc)) % MOD
+                        if val < 0 { val = val + MOD }
+                    }
+                    mu[u_tail * KLEN + t] = val as i32
+                    t = t + 1
+                }
+                mok[u_tail] = 1
+            }
+            let mut t: i64 = 0
+            while t < KLEN {
+                let mv: i64 = mu[u_tail * KLEN + t] as i64
+                ev[id * KLEN + t] = (((1 - u_first) * pow_x(t, 2 * half, MOD, xpow, pk, pv, pu, pc) + mv) % MOD) as i32
+                t = t + 1
+            }
+        } else {
+            let mid: i64 = drop_last(drop_first(ch, kind, child, length, litval, nc, df, fc, fv, lc, lv), kind, child, length, litval, nc, dl, df, fc, fv, lc, lv)
+            evals_node(mid, KLEN, MOD, xpow, kind, child, length, litval, nc, df, dl, fc, fv, lc, lv, ev, eok, mu, mok, gk, gv, gu, gc, pk, pv, pu, pc)
+            if mok[mid] == 0 {
+                let mut t: i64 = 0
+                while t < KLEN {
+                    let mut val: i64 = 0
+                    if t + 1 < KLEN {
+                        let base: i64 = ev[mid * KLEN + (t + 1)] as i64
+                        val = ((xpow[t] - 1) * base + geom_sum((xpow[t] * xpow[t]) % MOD, length[mid] as i64, MOD, gk, gv, gu, gc)) % MOD
+                        if val < 0 { val = val + MOD }
+                    }
+                    mu[mid * KLEN + t] = val as i32
+                    t = t + 1
+                }
+                mok[mid] = 1
+            }
+            let mut t: i64 = 0
+            while t < KLEN {
+                let mv: i64 = mu[mid * KLEN + t] as i64
+                ev[id * KLEN + t] = (((1 - u_first) * pow_x(t, 2 * half - 1, MOD, xpow, pk, pv, pu, pc) + mv * xpow[t] + u_last) % MOD) as i32
+                t = t + 1
+            }
+        }
+    }
+    eok[id] = 1
+}
+
+function kth_word(length: i64, rank: i64, start_bit: i64,
+                  ck: ptr<i64>, cv: ptr<i64>, cu: ptr<i8>, cc: i64,
+                  kind: ptr<i8>, child: ptr<i32>, lengtha: ptr<i32>, litval: ptr<i8>, nc: ptr<i64>) -> i64 {
+    if start_bit == 0 {
+        let total: i64 = count_start1(length, ck, cv, cu, cc)
+        return new_comp(kth_word(length, total - 1 - rank, 1, ck, cv, cu, cc, kind, child, lengtha, litval, nc), kind, child, lengtha, litval, nc)
+    }
+    if length <= 3 {
+        # PRE_WORDS
+        if length == 1 { return new_lit(1, 1, kind, child, lengtha, litval, nc) }
+        if length == 2 {
+            if rank == 0 { return new_lit(2, 2, kind, child, lengtha, litval, nc) } # 10
+            return new_lit(3, 2, kind, child, lengtha, litval, nc) # 11
+        }
+        # length 3: 100,101,110
+        if rank == 0 { return new_lit(4, 3, kind, child, lengtha, litval, nc) }
+        if rank == 1 { return new_lit(5, 3, kind, child, lengtha, litval, nc) }
+        return new_lit(6, 3, kind, child, lengtha, litval, nc)
+    }
+    let half_even: i64 = (length + 1) / 2
+    let count_even: i64 = count_start1(half_even, ck, cv, cu, cc)
+    if rank < count_even {
+        let ch: i64 = kth_word(half_even, rank, 1, ck, cv, cu, cc, kind, child, lengtha, litval, nc)
+        return new_even(ch, length, kind, child, lengtha, litval, nc)
+    }
+    let half_odd: i64 = length / 2 + 1
+    let ch: i64 = kth_word(half_odd, rank - count_even, 0, ck, cv, cu, cc, kind, child, lengtha, litval, nc)
+    return new_odd(ch, length, kind, child, lengtha, litval, nc)
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000
+    let CAP: i64 = 1 << 20
+    let ck: ptr<i64> = calloc(CAP, 8)
+    let cv: ptr<i64> = calloc(CAP, 8)
+    let cu: ptr<i8> = calloc(CAP, 1)
+    let pk: ptr<i64> = calloc(CAP, 8)
+    let pv: ptr<i64> = calloc(CAP, 8)
+    let pu: ptr<i8> = calloc(CAP, 1)
+
+    let mut max_len: i64 = 0
+    let mut ten: i64 = 10
+    let mut k: i64 = 1
+    while k <= 18 {
+        let L: i64 = find_length(ten, ck, cv, cu, CAP, pk, pv, pu, CAP)
+        if L > max_len { max_len = L }
+        if k < 18 { ten = ten * 10 }
+        k = k + 1
+    }
+    let mut depth: i64 = 0
+    let mut ll: i64 = max_len
+    while ll > 3 {
+        ll = ll / 2 + 1
+        depth = depth + 1
+    }
+    let KMAX: i64 = depth + 2
+    let KLEN: i64 = KMAX + 2
+    let xpow: ptr<i64> = calloc(KLEN, 8)
+    let mut t: i64 = 0
+    while t < KLEN {
+        let mut e: i64 = 1
+        let mut i: i64 = 0
+        while i < t {
+            e = e * 2
+            i = i + 1
+        }
+        xpow[t] = modpow(2, e, MOD)
+        t = t + 1
+    }
+
+    let AMAX: i64 = 50000
+    let kind: ptr<i8> = calloc(AMAX, 1)
+    let child: ptr<i32> = calloc(AMAX, 4)
+    let lengtha: ptr<i32> = calloc(AMAX, 4)
+    let litval: ptr<i8> = calloc(AMAX, 1)
+    let nc: ptr<i64> = calloc(1, 8)
+    nc[0] = 1
+    lengtha[0] = 0
+    kind[0] = 1
+    litval[0] = 0
+
+    let df: ptr<i32> = calloc(AMAX, 4)
+    let dl: ptr<i32> = calloc(AMAX, 4)
+    let fc: ptr<i8> = calloc(AMAX, 1)
+    let fv: ptr<i8> = calloc(AMAX, 1)
+    let lc: ptr<i8> = calloc(AMAX, 1)
+    let lv: ptr<i8> = calloc(AMAX, 1)
+    let mut i: i64 = 0
+    while i < AMAX {
+        df[i] = -1
+        dl[i] = -1
+        i = i + 1
+    }
+    let ev: ptr<i32> = calloc(AMAX * KLEN, 4)
+    let eok: ptr<i8> = calloc(AMAX, 1)
+    let mu: ptr<i32> = calloc(AMAX * KLEN, 4)
+    let mok: ptr<i8> = calloc(AMAX, 1)
+
+    let GCAP: i64 = 1 << 18
+    let gk: ptr<i64> = calloc(GCAP, 8)
+    let gv: ptr<i64> = calloc(GCAP, 8)
+    let gu: ptr<i8> = calloc(GCAP, 1)
+    let p2k: ptr<i64> = calloc(GCAP, 8)
+    let p2v: ptr<i64> = calloc(GCAP, 8)
+    let p2u: ptr<i8> = calloc(GCAP, 1)
+
+    let mut total: i64 = 0
+    ten = 10
+    k = 1
+    while k <= 18 {
+        let index: i64 = ten
+        let length: i64 = find_length(index, ck, cv, cu, CAP, pk, pv, pu, CAP)
+        let rank: i64 = index - 1 - count_prefix(length - 1, ck, cv, cu, CAP, pk, pv, pu, CAP)
+        let node: i64 = kth_word(length, rank, 1, ck, cv, cu, CAP, kind, child, lengtha, litval, nc)
+        evals_node(node, KLEN, MOD, xpow, kind, child, lengtha, litval, nc, df, dl, fc, fv, lc, lv, ev, eok, mu, mok, gk, gv, gu, GCAP, p2k, p2v, p2u, GCAP)
+        let aval: i64 = ev[node * KLEN + 0] as i64
+        total = (total + aval) % MOD
+        if k < 18 { ten = ten * 10 }
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

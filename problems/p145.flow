@@ -1,0 +1,33 @@
+# Project Euler 145
+# How many reversible numbers below one billion?
+
+function powi(base: i64, exp: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut e: i64 = exp
+    while e > 0 {
+        r = r * base
+        e = e - 1
+    }
+    return r
+}
+
+function count_by_length(length: i64) -> i64 {
+    if length % 2 == 0 {
+        return 20 * powi(30, length / 2 - 1)
+    }
+    if length % 4 == 3 {
+        return 100 * powi(500, (length - 3) / 4)
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut length: i64 = 1
+    while length <= 9 {
+        total = total + count_by_length(length)
+        length = length + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

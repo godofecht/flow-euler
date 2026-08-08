@@ -1,0 +1,59 @@
+# Project Euler 597
+# Torpids
+# p(13,1800): probability final order is even; recursive expected sign.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function floor(x: f64) -> f64
+}
+
+let mut G_memo: ptr<f64> = null
+let mut G_seen: ptr<i8> = null
+let mut G_tmax: i64 = 0
+let mut G_n: i64 = 0
+
+function expected_sign(l: i64, r: i64, t: i64) -> f64 {
+    if l >= r { return 1.0 }
+    let key: i64 = ((l * (G_n + 2) + r) * (G_tmax + 1) + t)
+    if G_seen[key] != 0 {
+        return G_memo[key]
+    }
+    let count: i64 = r - l + 1
+    let sum_j: i64 = (l + r) * count / 2
+    let S: f64 = (count as f64) * (t as f64) - (sum_j as f64)
+    let mut total: f64 = 0.0
+    let mut m: i64 = l
+    while m <= r {
+        let pm: f64 = ((t - m) as f64) / S
+        let mut sign_flip: f64 = 1.0
+        if ((m - l) & 1) != 0 { sign_flip = -1.0 }
+        let left: f64 = expected_sign(l, m - 1, m)
+        let right: f64 = expected_sign(m + 1, r, t)
+        total = total + pm * sign_flip * left * right
+        m = m + 1
+    }
+    G_seen[key] = 1
+    G_memo[key] = total
+    return total
+}
+
+function main() -> i32 {
+    let n: i64 = 13
+    let t0: i64 = 46
+    G_n = n
+    G_tmax = t0
+    let sz: i64 = (n + 2) * (n + 2) * (t0 + 1)
+    G_memo = calloc(sz, 8)
+    G_seen = calloc(sz, 1)
+    if G_memo == null || G_seen == null { return 1 }
+    let e: f64 = expected_sign(1, n, t0)
+    let p: f64 = (1.0 + e) / 2.0
+    let qq: i64 = floor(p * 10000000000.0 + 0.5) as i64
+    let ip: i64 = qq / 10000000000
+    let fp: i64 = qq % 10000000000
+    printf("%lld.%010lld\n", ip, fp)
+    free(G_seen)
+    free(G_memo)
+    return 0
+}

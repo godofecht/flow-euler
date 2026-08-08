@@ -1,0 +1,50 @@
+# Project Euler 232
+# The Race: optimal strategy win probability.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut CACHE: ptr<f64> = null
+let mut MAXS: i32 = 0
+
+function two_wins(need_one: i32, need_two: i32) -> f64 {
+    if need_two == 0 { return 1.0 }
+    if need_one == 0 { return 0.0 }
+    let idx: i64 = ((need_one - 1) as i64) * (MAXS as i64) + ((need_two - 1) as i64)
+    if CACHE[idx] >= 0.0 { return CACHE[idx] }
+    let mut best: f64 = 0.0
+    let mut bet: i32 = 1
+    while true {
+        let win2: f64 = 0.5 / (bet as f64)
+        let lose2: f64 = 1.0 - win2
+        let mut next_two: i32 = need_two - bet
+        if need_two < bet { next_two = 0 }
+        let mut current: f64 = 0.5 * win2 * two_wins(need_one - 1, next_two)
+        current = current + 0.5 * win2 * two_wins(need_one, next_two)
+        current = current + 0.5 * lose2 * two_wins(need_one - 1, need_two)
+        current = current / (1.0 - 0.5 * lose2)
+        if best < current { best = current }
+        if next_two == 0 { break }
+        bet = bet * 2
+    }
+    CACHE[idx] = best
+    return best
+}
+
+function main() -> i32 {
+    MAXS = 100
+    CACHE = calloc((MAXS as i64) * (MAXS as i64), 8)
+    if CACHE == null { return 1 }
+    let mut i: i64 = 0
+    let N: i64 = (MAXS as i64) * (MAXS as i64)
+    while i < N {
+        CACHE[i] = 0.0 - 1.0
+        i = i + 1
+    }
+    let result: f64 = 0.5 * two_wins(MAXS - 1, MAXS) + 0.5 * two_wins(MAXS, MAXS)
+    printf("%.8f\n", result)
+    free(CACHE)
+    return 0
+}

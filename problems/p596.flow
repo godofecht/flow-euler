@@ -1,0 +1,40 @@
+# Project Euler 596
+# Lattice Points in a Hyperball
+# T(r)=1+8*(S(r^2)-4*S(floor(r^2/4))) mod 10^9+7, S(n)=sum d*floor(n/d).
+
+const MOD: i64 = 1000000007
+const INV2: i64 = 500000004
+
+function sum_range(l: i64, r: i64) -> i64 {
+    if l > r { return 0 }
+    let cnt: i64 = r - l + 1
+    return ((l + r) % MOD) * (cnt % MOD) % MOD * INV2 % MOD
+}
+
+function sum_sigma_prefix(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut total: i64 = 0
+    let mut i: i64 = 1
+    while i <= n {
+        let q: i64 = n / i
+        let j: i64 = n / q
+        let s: i64 = sum_range(i, j)
+        total = (total + (q % MOD) * s % MOD) % MOD
+        i = j + 1
+    }
+    return total
+}
+
+function T(r: i64) -> i64 {
+    let n: i64 = r * r
+    let s: i64 = sum_sigma_prefix(n)
+    let s4: i64 = sum_sigma_prefix(n / 4)
+    let mut inner: i64 = (s - 4 * s4) % MOD
+    if inner < 0 { inner = inner + MOD }
+    return (1 + 8 * inner) % MOD
+}
+
+function main() -> i32 {
+    printf("%lld\n", T(100000000))
+    return 0
+}

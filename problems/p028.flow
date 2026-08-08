@@ -1,0 +1,18 @@
+# Project Euler 028
+# Sum of both diagonals in a 1001×1001 spiral.
+
+function solve(size: i64) -> i64 {
+    # Corners of layer with side 2k+1: n², n²-n+1, n²-2n+2, n²-3n+3 where n=2k+1
+    let mut total: i64 = 1
+    let mut n: i64 = 3
+    while n <= size {
+        total = total + 4 * n * n - 6 * (n - 1)
+        n = n + 2
+    }
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(1001))
+    return 0
+}

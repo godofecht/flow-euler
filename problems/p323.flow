@@ -1,0 +1,23 @@
+# Project Euler 323
+# Expected steps until 32-bit OR reaches all-ones; 10 decimal places.
+
+extern {
+    function pow(x: f64, y: f64) -> f64
+}
+
+function main() -> i32 {
+    let max_bits: f64 = 32.0
+    let epsilon: f64 = 0.00000000001
+    let mut result: f64 = 0.0
+    let mut round: f64 = 0.0
+    while true {
+        let has_zero: f64 = pow(0.5, round)
+        let is_done: f64 = pow(1.0 - has_zero, max_bits)
+        let delta: f64 = 1.0 - is_done
+        if delta < epsilon { break }
+        result = result + delta
+        round = round + 1.0
+    }
+    printf("%.10f\n", result)
+    return 0
+}

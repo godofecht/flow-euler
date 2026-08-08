@@ -1,0 +1,218 @@
+# Project Euler 289
+# L(6,10) mod 10^10 Eulerian non-crossing cycles.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function rep_state(s0: i64) -> i64 {
+    if s0 == 0 { return 0 }
+    let mapping: ptr<i32> = calloc(20, 4)
+    let mut nxt: i64 = 0
+    let mut out: i64 = 0
+    let mut i: i64 = 0
+    let mut s: i64 = s0
+    while (s >> (4 * i)) != 0 {
+        let x: i64 = (s >> (4 * i)) & 15
+        if mapping[x] == 0 {
+            nxt = nxt + 1
+            mapping[x] = nxt as i32
+        }
+        out = out | (((mapping[x] as i64) - 1) << (4 * i))
+        i = i + 1
+    }
+    free(mapping)
+    return out
+}
+
+function merge_label(s0: i64, src: i64, dst: i64, m: i64) -> i64 {
+    if s0 == -1 { return -1 }
+    let mut s: i64 = s0
+    let mut i: i64 = 0
+    while i < m + 4 {
+        if ((s >> (4 * i)) & 15) == src {
+            s = s ^ ((src ^ dst) << (4 * i))
+        }
+        i = i + 1
+    }
+    return s
+}
+
+function count_label(s0: i64, label: i64, m: i64) -> i64 {
+    let mut cnt: i64 = 0
+    let mut s: i64 = s0
+    let mut i: i64 = 0
+    while i < m + 4 {
+        if (s & 15) == label { cnt = cnt + 1 }
+        s = s >> 4
+        i = i + 1
+    }
+    return cnt
+}
+
+function main() -> i32 {
+    let MOD: i64 = 10000000000
+    let m: i64 = 6
+    let n: i64 = 10
+    let CONNECTIONS: ptr<i32> = calloc(14, 4)
+    CONNECTIONS[0] = 1111; CONNECTIONS[1] = 1114; CONNECTIONS[2] = 1133; CONNECTIONS[3] = 1134
+    CONNECTIONS[4] = 1131; CONNECTIONS[5] = 1211; CONNECTIONS[6] = 1214; CONNECTIONS[7] = 1221
+    CONNECTIONS[8] = 1222; CONNECTIONS[9] = 1224; CONNECTIONS[10] = 1231; CONNECTIONS[11] = 1232
+    CONNECTIONS[12] = 1233; CONNECTIONS[13] = 1234
+
+    let CAP: i64 = 200003
+    let keys: ptr<i64> = calloc(CAP, 8)
+    let vals: ptr<i64> = calloc(CAP, 8)
+    let used: ptr<i8> = calloc(CAP, 1)
+    let nkeys: ptr<i64> = calloc(CAP, 8)
+    let nvals: ptr<i64> = calloc(CAP, 8)
+    let nused: ptr<i8> = calloc(CAP, 1)
+
+    # dp[0]=1
+    let mut h: i64 = 0
+    used[h] = 1
+    keys[h] = 0
+    vals[h] = 1
+
+    let mut x: i64 = 0
+    while x <= n {
+        let mut y: i64 = 0
+        while y <= m {
+            let final: bool = (x == n && y == m)
+            # clear nxt
+            h = 0
+            while h < CAP {
+                nused[h] = 0
+                nvals[h] = 0
+                h = h + 1
+            }
+            let new_color: i64 = 15
+            if x == n || y == m { new_color = 0 }
+
+            h = 0
+            while h < CAP {
+                if used[h] != 0 {
+                    let state: i64 = keys[h]
+                    let ways: i64 = vals[h]
+                    let mut ci: i64 = 0
+                    while ci < 14 {
+                        let C: i64 = CONNECTIONS[ci] as i64
+                        let a: i64 = C / 1000 - 1
+                        let b: i64 = (C / 100) % 10 - 1
+                        let c: i64 = (C / 10) % 10 - 1
+                        let d: i64 = C % 10 - 1
+                        let colors0: i64 = (state >> (4 * y)) & 15
+                        let colors1: i64 = (state >> (4 * (y + 1))) & 15
+                        let colors2: i64 = (state >> (4 * (y + 2))) & 15
+                        let colors3: i64 = new_color
+                        let idx0: i64 = a
+                        let idx1: i64 = b
+                        let idx2: i64 = c
+                        let idx3: i64 = d
+                        let mut ok: bool = true
+                        let mut i: i64 = 0
+                        while i < 4 {
+                            let coli: i64 = colors0
+                            let idxi: i64 = idx0
+                            if i == 1 { coli = colors1; idxi = idx1 }
+                            elif i == 2 { coli = colors2; idxi = idx2 }
+                            elif i == 3 { coli = colors3; idxi = idx3 }
+                            if coli == 0 {
+                                let mut j: i64 = 0
+                                while j < 4 {
+                                    let colj: i64 = colors0
+                                    let idxj: i64 = idx0
+                                    if j == 1 { colj = colors1; idxj = idx1 }
+                                    elif j == 2 { colj = colors2; idxj = idx2 }
+                                    elif j == 3 { colj = colors3; idxj = idx3 }
+                                    let left: bool = (colj == 0)
+                                    let right: bool = (idxi == idxj)
+                                    if left != right { ok = false; break }
+                                    j = j + 1
+                                }
+                            }
+                            if !ok { break }
+                            i = i + 1
+                        }
+                        if ok {
+                            let mut kk: i64 = (state << 4) | new_color
+                            let mut bad: bool = false
+                            i = 0
+                            while i < 4 {
+                                let idxi: i64 = idx0
+                                if i == 1 { idxi = idx1 }
+                                elif i == 2 { idxi = idx2 }
+                                elif i == 3 { idxi = idx3 }
+                                if i != idxi {
+                                    let mut src: i64 = 0
+                                    if i == 3 { src = new_color }
+                                    else { src = (kk >> (4 * (y + i + 1))) & 15 }
+                                    let dst: i64 = (kk >> (4 * (y + idxi + 1))) & 15
+                                    if src != 0 {
+                                        if dst == 0 || src == dst {
+                                            bad = true
+                                            break
+                                        }
+                                        kk = merge_label(kk, src, dst, m)
+                                    }
+                                }
+                                i = i + 1
+                            }
+                            if !bad && kk != -1 {
+                                let cur: i64 = kk & 15
+                                kk = kk >> 4
+                                let old: i64 = (kk >> (4 * (y + 1))) & 15
+                                if count_label(kk, old, m) > 1 || old == cur || final {
+                                    kk = kk ^ ((cur ^ old) << (4 * (y + 1)))
+                                    if y == m {
+                                        kk = kk << 4
+                                    }
+                                    let st2: i64 = rep_state(kk)
+                                    let mut hh: i64 = st2 % CAP
+                                    if hh < 0 { hh = -hh }
+                                    while nused[hh] != 0 {
+                                        if nkeys[hh] == st2 { break }
+                                        hh = hh + 1
+                                        if hh == CAP { hh = 0 }
+                                    }
+                                    if nused[hh] == 0 {
+                                        nused[hh] = 1
+                                        nkeys[hh] = st2
+                                        nvals[hh] = ways % MOD
+                                    } else {
+                                        nvals[hh] = (nvals[hh] + ways) % MOD
+                                    }
+                                }
+                            }
+                        }
+                        ci = ci + 1
+                    }
+                }
+                h = h + 1
+            }
+            # swap
+            h = 0
+            while h < CAP {
+                used[h] = nused[h]
+                keys[h] = nkeys[h]
+                vals[h] = nvals[h]
+                h = h + 1
+            }
+            y = y + 1
+        }
+        x = x + 1
+    }
+    # get dp[0]
+    let mut ans: i64 = 0
+    h = 0
+    while h < CAP {
+        if used[h] != 0 && keys[h] == 0 {
+            ans = vals[h]
+            break
+        }
+        h = h + 1
+    }
+    printf("%lld\n", ans % MOD)
+    return 0
+}

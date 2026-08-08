@@ -1,0 +1,170 @@
+# Project Euler 441
+# S(10^7) for inverse summation of coprime couples, 4 decimals.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000
+    let half: i64 = N / 2
+
+    let mu: ptr<i8> = calloc(half + 1, 1)
+    let is_comp: ptr<i8> = calloc(half + 1, 1)
+    let primes: ptr<i32> = calloc(half / 5 + 10, 4)
+    if mu == null || is_comp == null || primes == null { return 1 }
+    mu[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= half {
+        if is_comp[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            mu[i] = -1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > half { break }
+            is_comp[ip] = 1
+            if i % p == 0 {
+                mu[ip] = 0
+                break
+            } else {
+                mu[ip] = (0 - (mu[i] as i64)) as i8
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let H: ptr<f64> = calloc(N + 1, 8)
+    let H2: ptr<f64> = calloc(N + 1, 8)
+    if H == null || H2 == null { return 1 }
+    let mut h: f64 = 0.0
+    let mut c: f64 = 0.0
+    let mut h2: f64 = 0.0
+    let mut c2: f64 = 0.0
+    i = 1
+    while i <= N {
+        let inv: f64 = 1.0 / (i as f64)
+        let y: f64 = inv - c
+        let t: f64 = h + y
+        c = (t - h) - y
+        h = t
+        H[i] = h
+        let inv2: f64 = inv * inv
+        let y2: f64 = inv2 - c2
+        let t2: f64 = h2 + y2
+        c2 = (t2 - h2) - y2
+        h2 = t2
+        H2[i] = h2
+        i = i + 1
+    }
+
+    let mut s_phi_over_q: f64 = 0.0
+    let mut s_btotal_over_q: f64 = 0.0
+    let mut d: i64 = 1
+    while d <= half {
+        let md: i64 = mu[d] as i64
+        if md != 0 {
+            let inv_d: f64 = 1.0 / (d as f64)
+            let inv_d2: f64 = inv_d * inv_d
+            let k: i64 = half / d
+            s_phi_over_q = s_phi_over_q + (md as f64) * (k as f64) * inv_d
+            let ht: f64 = H[k]
+            let p1: f64 = 0.5 * (ht * ht - H2[k])
+            s_btotal_over_q = s_btotal_over_q + (md as f64) * p1 * inv_d2
+        }
+        d = d + 1
+    }
+    s_phi_over_q = s_phi_over_q - 1.0
+
+    let mut s_A: f64 = 0.0
+    let mut s_weighted_btotal: f64 = 0.0
+    let mut s_B_combined: f64 = 0.0
+
+    # S2 cache via open addressing: key = M*(half+2)+L
+    let SCAP: i64 = 4000003
+    let s2_keys: ptr<i64> = calloc(SCAP, 8)
+    let s2_vals: ptr<f64> = calloc(SCAP, 8)
+    let s2_used: ptr<i8> = calloc(SCAP, 1)
+    if s2_keys == null || s2_vals == null || s2_used == null { return 1 }
+
+    d = 1
+    while d <= half {
+        let md: i64 = mu[d] as i64
+        if md != 0 {
+            let inv_d: f64 = 1.0 / (d as f64)
+            let inv_d2: f64 = inv_d * inv_d
+            let M: i64 = N / d
+            let a: i64 = N / (2 * d) + 1
+
+            let inner_A: f64 = (M as f64) * (H[M] - H[a - 1]) - ((M - a + 1) as f64)
+            s_A = s_A + (md as f64) * inner_A * inv_d
+
+            let mut p1M: f64 = 0.0
+            if M > 0 { p1M = 0.5 * (H[M] * H[M] - H2[M]) }
+            let mut p1am1: f64 = 0.0
+            if a - 1 > 0 { p1am1 = 0.5 * (H[a - 1] * H[a - 1] - H2[a - 1]) }
+            let s_over_k: f64 = p1M - p1am1
+            let mut sum_Hm1_M: f64 = 0.0
+            if M > 1 { sum_Hm1_M = (M as f64) * H[M - 1] - ((M - 1) as f64) }
+            let mut sum_Hm1_am1: f64 = 0.0
+            if a - 1 > 1 { sum_Hm1_am1 = ((a - 1) as f64) * H[a - 2] - ((a - 2) as f64) }
+            let s_hm1: f64 = sum_Hm1_M - sum_Hm1_am1
+            s_weighted_btotal = s_weighted_btotal + (md as f64) * (((N + 1) as f64) * s_over_k * inv_d2 - s_hm1 * inv_d)
+
+            let L: i64 = M - a
+            let mut s_rev: f64 = 0.0
+            if L > 0 { s_rev = ((L + 1) as f64) * H[L] - (L as f64) }
+
+            # S2(M,L)
+            let mut s2: f64 = 0.0
+            if L > 0 {
+                let key: i64 = M * (half + 2) + L
+                let mut hh: i64 = key % SCAP
+                if hh < 0 { hh = hh + SCAP }
+                let mut found: i64 = 0
+                while s2_used[hh] != 0 {
+                    if s2_keys[hh] == key {
+                        s2 = s2_vals[hh]
+                        found = 1
+                        break
+                    }
+                    hh = hh + 1
+                    if hh >= SCAP { hh = 0 }
+                }
+                if found == 0 {
+                    let mut r: i64 = 1
+                    let mut denom: f64 = (M - 1) as f64
+                    while r <= L {
+                        s2 = s2 + H[r] / denom
+                        denom = denom - 1.0
+                        r = r + 1
+                    }
+                    s2_used[hh] = 1
+                    s2_keys[hh] = key
+                    s2_vals[hh] = s2
+                }
+            }
+            s_B_combined = s_B_combined + (md as f64) * (s_rev * inv_d - (N as f64) * s2 * inv_d2)
+        }
+        d = d + 1
+    }
+
+    let ans: f64 = s_phi_over_q + s_btotal_over_q + s_A + s_weighted_btotal + s_B_combined
+    printf("%.4f\n", ans)
+
+    free(s2_used)
+    free(s2_vals)
+    free(s2_keys)
+    free(H2)
+    free(H)
+    free(primes)
+    free(is_comp)
+    free(mu)
+    return 0
+}

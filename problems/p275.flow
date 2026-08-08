@@ -1,0 +1,269 @@
+# Project Euler 275
+# Balanced sculptures of order 18 (reflections identified).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut G_n: i64 = 18
+let mut G_XMAX: i64 = 17
+let mut G_W: i64 = 35
+let mut G_SHIFT: i64 = 17
+let mut G_GRID: i64 = 630
+let mut G_root: i64 = 17
+let mut G_x_of: ptr<i64> = null
+let mut G_neigh: ptr<i64> = null
+let mut G_neigh_cnt: ptr<i64> = null
+let mut G_seen: ptr<i8> = null
+let mut G_Q: ptr<i64> = null
+let mut G_ans: i64 = 0
+
+function rec_total(q_begin: i64, q_end: i64, size: i64, moment: i64, minx: i64, maxx: i64) -> void {
+    if size == G_n {
+        if moment == 0 { G_ans = G_ans + 1 }
+        return
+    }
+    let r: i64 = G_n - size
+    let min_possible_x: i64 = minx - r
+    let max_possible_x: i64 = maxx + r
+    if moment + r * min_possible_x > 0 { return }
+    if moment + r * max_possible_x < 0 { return }
+
+    let mut i: i64 = q_begin
+    while i < q_end {
+        let cell: i64 = G_Q[i]
+        let x: i64 = G_x_of[cell]
+
+        let mut added: i64 = 0
+        let nb: i64 = G_neigh_cnt[cell]
+        let mut k: i64 = 0
+        while k < nb {
+            let nb_idx: i64 = G_neigh[cell * 4 + k]
+            if G_seen[nb_idx] == 0 {
+                G_seen[nb_idx] = 1
+                G_Q[q_end + added] = nb_idx
+                added = added + 1
+            }
+            k = k + 1
+        }
+
+        let mut nmin: i64 = minx
+        if x < nmin { nmin = x }
+        let mut nmax: i64 = maxx
+        if x > nmax { nmax = x }
+
+        rec_total(i + 1, q_end + added, size + 1, moment + x, nmin, nmax)
+
+        let mut j: i64 = q_end
+        while j < q_end + added {
+            G_seen[G_Q[j]] = 0
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function count_total(n: i64) -> i64 {
+    G_n = n
+    G_XMAX = n - 1
+    G_W = 2 * G_XMAX + 1
+    G_SHIFT = G_XMAX
+    G_GRID = G_W * (G_XMAX + 1)
+    G_root = G_SHIFT
+
+    G_x_of = calloc(G_GRID, 8)
+    G_neigh = calloc(G_GRID * 4, 8)
+    G_neigh_cnt = calloc(G_GRID, 8)
+    G_seen = calloc(G_GRID, 1)
+    G_Q = calloc(8 * n + 50, 8)
+
+    let mut y: i64 = 0
+    while y <= G_XMAX {
+        let base: i64 = y * G_W
+        let mut xi: i64 = 0
+        while xi < G_W {
+            G_x_of[base + xi] = xi - G_SHIFT
+            xi = xi + 1
+        }
+        y = y + 1
+    }
+
+    y = 0
+    while y <= G_XMAX {
+        let row: i64 = y * G_W
+        let mut xi: i64 = 0
+        while xi < G_W {
+            let idx: i64 = row + xi
+            let mut cnt: i64 = 0
+            if xi > 0 {
+                G_neigh[idx * 4 + cnt] = idx - 1
+                cnt = cnt + 1
+            }
+            if xi < G_W - 1 {
+                G_neigh[idx * 4 + cnt] = idx + 1
+                cnt = cnt + 1
+            }
+            if y > 0 {
+                G_neigh[idx * 4 + cnt] = idx - G_W
+                cnt = cnt + 1
+            }
+            if y < G_XMAX {
+                G_neigh[idx * 4 + cnt] = idx + G_W
+                cnt = cnt + 1
+            }
+            G_neigh_cnt[idx] = cnt
+            xi = xi + 1
+        }
+        y = y + 1
+    }
+
+    G_seen[G_root] = 1
+    let mut q_end: i64 = 0
+    let nb0: i64 = G_neigh_cnt[G_root]
+    let mut k: i64 = 0
+    while k < nb0 {
+        let nb_idx: i64 = G_neigh[G_root * 4 + k]
+        if G_seen[nb_idx] == 0 {
+            G_seen[nb_idx] = 1
+            G_Q[q_end] = nb_idx
+            q_end = q_end + 1
+        }
+        k = k + 1
+    }
+
+    G_ans = 0
+    rec_total(0, q_end, 1, 0, 0, 0)
+    let ans: i64 = G_ans
+    free(G_x_of); free(G_neigh); free(G_neigh_cnt); free(G_seen); free(G_Q)
+    return ans
+}
+
+function rec_sym(q_begin: i64, q_end: i64, full_size: i64) -> void {
+    if full_size == G_n {
+        G_ans = G_ans + 1
+        return
+    }
+    let mut i: i64 = q_begin
+    while i < q_end {
+        let cell: i64 = G_Q[i]
+        let x: i64 = G_x_of[cell]
+        let add: i64 = 1
+        let mut add2: i64 = 2
+        if x == 0 { add2 = 1 }
+        let new_full: i64 = full_size + add2
+        if new_full > G_n {
+            i = i + 1
+            continue
+        }
+
+        let mut added: i64 = 0
+        let nb: i64 = G_neigh_cnt[cell]
+        let mut k: i64 = 0
+        while k < nb {
+            let nb_idx: i64 = G_neigh[cell * 4 + k]
+            if G_seen[nb_idx] == 0 {
+                G_seen[nb_idx] = 1
+                G_Q[q_end + added] = nb_idx
+                added = added + 1
+            }
+            k = k + 1
+        }
+
+        rec_sym(i + 1, q_end + added, new_full)
+
+        let mut j: i64 = q_end
+        while j < q_end + added {
+            G_seen[G_Q[j]] = 0
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function count_symmetric(n: i64) -> i64 {
+    G_n = n
+    G_XMAX = n - 1
+    G_W = 2 * G_XMAX + 1
+    G_SHIFT = G_XMAX
+    G_GRID = G_W * (G_XMAX + 1)
+    G_root = G_SHIFT
+
+    G_x_of = calloc(G_GRID, 8)
+    G_neigh = calloc(G_GRID * 4, 8)
+    G_neigh_cnt = calloc(G_GRID, 8)
+    G_seen = calloc(G_GRID, 1)
+    G_Q = calloc(8 * n + 50, 8)
+
+    let mut y: i64 = 0
+    while y <= G_XMAX {
+        let base: i64 = y * G_W
+        let mut xi: i64 = 0
+        while xi < G_W {
+            G_x_of[base + xi] = xi - G_SHIFT
+            xi = xi + 1
+        }
+        y = y + 1
+    }
+
+    y = 0
+    while y <= G_XMAX {
+        let row: i64 = y * G_W
+        let mut xi: i64 = 0
+        while xi < G_W {
+            let idx: i64 = row + xi
+            let x: i64 = xi - G_SHIFT
+            let mut cnt: i64 = 0
+            if x >= 0 {
+                if xi > G_SHIFT {
+                    G_neigh[idx * 4 + cnt] = idx - 1
+                    cnt = cnt + 1
+                }
+                if xi < G_W - 1 {
+                    G_neigh[idx * 4 + cnt] = idx + 1
+                    cnt = cnt + 1
+                }
+                if y > 0 {
+                    G_neigh[idx * 4 + cnt] = idx - G_W
+                    cnt = cnt + 1
+                }
+                if y < G_XMAX {
+                    G_neigh[idx * 4 + cnt] = idx + G_W
+                    cnt = cnt + 1
+                }
+            }
+            G_neigh_cnt[idx] = cnt
+            xi = xi + 1
+        }
+        y = y + 1
+    }
+
+    G_seen[G_root] = 1
+    let mut q_end: i64 = 0
+    let nb0: i64 = G_neigh_cnt[G_root]
+    let mut k: i64 = 0
+    while k < nb0 {
+        let nb_idx: i64 = G_neigh[G_root * 4 + k]
+        if G_seen[nb_idx] == 0 {
+            G_seen[nb_idx] = 1
+            G_Q[q_end] = nb_idx
+            q_end = q_end + 1
+        }
+        k = k + 1
+    }
+
+    G_ans = 0
+    rec_sym(0, q_end, 1)
+    let ans: i64 = G_ans
+    free(G_x_of); free(G_neigh); free(G_neigh_cnt); free(G_seen); free(G_Q)
+    return ans
+}
+
+function main() -> i32 {
+    let n: i64 = 18
+    let total: i64 = count_total(n)
+    let sym: i64 = count_symmetric(n)
+    let ans: i64 = (total + sym) / 2
+    printf("%lld\n", ans)
+    return 0
+}

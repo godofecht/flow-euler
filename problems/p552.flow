@@ -1,0 +1,117 @@
+# Project Euler 552
+# Chinese Leftovers II
+# Track A_n residues mod all primes <= L; sum primes that ever divide some A_n.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            result = ((result as i128) * (base as i128) % (mod as i128)) as i64
+        }
+        base = ((base as i128) * (base as i128) % (mod as i128)) as i64
+        exp = exp >> 1
+    }
+    return result
+}
+
+function compute_S(limit: i64) -> i64 {
+    let sieve: ptr<i8> = calloc(limit + 1, 1)
+    if sieve == null { return -1 }
+    let mut i: i64 = 0
+    while i <= limit {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    i = 2
+    while i * i <= limit {
+        if sieve[i] != 0 {
+            let mut j: i64 = i * i
+            while j <= limit {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let primes: ptr<i64> = calloc(30000, 8)
+    if primes == null { free(sieve); return -1 }
+    let mut m: i64 = 0
+    i = 2
+    while i <= limit {
+        if sieve[i] != 0 {
+            primes[m] = i
+            m = m + 1
+        }
+        i = i + 1
+    }
+    free(sieve)
+
+    if m <= 1 {
+        free(primes)
+        return 0
+    }
+
+    let a_mod: ptr<i64> = calloc(m, 8)
+    let m_mod: ptr<i64> = calloc(m, 8)
+    let found: ptr<i8> = calloc(m, 1)
+    if a_mod == null || m_mod == null || found == null { return -1 }
+
+    let mut j: i64 = 0
+    while j < m {
+        let q: i64 = primes[j]
+        a_mod[j] = 1 % q
+        m_mod[j] = 2 % q
+        j = j + 1
+    }
+
+    let mut idx: i64 = 1
+    while idx < m {
+        let p: i64 = primes[idx]
+        let inv: i64 = modpow(m_mod[idx], p - 2, p)
+        let mut t: i64 = ((idx + 1 - a_mod[idx]) % p) * inv % p
+        if t < 0 { t = t + p }
+
+        j = idx + 1
+        while j < m {
+            let q: i64 = primes[j]
+            let a: i64 = (a_mod[j] + m_mod[j] * t % q) % q
+            a_mod[j] = a
+            m_mod[j] = m_mod[j] * p % q
+            if a == 0 {
+                found[j] = 1
+            }
+            j = j + 1
+        }
+        idx = idx + 1
+    }
+
+    let mut ans: i64 = 0
+    j = 0
+    while j < m {
+        if found[j] != 0 {
+            ans = ans + primes[j]
+        }
+        j = j + 1
+    }
+
+    free(primes)
+    free(a_mod)
+    free(m_mod)
+    free(found)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", compute_S(300000))
+    return 0
+}

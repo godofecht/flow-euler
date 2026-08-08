@@ -1,0 +1,60 @@
+# Project Euler 128
+# PD(n)=3 hexagonal tile differences; find the 2000th such n.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function is_prime_arr(sieve: ptr<i8>, x: i64) -> bool {
+    if x < 2 { return false }
+    if x % 2 == 0 { return x == 2 }
+    return sieve[x] == 0
+}
+
+function main() -> i32 {
+    let slim: i64 = 2000000
+    let sieve: ptr<i8> = calloc(slim, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < slim {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < slim {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let mut found: i64 = 2  # 1 and 2
+    let mut first: i64 = 8
+    let mut ring: i64 = 2
+    let mut answer: i64 = 0
+    while found < 2000 {
+        let inc_from: i64 = (ring - 1) * 6
+        let inc_to: i64 = ring * 6
+        let inc_to2: i64 = (ring + 1) * 6 + inc_to
+
+        if is_prime_arr(sieve, inc_to - 1) {
+            if is_prime_arr(sieve, inc_to + 1) && is_prime_arr(sieve, inc_to2 - 1) {
+                found = found + 1
+                if found == 2000 { answer = first }
+            }
+            if is_prime_arr(sieve, inc_from + inc_to - 1) && is_prime_arr(sieve, inc_to2 - inc_to - 1) {
+                found = found + 1
+                let last: i64 = first + inc_to - 1
+                if found == 2000 { answer = last }
+            }
+        }
+        first = first + inc_to
+        ring = ring + 1
+    }
+
+    printf("%lld\n", answer)
+    free(sieve)
+    return 0
+}

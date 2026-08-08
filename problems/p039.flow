@@ -1,0 +1,31 @@
+# Project Euler 039
+# Perimeter p ≤ 1000 maximizing number of integer right triangles {a,b,c}.
+
+function main() -> i32 {
+    let mut best_p: i64 = 0
+    let mut best_c: i64 = 0
+    let mut p: i64 = 12
+    while p <= 1000 {
+        let mut count: i64 = 0
+        let mut a: i64 = 1
+        while a < p / 3 {
+            let mut b: i64 = a
+            while b < p / 2 {
+                let c: i64 = p - a - b
+                if b > c { break }
+                if a * a + b * b == c * c {
+                    count = count + 1
+                }
+                b = b + 1
+            }
+            a = a + 1
+        }
+        if count > best_c {
+            best_c = count
+            best_p = p
+        }
+        p = p + 1
+    }
+    printf("%lld\n", best_p)
+    return 0
+}

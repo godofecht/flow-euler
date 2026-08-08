@@ -1,0 +1,223 @@
+# Project Euler 473
+# Phigital number base — sum of palindromic phigitals <= 10^10.
+# Meet-in-the-middle over paired exponents (stbrumme gap of 3).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut PX: ptr<i64> = null
+let mut PY: ptr<i64> = null
+
+let mut LX: ptr<i64> = null
+let mut LY: ptr<i64> = null
+let mut LLAST: ptr<i64> = null
+let mut LN: i64 = 0
+
+let mut RX: ptr<i64> = null
+let mut RY: ptr<i64> = null
+let mut RFIRST: ptr<i64> = null
+let mut RN: i64 = 0
+
+function gen_left(x: i64, y: i64, ni: i64, last: i64, hi: i64) -> void {
+    LX[LN] = x
+    LY[LN] = y
+    LLAST[LN] = last
+    LN = LN + 1
+    let mut e: i64 = ni
+    while e <= hi {
+        gen_left(x + PX[e], y + PY[e], e + 3, e, hi)
+        e = e + 1
+    }
+}
+
+function gen_right(x: i64, y: i64, ni: i64, first: i64, hi: i64) -> void {
+    RX[RN] = x
+    RY[RN] = y
+    RFIRST[RN] = first
+    RN = RN + 1
+    let mut e: i64 = ni
+    while e <= hi {
+        gen_right(x + PX[e], y + PY[e], e + 3, first, hi)
+        e = e + 1
+    }
+}
+
+function sort_right_by_y() -> void {
+    # quicksort triples (RY, RX, RFIRST) by RY then RFIRST
+    let lo: ptr<i64> = calloc(64, 8)
+    let hi: ptr<i64> = calloc(64, 8)
+    let mut sp: i32 = 0
+    lo[0] = 0
+    hi[0] = RN - 1
+    sp = 1
+    while sp > 0 {
+        sp = sp - 1
+        let l: i64 = lo[sp]
+        let h: i64 = hi[sp]
+        if l >= h { continue }
+        let mid: i64 = (l + h) / 2
+        let py: i64 = RY[mid]
+        let pf: i64 = RFIRST[mid]
+        let mut i: i64 = l
+        let mut j: i64 = h
+        while i <= j {
+            while true {
+                let mut less: bool = false
+                if RY[i] < py { less = true }
+                else {
+                    if RY[i] == py {
+                        if RFIRST[i] < pf { less = true }
+                    }
+                }
+                if !less { break }
+                i = i + 1
+            }
+            while true {
+                let mut greater: bool = false
+                if RY[j] > py { greater = true }
+                else {
+                    if RY[j] == py {
+                        if RFIRST[j] > pf { greater = true }
+                    }
+                }
+                if !greater { break }
+                j = j - 1
+            }
+            if i <= j {
+                let tx: i64 = RX[i]; RX[i] = RX[j]; RX[j] = tx
+                let ty: i64 = RY[i]; RY[i] = RY[j]; RY[j] = ty
+                let tf: i64 = RFIRST[i]; RFIRST[i] = RFIRST[j]; RFIRST[j] = tf
+                i = i + 1
+                j = j - 1
+            }
+        }
+        if l < j {
+            lo[sp] = l
+            hi[sp] = j
+            sp = sp + 1
+        }
+        if i < h {
+            lo[sp] = i
+            hi[sp] = h
+            sp = sp + 1
+        }
+    }
+    free(lo)
+    free(hi)
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 10000000000
+    PX = calloc(50, 8)
+    PY = calloc(50, 8)
+    let F: ptr<i64> = calloc(60, 8)
+    if PX == null || PY == null || F == null { return 1 }
+
+    F[0] = 0
+    F[1] = 1
+    let mut i: i64 = 2
+    while i < 60 {
+        F[i] = F[i - 1] + F[i - 2]
+        i = i + 1
+    }
+
+    PX[0] = 2
+    PY[0] = 0
+    i = 1
+    while i <= 48 {
+        let Lk: i64 = F[i - 1] + F[i + 1]
+        let Lk1: i64 = F[i] + F[i + 2]
+        let mut sign: i64 = 0 - 1
+        if ((i + 1) & 1) == 0 {
+            sign = 1
+        }
+        PX[i] = Lk + sign * Lk1
+        PY[i] = F[i] - sign * F[i + 1]
+        i = i + 1
+    }
+
+    # ~13k states per half
+    let CAP: i64 = 20000
+    LX = calloc(CAP, 8)
+    LY = calloc(CAP, 8)
+    LLAST = calloc(CAP, 8)
+    RX = calloc(CAP, 8)
+    RY = calloc(CAP, 8)
+    RFIRST = calloc(CAP, 8)
+    if LX == null || LY == null || LLAST == null || RX == null || RY == null || RFIRST == null {
+        return 1
+    }
+
+    # empty left
+    LX[0] = 0
+    LY[0] = 0
+    LLAST[0] = 0 - 1000000000
+    LN = 1
+    i = 1
+    while i <= 24 {
+        gen_left(PX[i], PY[i], i + 3, i, 24)
+        i = i + 1
+    }
+
+    # empty right
+    RX[0] = 0
+    RY[0] = 0
+    RFIRST[0] = 1000000000
+    RN = 1
+    i = 25
+    while i <= 48 {
+        gen_right(PX[i], PY[i], i + 3, i, 48)
+        i = i + 1
+    }
+
+    sort_right_by_y()
+
+    let mut ans: i64 = 0
+    let mut li: i64 = 0
+    while li < LN {
+        let need: i64 = 0 - LY[li]
+        let last: i64 = LLAST[li]
+        # binary search lower bound on RY == need
+        let mut lo: i64 = 0
+        let mut hi: i64 = RN
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if RY[mid] < need {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        let mut ri: i64 = lo
+        while ri < RN {
+            if RY[ri] != need { break }
+            if RFIRST[ri] >= last + 3 {
+                let xx: i64 = LX[li] + RX[ri]
+                let v: i64 = xx / 2
+                if v > 0 {
+                    if v <= LIMIT {
+                        ans = ans + v
+                    }
+                }
+            }
+            ri = ri + 1
+        }
+        li = li + 1
+    }
+
+    # Lone phigital "1"
+    printf("%lld\n", ans + 1)
+
+    free(PX)
+    free(PY)
+    free(F)
+    free(LX)
+    free(LY)
+    free(LLAST)
+    free(RX)
+    free(RY)
+    free(RFIRST)
+    return 0
+}

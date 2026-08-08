@@ -1,0 +1,7 @@
+# Project Euler 218
+# Perfect primitive right triangles that are not super-perfect: always zero.
+
+function main() -> i32 {
+    printf("%lld\n", 0)
+    return 0
+}

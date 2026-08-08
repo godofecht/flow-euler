@@ -1,0 +1,128 @@
+# Project Euler 420
+# F(10^7): 2x2 matrices with two distinct positive integer square roots.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000
+    let Umax: i64 = isqrt(N - 2)
+    let Kmax: i64 = 2 * Umax
+    let M: i64 = (Kmax * Kmax) / 4
+
+    let d: ptr<i32> = calloc(M + 1, 4)
+    let spf: ptr<i32> = calloc(M + 1, 4)
+    let expn: ptr<i8> = calloc(M + 1, 1)
+    let primes: ptr<i32> = calloc(M / 5 + 10, 4)
+    if d == null || spf == null || expn == null || primes == null { return 1 }
+
+    d[1] = 1
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= M {
+        if spf[i] == 0 {
+            spf[i] = i as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+            expn[i] = 1
+            d[i] = 2
+        }
+        let si: i64 = spf[i] as i64
+        let di: i64 = d[i] as i64
+        let ei: i64 = expn[i] as i64
+        let mut pi: i64 = 0
+        while pi < pc {
+            let p: i64 = primes[pi] as i64
+            let ip: i64 = i * p
+            if ip > M { break }
+            spf[ip] = p as i32
+            if p == si {
+                expn[ip] = (ei + 1) as i8
+                d[ip] = (di / (ei + 1) * (ei + 2)) as i32
+                break
+            } else {
+                expn[ip] = 1
+                d[ip] = (di * 2) as i32
+            }
+            pi = pi + 1
+        }
+        i = i + 1
+    }
+
+    # prefix[K] stored flat: for each K, K entries. Total sum_{K=2}^{Kmax} K ~ Kmax^2/2
+    let pref_size: i64 = (Kmax + 1) * (Kmax + 1)
+    let prefix: ptr<i32> = calloc(pref_size, 4)
+    if prefix == null { return 1 }
+    let mut K: i64 = 2
+    while K <= Kmax {
+        let base: i64 = K * (Kmax + 1)
+        let mut s: i64 = 0
+        let mut a: i64 = 1
+        while a < K {
+            s = s + (d[a * (K - a)] as i64)
+            prefix[base + a] = s as i32
+            a = a + 1
+        }
+        K = K + 1
+    }
+
+    let mut total: i64 = 0
+    let mut u: i64 = 2
+    while u <= Umax {
+        let mut vmax: i64 = isqrt(N - 1 - u * u)
+        if vmax >= u { vmax = u - 1 }
+        let mut v: i64 = 1
+        while v <= vmax {
+            let g: i64 = gcd(u, v)
+            let uu: i64 = u / g
+            let vv: i64 = v / g
+            let mut delta: i64 = 1
+            if (uu % 2 == 1) && (vv % 2 == 1) { delta = 2 }
+            K = g * delta
+            if K > 1 {
+                let s: i64 = u + v
+                let mut low: i64 = (v * K) / s + 1
+                let mut high: i64 = (u * K - 1) / s
+                if low < 1 { low = 1 }
+                if high > K - 1 { high = K - 1 }
+                if low <= high {
+                    let base: i64 = K * (Kmax + 1)
+                    total = total + (prefix[base + high] as i64) - (prefix[base + low - 1] as i64)
+                }
+            }
+            v = v + 1
+        }
+        u = u + 1
+    }
+    printf("%lld\n", total)
+    free(prefix)
+    free(primes)
+    free(expn)
+    free(spf)
+    free(d)
+    return 0
+}

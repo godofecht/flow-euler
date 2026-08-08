@@ -1,0 +1,63 @@
+# Project Euler 522
+# Hilbert's Blackout — F(12344321) mod 135707531.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 135707531
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    if b < 0 { b = b + mod }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let n: i64 = 12344321
+    let inv: ptr<i32> = calloc(n + 1, 4)
+    if inv == null { return 1 }
+    inv[1] = 1
+    let mut fact_n: i64 = 1
+    let mut i: i64 = 2
+    while i <= n {
+        let t: i64 = (MOD - (MOD / i) * (inv[MOD % i] as i64) % MOD) % MOD
+        inv[i] = t as i32
+        fact_n = (fact_n * i) % MOD
+        i = i + 1
+    }
+    let mut total_z: i64 = (n % MOD) * ((n - 1) % MOD) % MOD
+    total_z = total_z * modpow(n - 2, n - 1, MOD) % MOD
+
+    let mut inv_fact: i64 = 1
+    let mut S: i64 = 0
+    let mut m: i64 = 1
+    while m <= n - 2 {
+        inv_fact = (inv_fact * (inv[m] as i64)) % MOD
+        if m >= 2 {
+            let mut term: i64 = modpow(m - 1, m, MOD)
+            term = (term * inv_fact) % MOD
+            term = (term * (inv[n - m] as i64)) % MOD
+            S = S + term
+            if S >= MOD { S = S % MOD }
+        }
+        m = m + 1
+    }
+    let extra_p: i64 = (fact_n * (S % MOD)) % MOD
+    let ans: i64 = (total_z + extra_p) % MOD
+    printf("%lld\n", ans)
+    free(inv)
+    return 0
+}

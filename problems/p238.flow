@@ -1,0 +1,252 @@
+# Project Euler 238
+# Infinite string tour: BBS digit stream, sum p(k) for k <= 2e15.
+# Period digit-sum T ~ 8e7; cover residues with a u64 limb bitset.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function pop64(x0: u64) -> i64 {
+    let mut x: u64 = x0
+    let mut c: i64 = 0
+    while x != 0 {
+        c = c + 1
+        x = x & (x - 1)
+    }
+    return c
+}
+
+function bit_set(bits: ptr<u64>, idx: i64) -> void {
+    let limb: i64 = idx >> 6
+    let bit: i64 = idx & 63
+    let one: u64 = 1
+    bits[limb] = bits[limb] | (one << (bit as u64))
+}
+
+function bits_copy(src: ptr<u64>, dst: ptr<u64>, nlimbs: i64) -> void {
+    let mut i: i64 = 0
+    while i < nlimbs {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function bits_zero(bits: ptr<u64>, nlimbs: i64) -> void {
+    let mut i: i64 = 0
+    let z: u64 = 0
+    while i < nlimbs {
+        bits[i] = z
+        i = i + 1
+    }
+}
+
+# Set every bit in [0, T).
+function bits_fill(bits: ptr<u64>, T: i64) -> void {
+    let nlimbs: i64 = (T + 63) / 64
+    let all: u64 = 0
+    all = all - 1
+    let mut i: i64 = 0
+    let full: i64 = T / 64
+    while i < full {
+        bits[i] = all
+        i = i + 1
+    }
+    let remb: i64 = T & 63
+    if remb != 0 {
+        let one: u64 = 1
+        bits[full] = (one << (remb as u64)) - 1
+    }
+}
+
+# Circular right shift by d bits (1..9) of a T-bit set into dst.
+function circ_rshift(src: ptr<u64>, dst: ptr<u64>, T: i64, d: i64) -> void {
+    let nlimbs: i64 = (T + 63) / 64
+    let du: u64 = d as u64
+    let one: u64 = 1
+    let low_mask: u64 = (one << du) - 1
+    let low: u64 = src[0] & low_mask
+    let sh: u64 = 64 - du
+    let mut i: i64 = 0
+    while i + 1 < nlimbs {
+        dst[i] = (src[i] >> du) | (src[i + 1] << sh)
+        i = i + 1
+    }
+    dst[nlimbs - 1] = src[nlimbs - 1] >> du
+
+    # Wrap the saved low d bits into positions [T-d, T).
+    let top: i64 = T - d
+    let limb: i64 = top >> 6
+    let bit: i64 = top & 63
+    let bu: u64 = bit as u64
+    dst[limb] = dst[limb] | (low << bu)
+    if bit + d > 64 {
+        dst[limb + 1] = dst[limb + 1] | (low >> (64 - bu))
+    }
+
+    # Mask to exactly T bits.
+    let remb: i64 = T & 63
+    if remb != 0 {
+        dst[nlimbs - 1] = dst[nlimbs - 1] & ((one << (remb as u64)) - 1)
+    }
+}
+
+# Popcount of bits of v0 whose global indices lie in [lo, hi], for limb li.
+function pop_in_range(v0: u64, li: i64, lo: i64, hi: i64) -> i64 {
+    if hi < lo { return 0 }
+    let base: i64 = li * 64
+    if base > hi { return 0 }
+    if base + 63 < lo { return 0 }
+    let mut start: i64 = lo - base
+    if start < 0 { start = 0 }
+    let mut endb: i64 = hi - base
+    if endb > 63 { endb = 63 }
+    let one: u64 = 1
+    let width: i64 = endb - start + 1
+    let mut mask: u64 = 0
+    if width == 64 {
+        mask = mask - 1
+    } else {
+        mask = ((one << (width as u64)) - 1) << (start as u64)
+    }
+    return pop64(v0 & mask)
+}
+
+# Write decimal digits of s0 at digits[pos0..]; return new pos. Digit sum via sum_out.
+function digit_sum_and_emit(s0: i64, digits: ptr<i8>, pos0: i64, sum_out: ptr<i64>) -> i64 {
+    let mut tmpd: array<i32, 8> = [0, 0, 0, 0, 0, 0, 0, 0]
+    let mut t: i64 = s0
+    let mut len: i32 = 0
+    if t == 0 {
+        digits[pos0] = 0
+        return pos0 + 1
+    }
+    while t > 0 {
+        tmpd[len] = (t % 10) as i32
+        t = t / 10
+        len = len + 1
+    }
+    let mut pos: i64 = pos0
+    let mut di: i32 = len - 1
+    while di >= 0 {
+        let d: i32 = tmpd[di]
+        digits[pos] = d as i8
+        sum_out[0] = sum_out[0] + (d as i64)
+        pos = pos + 1
+        di = di - 1
+    }
+    return pos
+}
+
+function bbs_period(s0: i64, mod: i64) -> i64 {
+    let mut s: i64 = s0
+    let mut n: i64 = 0
+    while n < 100000000 {
+        s = (s * s) % mod
+        n = n + 1
+        if s == s0 { return n }
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let S0: i64 = 14025256
+    let MOD: i64 = 20300713
+    let TARGET: i64 = 2000000000000000
+
+    let period: i64 = bbs_period(S0, MOD)
+
+    # One period has < 8 digits per term.
+    let dig_cap: i64 = period * 8 + 8
+    let digits: ptr<i8> = calloc(dig_cap, 1)
+    if digits == null { return 1 }
+
+    let mut s: i64 = S0
+    let mut L: i64 = 0
+    let mut Tacc: i64 = 0
+    let mut i: i64 = 0
+    while i < period {
+        L = digit_sum_and_emit(s, digits, L, &Tacc)
+        s = (s * s) % MOD
+        i = i + 1
+    }
+    let T: i64 = Tacc
+
+    let nlimbs: i64 = (T + 63) / 64
+    let present: ptr<u64> = calloc(nlimbs, 8)
+    let unknown: ptr<u64> = calloc(nlimbs, 8)
+    let rot: ptr<u64> = calloc(nlimbs, 8)
+    let tmp: ptr<u64> = calloc(nlimbs, 8)
+    if present == null || unknown == null || rot == null || tmp == null { return 1 }
+
+    bits_zero(present, nlimbs)
+    bit_set(present, 0)
+    let mut ps: i64 = 0
+    i = 0
+    while i < L {
+        ps = ps + (digits[i] as i64)
+        if ps == T {
+            bit_set(present, 0)
+        } else {
+            bit_set(present, ps)
+        }
+        i = i + 1
+    }
+
+    bits_fill(unknown, T)
+    bits_copy(present, rot, nlimbs)
+
+    let rem: i64 = TARGET % T
+    let mut sum_all: i64 = 0
+    let mut sum_1000: i64 = 0
+    let mut sum_rem: i64 = 0
+    let mut left: i64 = T
+    let mut z: i64 = 0
+    while z < L {
+        let mut cnt: i64 = 0
+        let mut c1000: i64 = 0
+        let mut crem: i64 = 0
+        let mut li: i64 = 0
+        while li < nlimbs {
+            let v: u64 = unknown[li] & rot[li]
+            if v != 0 {
+                cnt = cnt + pop64(v)
+                c1000 = c1000 + pop_in_range(v, li, 1, 1000)
+                crem = crem + pop_in_range(v, li, 1, rem)
+                unknown[li] = unknown[li] ^ v
+            }
+            li = li + 1
+        }
+        let w: i64 = z + 1
+        if cnt != 0 {
+            sum_all = sum_all + w * cnt
+            sum_1000 = sum_1000 + w * c1000
+            sum_rem = sum_rem + w * crem
+            left = left - cnt
+            if left == 0 { break }
+        }
+        let d: i64 = digits[z] as i64
+        if d != 0 {
+            bits_zero(tmp, nlimbs)
+            circ_rshift(rot, tmp, T, d)
+            bits_copy(tmp, rot, nlimbs)
+        }
+        z = z + 1
+    }
+
+    if sum_1000 != 4742 {
+        printf("check failed: %lld\n", sum_1000)
+        return 1
+    }
+
+    let q: i64 = TARGET / T
+    let ans: i64 = q * sum_all + sum_rem
+    printf("%lld\n", ans)
+
+    free(digits)
+    free(present)
+    free(unknown)
+    free(rot)
+    free(tmp)
+    return 0
+}

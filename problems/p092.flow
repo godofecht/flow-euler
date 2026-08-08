@@ -1,0 +1,61 @@
+# Project Euler 092
+# How many starting numbers below ten million arrive at 89 in square-digit chain.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function sqdig(n: i32) -> i32 {
+    let mut s: i32 = 0
+    let mut x: i32 = n
+    while x > 0 {
+        let d: i32 = x % 10
+        s = s + d * d
+        x = x / 10
+    }
+    return s
+}
+
+function main() -> i32 {
+    # max sqdig sum for 9999999 is 7*81=567
+    let cache: ptr<i8> = calloc(600, 1)
+    if cache == null { return 1 }
+    # 0 = unknown, 1 = ends at 1, 2 = ends at 89
+    cache[1] = 1
+    cache[89] = 2
+
+    let mut i: i32 = 2
+    while i < 600 {
+        if cache[i] == 0 {
+            let mut x: i32 = i
+            while x != 1 && x != 89 && cache[x] == 0 {
+                x = sqdig(x)
+            }
+            let end: i8 = 1
+            if x == 89 || cache[x] == 2 {
+                end = 2
+            }
+            # fill chain
+            x = i
+            while x != 1 && x != 89 && cache[x] == 0 {
+                cache[x] = end
+                x = sqdig(x)
+            }
+        }
+        i = i + 1
+    }
+
+    let mut count: i64 = 0
+    let mut n: i32 = 1
+    while n < 10000000 {
+        let s: i32 = sqdig(n)
+        if cache[s] == 2 {
+            count = count + 1
+        }
+        n = n + 1
+    }
+    printf("%lld\n", count)
+    free(cache)
+    return 0
+}

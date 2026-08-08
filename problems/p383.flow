@@ -1,0 +1,125 @@
+# Project Euler 383
+# T5(10^18): count i with s5(2i-1) >= 2*s5(i) via base-5 digit DP.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function state_key(pos: i32, tight: i32, cn: i32, bn: i32, del_off: i32, DMAX: i32) -> i64 {
+    return (((((pos as i64) * 2 + (tight as i64)) * 2 + (cn as i64)) * 2 + (bn as i64)) * (DMAX as i64) + (del_off as i64))
+}
+
+function dfs(pos: i32, tight: i32, cn: i32, bn: i32, delta: i32, L: i32, digs: ptr<i32>,
+             r_cin: ptr<i32>, r_bin: ptr<i32>, r_e: ptr<i32>, r_cnt: ptr<i32>,
+             memo: ptr<i64>, seen: ptr<i8>, DOFF: i32, DMAX: i32) -> i64 {
+    if pos == L {
+        if cn == 0 && bn == 1 && delta >= 0 { return 1 }
+        return 0
+    }
+    let del_off: i32 = delta + DOFF
+    if del_off < 0 || del_off >= DMAX { return 0 }
+    let key: i64 = state_key(pos, tight, cn, bn, del_off, DMAX)
+    if seen[key] == 1 { return memo[key] }
+
+    let mut limit: i32 = 4
+    if tight == 1 { limit = digs[pos] }
+    let mut total: i64 = 0
+    let mut d: i32 = 0
+    while d <= limit {
+        let mut tight2: i32 = 0
+        if tight == 1 && d == limit { tight2 = 1 }
+        let kkey: i32 = (cn * 2 + bn) * 5 + d
+        let cnt: i32 = r_cnt[kkey]
+        let mut s: i32 = 0
+        while s < cnt {
+            let base: i32 = kkey * 8 + s
+            total = total + dfs(pos + 1, tight2, r_cin[base], r_bin[base], delta + r_e[base] - 2 * d,
+                                L, digs, r_cin, r_bin, r_e, r_cnt, memo, seen, DOFF, DMAX)
+            s = s + 1
+        }
+        d = d + 1
+    }
+    seen[key] = 1
+    memo[key] = total
+    return total
+}
+
+function main() -> i32 {
+    let N: i64 = 1000000000000000000
+    let digs: ptr<i32> = calloc(40, 4)
+    let rev: ptr<i32> = calloc(40, 4)
+    if digs == null || rev == null { return 1 }
+    let mut tmp: i64 = N
+    let mut L: i32 = 0
+    while tmp > 0 {
+        rev[L] = (tmp % 5) as i32
+        tmp = tmp / 5
+        L = L + 1
+    }
+    let mut i: i32 = 0
+    while i < L {
+        digs[i] = rev[L - 1 - i]
+        i = i + 1
+    }
+
+    let r_cin: ptr<i32> = calloc(2 * 2 * 5 * 8, 4)
+    let r_bin: ptr<i32> = calloc(2 * 2 * 5 * 8, 4)
+    let r_e: ptr<i32> = calloc(2 * 2 * 5 * 8, 4)
+    let r_cnt: ptr<i32> = calloc(2 * 2 * 5, 4)
+    if r_cin == null || r_bin == null || r_e == null || r_cnt == null { return 1 }
+
+    let mut cin: i32 = 0
+    while cin <= 1 {
+        let mut bin: i32 = 0
+        while bin <= 1 {
+            let mut d: i32 = 0
+            while d < 5 {
+                let raw0: i32 = 2 * d + cin - bin
+                let mut raw: i32 = raw0
+                let mut bout: i32 = 0
+                if raw0 < 0 {
+                    raw = raw0 + 5
+                    bout = 1
+                }
+                let e: i32 = raw % 5
+                let cout: i32 = raw / 5
+                let key: i32 = (cout * 2 + bout) * 5 + d
+                let slot: i32 = r_cnt[key]
+                let base: i32 = key * 8 + slot
+                r_cin[base] = cin
+                r_bin[base] = bin
+                r_e[base] = e
+                r_cnt[key] = slot + 1
+                d = d + 1
+            }
+            bin = bin + 1
+        }
+        cin = cin + 1
+    }
+
+    let DOFF: i32 = 250
+    let DMAX: i32 = 401
+    let SZ: i64 = (L + 1) as i64 * 2 * 2 * 2 * (DMAX as i64)
+    let memo: ptr<i64> = calloc(SZ, 8)
+    let seen: ptr<i8> = calloc(SZ, 1)
+    if memo == null || seen == null { return 1 }
+
+    let mut ans: i64 = 0
+    let mut cf: i32 = 0
+    while cf <= 1 {
+        ans = ans + dfs(0, 1, cf, 0, cf, L, digs, r_cin, r_bin, r_e, r_cnt, memo, seen, DOFF, DMAX)
+        cf = cf + 1
+    }
+
+    printf("%lld\n", ans)
+    free(seen)
+    free(memo)
+    free(r_cnt)
+    free(r_e)
+    free(r_bin)
+    free(r_cin)
+    free(rev)
+    free(digs)
+    return 0
+}

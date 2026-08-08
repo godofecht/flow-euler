@@ -1,0 +1,14 @@
+# Project Euler 006
+# Difference between the square of the sum and the sum of the squares
+# of the first one hundred natural numbers.
+
+function solve(n: i64) -> i64 {
+    let sum: i64 = n * (n + 1) / 2
+    let sum_sq: i64 = n * (n + 1) * (2 * n + 1) / 6
+    return sum * sum - sum_sq
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(100))
+    return 0
+}

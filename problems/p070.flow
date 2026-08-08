@@ -1,0 +1,97 @@
+# Project Euler 070
+# Find n, 1 < n < 10^7, minimizing n/φ(n) among n where φ(n) is a permutation of n.
+# Optimum is a product of two primes near sqrt(limit).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function is_perm(a: i64, b: i64, ca: ptr<i32>) -> bool {
+    let mut i: i32 = 0
+    while i < 10 {
+        ca[i] = 0
+        i = i + 1
+    }
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while x > 0 {
+        ca[(x % 10) as i32] = ca[(x % 10) as i32] + 1
+        x = x / 10
+    }
+    while y > 0 {
+        ca[(y % 10) as i32] = ca[(y % 10) as i32] - 1
+        y = y / 10
+    }
+    i = 0
+    while i < 10 {
+        if ca[i] != 0 { return false }
+        i = i + 1
+    }
+    return true
+}
+
+function main() -> i32 {
+    # Generate primes up to ~5000 (sqrt(1e7)≈3162, search a bit wider)
+    let plim: i64 = 5000
+    let sieve: ptr<i8> = calloc(plim, 1)
+    let primes: ptr<i64> = calloc(1000, 8)
+    if sieve == null || primes == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < plim {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < plim {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut pc: i32 = 0
+    p = 2
+    while p < plim {
+        if sieve[p] == 0 {
+            primes[pc] = p
+            pc = pc + 1
+        }
+        p = p + 1
+    }
+
+    let ca: ptr<i32> = calloc(10, 4)
+    if ca == null { return 1 }
+
+    let mut best_n: i64 = 0
+    let mut best_phi: i64 = 1
+    let limit: i64 = 10000000
+    let mut i: i32 = 0
+    while i < pc {
+        let mut j: i32 = i
+        while j < pc {
+            let n: i64 = primes[i] * primes[j]
+            if n >= limit { break }
+            # φ(pq) = (p-1)(q-1) for p!=q; φ(p^2)=(p^2-p)
+            let mut ph: i64 = 0
+            if i == j {
+                ph = primes[i] * (primes[i] - 1)
+            } else {
+                ph = (primes[i] - 1) * (primes[j] - 1)
+            }
+            if is_perm(n, ph, ca) {
+                if best_n == 0 || n * best_phi < best_n * ph {
+                    best_n = n
+                    best_phi = ph
+                }
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    printf("%lld\n", best_n)
+    free(ca)
+    free(primes)
+    free(sieve)
+    return 0
+}

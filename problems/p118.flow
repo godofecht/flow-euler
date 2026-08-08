@@ -1,0 +1,137 @@
+# Project Euler 118
+# How many sets of primes using digits 1-9 exactly once?
+
+function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    let mut b: i64 = b0 % mod
+    let mut result: i64 = 0
+    while b > 0 {
+        if b % 2 == 1 { result = (result + a) % mod }
+        a = (a * 2) % mod
+        b = b / 2
+    }
+    return result
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { result = mulmod(result, b, mod) }
+        b = mulmod(b, b, mod)
+        e = e / 2
+    }
+    return result
+}
+
+function is_prime(n: i64) -> bool {
+    if n < 2 { return false }
+    if n % 2 == 0 { return n == 2 }
+    if n % 3 == 0 { return n == 3 }
+    if n % 5 == 0 { return n == 5 }
+    let bases: array<i64, 5>
+    bases[0] = 2
+    bases[1] = 3
+    bases[2] = 5
+    bases[3] = 7
+    bases[4] = 11
+    let mut d: i64 = n - 1
+    let mut s: i32 = 0
+    while d % 2 == 0 {
+        d = d / 2
+        s = s + 1
+    }
+    let mut bi: i32 = 0
+    while bi < 5 {
+        let a: i64 = bases[bi] % n
+        if a != 0 {
+            let mut x: i64 = modpow(a, d, n)
+            if x != 1 && x != n - 1 {
+                let mut r: i32 = 1
+                let mut bad: bool = true
+                while r < s {
+                    x = mulmod(x, x, n)
+                    if x == n - 1 { bad = false; break }
+                    r = r + 1
+                }
+                if bad { return false }
+            }
+        }
+        bi = bi + 1
+    }
+    return true
+}
+
+# Count splits of digit array into nondecreasing prime sequence.
+function count_splits(digs: ptr<i32>, start: i32, last: i64) -> i64 {
+    if start == 9 { return 1 }
+    let mut total: i64 = 0
+    let mut num: i64 = 0
+    let mut j: i32 = start
+    while j < 9 {
+        num = num * 10 + (digs[j] as i64)
+        if num >= last && is_prime(num) {
+            total = total + count_splits(digs, j + 1, num)
+        }
+        j = j + 1
+    }
+    return total
+}
+
+function next_perm(a: ptr<i32>, n: i32) -> bool {
+    # standard next permutation
+    let mut i: i32 = n - 2
+    while i >= 0 && a[i] >= a[i + 1] {
+        i = i - 1
+    }
+    if i < 0 { return false }
+    let mut j: i32 = n - 1
+    while a[j] <= a[i] {
+        j = j - 1
+    }
+    let t: i32 = a[i]
+    a[i] = a[j]
+    a[j] = t
+    # reverse i+1..n-1
+    let mut L: i32 = i + 1
+    let mut R: i32 = n - 1
+    while L < R {
+        let u: i32 = a[L]
+        a[L] = a[R]
+        a[R] = u
+        L = L + 1
+        R = R - 1
+    }
+    return true
+}
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let digs: ptr<i32> = calloc(9, 4)
+    if digs == null { return 1 }
+    let mut i: i32 = 0
+    while i < 9 {
+        digs[i] = i + 1
+        i = i + 1
+    }
+    let mut total: i64 = 0
+    while true {
+        total = total + count_splits(digs, 0, 0)
+        if !next_perm(digs, 9) { break }
+    }
+    # Each set is counted |set|! / automorphisms? NO —
+    # We form ordered concatenations via permutations, and splits require
+    # nondecreasing primes, so each set is counted once per ordering of digits
+    # consistent with concatenating the primes in sorted order.
+    # That is exactly once per set (digits follow sorted primes concatenated).
+    # Wait: for a set {p1<p2<...<pk}, only ONE permutation of digits matches
+    # the concatenation p1|p2|...|pk. So each set counted once. Good.
+    printf("%lld\n", total)
+    free(digs)
+    return 0
+}

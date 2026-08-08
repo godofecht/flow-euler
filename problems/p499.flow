@@ -1,0 +1,66 @@
+# Project Euler 499
+# St. Petersburg Lottery — p_15(10^9) via negative root of mgf equation.
+
+extern {
+    function exp(x: f64) -> f64
+}
+
+function expm1(x: f64) -> f64 {
+    return exp(x) - 1.0
+}
+
+function f_expm1(t: f64, m: i32) -> f64 {
+    let mut s: f64 = 0.0
+    let mut c: f64 = 0.0
+    let mut pow2: f64 = 1.0
+    let mut weight: f64 = 0.5
+    let mut k: i32 = 0
+    while k < 200 {
+        let term: f64 = weight * expm1(pow2 * t)
+        let y: f64 = term - c
+        let tmp: f64 = s + y
+        c = (tmp - s) - y
+        s = tmp
+        if weight < 1.0e-27 { break }
+        pow2 = pow2 * 2.0
+        weight = weight * 0.5
+        k = k + 1
+    }
+    return expm1((m as f64) * t) - s
+}
+
+function solve_t(m: i32) -> f64 {
+    let mut hi: f64 = -1.0e-12
+    let mut f_hi: f64 = f_expm1(hi, m)
+    while f_hi <= 0.0 {
+        hi = hi * 0.5
+        f_hi = f_expm1(hi, m)
+    }
+    let mut lo: f64 = hi
+    let mut f_lo: f64 = f_hi
+    while f_lo > 0.0 {
+        lo = lo * 2.0
+        f_lo = f_expm1(lo, m)
+    }
+    let mut it: i32 = 0
+    while it < 120 {
+        let mid: f64 = (lo + hi) * 0.5
+        let f_mid: f64 = f_expm1(mid, m)
+        if f_mid > 0.0 {
+            hi = mid
+        } else {
+            lo = mid
+        }
+        it = it + 1
+    }
+    return (lo + hi) * 0.5
+}
+
+function main() -> i32 {
+    let m: i32 = 15
+    let s: i64 = 1000000000
+    let t: f64 = solve_t(m)
+    let p: f64 = -expm1(t * ((s - (m as i64) + 1) as f64))
+    printf("%.7f\n", p)
+    return 0
+}

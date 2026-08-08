@@ -1,0 +1,21 @@
+# Project Euler 449
+# Chocolate volume on ellipsoid a=3, b=1, thickness 1.
+
+extern {
+    function sqrt(x: f64) -> f64
+    function atan(x: f64) -> f64
+    function atanh(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let PI: f64 = 3.14159265358979323846
+    let A: f64 = 3.0
+    let C: f64 = 1.0
+    let t: f64 = 1.0
+    let e: f64 = sqrt(1.0 - (C * C) / (A * A))
+    let S: f64 = 2.0 * PI * A * A * (1.0 + (C * C / (A * A)) * (atanh(e) / e))
+    let M: f64 = 2.0 * PI * C + (2.0 * PI * A / e) * atan((A * e) / C)
+    let ans: f64 = S * t + M * t * t + (4.0 * PI / 3.0) * t * t * t
+    printf("%.8f\n", ans)
+    return 0
+}

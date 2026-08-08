@@ -1,0 +1,236 @@
+# Project Euler 180
+# Sum of distinct s=x+y+z for golden triples of order 35; answer = num+den of total.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    if x < 0 { x = 0 - x }
+    let mut y: i64 = b
+    if y < 0 { y = 0 - y }
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+# Store fractions as num/den in arrays; hash set of sums as reduced fractions
+# Max rationals for k=35: sum_{b=2}^{35} phi(b) ≈ 385
+
+function main() -> i32 {
+    let K: i64 = 35
+    let nums: ptr<i64> = calloc(400, 8)
+    let dens: ptr<i64> = calloc(400, 8)
+    if nums == null || dens == null { return 1 }
+    let mut qc: i64 = 0
+    let mut b: i64 = 2
+    while b <= K {
+        let mut a: i64 = 1
+        while a < b {
+            if gcd(a, b) == 1 {
+                nums[qc] = a
+                dens[qc] = b
+                qc = qc + 1
+            }
+            a = a + 1
+        }
+        b = b + 1
+    }
+
+    # set of sums: sn[i]/sd[i]
+    let MAXS: i64 = 200000
+    let sn: ptr<i64> = calloc(MAXS, 8)
+    let sd: ptr<i64> = calloc(MAXS, 8)
+    if sn == null || sd == null { return 1 }
+    let mut sc: i64 = 0
+
+    let mut i: i64 = 0
+    while i < qc {
+        let mut j: i64 = i
+        while j < qc {
+            let xn: i64 = nums[i]
+            let xd: i64 = dens[i]
+            let yn: i64 = nums[j]
+            let yd: i64 = dens[j]
+
+            # helper to check if zn/zd is in Q and add sum
+            # n=1: z = x+y = (xn*yd + yn*xd)/(xd*yd)
+            let mut zn: i64 = xn * yd + yn * xd
+            let mut zd: i64 = xd * yd
+            let g: i64 = gcd(zn, zd)
+            zn = zn / g
+            zd = zd / g
+            # check in Q: 0 < zn < zd <= K
+            if zn > 0 && zn < zd && zd <= K {
+                let mut snum: i64 = xn * yd * zd + yn * xd * zd + zn * xd * yd
+                let mut sden: i64 = xd * yd * zd
+                let g2: i64 = gcd(snum, sden)
+                snum = snum / g2
+                sden = sden / g2
+                # insert if new
+                let mut found: bool = false
+                let mut k: i64 = 0
+                while k < sc {
+                    if sn[k] == snum && sd[k] == sden { found = true; break }
+                    k = k + 1
+                }
+                if !found {
+                    sn[sc] = snum
+                    sd[sc] = sden
+                    sc = sc + 1
+                }
+            }
+
+            # n=-1: z = xy/(x+y)
+            let mut den_sum: i64 = xn * yd + yn * xd
+            zn = xn * yn
+            zd = den_sum
+            # z = (xn/xd)*(yn/yd) / ((xn*yd+yn*xd)/(xd*yd)) = xn*yn*xd*yd / (xd*yd*den_sum) wait
+            # z = (xn*yn)/(xd*yd) * (xd*yd)/den_sum = (xn*yn)/den_sum
+            zn = xn * yn
+            zd = den_sum
+            let g3: i64 = gcd(zn, zd)
+            zn = zn / g3
+            zd = zd / g3
+            if zn > 0 && zn < zd && zd <= K {
+                let mut snum: i64 = xn * yd * zd + yn * xd * zd + zn * xd * yd
+                let mut sden: i64 = xd * yd * zd
+                let g2: i64 = gcd(snum, sden)
+                snum = snum / g2
+                sden = sden / g2
+                let mut found: bool = false
+                let mut k: i64 = 0
+                while k < sc {
+                    if sn[k] == snum && sd[k] == sden { found = true; break }
+                    k = k + 1
+                }
+                if !found {
+                    sn[sc] = snum
+                    sd[sc] = sden
+                    sc = sc + 1
+                }
+            }
+
+            # n=2: z^2 = x^2+y^2
+            let z2n: i64 = xn * xn * yd * yd + yn * yn * xd * xd
+            let z2d: i64 = xd * xd * yd * yd
+            let g4: i64 = gcd(z2n, z2d)
+            let z2nr: i64 = z2n / g4
+            let z2dr: i64 = z2d / g4
+            let sn2: i64 = isqrt(z2nr)
+            let sd2: i64 = isqrt(z2dr)
+            if sn2 * sn2 == z2nr && sd2 * sd2 == z2dr {
+                zn = sn2
+                zd = sd2
+                let g5: i64 = gcd(zn, zd)
+                zn = zn / g5
+                zd = zd / g5
+                if zn > 0 && zn < zd && zd <= K {
+                    let mut snum: i64 = xn * yd * zd + yn * xd * zd + zn * xd * yd
+                    let mut sden: i64 = xd * yd * zd
+                    let g2: i64 = gcd(snum, sden)
+                    snum = snum / g2
+                    sden = sden / g2
+                    let mut found: bool = false
+                    let mut k: i64 = 0
+                    while k < sc {
+                        if sn[k] == snum && sd[k] == sden { found = true; break }
+                        k = k + 1
+                    }
+                    if !found {
+                        sn[sc] = snum
+                        sd[sc] = sden
+                        sc = sc + 1
+                    }
+                }
+            }
+
+            # n=-2: z^2 = (xy)^2 / (x^2+y^2)
+            # z2 = (xn*yn)^2 / (z2n/z2d wait) = (xn*yn)^2 * z2d / z2n but use reduced
+            # x^2+y^2 = z2nr/z2dr already computed above before reduce... recompute
+            let x2y2n: i64 = xn * xn * yd * yd + yn * yn * xd * xd
+            let x2y2d: i64 = xd * xd * yd * yd
+            # z2 = (xn*yn/(xd*yd))^2 / (x2y2n/x2y2d) = (xn*yn)^2 * x2y2d / ((xd*yd)^2 * x2y2n)
+            let mut zz_n: i64 = xn * yn * xn * yn * x2y2d
+            let mut zz_d: i64 = xd * yd * xd * yd * x2y2n
+            let g6: i64 = gcd(zz_n, zz_d)
+            zz_n = zz_n / g6
+            zz_d = zz_d / g6
+            let sn3: i64 = isqrt(zz_n)
+            let sd3: i64 = isqrt(zz_d)
+            if sn3 * sn3 == zz_n && sd3 * sd3 == zz_d {
+                zn = sn3
+                zd = sd3
+                let g5: i64 = gcd(zn, zd)
+                zn = zn / g5
+                zd = zd / g5
+                if zn > 0 && zn < zd && zd <= K {
+                    let mut snum: i64 = xn * yd * zd + yn * xd * zd + zn * xd * yd
+                    let mut sden: i64 = xd * yd * zd
+                    let g2: i64 = gcd(snum, sden)
+                    snum = snum / g2
+                    sden = sden / g2
+                    let mut found: bool = false
+                    let mut k: i64 = 0
+                    while k < sc {
+                        if sn[k] == snum && sd[k] == sden { found = true; break }
+                        k = k + 1
+                    }
+                    if !found {
+                        sn[sc] = snum
+                        sd[sc] = sden
+                        sc = sc + 1
+                    }
+                }
+            }
+
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    # sum all fractions
+    let mut tnum: i128 = 0
+    let mut tden: i128 = 1
+    i = 0
+    while i < sc {
+        # tnum/tden + sn/sd
+        let a: i128 = sn[i] as i128
+        let b: i128 = sd[i] as i128
+        tnum = tnum * b + tden * a
+        tden = tden * b
+        # reduce
+        let mut x: i128 = tnum
+        if x < (0 as i128) { x = 0 as i128 - x }
+        let mut y: i128 = tden
+        while y != (0 as i128) {
+            let t: i128 = x % y
+            x = y
+            y = t
+        }
+        let g: i128 = x
+        tnum = tnum / g
+        tden = tden / g
+        i = i + 1
+    }
+    let ans: i64 = (tnum + tden) as i64
+    printf("%lld\n", ans)
+    free(nums); free(dens); free(sn); free(sd)
+    return 0
+}

@@ -1,0 +1,50 @@
+# Project Euler 181
+# Ways to group 60 black and 40 white objects.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+function main() -> i32 {
+    let MB: i32 = 60
+    let MW: i32 = 40
+    let rows: i64 = (MB + 1) as i64
+    let cols: i64 = (MW + 1) as i64
+    let prev: ptr<i64> = calloc(rows * cols, 8)
+    let cur: ptr<i64> = calloc(rows * cols, 8)
+    if prev == null || cur == null { return 1 }
+    prev[0] = 1
+
+    let mut ub: i32 = 0
+    while ub <= MB {
+        let mut uw: i32 = 0
+        while uw <= MW {
+            if !(ub == 0 && uw == 0) {
+                let mut i: i32 = 0
+                while i <= MB {
+                    let mut j: i32 = 0
+                    while j <= MW {
+                        let mut total: i64 = 0
+                        let mut k: i32 = 0
+                        while i >= k * ub && j >= k * uw {
+                            total = total + prev[((i - k * ub) as i64) * cols + ((j - k * uw) as i64)]
+                            k = k + 1
+                        }
+                        cur[(i as i64) * cols + (j as i64)] = total
+                        j = j + 1
+                    }
+                    i = i + 1
+                }
+                memcpy(prev as ptr<void>, cur as ptr<void>, rows * cols * 8)
+            }
+            uw = uw + 1
+        }
+        ub = ub + 1
+    }
+    printf("%lld\n", cur[(MB as i64) * cols + (MW as i64)])
+    free(prev)
+    free(cur)
+    return 0
+}

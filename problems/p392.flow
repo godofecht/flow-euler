@@ -1,0 +1,82 @@
+# Project Euler 392
+# Minimal red area for N=400 enmeshed unit circle grid, 10 decimals.
+
+extern {
+    function sqrt(x: f64) -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function f(x: f64) -> f64 {
+    let v: f64 = 1.0 - x * x
+    if v < 0.0 { v = 0.0 }
+    return sqrt(v)
+}
+
+function end_x(m: i32, x1: f64) -> f64 {
+    if !(x1 > 0.0 && x1 < 1.0) { return 1.0e300 }
+    let mut x_cur: f64 = x1
+    let mut g_prev: f64 = 1.0
+    let mut k: i32 = 1
+    while k < m {
+        if x_cur <= 0.0 { return 1.0e300 }
+        if x_cur >= 1.0 { return x_cur }
+        let g_cur: f64 = f(x_cur)
+        let x_next: f64 = x_cur + (g_prev - g_cur) * g_cur / x_cur
+        if !(x_cur < x_next) { return 1.0e300 }
+        x_cur = x_next
+        g_prev = g_cur
+        k = k + 1
+    }
+    return x_cur
+}
+
+function solve_quadrant(m: i32) -> f64 {
+    let mut lo: f64 = 0.000001
+    while end_x(m, lo) >= 1.0 {
+        lo = lo * 0.5
+        if lo < 1.0e-20 { return 0.0 }
+    }
+    let mut hi: f64 = 0.9
+    while end_x(m, hi) <= 1.0 {
+        hi = (hi + 1.0) / 2.0
+        if hi >= 1.0 - 1.0e-15 { return 0.0 }
+    }
+    let mut it: i32 = 0
+    while it < 200 {
+        let mid: f64 = (lo + hi) / 2.0
+        if end_x(m, mid) > 1.0 { hi = mid } else { lo = mid }
+        it = it + 1
+    }
+    let x1: f64 = (lo + hi) / 2.0
+    let xs: ptr<f64> = calloc((m + 1) as i64, 8)
+    if xs == null { return 0.0 }
+    xs[0] = 0.0
+    xs[1] = x1
+    let mut g_prev: f64 = 1.0
+    let mut k: i32 = 1
+    while k < m {
+        let xk: f64 = xs[k]
+        let gk: f64 = f(xk)
+        xs[k + 1] = xk + (g_prev - gk) * gk / xk
+        g_prev = gk
+        k = k + 1
+    }
+    let mut area_q: f64 = 0.0
+    let mut i: i32 = 0
+    while i < m {
+        let xi: f64 = xs[i]
+        area_q = area_q + (xs[i + 1] - xi) * f(xi)
+        i = i + 1
+    }
+    free(xs)
+    return area_q
+}
+
+function main() -> i32 {
+    let N: i32 = 400
+    let m: i32 = N / 2 + 1
+    let ans: f64 = 4.0 * solve_quadrant(m)
+    printf("%.10f\n", ans)
+    return 0
+}

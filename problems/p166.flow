@@ -1,0 +1,65 @@
+# Project Euler 166
+# 4x4 grids of digits 0-9 with equal row/column/diagonal sums.
+
+function main() -> i32 {
+    let mut ans: i64 = 0
+    let mut b: i32 = 0
+    while b <= 9 {
+        let mut c: i32 = 0
+        while c <= 9 {
+            let mut d: i32 = 0
+            while d <= 9 {
+                let mut e: i32 = 0
+                while e <= 9 {
+                    let mut ii: i32 = 0
+                    while ii <= 9 {
+                        let m: i32 = b + c + d - e - ii
+                        if m >= 0 && m <= 9 {
+                            let mut k: i32 = 0
+                            while k <= 9 {
+                                let f: i32 = b + c + d * 2 - e - ii - k
+                                if f >= 0 && f <= 9 {
+                                    let mut a: i32 = 0
+                                    while a <= 9 {
+                                        let mut g: i32 = 0
+                                        while g <= 9 {
+                                            let o: i32 = a + b + d - g - k
+                                            if o >= 0 && o <= 9 {
+                                                let j: i32 = a + b + c - g - m
+                                                if j >= 0 && j <= 9 {
+                                                    let l: i32 = a + b + c + d - ii - j - k
+                                                    if l >= 0 && l <= 9 {
+                                                        let h: i32 = a + b + c + d - e - f - g
+                                                        if h >= 0 && h <= 9 {
+                                                            let n: i32 = a + c + d - f - j
+                                                            if n >= 0 && n <= 9 {
+                                                                let p: i32 = a + b + c - h - l
+                                                                if p >= 0 && p <= 9 {
+                                                                    ans = ans + 1
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            g = g + 1
+                                        }
+                                        a = a + 1
+                                    }
+                                }
+                                k = k + 1
+                            }
+                        }
+                        ii = ii + 1
+                    }
+                    e = e + 1
+                }
+                d = d + 1
+            }
+            c = c + 1
+        }
+        b = b + 1
+    }
+    printf("%lld\n", ans)
+    return 0
+}

@@ -1,0 +1,113 @@
+# Project Euler 451
+# Modular Inverses — sum I(n) for 3..2e7 via SPF + CRT root expansion.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modinv(a0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    let mut b: i64 = m
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = a - q * b
+        a = b
+        b = t
+        let tx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = tx
+    }
+    if x0 < 0 { x0 = x0 + m }
+    return x0
+}
+
+function I_n(n: i64, spf: ptr<i32>, roots: ptr<i64>) -> i64 {
+    let mut rc: i32 = 1
+    roots[0] = n - 1
+    let mut best: i64 = 1
+    let mut remaining: i64 = n
+    while remaining > 1 {
+        let p: i64 = spf[remaining] as i64
+        let mut prime_power: i64 = 1
+        while remaining % p == 0 {
+            remaining = remaining / p
+            prime_power = prime_power * p
+        }
+        if prime_power == 2 {
+            continue
+        }
+        let cofactor: i64 = n / prime_power
+        let projector: i64 = cofactor * modinv(cofactor % prime_power, prime_power) % n
+        let delta_two: i64 = (2 * projector) % n
+        let mut has_extra: bool = false
+        let mut delta_half: i64 = 0
+        let mut delta_half_plus_two: i64 = 0
+        if prime_power % 2 == 0 && prime_power >= 8 {
+            has_extra = true
+            let half: i64 = prime_power / 2
+            delta_half = (half * projector) % n
+            delta_half_plus_two = ((half + 2) * projector) % n
+        }
+        let prev_rc: i32 = rc
+        let mut i: i32 = 0
+        while i < prev_rc {
+            let root: i64 = roots[i]
+            let candidate: i64 = (root + delta_two) % n
+            roots[rc] = candidate
+            rc = rc + 1
+            if best < candidate && candidate < n - 1 {
+                best = candidate
+            }
+            if has_extra {
+                let c2: i64 = (root + delta_half) % n
+                roots[rc] = c2
+                rc = rc + 1
+                if best < c2 && c2 < n - 1 { best = c2 }
+                let c3: i64 = (root + delta_half_plus_two) % n
+                roots[rc] = c3
+                rc = rc + 1
+                if best < c3 && c3 < n - 1 { best = c3 }
+            }
+            i = i + 1
+        }
+    }
+    return best
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 20000000
+    let spf: ptr<i32> = calloc(LIMIT + 1, 4)
+    let roots: ptr<i64> = calloc(256, 8)
+    if spf == null || roots == null { return 1 }
+    let mut i: i64 = 0
+    while i <= LIMIT {
+        spf[i] = i as i32
+        i = i + 1
+    }
+    i = 2
+    while i * i <= LIMIT {
+        if (spf[i] as i64) == i {
+            let mut j: i64 = i * i
+            while j <= LIMIT {
+                if (spf[j] as i64) == j {
+                    spf[j] = i as i32
+                }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut total: i64 = 0
+    let mut n: i64 = 3
+    while n <= LIMIT {
+        total = total + I_n(n, spf, roots)
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    free(roots)
+    free(spf)
+    return 0
+}

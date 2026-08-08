@@ -1,0 +1,102 @@
+# Project Euler 484
+# Arithmetic Derivative
+# S(N) = sum_{1 < k <= N} gcd(k, k') via powerful-number DFS.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut PRIMES: ptr<i64> = null
+let mut PLEN: i64 = 0
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function dfs(i0: i64, L0: i64) -> i64 {
+    let mut res: i64 = 0
+    let mut i: i64 = i0
+    while i < PLEN {
+        let p: i64 = PRIMES[i]
+        let q: i64 = p * p
+        let mut L: i64 = L0 / q
+        if L == 0 { break }
+        let mut e: i64 = 1
+        let mut g: i64 = 1
+        while L != 0 {
+            let gp: i64 = g
+            e = e + 1
+            if e != 1 {
+                if e == p {
+                    g = g * q
+                    e = 0
+                } else {
+                    g = g * p
+                }
+                let c: i64 = g - gp
+                res = res + c * L
+                if L > q {
+                    res = res + c * dfs(i + 1, L)
+                }
+            }
+            L = L / p
+        }
+        i = i + 1
+    }
+    return res
+}
+
+function main() -> i32 {
+    let N: i64 = 5000000000000000
+    let lim: i64 = isqrt(N)
+    let half: i64 = lim / 2 + 1
+    let sieve: ptr<i8> = calloc(half, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i < half {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    let r: i64 = isqrt(lim)
+    let mut p: i64 = 3
+    while p <= r {
+        if sieve[p / 2] != 0 {
+            let mut cur: i64 = (p * p) / 2
+            while cur < half {
+                sieve[cur] = 0
+                cur = cur + p
+            }
+        }
+        p = p + 2
+    }
+
+    PRIMES = calloc(4200000, 8)
+    if PRIMES == null { return 1 }
+    PRIMES[0] = 2
+    PLEN = 1
+    i = 1
+    while i < half {
+        if sieve[i] != 0 {
+            PRIMES[PLEN] = 2 * i + 1
+            PLEN = PLEN + 1
+        }
+        i = i + 1
+    }
+    free(sieve)
+
+    let ans: i64 = N - 1 + dfs(0, N)
+    printf("%lld\n", ans)
+    free(PRIMES)
+    PRIMES = null
+    PLEN = 0
+    return 0
+}

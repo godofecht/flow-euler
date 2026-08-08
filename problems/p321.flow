@@ -1,0 +1,29 @@
+# Project Euler 321
+# Sum of first 40 n where M(n)=n(n+2) is triangular (Diophantine recurrence).
+
+function main() -> i32 {
+    let num_values: i64 = 40
+    let mut x1: i64 = 2
+    let mut y1: i64 = 1
+    let mut x2: i64 = 5
+    let mut y2: i64 = 3
+    let mut sum: i64 = y1 + y2
+    let mut n: i64 = 3
+    while n <= num_values {
+        let next_x1: i64 = 3 * x1 + 4 * y1 + 5
+        let next_y1: i64 = 2 * x1 + 3 * y1 + 3
+        x1 = next_x1
+        y1 = next_y1
+        sum = sum + y1
+        n = n + 1
+        if n > num_values { break }
+        let next_x2: i64 = 3 * x2 + 4 * y2 + 5
+        let next_y2: i64 = 2 * x2 + 3 * y2 + 3
+        x2 = next_x2
+        y2 = next_y2
+        sum = sum + y2
+        n = n + 1
+    }
+    printf("%lld\n", sum)
+    return 0
+}

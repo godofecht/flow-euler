@@ -1,0 +1,133 @@
+# Project Euler 516
+# 5-smooth Totients — S(10^12) mod 2^32.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function is_prime(x0: i64) -> i32 {
+    let x: i64 = x0
+    if x % 2 == 0 || x % 3 == 0 || x % 5 == 0 {
+        if x == 2 || x == 3 || x == 5 { return 1 }
+        return 0
+    }
+    let mut i: i64 = 7
+    let mut pos: i32 = 1
+    # wheel deltas
+    while i * i <= x {
+        if x % i == 0 { return 0 }
+        if pos == 0 { i = i + 6 }
+        elif pos == 1 { i = i + 4 }
+        elif pos == 2 { i = i + 2 }
+        elif pos == 3 { i = i + 4 }
+        elif pos == 4 { i = i + 2 }
+        elif pos == 5 { i = i + 4 }
+        elif pos == 6 { i = i + 6 }
+        else { i = i + 2 }
+        pos = (pos + 1) & 7
+    }
+    if x > 1 { return 1 }
+    return 0
+}
+
+function main() -> i32 {
+    let limit: i64 = 1000000000000
+    let hamming: ptr<i64> = calloc(200000, 8)
+    let primes: ptr<i64> = calloc(200000, 8)
+    if hamming == null || primes == null { return 1 }
+    let mut hn: i64 = 0
+    let mut pn: i64 = 0
+    let mut two: i64 = 1
+    while two <= limit {
+        let mut three: i64 = 1
+        while two * three <= limit {
+            let mut five: i64 = 1
+            while two * three * five <= limit {
+                let current: i64 = two * three * five
+                hamming[hn] = current
+                hn = hn + 1
+                if current > 5 && is_prime(current + 1) == 1 {
+                    primes[pn] = current + 1
+                    pn = pn + 1
+                }
+                if five > limit / 5 { break }
+                five = five * 5
+            }
+            if three > limit / 3 { break }
+            three = three * 3
+        }
+        if two > limit / 2 { break }
+        two = two * 2
+    }
+    # sort hamming and primes (insertion / selection is fine for ~few thousand)
+    let mut i: i64 = 0
+    while i < hn {
+        let mut j: i64 = i + 1
+        while j < hn {
+            if hamming[j] < hamming[i] {
+                let t: i64 = hamming[i]
+                hamming[i] = hamming[j]
+                hamming[j] = t
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    i = 0
+    while i < pn {
+        let mut j2: i64 = i + 1
+        while j2 < pn {
+            if primes[j2] < primes[i] {
+                let t2: i64 = primes[i]
+                primes[i] = primes[j2]
+                primes[j2] = t2
+            }
+            j2 = j2 + 1
+        }
+        i = i + 1
+    }
+
+    # stack for DFS: (number, largest_prime)
+    let stack_n: ptr<i64> = calloc(200000, 8)
+    let stack_p: ptr<i64> = calloc(200000, 8)
+    if stack_n == null || stack_p == null { return 1 }
+    let mut sp: i64 = 0
+    stack_n[0] = 1
+    stack_p[0] = 1
+    sp = 1
+    let mut total: i64 = 0
+    while sp > 0 {
+        sp = sp - 1
+        let number: i64 = stack_n[sp]
+        let largest_prime: i64 = stack_p[sp]
+        let mut xi: i64 = 0
+        while xi < hn {
+            let x: i64 = hamming[xi]
+            if x > limit / number { break }
+            let next_value: i64 = x * number
+            total = total + next_value
+            xi = xi + 1
+        }
+        # find first prime > largest_prime
+        let mut lo: i64 = 0
+        let mut hi: i64 = pn
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if primes[mid] <= largest_prime { lo = mid + 1 } else { hi = mid }
+        }
+        let mut pi: i64 = lo
+        while pi < pn {
+            let prime: i64 = primes[pi]
+            if prime > limit / number { break }
+            stack_n[sp] = prime * number
+            stack_p[sp] = prime
+            sp = sp + 1
+            pi = pi + 1
+        }
+    }
+    total = total & 4294967295
+    printf("%lld\n", total)
+    free(hamming); free(primes); free(stack_n); free(stack_p)
+    return 0
+}

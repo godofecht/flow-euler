@@ -1,0 +1,170 @@
+# Project Euler 368
+# Kempner-like sum over n without 3 equal consecutive digits; 10 decimals.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function pow(base: f64, exp: f64) -> f64
+}
+
+function main() -> i32 {
+    let K: i64 = 20
+    let TAIL_TOL: f64 = 0.0000000000005
+    let MAX_LEN: i64 = 10000
+    let R_BOUND: f64 = 0.991
+
+    let pow10inv: ptr<f64> = calloc(K + 1, 8)
+    let comb: ptr<f64> = calloc((K + 1) * (K + 1), 8)
+    let f1: ptr<f64> = calloc(10 * (K + 1), 8)
+    let f2: ptr<f64> = calloc(10 * (K + 1), 8)
+    let nf1: ptr<f64> = calloc(10 * (K + 1), 8)
+    let nf2: ptr<f64> = calloc(10 * (K + 1), 8)
+    let total: ptr<f64> = calloc(K + 1, 8)
+    if pow10inv == null || comb == null || f1 == null || f2 == null { return 1 }
+    if nf1 == null || nf2 == null || total == null { return 1 }
+
+    let mut j: i64 = 1
+    while j <= K {
+        pow10inv[j] = pow(10.0, 0.0 - (j as f64))
+        j = j + 1
+    }
+
+    j = 1
+    while j <= K {
+        let mut i: i64 = 0
+        while i <= K - j {
+            # C(j+i-1, i)
+            let mut c: f64 = 1.0
+            let mut t: i64 = 1
+            while t <= i {
+                c = c * (((j + i - t) as f64) / (t as f64))
+                t = t + 1
+            }
+            comb[j * (K + 1) + i] = c
+            i = i + 1
+        }
+        j = j + 1
+    }
+
+    let mut d: i64 = 0
+    while d <= 9 {
+        let mut pre: i64 = 10
+        while pre < 100 {
+            let a: i64 = pre / 10
+            let b: i64 = pre % 10
+            if a == b && b == d {
+                pre = pre + 1
+                continue
+            }
+            let x: i64 = pre * 10 + d
+            let inv: f64 = 1.0 / (x as f64)
+            let mut p: f64 = inv
+            let base: i64 = d * (K + 1)
+            j = 1
+            while j <= K {
+                if b == d {
+                    f2[base + j] = f2[base + j] + p
+                } else {
+                    f1[base + j] = f1[base + j] + p
+                }
+                p = p * inv
+                j = j + 1
+            }
+            pre = pre + 1
+        }
+        d = d + 1
+    }
+
+    let mut ans: f64 = 0.0
+    let mut n: i64 = 1
+    while n < 100 {
+        ans = ans + 1.0 / (n as f64)
+        n = n + 1
+    }
+
+    let mut delta: f64 = 0.0
+    d = 0
+    while d <= 9 {
+        delta = delta + f1[d * (K + 1) + 1] + f2[d * (K + 1) + 1]
+        d = d + 1
+    }
+    ans = ans + delta
+
+    let mut length: i64 = 4
+    while length <= MAX_LEN {
+        let mut p: i64 = 1
+        while p <= K {
+            let mut s: f64 = 0.0
+            d = 0
+            while d <= 9 {
+                s = s + f1[d * (K + 1) + p] + f2[d * (K + 1) + p]
+                d = d + 1
+            }
+            total[p] = s
+            p = p + 1
+        }
+
+        # clear nf1, nf2
+        let mut zi: i64 = 0
+        while zi < 10 * (K + 1) {
+            nf1[zi] = 0.0
+            nf2[zi] = 0.0
+            zi = zi + 1
+        }
+
+        d = 0
+        while d <= 9 {
+            let md: f64 = 0.0 - (d as f64) / 10.0
+            let base_d: i64 = d * (K + 1)
+            j = 1
+            while j <= K {
+                let base: f64 = pow10inv[j]
+                let mut pre_pow: f64 = 1.0
+                let mut i: i64 = 0
+                while i <= K - j {
+                    let c: f64 = comb[j * (K + 1) + i] * pre_pow * base
+                    let pwr: i64 = i + j
+                    let f1dp: f64 = f1[base_d + pwr]
+                    nf2[base_d + j] = nf2[base_d + j] + c * f1dp
+                    let excl: f64 = f1dp + f2[base_d + pwr]
+                    nf1[base_d + j] = nf1[base_d + j] + c * (total[pwr] - excl)
+                    pre_pow = pre_pow * md
+                    i = i + 1
+                }
+                j = j + 1
+            }
+            d = d + 1
+        }
+
+        # swap f1/f2 with nf1/nf2 via copy
+        zi = 0
+        while zi < 10 * (K + 1) {
+            f1[zi] = nf1[zi]
+            f2[zi] = nf2[zi]
+            zi = zi + 1
+        }
+
+        delta = 0.0
+        d = 0
+        while d <= 9 {
+            delta = delta + f1[d * (K + 1) + 1] + f2[d * (K + 1) + 1]
+            d = d + 1
+        }
+        ans = ans + delta
+
+        let tail_bound: f64 = delta * (R_BOUND / (1.0 - R_BOUND))
+        if tail_bound < TAIL_TOL { break }
+        length = length + 1
+    }
+
+    printf("%.10f\n", ans)
+
+    free(total)
+    free(nf2)
+    free(nf1)
+    free(f2)
+    free(f1)
+    free(comb)
+    free(pow10inv)
+    return 0
+}

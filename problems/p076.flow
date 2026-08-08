@@ -1,0 +1,26 @@
+# Project Euler 076
+# Ways to write 100 as a sum of ≥2 positive integers (order irrelevant).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let n: i32 = 100
+    let ways: ptr<i64> = calloc((n + 1) as i64, 8)
+    if ways == null { return 1 }
+    ways[0] = 1
+    let mut k: i32 = 1
+    while k < n {
+        let mut x: i32 = k
+        while x <= n {
+            ways[x] = ways[x] + ways[x - k]
+            x = x + 1
+        }
+        k = k + 1
+    }
+    printf("%lld\n", ways[n])
+    free(ways)
+    return 0
+}

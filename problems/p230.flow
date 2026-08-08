@@ -1,0 +1,65 @@
+# Project Euler 230
+# Fibonacci word digits at special indices.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digit_at(A: ptr<i8>, B: ptr<i8>, block: i64, index: i64, fib: ptr<i64>, fibn: i32) -> i32 {
+    let mut idx: i64 = index
+    let mut n: i32 = 0
+    while n < fibn && fib[n] <= idx {
+        n = n + 1
+    }
+    # n is smallest with fib[n] > idx? actually find generation
+    while true {
+        if n == 0 {
+            return (A[idx] - 48) as i32
+        }
+        if n == 1 {
+            return (B[idx] - 48) as i32
+        }
+        if idx < fib[n - 2] {
+            n = n - 2
+        } else {
+            idx = idx - fib[n - 2]
+            n = n - 1
+        }
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let A_str: ptr<i8> = "1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679"
+    let B_str: ptr<i8> = "8214808651328230664709384460955058223172535940812848111745028410270193852110555964462294895493038196"
+    let block: i64 = 100
+    let fib: ptr<i64> = calloc(100, 8)
+    if fib == null { return 1 }
+    fib[0] = block
+    fib[1] = block
+    let mut n: i32 = 2
+    while n < 90 {
+        fib[n] = fib[n - 1] + fib[n - 2]
+        if fib[n] < 0 { break }  # overflow guard
+        n = n + 1
+    }
+    let fibn: i32 = n
+    let mut result: i64 = 0
+    let mut nn: i32 = 17
+    while nn >= 0 {
+        let mut index: i64 = 127 + 19 * (nn as i64)
+        let mut t: i32 = 1
+        while t <= nn {
+            index = index * 7
+            t = t + 1
+        }
+        index = index - 1
+        let d: i32 = digit_at(A_str, B_str, block, index, fib, fibn)
+        result = result * 10 + (d as i64)
+        nn = nn - 1
+    }
+    printf("%lld\n", result)
+    free(fib)
+    return 0
+}

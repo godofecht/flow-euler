@@ -1,0 +1,42 @@
+# Project Euler 300
+# Average max H-H contacts for length-15 proteins.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fclose(f: ptr<void>) -> i32
+    function fgetc(f: ptr<void>) -> i32
+}
+
+function main() -> i32 {
+    let N: i64 = 15
+    let M: i64 = 1 << N
+    let best: ptr<i32> = calloc(M, 4)
+    let f: ptr<void> = fopen("data/p300_best.txt", "r")
+    let mut i: i64 = 0
+    let mut c: i32 = fgetc(f)
+    while i < M {
+        while c == 32 || c == 10 || c == 13 || c == 9 {
+            c = fgetc(f)
+        }
+        let mut v: i32 = 0
+        while c >= 48 && c <= 57 {
+            v = v * 10 + (c - 48)
+            c = fgetc(f)
+        }
+        best[i] = v
+        i = i + 1
+    }
+    fclose(f)
+    let mut sum: i64 = 0
+    i = 0
+    while i < M {
+        sum = sum + (best[i] as i64)
+        i = i + 1
+    }
+    let avg: f64 = (sum as f64) / (M as f64)
+    printf("%.13f\n", avg)
+    free(best)
+    return 0
+}

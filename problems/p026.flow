@@ -1,0 +1,43 @@
+# Project Euler 026
+# Value of d < 1000 for which 1/d has the longest recurring cycle.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function cycle_len(d: i64) -> i64 {
+    let seen: ptr<i32> = calloc(d, 4)
+    if seen == null {
+        return 0
+    }
+    let mut rem: i64 = 1 % d
+    let mut pos: i32 = 0
+    while rem != 0 && seen[rem] == 0 {
+        seen[rem] = pos + 1   # store pos+1 so 0 means unseen
+        rem = (rem * 10) % d
+        pos = pos + 1
+    }
+    let mut len: i64 = 0
+    if rem != 0 {
+        len = (pos - (seen[rem] - 1)) as i64
+    }
+    free(seen)
+    return len
+}
+
+function main() -> i32 {
+    let mut best_d: i64 = 0
+    let mut best_len: i64 = 0
+    let mut d: i64 = 2
+    while d < 1000 {
+        let len: i64 = cycle_len(d)
+        if len > best_len {
+            best_len = len
+            best_d = d
+        }
+        d = d + 1
+    }
+    printf("%lld\n", best_d)
+    return 0
+}

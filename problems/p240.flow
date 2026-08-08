@@ -1,0 +1,75 @@
+# Project Euler 240
+# Dice top: 20d12, top 10 sum to 70.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut NUM_DICE: i32 = 20
+let mut MAX_POINTS: i32 = 12
+let mut NUM_TOP: i32 = 10
+let mut SUM_TOP: i32 = 70
+let mut FACT: ptr<i64> = null
+let mut DICES: ptr<i32> = null
+
+function count_ways() -> i64 {
+    let how: ptr<i32> = calloc((MAX_POINTS + 1) as i64, 4)
+    let mut i: i32 = 0
+    while i < NUM_DICE {
+        how[DICES[i]] = how[DICES[i]] + 1
+        i = i + 1
+    }
+    let mut result: i64 = FACT[NUM_DICE]
+    i = 1
+    while i <= MAX_POINTS {
+        if how[i] > 1 {
+            result = result / FACT[how[i]]
+        }
+        i = i + 1
+    }
+    free(how)
+    return result
+}
+
+function search(len: i32) -> i64 {
+    if len == NUM_DICE {
+        return count_ways()
+    }
+    if len == NUM_TOP {
+        let mut s: i32 = 0
+        let mut i: i32 = 0
+        while i < NUM_TOP {
+            s = s + DICES[i]
+            i = i + 1
+        }
+        if s != SUM_TOP { return 0 }
+    }
+    let mut max_dice: i32 = MAX_POINTS
+    if len > 0 { max_dice = DICES[len - 1] }
+    let mut result: i64 = 0
+    let mut dice: i32 = 1
+    while dice <= max_dice {
+        DICES[len] = dice
+        result = result + search(len + 1)
+        dice = dice + 1
+    }
+    return result
+}
+
+function main() -> i32 {
+    FACT = calloc((NUM_DICE + 1) as i64, 8)
+    DICES = calloc(NUM_DICE as i64, 4)
+    if FACT == null || DICES == null { return 1 }
+    FACT[0] = 1
+    let mut i: i32 = 1
+    let mut cur: i64 = 1
+    while i <= NUM_DICE {
+        cur = cur * (i as i64)
+        FACT[i] = cur
+        i = i + 1
+    }
+    printf("%lld\n", search(0))
+    free(FACT); free(DICES)
+    return 0
+}

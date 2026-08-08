@@ -1,0 +1,72 @@
+# Project Euler 041
+# Largest n-digit pandigital prime.
+
+function is_prime(n: i64) -> bool {
+    if n < 2 { return false }
+    if n < 4 { return true }
+    if n % 2 == 0 || n % 3 == 0 { return false }
+    let mut i: i64 = 5
+    while i * i <= n {
+        if n % i == 0 || n % (i + 2) == 0 { return false }
+        i = i + 6
+    }
+    return true
+}
+
+function swap(a: ptr<i32>, i: i32, j: i32) -> void {
+    let t: i32 = a[i]
+    a[i] = a[j]
+    a[j] = t
+}
+
+function next_perm(a: ptr<i32>, n: i32) -> bool {
+    # lexicographic next permutation; returns false if finished
+    let mut i: i32 = n - 2
+    while i >= 0 && a[i] >= a[i + 1] {
+        i = i - 1
+    }
+    if i < 0 { return false }
+    let mut j: i32 = n - 1
+    while a[j] <= a[i] {
+        j = j - 1
+    }
+    swap(a, i, j)
+    let mut l: i32 = i + 1
+    let mut r: i32 = n - 1
+    while l < r {
+        swap(a, l, r)
+        l = l + 1
+        r = r - 1
+    }
+    return true
+}
+
+function to_number(a: ptr<i32>, n: i32) -> i64 {
+    let mut v: i64 = 0
+    let mut i: i32 = 0
+    while i < n {
+        v = v * 10 + (a[i] as i64)
+        i = i + 1
+    }
+    return v
+}
+
+function main() -> i32 {
+    # 8- and 9-digit pandigitals are divisible by 3 (digit sum), so max is 7-digit
+    let digits: array<i32, 7> = [7, 6, 5, 4, 3, 2, 1]  # start from largest
+    let mut best: i64 = 0
+    # iterate permutations in descending order by starting high and using prev...
+    # easier: generate all from ascending then track max prime
+    let asc: array<i32, 7> = [1, 2, 3, 4, 5, 6, 7]
+    while true {
+        let v: i64 = to_number(asc, 7)
+        if is_prime(v) && v > best {
+            best = v
+        }
+        if !next_perm(asc, 7) {
+            break
+        }
+    }
+    printf("%lld\n", best)
+    return 0
+}

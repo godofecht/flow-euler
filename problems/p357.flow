@@ -1,0 +1,74 @@
+# Project Euler 357
+# Sum n ≤ 10^8 such that for every divisor d of n, d + n/d is prime.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 100000000
+    let sieve: ptr<i8> = calloc(LIMIT + 2, 1)
+    if sieve == null { return 1 }
+
+    let mut i: i64 = 0
+    while i <= LIMIT + 1 {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    let mut p: i64 = 2
+    while p * p <= LIMIT + 1 {
+        if sieve[p] == 1 {
+            let mut m: i64 = p * p
+            while m <= LIMIT + 1 {
+                sieve[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    let mut total: i64 = 1
+    let mut x: i64 = 2
+    while x <= LIMIT {
+        # n ≡ 2 (mod 4)
+        let mut ok: i32 = 1
+        if sieve[x + 1] == 0 {
+            ok = 0
+        }
+        if ok == 1 {
+            let lim: i64 = isqrt(x)
+            let mut d: i64 = 2
+            while d <= lim {
+                if x % d == 0 {
+                    if sieve[d + x / d] == 0 {
+                        ok = 0
+                        break
+                    }
+                }
+                d = d + 1
+            }
+        }
+        if ok == 1 {
+            total = total + x
+        }
+        x = x + 4
+    }
+
+    printf("%lld\n", total)
+    free(sieve)
+    return 0
+}

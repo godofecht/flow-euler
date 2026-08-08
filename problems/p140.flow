@@ -1,0 +1,23 @@
+# Project Euler 140
+# Sum of the first thirty golden nuggets for modified Fibonacci GF.
+
+function main() -> i32 {
+    # First four nuggets; then n_k = 7*n_{k-2} - n_{k-4} + 7
+    let mut n0: i64 = 2
+    let mut n1: i64 = 5
+    let mut n2: i64 = 21
+    let mut n3: i64 = 42
+    let mut total: i64 = n0 + n1 + n2 + n3
+    let mut k: i32 = 4
+    while k < 30 {
+        let nxt: i64 = 7 * n2 - n0 + 7
+        total = total + nxt
+        n0 = n1
+        n1 = n2
+        n2 = n3
+        n3 = nxt
+        k = k + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

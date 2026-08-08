@@ -1,0 +1,18 @@
+# Project Euler 317
+# Firecracker fragment volume (g=9.81, v=20, h=100), 4dp.
+
+extern {
+    function pow(x: f64, y: f64) -> f64
+}
+
+function main() -> i32 {
+    let pi: f64 = 3.141592653589793238462
+    let g: f64 = 9.81
+    let velocity: f64 = 20.0
+    let height: f64 = 100.0
+    let add: f64 = velocity * velocity / (2.0 * g) + height
+    let factor: f64 = -g / (2.0 * velocity * velocity)
+    let result: f64 = -0.5 * pi * add * add / factor
+    printf("%.4f\n", result)
+    return 0
+}

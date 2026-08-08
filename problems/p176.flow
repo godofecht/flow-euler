@@ -1,0 +1,182 @@
+# Project Euler 176
+# Smallest integer L that is a cathetus of exactly 47547 integer right triangles.
+# With m = L (odd L) or m = L/2 (even L): (tau(m^2)-1)/2 = 47547
+# so tau(m^2) = 95095 = 5*7*11*13*19. Minimize L among even/odd cases.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function ipow(base: i64, exp: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e % 2) == 1 { r = r * b }
+        b = b * b
+        e = e / 2
+    }
+    return r
+}
+
+# Global-ish via heap for DFS state
+# primes[0..11], search for minimal m with product of (2e_i+1) = target
+
+function main() -> i32 {
+    let primes: ptr<i64> = calloc(12, 8)
+    if primes == null { return 1 }
+    primes[0] = 2; primes[1] = 3; primes[2] = 5; primes[3] = 7
+    primes[4] = 11; primes[5] = 13; primes[6] = 17; primes[7] = 19
+    primes[8] = 23; primes[9] = 29; primes[10] = 31; primes[11] = 37
+
+    let target: i64 = 95095
+    # Collect divisors of target
+    let divs: ptr<i64> = calloc(64, 8)
+    if divs == null { free(primes); return 1 }
+    let mut dc: i32 = 0
+    let mut d: i64 = 1
+    while d * d <= target {
+        if target % d == 0 {
+            divs[dc] = d
+            dc = dc + 1
+            if d * d != target {
+                divs[dc] = target / d
+                dc = dc + 1
+            }
+        }
+        d = d + 1
+    }
+    # sort descending for nicer search (simple bubble)
+    let mut i: i32 = 0
+    while i < dc {
+        let mut j: i32 = i + 1
+        while j < dc {
+            if divs[j] > divs[i] {
+                let t: i64 = divs[i]
+                divs[i] = divs[j]
+                divs[j] = t
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    # Iterative DFS via explicit stack of (rem, idx, max_e, cur)
+    # Stack entries as 4 i64s
+    let stack: ptr<i64> = calloc(100000 * 4, 8)
+    if stack == null { free(divs); free(primes); return 1 }
+    let mut sp: i32 = 0
+    # push initial: rem=target, idx=0, max_e=1e9, cur=1
+    stack[0] = target; stack[1] = 0; stack[2] = 1000000000; stack[3] = 1
+    sp = 1
+
+    let mut best_any: i64 = 0
+    while sp > 0 {
+        sp = sp - 1
+        let rem: i64 = stack[sp * 4]
+        let idx: i64 = stack[sp * 4 + 1]
+        let max_e: i64 = stack[sp * 4 + 2]
+        let cur: i64 = stack[sp * 4 + 3]
+        if rem == 1 {
+            if best_any == 0 || cur < best_any { best_any = cur }
+            continue
+        }
+        if idx >= 12 { continue }
+        if best_any != 0 && cur >= best_any { continue }
+        let mut di: i32 = 0
+        while di < dc {
+            let dd: i64 = divs[di]
+            di = di + 1
+            if dd == 1 { continue }
+            if rem % dd != 0 { continue }
+            let e: i64 = (dd - 1) / 2
+            if 2 * e + 1 != dd { continue }
+            if e > max_e { continue }
+            # check overflow / prune
+            if e > 60 { continue }
+            let mut nxt: i64 = cur
+            let mut ok: bool = true
+            let mut ee: i64 = 0
+            while ee < e {
+                if best_any != 0 && nxt > best_any / primes[idx] {
+                    ok = false
+                    break
+                }
+                nxt = nxt * primes[idx]
+                ee = ee + 1
+            }
+            if !ok { continue }
+            if best_any != 0 && nxt >= best_any { continue }
+            stack[sp * 4] = rem / dd
+            stack[sp * 4 + 1] = idx + 1
+            stack[sp * 4 + 2] = e
+            stack[sp * 4 + 3] = nxt
+            sp = sp + 1
+        }
+    }
+
+    # Odd m: start from primes[1..]
+    stack[0] = target; stack[1] = 1; stack[2] = 1000000000; stack[3] = 1
+    sp = 1
+    let mut best_odd: i64 = 0
+    while sp > 0 {
+        sp = sp - 1
+        let rem: i64 = stack[sp * 4]
+        let idx: i64 = stack[sp * 4 + 1]
+        let max_e: i64 = stack[sp * 4 + 2]
+        let cur: i64 = stack[sp * 4 + 3]
+        if rem == 1 {
+            if best_odd == 0 || cur < best_odd { best_odd = cur }
+            continue
+        }
+        if idx >= 12 { continue }
+        if best_odd != 0 && cur >= best_odd { continue }
+        let mut di: i32 = 0
+        while di < dc {
+            let dd: i64 = divs[di]
+            di = di + 1
+            if dd == 1 { continue }
+            if rem % dd != 0 { continue }
+            let e: i64 = (dd - 1) / 2
+            if 2 * e + 1 != dd { continue }
+            if e > max_e { continue }
+            if e > 60 { continue }
+            let mut nxt: i64 = cur
+            let mut ok: bool = true
+            let mut ee: i64 = 0
+            while ee < e {
+                if best_odd != 0 && nxt > best_odd / primes[idx] {
+                    ok = false
+                    break
+                }
+                nxt = nxt * primes[idx]
+                ee = ee + 1
+            }
+            if !ok { continue }
+            if best_odd != 0 && nxt >= best_odd { continue }
+            stack[sp * 4] = rem / dd
+            stack[sp * 4 + 1] = idx + 1
+            stack[sp * 4 + 2] = e
+            stack[sp * 4 + 3] = nxt
+            sp = sp + 1
+        }
+    }
+
+    let mut ans: i64 = 0
+    if best_any % 2 == 1 {
+        ans = best_any
+    } else {
+        let two_m: i64 = 2 * best_any
+        if best_odd != 0 && best_odd < two_m {
+            ans = best_odd
+        } else {
+            ans = two_m
+        }
+    }
+    printf("%lld\n", ans)
+    free(stack)
+    free(divs)
+    free(primes)
+    return 0
+}

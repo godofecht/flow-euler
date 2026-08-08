@@ -1,0 +1,92 @@
+# Project Euler 581
+# 47-smooth Triangular Numbers
+# Sum n where n and n+1 are both 47-smooth (Størmer bound).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function realloc(p: ptr<void>, size: i64) -> ptr<void>
+}
+
+function sum_smooth_indices() -> i64 {
+    let primes: ptr<i64> = calloc(15, 8)
+    if primes == null { return -1 }
+    primes[0] = 2
+    primes[1] = 3
+    primes[2] = 5
+    primes[3] = 7
+    primes[4] = 11
+    primes[5] = 13
+    primes[6] = 17
+    primes[7] = 19
+    primes[8] = 23
+    primes[9] = 29
+    primes[10] = 31
+    primes[11] = 37
+    primes[12] = 41
+    primes[13] = 43
+    primes[14] = 47
+    let k: i64 = 15
+    let limit: i64 = 1109496723126
+
+    let mut cap: i64 = 2000000
+    let mut smooth: ptr<i64> = calloc(cap, 8)
+    if smooth == null { free(primes); return -1 }
+    smooth[0] = 1
+    let mut len: i64 = 1
+
+    let idx: ptr<i64> = calloc(k, 8)
+    let next_vals: ptr<i64> = calloc(k, 8)
+    if idx == null || next_vals == null { return -1 }
+    let mut j: i64 = 0
+    while j < k {
+        next_vals[j] = primes[j]
+        j = j + 1
+    }
+
+    let mut prev: i64 = 1
+    let mut ans: i64 = 0
+
+    while true {
+        let mut m: i64 = next_vals[0]
+        j = 1
+        while j < k {
+            if next_vals[j] < m { m = next_vals[j] }
+            j = j + 1
+        }
+        if m > limit { break }
+
+        if len >= cap {
+            cap = cap * 2
+            smooth = realloc(smooth, cap * 8)
+            if smooth == null { return -1 }
+        }
+        smooth[len] = m
+        len = len + 1
+
+        if m == prev + 1 {
+            ans = ans + prev
+        }
+        prev = m
+
+        j = 0
+        while j < k {
+            if next_vals[j] == m {
+                idx[j] = idx[j] + 1
+                next_vals[j] = primes[j] * smooth[idx[j]]
+            }
+            j = j + 1
+        }
+    }
+
+    free(next_vals)
+    free(idx)
+    free(smooth)
+    free(primes)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", sum_smooth_indices())
+    return 0
+}

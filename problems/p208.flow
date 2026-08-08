@@ -1,0 +1,70 @@
+# Project Euler 208
+# Robot Walks: closed paths of 70 five-degree arcs.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut NUM_VISITED: ptr<i32> = null
+let mut MAX_PER: i32 = 0
+let mut CACHE: ptr<i64> = null
+const UNKNOWN: i64 = 0 - 1
+
+function search(arcs_left: i32, current_arc: i32) -> i64 {
+    if arcs_left == 0 {
+        if current_arc != 0 { return 0 }
+        if NUM_VISITED[0] != NUM_VISITED[1] { return 0 }
+        if NUM_VISITED[2] != NUM_VISITED[3] { return 0 }
+        if NUM_VISITED[0] != NUM_VISITED[2] { return 0 }
+        return 1
+    }
+    let idf: i64 = (MAX_PER + 1) as i64
+    let mut key: i64 = current_arc as i64
+    let mut i: i32 = 0
+    while i < 5 {
+        key = key * idf + (NUM_VISITED[i] as i64)
+        i = i + 1
+    }
+    if CACHE[key] != UNKNOWN {
+        return CACHE[key]
+    }
+    let mut result: i64 = 0
+    let turn_left: i32 = (current_arc + 1) % 5
+    if NUM_VISITED[turn_left] < MAX_PER {
+        NUM_VISITED[turn_left] = NUM_VISITED[turn_left] + 1
+        result = result + search(arcs_left - 1, turn_left)
+        NUM_VISITED[turn_left] = NUM_VISITED[turn_left] - 1
+    }
+    let turn_right: i32 = (current_arc + 4) % 5
+    if NUM_VISITED[turn_right] < MAX_PER {
+        NUM_VISITED[turn_right] = NUM_VISITED[turn_right] + 1
+        result = result + search(arcs_left - 1, turn_right)
+        NUM_VISITED[turn_right] = NUM_VISITED[turn_right] - 1
+    }
+    CACHE[key] = result
+    return result
+}
+
+function main() -> i32 {
+    let num_arcs: i32 = 70
+    MAX_PER = num_arcs / 5
+    let mut size: i64 = 5
+    let mut p: i32 = 0
+    while p < 5 {
+        size = size * ((MAX_PER + 1) as i64)
+        p = p + 1
+    }
+    CACHE = calloc(size, 8)
+    NUM_VISITED = calloc(5, 4)
+    if CACHE == null || NUM_VISITED == null { return 1 }
+    let mut i: i64 = 0
+    while i < size {
+        CACHE[i] = UNKNOWN
+        i = i + 1
+    }
+    printf("%lld\n", search(num_arcs, 0))
+    free(CACHE)
+    free(NUM_VISITED)
+    return 0
+}

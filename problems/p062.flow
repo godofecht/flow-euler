@@ -1,0 +1,96 @@
+# Project Euler 062
+# Smallest cube for which exactly five permutations of its digits are cube.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digit_sig_into(n: i64, sigs: ptr<i8>, row: i32) -> void {
+    let cnt: ptr<i32> = calloc(10, 4)
+    if cnt == null { return }
+    let mut x: i64 = n
+    if x == 0 {
+        cnt[0] = 1
+    }
+    while x > 0 {
+        let d: i32 = (x % 10) as i32
+        cnt[d] = cnt[d] + 1
+        x = x / 10
+    }
+    let mut i: i32 = 0
+    while i < 10 {
+        sigs[row * 10 + i] = cnt[i] as i8
+        i = i + 1
+    }
+    free(cnt)
+}
+
+function sig_eq(sigs: ptr<i8>, a: i32, b: i32) -> bool {
+    let mut i: i32 = 0
+    while i < 10 {
+        if sigs[a * 10 + i] != sigs[b * 10 + i] { return false }
+        i = i + 1
+    }
+    return true
+}
+
+function num_digits(n: i64) -> i32 {
+    if n == 0 { return 1 }
+    let mut c: i32 = 0
+    let mut x: i64 = n
+    while x > 0 {
+        c = c + 1
+        x = x / 10
+    }
+    return c
+}
+
+function main() -> i32 {
+    let limit: i32 = 10000
+    let sigs: ptr<i8> = calloc((limit * 10) as i64, 1)
+    let cubes: ptr<i64> = calloc(limit as i64, 8)
+    let seen: ptr<i8> = calloc(limit as i64, 1)
+    if sigs == null || cubes == null || seen == null { return 1 }
+
+    let mut n: i32 = 1
+    while n < limit {
+        let ni: i64 = n as i64
+        let c: i64 = ni * ni * ni
+        cubes[n] = c
+        digit_sig_into(c, sigs, n)
+        n = n + 1
+    }
+
+    let mut ans: i64 = 0
+    let mut i: i32 = 1
+    while i < limit {
+        if seen[i] != 0 {
+            i = i + 1
+            continue
+        }
+        let digs_i: i32 = num_digits(cubes[i])
+        let mut cnt: i32 = 1
+        let mut j: i32 = i + 1
+        while j < limit {
+            let digs_j: i32 = num_digits(cubes[j])
+            if digs_j > digs_i { break }
+            if sig_eq(sigs, i, j) {
+                cnt = cnt + 1
+                seen[j] = 1
+            }
+            j = j + 1
+        }
+        seen[i] = 1
+        if cnt == 5 {
+            ans = cubes[i]
+            break
+        }
+        i = i + 1
+    }
+    printf("%lld\n", ans)
+    free(seen)
+    free(cubes)
+    free(sigs)
+    return 0
+}

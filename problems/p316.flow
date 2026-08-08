@@ -1,0 +1,77 @@
+# Project Euler 316
+# Sum g(floor(10^16/n)) for n=2..999999 using KMP borders.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function digits_of(n: i64, buf: ptr<i8>) -> i32 {
+    # write decimal digits of n into buf, return length
+    if n == 0 {
+        buf[0] = 48
+        return 1
+    }
+    let tmp: ptr<i8> = calloc(24, 1)
+    let mut len: i32 = 0
+    let mut v: i64 = n
+    while v > 0 {
+        tmp[len] = ((v % 10) as i8) + 48
+        v = v / 10
+        len = len + 1
+    }
+    # reverse into buf
+    let mut i: i32 = 0
+    while i < len {
+        buf[i] = tmp[len - 1 - i]
+        i = i + 1
+    }
+    free(tmp)
+    return len
+}
+
+function g(n: i64) -> i64 {
+    let word: ptr<i8> = calloc(24, 1)
+    let length: i32 = digits_of(n, word)
+    let pi: ptr<i32> = calloc(length as i64, 4)
+    let mut matched: i32 = 0
+    let mut i: i32 = 1
+    while i < length {
+        while matched > 0 && word[i] != word[matched] {
+            matched = pi[matched - 1]
+        }
+        if word[i] == word[matched] {
+            matched = matched + 1
+        }
+        pi[i] = matched
+        i = i + 1
+    }
+    let mut expected_end: i64 = 0
+    let mut border: i32 = length
+    while border > 0 {
+        # POW10[border]
+        let mut p: i64 = 1
+        let mut e: i32 = 0
+        while e < border {
+            p = p * 10
+            e = e + 1
+        }
+        expected_end = expected_end + p
+        border = pi[border - 1]
+    }
+    let ans: i64 = expected_end - (length as i64) + 1
+    free(word); free(pi)
+    return ans
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let divider: i64 = 10000000000000000
+    let mut n: i64 = 2
+    while n <= 999999 {
+        total = total + g(divider / n)
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

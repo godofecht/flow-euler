@@ -1,0 +1,36 @@
+# Project Euler 085
+# Nearest to two million rectangles in a grid; return area of that grid.
+
+function rects(m: i64, n: i64) -> i64 {
+    return m * (m + 1) / 2 * n * (n + 1) / 2
+}
+
+function abs64(x: i64) -> i64 {
+    if x < 0 { return 0 - x }
+    return x
+}
+
+function main() -> i32 {
+    let target: i64 = 2000000
+    let mut best_diff: i64 = target
+    let mut best_area: i64 = 0
+    let mut m: i64 = 1
+    while m < 2000 {
+        let mut n: i64 = 1
+        while n <= m {
+            let r: i64 = rects(m, n)
+            let d: i64 = abs64(r - target)
+            if d < best_diff {
+                best_diff = d
+                best_area = m * n
+            }
+            if r > target + best_diff {
+                break
+            }
+            n = n + 1
+        }
+        m = m + 1
+    }
+    printf("%lld\n", best_area)
+    return 0
+}

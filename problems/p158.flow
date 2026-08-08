@@ -1,0 +1,38 @@
+# Project Euler 158
+# Max over n of p(n): strings of length n from 26 letters with exactly one
+# character lexicographically after its left neighbour.
+
+function choose(n0: i64, k0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut result: i64 = 1
+    let mut inv: i64 = 1
+    while inv <= k0 {
+        result = result * n / inv
+        n = n - 1
+        inv = inv + 1
+    }
+    return result
+}
+
+function count(n: i64, alphabet: i64) -> i64 {
+    if n > alphabet { return 0 }
+    let mut result: i64 = 0
+    let mut i: i64 = 1
+    while i < n {
+        result = result + choose(n, i) - 1
+        i = i + 1
+    }
+    return result * choose(alphabet, n)
+}
+
+function main() -> i32 {
+    let mut best: i64 = 0
+    let mut i: i64 = 2
+    while i <= 26 {
+        let cur: i64 = count(i, 26)
+        if cur > best { best = cur }
+        i = i + 1
+    }
+    printf("%lld\n", best)
+    return 0
+}

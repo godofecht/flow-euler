@@ -1,0 +1,307 @@
+# Project Euler 355
+# Maximal coprime subset sum Co(200000) via min-cost max-flow matching.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let N: i64 = 200000
+    let sieve: ptr<i8> = calloc(N + 1, 1)
+    let primes: ptr<i32> = calloc(N / 5 + 10, 4)
+    let mut pc: i64 = 0
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut i: i64 = 2
+    while i <= N {
+        if sieve[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            let mut j: i64 = i * i
+            while j <= N {
+                sieve[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let vpow: ptr<i32> = calloc(N + 1, 4)
+    let mut baseline: i64 = 1
+    let mut pi: i64 = 0
+    while pi < pc {
+        let p: i64 = primes[pi] as i64
+        let mut x: i64 = p
+        while x * p <= N { x = x * p }
+        vpow[p] = x as i32
+        baseline = baseline + x
+        pi = pi + 1
+    }
+
+    let sq: i64 = isqrt(N)
+    let small: ptr<i32> = calloc(pc, 4)
+    let big: ptr<i32> = calloc(pc, 4)
+    let mut sc: i64 = 0
+    let mut bc: i64 = 0
+    pi = 0
+    while pi < pc {
+        let p: i64 = primes[pi] as i64
+        if p <= sq {
+            small[sc] = p as i32
+            sc = sc + 1
+        } elif p <= N / 2 {
+            big[bc] = p as i32
+            bc = bc + 1
+        }
+        pi = pi + 1
+    }
+
+    if sc == 0 || bc == 0 {
+        printf("%lld\n", baseline)
+        return 0
+    }
+
+    # Precompute power lists for small primes
+    let spow_start: ptr<i32> = calloc(sc + 1, 4)
+    let spow_vals: ptr<i32> = calloc(sc * 20, 4)
+    let mut spow_n: i64 = 0
+    let mut si: i64 = 0
+    while si < sc {
+        spow_start[si] = spow_n as i32
+        let p: i64 = small[si] as i64
+        let mut x: i64 = p
+        while true {
+            spow_vals[spow_n] = x as i32
+            spow_n = spow_n + 1
+            if x > N / p { break }
+            x = x * p
+        }
+        si = si + 1
+    }
+    spow_start[sc] = spow_n as i32
+
+    # Collect positive-gain edges
+    let e_i: ptr<i32> = calloc(sc * bc + 1, 4)
+    let e_j: ptr<i32> = calloc(sc * bc + 1, 4)
+    let e_g: ptr<i32> = calloc(sc * bc + 1, 4)
+    let mut ec: i64 = 0
+    let mut max_gain: i64 = 0
+    let mut j: i64 = 0
+    while j < bc {
+        let q: i64 = big[j] as i64
+        let limit: i64 = N / q
+        si = 0
+        while si < sc {
+            let p: i64 = small[si] as i64
+            if p > limit { break }
+            let a0: i64 = spow_start[si] as i64
+            let a1: i64 = spow_start[si + 1] as i64
+            let mut pa: i64 = spow_vals[a1 - 1] as i64
+            if pa > limit {
+                let mut t: i64 = a1 - 1
+                while t >= a0 {
+                    let val: i64 = spow_vals[t] as i64
+                    if val <= limit {
+                        pa = val
+                        break
+                    }
+                    t = t - 1
+                }
+            }
+            let m: i64 = pa * q
+            let gain: i64 = m - (vpow[p] as i64) - q
+            if gain > 0 {
+                e_i[ec] = si as i32
+                e_j[ec] = j as i32
+                e_g[ec] = gain as i32
+                ec = ec + 1
+                if gain > max_gain { max_gain = gain }
+            }
+            si = si + 1
+        }
+        j = j + 1
+    }
+
+    if max_gain == 0 {
+        printf("%lld\n", baseline)
+        return 0
+    }
+
+    let C: i64 = max_gain
+    # Nodes: 0=SRC, 1..sc=small, sc+1..sc+bc=big, sc+bc+1=SNK
+    let SRC: i64 = 0
+    let off_s: i64 = 1
+    let off_b: i64 = off_s + sc
+    let SNK: i64 = off_b + bc
+    let nn: i64 = SNK + 1
+
+    # Edges: each logical edge makes 2 directed. Estimate capacity.
+    let max_edges: i64 = (sc * 2 + bc + ec) * 2 + 10
+    let eto: ptr<i32> = calloc(max_edges, 4)
+    let ecap: ptr<i32> = calloc(max_edges, 4)
+    let ecost: ptr<i32> = calloc(max_edges, 4)
+    let erev: ptr<i32> = calloc(max_edges, 4)
+    let enext: ptr<i32> = calloc(max_edges, 4)
+    let head: ptr<i32> = calloc(nn, 4)
+    let mut ei: i64 = 0
+    let mut u: i64 = 0
+    while u < nn {
+        head[u] = -1
+        u = u + 1
+    }
+
+    # helper via inline add
+    # add_edge fr -> dst
+    # We'll add in a loop below.
+
+    si = 0
+    while si < sc {
+        # SRC -> small
+        let fr: i64 = SRC
+        let dst: i64 = off_s + si
+        eto[ei] = dst as i32; ecap[ei] = 1; ecost[ei] = 0; erev[ei] = (ei + 1) as i32; enext[ei] = head[fr]; head[fr] = ei as i32; ei = ei + 1
+        eto[ei] = fr as i32; ecap[ei] = 0; ecost[ei] = 0; erev[ei] = (ei - 1) as i32; enext[ei] = head[dst]; head[dst] = ei as i32; ei = ei + 1
+        # small -> SNK cost C
+        let fr2: i64 = dst
+        let dst2: i64 = SNK
+        eto[ei] = dst2 as i32; ecap[ei] = 1; ecost[ei] = C as i32; erev[ei] = (ei + 1) as i32; enext[ei] = head[fr2]; head[fr2] = ei as i32; ei = ei + 1
+        eto[ei] = fr2 as i32; ecap[ei] = 0; ecost[ei] = (0 - C) as i32; erev[ei] = (ei - 1) as i32; enext[ei] = head[dst2]; head[dst2] = ei as i32; ei = ei + 1
+        si = si + 1
+    }
+    j = 0
+    while j < bc {
+        let fr: i64 = off_b + j
+        let dst: i64 = SNK
+        eto[ei] = dst as i32; ecap[ei] = 1; ecost[ei] = 0; erev[ei] = (ei + 1) as i32; enext[ei] = head[fr]; head[fr] = ei as i32; ei = ei + 1
+        eto[ei] = fr as i32; ecap[ei] = 0; ecost[ei] = 0; erev[ei] = (ei - 1) as i32; enext[ei] = head[dst]; head[dst] = ei as i32; ei = ei + 1
+        j = j + 1
+    }
+    let mut e: i64 = 0
+    while e < ec {
+        let fr: i64 = off_s + (e_i[e] as i64)
+        let dst: i64 = off_b + (e_j[e] as i64)
+        let cost: i64 = C - (e_g[e] as i64)
+        eto[ei] = dst as i32; ecap[ei] = 1; ecost[ei] = cost as i32; erev[ei] = (ei + 1) as i32; enext[ei] = head[fr]; head[fr] = ei as i32; ei = ei + 1
+        eto[ei] = fr as i32; ecap[ei] = 0; ecost[ei] = (0 - cost) as i32; erev[ei] = (ei - 1) as i32; enext[ei] = head[dst]; head[dst] = ei as i32; ei = ei + 1
+        e = e + 1
+    }
+
+    let pot: ptr<i64> = calloc(nn, 8)
+    let dist: ptr<i64> = calloc(nn, 8)
+    let prev_v: ptr<i32> = calloc(nn, 4)
+    let prev_e: ptr<i32> = calloc(nn, 4)
+    let heap_d: ptr<i64> = calloc(nn * 4, 8)
+    let heap_v: ptr<i32> = calloc(nn * 4, 4)
+    let INF: i64 = 1000000000000000
+    let mut flow: i64 = 0
+    let mut cost_total: i64 = 0
+    let need: i64 = sc
+
+    while flow < need {
+        u = 0
+        while u < nn {
+            dist[u] = INF
+            u = u + 1
+        }
+        dist[SRC] = 0
+        heap_d[0] = 0
+        heap_v[0] = SRC as i32
+        let mut hs: i64 = 1
+        while hs > 0 {
+            let dcur: i64 = heap_d[0]
+            let v: i64 = heap_v[0] as i64
+            hs = hs - 1
+            if hs > 0 {
+                heap_d[0] = heap_d[hs]
+                heap_v[0] = heap_v[hs]
+                let mut idx: i64 = 0
+                while true {
+                    let l: i64 = 2 * idx + 1
+                    let r: i64 = l + 1
+                    let mut smallest: i64 = idx
+                    if l < hs && heap_d[l] < heap_d[smallest] { smallest = l }
+                    if r < hs && heap_d[r] < heap_d[smallest] { smallest = r }
+                    if smallest == idx { break }
+                    let td: i64 = heap_d[idx]
+                    let tv: i32 = heap_v[idx]
+                    heap_d[idx] = heap_d[smallest]
+                    heap_v[idx] = heap_v[smallest]
+                    heap_d[smallest] = td
+                    heap_v[smallest] = tv
+                    idx = smallest
+                }
+            }
+            if dcur != dist[v] { continue }
+            let mut ed: i32 = head[v]
+            while ed != -1 {
+                if ecap[ed] > 0 {
+                    let w: i64 = eto[ed] as i64
+                    let nd: i64 = dcur + (ecost[ed] as i64) + pot[v] - pot[w]
+                    if nd < dist[w] {
+                        dist[w] = nd
+                        prev_v[w] = v as i32
+                        prev_e[w] = ed
+                        # push
+                        let mut idx: i64 = hs
+                        heap_d[idx] = nd
+                        heap_v[idx] = w as i32
+                        hs = hs + 1
+                        while idx > 0 {
+                            let par: i64 = (idx - 1) / 2
+                            if heap_d[par] <= heap_d[idx] { break }
+                            let td: i64 = heap_d[par]
+                            let tv: i32 = heap_v[par]
+                            heap_d[par] = heap_d[idx]
+                            heap_v[par] = heap_v[idx]
+                            heap_d[idx] = td
+                            heap_v[idx] = tv
+                            idx = par
+                        }
+                    }
+                }
+                ed = enext[ed]
+            }
+        }
+        if dist[SNK] >= INF { break }
+        u = 0
+        while u < nn {
+            if dist[u] < INF { pot[u] = pot[u] + dist[u] }
+            u = u + 1
+        }
+        let mut add: i64 = need - flow
+        let mut v: i64 = SNK
+        while v != SRC {
+            let pv: i64 = prev_v[v] as i64
+            let pe: i64 = prev_e[v] as i64
+            if (ecap[pe] as i64) < add { add = ecap[pe] as i64 }
+            v = pv
+        }
+        v = SNK
+        while v != SRC {
+            let pv: i64 = prev_v[v] as i64
+            let pe: i64 = prev_e[v] as i64
+            ecap[pe] = (ecap[pe] as i64 - add) as i32
+            let rv: i64 = erev[pe] as i64
+            ecap[rv] = (ecap[rv] as i64 + add) as i32
+            cost_total = cost_total + add * (ecost[pe] as i64)
+            v = pv
+        }
+        flow = flow + add
+    }
+
+    let total_gain: i64 = C * sc - cost_total
+    printf("%lld\n", baseline + total_gain)
+    return 0
+}

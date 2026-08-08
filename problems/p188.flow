@@ -1,0 +1,86 @@
+# Project Euler 188
+# Last 8 digits of 1777↑↑1855.
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function carmichael(n: i64) -> i64 {
+    # λ(n) for n = 2^a * odd
+    let mut m: i64 = n
+    let mut lam: i64 = 1
+    if m % 2 == 0 {
+        let mut a: i64 = 0
+        while m % 2 == 0 {
+            m = m / 2
+            a = a + 1
+        }
+        if a == 1 { lam = 1 }
+        elif a == 2 { lam = 2 }
+        else {
+            let mut t: i64 = 1
+            let mut i: i64 = 0
+            while i < a - 2 {
+                t = t * 2
+                i = i + 1
+            }
+            lam = t
+        }
+    }
+    let mut p: i64 = 3
+    while p * p <= m {
+        if m % p == 0 {
+            let mut pk: i64 = 1
+            while m % p == 0 {
+                m = m / p
+                pk = pk * p
+            }
+            let phi_pk: i64 = pk - pk / p
+            # lcm(lam, phi_pk)
+            lam = lam / gcd(lam, phi_pk) * phi_pk
+        }
+        p = p + 2
+    }
+    if m > 1 {
+        let phi_m: i64 = m - 1
+        lam = lam / gcd(lam, phi_m) * phi_m
+    }
+    return lam
+}
+
+function tower(a: i64, h: i64, mod: i64) -> i64 {
+    if mod == 1 { return 0 }
+    if h == 1 { return a % mod }
+    if h == 2 { return modpow(a, a, mod) }
+    let lam: i64 = carmichael(mod)
+    let e: i64 = tower(a, h - 1, lam)
+    return modpow(a, e, mod)
+}
+
+function main() -> i32 {
+    # Totient chain for 10^8 is short; height 1855 collapses quickly.
+    # Cap height: once mod's carmichael chain depth < h, same result.
+    let mut h: i64 = 1855
+    if h > 40 { h = 40 }  # safe: λ-chain of 10^8 << 40
+    printf("%lld\n", tower(1777, h, 100000000))
+    return 0
+}

@@ -1,0 +1,69 @@
+# Project Euler 570
+# Snowflakes
+# G(n)=6*gcd(2*4^(n-2)-3^(n-2), 7n+3); sum G(3)..G(10^7).
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    if base < 0 { base = base + mod }
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            result = ((result as i128) * (base as i128) % (mod as i128)) as i64
+        }
+        base = ((base as i128) * (base as i128) % (mod as i128)) as i64
+        exp = exp >> 1
+    }
+    return result
+}
+
+function sum_G(N: i64) -> i64 {
+    let mut total_d: i64 = 0
+    let mut n: i64 = 4
+    while n <= N {
+        let m: i64 = 7 * n + 3
+        let inv3: i64 = (2 * m + 1) / 3
+        let b: i64 = (4 * inv3) % m
+        let t: i64 = modpow(b, n - 2, m)
+        let x: i64 = (2 * t - 1) % m
+        if x < 0 { total_d = total_d + gcd(x + m, m) } else { total_d = total_d + gcd(x, m) }
+        n = n + 3
+    }
+    n = 5
+    while n <= N {
+        let m: i64 = 7 * n + 3
+        let inv3: i64 = (m + 1) / 3
+        let b: i64 = (4 * inv3) % m
+        let t: i64 = modpow(b, n - 2, m)
+        let x: i64 = (2 * t - 1) % m
+        if x < 0 { total_d = total_d + gcd(x + m, m) } else { total_d = total_d + gcd(x, m) }
+        n = n + 3
+    }
+    n = 3
+    while n <= N {
+        let m: i64 = 7 * n + 3
+        let mut x: i64 = (2 * modpow(4, n - 2, m) - modpow(3, n - 2, m)) % m
+        if x < 0 { x = x + m }
+        total_d = total_d + gcd(x, m)
+        n = n + 3
+    }
+    return 6 * total_d
+}
+
+function main() -> i32 {
+    printf("%lld\n", sum_G(10000000))
+    return 0
+}

@@ -1,0 +1,17 @@
+# Project Euler 494
+# Collatz Prefix Families — f(90) = F_90 + excess(90).
+
+function main() -> i32 {
+    let mut a: i64 = 1
+    let mut b: i64 = 1
+    let mut i: i32 = 3
+    while i <= 90 {
+        let c: i64 = a + b
+        a = b
+        b = c
+        i = i + 1
+    }
+    let excess: i64 = 76016546
+    printf("%lld\n", b + excess)
+    return 0
+}

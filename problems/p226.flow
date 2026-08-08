@@ -1,0 +1,73 @@
+# Project Euler 226
+# Blancmange curve vs circle intersection area.
+
+extern {
+    function sqrt(x: f64) -> f64
+    function floor(x: f64) -> f64
+    function fabs(x: f64) -> f64
+    function pow(x: f64, y: f64) -> f64
+}
+
+const EPSILON: f64 = 0.00000001
+
+function s_curve(x: f64) -> f64 {
+    let mut result: f64 = 0.0
+    let mut n: i32 = 0
+    while true {
+        let power: f64 = pow(2.0, n as f64)
+        let parameter: f64 = power * x
+        let mut s_val: f64 = parameter - floor(parameter)
+        if s_val > 0.5 { s_val = 1.0 - s_val }
+        let add: f64 = s_val / power
+        result = result + add
+        if add < EPSILON { return result }
+        n = n + 1
+    }
+    return result
+}
+
+function find_intersection(cx: f64, cy: f64, radius: f64, x0: f64, step0: f64) -> f64 {
+    let mut x: f64 = x0
+    let mut step: f64 = step0
+    while true {
+        let y: f64 = s_curve(x)
+        let dx: f64 = x - cx
+        let dy: f64 = y - cy
+        let distance: f64 = sqrt(dx * dx + dy * dy)
+        if fabs(distance - radius) < EPSILON { return x }
+        let mut turn: bool = false
+        if distance < radius {
+            if dx > 0.0 && step < 0.0 { turn = true }
+            if dx < 0.0 && step > 0.0 { turn = true }
+        } else {
+            if dx > 0.0 && step > 0.0 { turn = true }
+            if dx < 0.0 && step < 0.0 { turn = true }
+        }
+        if turn { step = 0.0 - step / 2.0 }
+        x = x + step
+    }
+    return x
+}
+
+function integrate(cx: f64, cy: f64, radius: f64, from_x: f64, to_x: f64, step: f64) -> f64 {
+    let mut result: f64 = 0.0
+    let mut x: f64 = from_x
+    while x <= to_x {
+        let upper: f64 = s_curve(x)
+        let lower: f64 = cy - sqrt(radius * radius - (x - cx) * (x - cx))
+        result = result + (upper - lower) * step
+        x = x + step
+    }
+    return result
+}
+
+function main() -> i32 {
+    let cx: f64 = 0.25
+    let cy: f64 = 0.5
+    let radius: f64 = 0.25
+    let from_x: f64 = find_intersection(cx, cy, radius, cx, 0.0 - 0.1)
+    let to_x: f64 = find_intersection(cx, cy, radius, cx, 0.1)
+    let area: f64 = integrate(cx, cy, radius, from_x, to_x, 0.00001)
+    printf("%.8f\n", area)
+    return 0
+}

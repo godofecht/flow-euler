@@ -1,0 +1,189 @@
+# Project Euler 547
+# Distance of Random Points Within Hollow Square Laminae — S(40).
+
+extern {
+    function sqrt(x: f64) -> f64
+    function log(x: f64) -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 40
+
+function iabs(x: i64) -> i64 {
+    if x < 0 { return -x }
+    return x
+}
+
+function asinh_f(x: f64) -> f64 {
+    return log(x + sqrt(x * x + 1.0))
+}
+
+function A_pos(a: f64, b: f64) -> f64 {
+    if a == 0.0 || b == 0.0 { return 0.0 }
+    let r: f64 = sqrt(a * a + b * b)
+    return (2.0 * a * b * r + a * a * a * asinh_f(b / a) + b * b * b * asinh_f(a / b)) / 6.0
+}
+
+function build_tables(max_n: i64, A: ptr<f64>, F3: ptr<f64>, P5: ptr<f64>, off: i64) -> void {
+    let size: i64 = 2 * max_n + 1
+    let mut x: i64 = -max_n
+    while x <= max_n {
+        let mut sx: f64 = 1.0
+        if x < 0 { sx = -1.0 }
+        let ax: f64 = iabs(x) as f64
+        let mut y: i64 = -max_n
+        while y <= max_n {
+            if x == 0 || y == 0 {
+                A[x + off + (y + off) * size] = 0.0
+            } else {
+                let mut sy: f64 = 1.0
+                if y < 0 { sy = -1.0 }
+                let by: f64 = iabs(y) as f64
+                A[x + off + (y + off) * size] = sx * sy * A_pos(ax, by)
+            }
+            y = y + 1
+        }
+        x = x + 1
+    }
+    let mut a: i64 = 0
+    while a <= max_n {
+        let a2: f64 = (a * a) as f64
+        let a4: f64 = a2 * a2
+        y = -max_n
+        while y <= max_n {
+            if a == 0 {
+                let yf: f64 = y as f64
+                let ay: f64 = iabs(y) as f64
+                F3[a * size + (y + off)] = yf * ay * ay / 4.0
+            } else {
+                let yf: f64 = y as f64
+                let r: f64 = sqrt(a2 + yf * yf)
+                let yy: f64 = yf * yf
+                F3[a * size + (y + off)] = (yf * r * (2.0 * yy + 5.0 * a2) + 3.0 * a4 * asinh_f(yf / (a as f64))) / 8.0
+            }
+            y = y + 1
+        }
+        a = a + 1
+    }
+    a = 0
+    while a <= max_n {
+        let aa: f64 = (a * a) as f64
+        let mut b: i64 = 0
+        while b <= max_n {
+            let bb: f64 = (b * b) as f64
+            P5[a * (max_n + 1) + b] = (aa + bb) * sqrt(aa + bb)
+            b = b + 1
+        }
+        a = a + 1
+    }
+}
+
+function I0(x0: i64, x1: i64, y0: i64, y1: i64, A: ptr<f64>, off: i64, size: i64) -> f64 {
+    return A[x1 + off + (y1 + off) * size] - A[x0 + off + (y1 + off) * size]
+        - A[x1 + off + (y0 + off) * size] + A[x0 + off + (y0 + off) * size]
+}
+
+function Ix(x0: i64, x1: i64, y0: i64, y1: i64, F3: ptr<f64>, off: i64, size: i64) -> f64 {
+    let a1: i64 = iabs(x1)
+    let a0: i64 = iabs(x0)
+    return ((F3[a1 * size + (y1 + off)] - F3[a1 * size + (y0 + off)])
+        - (F3[a0 * size + (y1 + off)] - F3[a0 * size + (y0 + off)])) / 3.0
+}
+
+function Iy(x0: i64, x1: i64, y0: i64, y1: i64, F3: ptr<f64>, off: i64, size: i64) -> f64 {
+    return Ix(y0, y1, x0, x1, F3, off, size)
+}
+
+function Ixy(x0: i64, x1: i64, y0: i64, y1: i64, P5: ptr<f64>, max_n: i64) -> f64 {
+    let ax1: i64 = iabs(x1)
+    let ax0: i64 = iabs(x0)
+    let ay1: i64 = iabs(y1)
+    let ay0: i64 = iabs(y0)
+    return (P5[ax1 * (max_n + 1) + ay1] - P5[ax0 * (max_n + 1) + ay1]
+        - P5[ax1 * (max_n + 1) + ay0] + P5[ax0 * (max_n + 1) + ay0]) / 15.0
+}
+
+function seg_term(x0: i64, x1: i64, mx: f64, cx: f64,
+                  y0: i64, y1: i64, my: f64, cy: f64,
+                  A: ptr<f64>, F3: ptr<f64>, P5: ptr<f64>, off: i64, size: i64, max_n: i64) -> f64 {
+    let i0: f64 = I0(x0, x1, y0, y1, A, off, size)
+    let mut term: f64 = cx * cy * i0
+    if mx != 0.0 { term = term + mx * cy * Ix(x0, x1, y0, y1, F3, off, size) }
+    if my != 0.0 { term = term + cx * my * Iy(x0, x1, y0, y1, F3, off, size) }
+    if mx != 0.0 && my != 0.0 { term = term + mx * my * Ixy(x0, x1, y0, y1, P5, max_n) }
+    return term
+}
+
+function cross_integral(outer_w: i64, outer_h: i64, inner_w: i64, inner_h: i64, left: i64, bottom: i64,
+                        A: ptr<f64>, F3: ptr<f64>, P5: ptr<f64>, off: i64, size: i64, max_n: i64) -> f64 {
+    let right: i64 = outer_w - left - inner_w
+    let mut total: f64 = 0.0
+    let a0: i64 = -(left + inner_w)
+    let a1: i64 = -left
+    if a0 != a1 {
+        total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, -(bottom + inner_h), -bottom, 1.0, (bottom + inner_h) as f64, A, F3, P5, off, size, max_n)
+        total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, -bottom, right, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
+        total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, right, outer_w - left, -1.0, (outer_w - left) as f64, A, F3, P5, off, size, max_n)
+    }
+    total = total + seg_term(-left, right, 0.0, inner_h as f64, -(bottom + inner_h), -bottom, 1.0, (bottom + inner_h) as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(-left, right, 0.0, inner_h as f64, -bottom, right, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(-left, right, 0.0, inner_h as f64, right, outer_w - left, -1.0, (outer_w - left) as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, -(bottom + inner_h), -bottom, 1.0, (bottom + inner_h) as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, -bottom, right, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, right, outer_w - left, -1.0, (outer_w - left) as f64, A, F3, P5, off, size, max_n)
+    return total
+}
+
+function solve_S(n: i64) -> f64 {
+    let off: i64 = n
+    let size: i64 = 2 * n + 1
+    let A: ptr<f64> = calloc(size * size, 8)
+    let F3: ptr<f64> = calloc((n + 1) * size, 8)
+    let P5: ptr<f64> = calloc((n + 1) * (n + 1), 8)
+    if A == null || F3 == null || P5 == null { return 0.0 }
+    build_tables(n, A, F3, P5, off)
+    let I_outer: f64 = cross_integral(n, n, n, n, 0, 0, A, F3, P5, off, size, n)
+    let I_hole: ptr<f64> = calloc(n * n, 8)
+    if I_hole == null { free(A); free(F3); free(P5); return 0.0 }
+    let mut w: i64 = 1
+    while w < n - 1 {
+        let mut h: i64 = 1
+        while h < n - 1 {
+            I_hole[w * n + h] = cross_integral(w, h, w, h, 0, 0, A, F3, P5, off, size, n)
+            h = h + 1
+        }
+        w = w + 1
+    }
+    let mut S_total: f64 = 0.0
+    w = 1
+    while w < n - 1 {
+        h = 1
+        while h < n - 1 {
+            let area: f64 = (n * n - w * h) as f64
+            let inv_area2: f64 = 1.0 / (area * area)
+            let Ih: f64 = I_hole[w * n + h]
+            let mut left: i64 = 1
+            while left < n - w {
+                let mut bottom: i64 = 1
+                while bottom < n - h {
+                    let I_cross: f64 = cross_integral(n, n, w, h, left, bottom, A, F3, P5, off, size, n)
+                    let I_region: f64 = I_outer - 2.0 * I_cross + Ih
+                    S_total = S_total + I_region * inv_area2
+                    bottom = bottom + 1
+                }
+                left = left + 1
+            }
+            h = h + 1
+        }
+        w = w + 1
+    }
+    free(A); free(F3); free(P5); free(I_hole)
+    return S_total
+}
+
+function main() -> i32 {
+    let ans: f64 = solve_S(N)
+    printf("%.4f\n", ans)
+    return 0
+}

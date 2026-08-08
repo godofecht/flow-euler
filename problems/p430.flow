@@ -1,0 +1,15 @@
+# Project Euler 430
+# E(10^10, 4000) expected white disks after range flips.
+
+extern {
+    function pow(x: f64, y: f64) -> f64
+}
+
+function main() -> i32 {
+    let N: f64 = 10000000000.0
+    let M: f64 = 4000.0
+    # E = N/2 + N/(2(2M+1)) - M(2N-1)/(2 N (2M-1))
+    let ans: f64 = N / 2.0 + N / (2.0 * (2.0 * M + 1.0)) - (M * (2.0 * N - 1.0)) / (2.0 * N * (2.0 * M - 1.0))
+    printf("%.2f\n", ans)
+    return 0
+}

@@ -1,0 +1,43 @@
+# Project Euler 017
+# Letters used writing 1..1000 in British English (no spaces/hyphens).
+
+function letters_under_100(n: i32) -> i32 {
+    # 1..19
+    let ones: array<i32, 20> = [
+        0, 3, 3, 5, 4, 4, 3, 5, 5, 4,
+        3, 6, 6, 8, 8, 7, 7, 9, 8, 8
+    ]
+    # 20,30,...,90
+    let tens: array<i32, 10> = [0, 0, 6, 6, 5, 5, 5, 7, 6, 6]
+
+    if n < 20 {
+        return ones[n]
+    }
+    return tens[n / 10] + ones[n % 10]
+}
+
+function letters(n: i32) -> i32 {
+    if n == 1000 {
+        return 11  # "onethousand"
+    }
+    let mut total: i32 = 0
+    let hundreds: i32 = n / 100
+    let rest: i32 = n % 100
+    if hundreds > 0 {
+        total = total + letters_under_100(hundreds) + 7  # "hundred"
+        if rest > 0 {
+            total = total + 3  # "and"
+        }
+    }
+    total = total + letters_under_100(rest)
+    return total
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    for n in 1..1001 {
+        total = total + (letters(n) as i64)
+    }
+    printf("%lld\n", total)
+    return 0
+}

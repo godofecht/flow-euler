@@ -1,0 +1,198 @@
+# Project Euler 437
+# Sum of primes p < 10^8 that have a Fibonacci primitive root.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mod_pow(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    if a < 0 { a = a + mod }
+    let mut e: i64 = e0
+    let mut r: i64 = 1
+    while e > 0 {
+        if e % 2 == 1 { r = (r * a) % mod }
+        a = (a * a) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function is_prime_mr(n: i64) -> bool {
+    if n < 2 { return false }
+    let sp: array<i64, 12> = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
+    let mut i: i64 = 0
+    while i < 12 {
+        let p: i64 = sp[i]
+        if n == p { return true }
+        if n % p == 0 { return false }
+        i = i + 1
+    }
+    let mut d: i64 = n - 1
+    let mut s: i64 = 0
+    while d % 2 == 0 { d = d / 2; s = s + 1 }
+    let bases: array<i64, 5> = [2, 3, 5, 7, 11]
+    i = 0
+    while i < 5 {
+        let a: i64 = bases[i]
+        if a % n == 0 { i = i + 1; continue }
+        let mut x: i64 = mod_pow(a, d, n)
+        if x == 1 || x == n - 1 { i = i + 1; continue }
+        let mut ok: bool = false
+        let mut r: i64 = 1
+        while r < s {
+            x = (x * x) % n
+            if x == n - 1 { ok = true; break }
+            r = r + 1
+        }
+        if !ok { return false }
+        i = i + 1
+    }
+    return true
+}
+
+function tonelli(n0: i64, p: i64) -> i64 {
+    let n: i64 = n0 % p
+    if n == 0 { return 0 }
+    if p % 4 == 3 { return mod_pow(n, (p + 1) / 4, p) }
+    let mut q: i64 = p - 1
+    let mut s: i64 = 0
+    while q % 2 == 0 { q = q / 2; s = s + 1 }
+    let mut z: i64 = 2
+    while mod_pow(z, (p - 1) / 2, p) != p - 1 { z = z + 1 }
+    let mut c: i64 = mod_pow(z, q, p)
+    let mut r: i64 = mod_pow(n, (q + 1) / 2, p)
+    let mut t: i64 = mod_pow(n, q, p)
+    let mut m: i64 = s
+    while t != 1 {
+        let mut i: i64 = 1
+        let mut t2: i64 = (t * t) % p
+        while t2 != 1 {
+            t2 = (t2 * t2) % p
+            i = i + 1
+        }
+        let b: i64 = mod_pow(c, 1 << (m - i - 1), p)
+        r = (r * b) % p
+        c = (b * b) % p
+        t = (t * c) % p
+        m = i
+    }
+    return r
+}
+
+function is_prim_root(g: i64, p: i64, factors: ptr<i64>, nf: i64) -> bool {
+    let mut i: i64 = 0
+    while i < nf {
+        let f: i64 = factors[i]
+        if mod_pow(g, (p - 1) / f, p) == 1 { return false }
+        i = i + 1
+    }
+    return true
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 100000000
+    let SQR: i64 = 10000
+    let sieve: ptr<i8> = calloc(SQR + 1, 1)
+    let primes: ptr<i32> = calloc(SQR, 4)
+    if sieve == null || primes == null { return 1 }
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= SQR {
+        if sieve[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            let mut j: i64 = i * i
+            while j <= SQR {
+                sieve[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let factors: ptr<i64> = calloc(64, 8)
+    let mut total: i64 = 5  # prime 5
+    let SEG: i64 = 1000000
+    let seg: ptr<i8> = calloc(SEG, 1)
+    if seg == null { return 1 }
+
+    let mut low: i64 = 2
+    while low < LIMIT {
+        let high: i64 = low + SEG
+        if high > LIMIT { high = LIMIT }
+        let mut t: i64 = 0
+        while t < high - low { seg[t] = 0; t = t + 1 }
+
+        let mut pi: i64 = 0
+        while pi < pc {
+            let p: i64 = primes[pi] as i64
+            let mut start: i64 = ((low + p - 1) / p) * p
+            if start < p * p { start = p * p }
+            let mut x: i64 = start
+            while x < high {
+                seg[x - low] = 1
+                x = x + p
+            }
+            pi = pi + 1
+        }
+
+        let mut n: i64 = low
+        if n < 3 { n = 3 }
+        if n % 2 == 0 { n = n + 1 }
+        while n < high {
+            if seg[n - low] == 0 && n > 5 {
+                let r5: i64 = n % 5
+                if r5 == 1 || r5 == 4 {
+                    # sqrt(5) mod n
+                    let mut s: i64 = 0
+                    if n % 4 == 3 {
+                        s = mod_pow(5, (n + 1) / 4, n)
+                    } else {
+                        s = tonelli(5, n)
+                    }
+                    let inv2: i64 = (n + 1) / 2
+                    let g1: i64 = ((1 + s) * inv2) % n
+                    let g2: i64 = ((1 - s) % n + n) % n * inv2 % n
+
+                    # factor n-1
+                    let mut m: i64 = n - 1
+                    let mut nf: i64 = 0
+                    if m % 2 == 0 {
+                        factors[nf] = 2
+                        nf = nf + 1
+                        while m % 2 == 0 { m = m / 2 }
+                    }
+                    let mut jj: i64 = 0
+                    while jj < pc {
+                        let p: i64 = primes[jj] as i64
+                        if p * p > m { break }
+                        if m % p == 0 {
+                            factors[nf] = p
+                            nf = nf + 1
+                            while m % p == 0 { m = m / p }
+                        }
+                        jj = jj + 1
+                    }
+                    if m > 1 {
+                        factors[nf] = m
+                        nf = nf + 1
+                    }
+                    if is_prim_root(g1, n, factors, nf) || is_prim_root(g2, n, factors, nf) {
+                        total = total + n
+                    }
+                }
+            }
+            n = n + 2
+        }
+        low = high
+    }
+
+    printf("%lld\n", total)
+    free(seg)
+    free(factors)
+    free(primes)
+    free(sieve)
+    return 0
+}

@@ -1,0 +1,150 @@
+# Project Euler 155
+# Distinct capacitances from series/parallel networks of <= 18 unit capacitors.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    if a < 0 { a = -a }
+    let mut b: i64 = b0
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function set_insert(nums: ptr<i64>, dens: ptr<i64>, used: ptr<i8>, cap: i64, num0: i64, den0: i64) -> bool {
+    let g: i64 = gcd(num0, den0)
+    let mut n: i64 = num0 / g
+    let mut d: i64 = den0 / g
+    if d < 0 { n = -n; d = -d }
+    let mut slot: i64 = n * 11400714819323198485 + d * 14029467366897019727
+    if slot < 0 { slot = -slot }
+    slot = slot & (cap - 1)
+    let start: i64 = slot
+    while used[slot] != 0 {
+        if nums[slot] == n && dens[slot] == d { return false }
+        slot = (slot + 1) & (cap - 1)
+        if slot == start { return false }
+    }
+    used[slot] = 1
+    nums[slot] = n
+    dens[slot] = d
+    return true
+}
+
+function main() -> i32 {
+    let limit: i32 = 18
+    let pool: i64 = 7000000
+    let nums: ptr<i64> = calloc(pool, 8)
+    let dens: ptr<i64> = calloc(pool, 8)
+    let offsets: ptr<i64> = calloc((limit + 2) as i64, 8)
+    let counts: ptr<i32> = calloc((limit + 1) as i64, 4)
+    if nums == null || dens == null || offsets == null || counts == null { return 1 }
+
+    let scap: i64 = 16777216
+    let snum: ptr<i64> = calloc(scap, 8)
+    let sden: ptr<i64> = calloc(scap, 8)
+    let sused: ptr<i8> = calloc(scap, 1)
+    if snum == null || sden == null || sused == null { return 1 }
+
+    nums[0] = 1
+    dens[0] = 1
+    counts[1] = 1
+    offsets[1] = 0
+    offsets[2] = 1
+    set_insert(snum, sden, sused, scap, 1, 1)
+    let mut total: i64 = 1
+    let mut next_free: i64 = 1
+
+    let mut size: i32 = 2
+    while size <= limit {
+        let tcap: i64 = 16777216
+        let tnum: ptr<i64> = calloc(tcap, 8)
+        let tden: ptr<i64> = calloc(tcap, 8)
+        let tused: ptr<i8> = calloc(tcap, 1)
+        if tnum == null || tden == null || tused == null { return 1 }
+
+        offsets[size] = next_free
+        let mut tcount: i32 = 0
+
+        let mut left: i32 = 1
+        while left <= size / 2 {
+            let right: i32 = size - left
+            let lb: i64 = offsets[left]
+            let rb: i64 = offsets[right]
+            let lc: i32 = counts[left]
+            let rc: i32 = counts[right]
+            let mut i: i32 = 0
+            while i < lc {
+                let mut j: i32 = 0
+                if left == right { j = i } else { j = 0 }
+                while j < rc {
+                    let a0: i64 = nums[lb + (i as i64)]
+                    let a1: i64 = dens[lb + (i as i64)]
+                    let b0: i64 = nums[rb + (j as i64)]
+                    let b1: i64 = dens[rb + (j as i64)]
+                    let num: i64 = a0 * b1 + b0 * a1
+                    let den: i64 = a1 * b1
+                    if set_insert(tnum, tden, tused, tcap, num, den) {
+                        let g: i64 = gcd(num, den)
+                        let mut nn2: i64 = num / g
+                        let mut dd2: i64 = den / g
+                        if dd2 < 0 {
+                            nn2 = -nn2
+                            dd2 = -dd2
+                        }
+                        nums[next_free] = nn2
+                        dens[next_free] = dd2
+                        next_free = next_free + 1
+                        tcount = tcount + 1
+                        if set_insert(snum, sden, sused, scap, nn2, dd2) {
+                            total = total + 1
+                        }
+                    }
+                    if set_insert(tnum, tden, tused, tcap, den, num) {
+                        let g2: i64 = gcd(den, num)
+                        let mut nn3: i64 = den / g2
+                        let mut dd3: i64 = num / g2
+                        if dd3 < 0 {
+                            nn3 = -nn3
+                            dd3 = -dd3
+                        }
+                        nums[next_free] = nn3
+                        dens[next_free] = dd3
+                        next_free = next_free + 1
+                        tcount = tcount + 1
+                        if set_insert(snum, sden, sused, scap, nn3, dd3) {
+                            total = total + 1
+                        }
+                    }
+                    j = j + 1
+                }
+                i = i + 1
+            }
+            left = left + 1
+        }
+        counts[size] = tcount
+        offsets[size + 1] = next_free
+        free(tnum)
+        free(tden)
+        free(tused)
+        size = size + 1
+    }
+
+    printf("%lld\n", total)
+    free(nums)
+    free(dens)
+    free(offsets)
+    free(counts)
+    free(snum)
+    free(sden)
+    free(sused)
+    return 0
+}

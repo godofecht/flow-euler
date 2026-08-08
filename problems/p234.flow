@@ -1,0 +1,92 @@
+# Project Euler 234
+# Semidivisible numbers sum below 999966663333.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 999966663333
+    let S: i64 = isqrt(LIMIT) + 200
+    let sieve: ptr<i8> = calloc(S + 1, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i <= S {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    i = 2
+    while i * i <= S {
+        if sieve[i] == 1 {
+            let mut j: i64 = i * i
+            while j <= S {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let primes: ptr<i64> = calloc(S / 5, 8)
+    let mut pc: i64 = 0
+    i = 2
+    while i <= S {
+        if sieve[i] == 1 {
+            primes[pc] = i
+            pc = pc + 1
+        }
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut idx: i64 = 0
+    while idx + 1 < pc {
+        let last: i64 = primes[idx]
+        let nxt: i64 = primes[idx + 1]
+        if last * last > LIMIT { break }
+        let start: i64 = last * last
+        let mut end: i64 = nxt * nxt
+
+        let mut j: i64 = start + last
+        while j < end && j <= LIMIT {
+            total = total + j
+            j = j + last
+        }
+
+        let mut end2: i64 = end
+        while end2 - nxt > LIMIT {
+            end2 = end2 - nxt
+        }
+        j = end2 - nxt
+        while j > start {
+            total = total + j
+            j = j - nxt
+        }
+
+        let step: i64 = last * nxt
+        j = start - (start % step)
+        while j < end && j <= LIMIT {
+            if j > start {
+                total = total - j - j
+            }
+            j = j + step
+        }
+        idx = idx + 1
+    }
+    printf("%lld\n", total)
+    free(sieve); free(primes)
+    return 0
+}

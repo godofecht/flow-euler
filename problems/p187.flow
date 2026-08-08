@@ -1,0 +1,67 @@
+# Project Euler 187
+# Count semiprimes n < 10^8.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 100000000
+    let N: i64 = LIMIT / 2
+    let sieve: ptr<i8> = calloc(N + 1, 1)
+    if sieve == null { return 1 }
+    let mut i: i64 = 0
+    while i <= N {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    sieve[1] = 0
+    let mut p: i64 = 2
+    while p * p <= N {
+        if sieve[p] == 1 {
+            let mut m: i64 = p * p
+            while m <= N {
+                sieve[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    # count primes and collect
+    let mut pc: i64 = 0
+    i = 2
+    while i <= N {
+        if sieve[i] == 1 { pc = pc + 1 }
+        i = i + 1
+    }
+    let primes: ptr<i64> = calloc(pc, 8)
+    if primes == null { free(sieve); return 1 }
+    let mut idx: i64 = 0
+    i = 2
+    while i <= N {
+        if sieve[i] == 1 {
+            primes[idx] = i
+            idx = idx + 1
+        }
+        i = i + 1
+    }
+    let mut count: i64 = 0
+    let mut j: i64 = pc - 1
+    let mut ii: i64 = 0
+    while ii < pc {
+        let pp: i64 = primes[ii]
+        if pp * pp >= LIMIT { break }
+        while j >= ii && primes[j] * pp >= LIMIT {
+            j = j - 1
+        }
+        if j < ii { break }
+        count = count + (j - ii + 1)
+        ii = ii + 1
+    }
+    printf("%lld\n", count)
+    free(primes)
+    free(sieve)
+    return 0
+}

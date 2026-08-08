@@ -1,0 +1,139 @@
+# Project Euler 332
+# Sum of minimal spherical triangle areas A(r) for r=1..50.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function atan2(y: f64, x: f64) -> f64
+    function tan(x: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x { x = y; y = (x + n / x) / 2 }
+    return x
+}
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function min_area(r: i64) -> f64 {
+    let rr: i64 = r * r
+    let xs: ptr<i16> = calloc(30000, 2)
+    let ys: ptr<i16> = calloc(30000, 2)
+    let zs: ptr<i16> = calloc(30000, 2)
+    let mut n: i64 = 0
+    let mut x: i64 = -r
+    while x <= r {
+        let x2: i64 = x * x
+        let mut y: i64 = -r
+        while y <= r {
+            let z2: i64 = rr - x2 - y * y
+            if z2 >= 0 {
+                let z: i64 = isqrt(z2)
+                if z * z == z2 {
+                    xs[n] = x as i16; ys[n] = y as i16; zs[n] = z as i16; n = n + 1
+                    if z != 0 {
+                        xs[n] = x as i16; ys[n] = y as i16; zs[n] = (-z) as i16; n = n + 1
+                    }
+                }
+            }
+            y = y + 1
+        }
+        x = x + 1
+    }
+    if n < 3 { free(xs); free(ys); free(zs); return 0.0 }
+
+    let dots: ptr<i16> = calloc(n * n, 2)
+    let mut i: i64 = 0
+    while i < n {
+        let xi: i64 = xs[i] as i64
+        let yi: i64 = ys[i] as i64
+        let zi: i64 = zs[i] as i64
+        let mut j: i64 = i
+        while j < n {
+            let v: i64 = xi * (xs[j] as i64) + yi * (ys[j] as i64) + zi * (zs[j] as i64)
+            dots[i * n + j] = v as i16
+            dots[j * n + i] = v as i16
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let r2: f64 = (rr) as f64
+    let r3: f64 = r2 * (r as f64)
+    let inv_r2: f64 = 1.0 / r2
+    let inv_r3: f64 = 1.0 / r3
+    let mut best: f64 = 1.5707963267948966 * r2
+    let mut best_unit: f64 = best / r2
+    let mut D_max: i64 = floor(4.0 * r3 * tan(best_unit / 2.0) + 0.000000000001) as i64
+    if D_max < 1 { D_max = 1 }
+
+    i = 0
+    while i < n - 2 {
+        let xi: i64 = xs[i] as i64
+        let yi: i64 = ys[i] as i64
+        let zi: i64 = zs[i] as i64
+        let mut j: i64 = i + 1
+        while j < n - 1 {
+            let xj: i64 = xs[j] as i64
+            let yj: i64 = ys[j] as i64
+            let zj: i64 = zs[j] as i64
+            let cx: i64 = yi * zj - zi * yj
+            let cy: i64 = zi * xj - xi * zj
+            let cz: i64 = xi * yj - yi * xj
+            if cx != 0 || cy != 0 || cz != 0 {
+                let g: i64 = gcd(cx, gcd(cy, cz))
+                if g != 0 && g <= D_max {
+                    let dot_ij: i64 = dots[i * n + j] as i64
+                    let mut k: i64 = j + 1
+                    while k < n {
+                        let mut det: i64 = cx * (xs[k] as i64) + cy * (ys[k] as i64) + cz * (zs[k] as i64)
+                        if det != 0 {
+                            if det < 0 { det = -det }
+                            if det <= D_max {
+                                let denom: f64 = 1.0 + ((dot_ij + (dots[j * n + k] as i64) + (dots[i * n + k] as i64)) as f64) * inv_r2
+                                let area: f64 = 2.0 * atan2((det as f64) * inv_r3, denom) * r2
+                                if area < best {
+                                    best = area
+                                    best_unit = best / r2
+                                    D_max = floor(4.0 * r3 * tan(best_unit / 2.0) + 0.000000000001) as i64
+                                    if D_max < 1 { D_max = 1 }
+                                }
+                            }
+                        }
+                        k = k + 1
+                    }
+                }
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    free(xs); free(ys); free(zs); free(dots)
+    return best
+}
+
+function main() -> i32 {
+    let mut sum: f64 = 0.0
+    let mut r: i64 = 1
+    while r <= 50 {
+        sum = sum + min_area(r)
+        r = r + 1
+    }
+    printf("%.6f\n", sum)
+    return 0
+}

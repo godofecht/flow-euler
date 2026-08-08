@@ -1,0 +1,34 @@
+# Project Euler 493
+# Under the Rainbow — 7*(1-C(60,20)/C(70,20)) to 9 decimals.
+
+function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function main() -> i32 {
+    let mut num: i64 = 1
+    let mut den: i64 = 1
+    let mut i: i64 = 0
+    while i < 20 {
+        num = num * (60 - i)
+        den = den * (70 - i)
+        let g: i64 = gcd(num, den)
+        num = num / g
+        den = den / g
+        i = i + 1
+    }
+    let top: i64 = 7 * (den - num)
+    let scale: i64 = 1000000000
+    let mut q: i64 = (top * scale) / den
+    let rem: i64 = (top * scale) % den
+    if rem * 2 >= den { q = q + 1 }
+    printf("%lld.%09lld\n", q / scale, q % scale)
+    return 0
+}

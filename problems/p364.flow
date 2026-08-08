@@ -1,0 +1,93 @@
+# Project Euler 364
+# Comfortable distance seating sequences mod 100000007, N=10^6.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e / 2
+    }
+    return r
+}
+
+function nCk(n: i64, k: i64, fact: ptr<i64>, invfact: ptr<i64>, mod: i64) -> i64 {
+    if k < 0 || k > n { return 0 }
+    return ((fact[n] * invfact[k]) % mod * invfact[n - k]) % mod
+}
+
+function T(n: i64, fact: ptr<i64>, invfact: ptr<i64>, pow2: ptr<i64>, mod: i64) -> i64 {
+    let mut res: i64 = 0
+    let mut a: i64 = 1
+    while a <= 2 {
+        let mut b: i64 = 0
+        while b <= 1 {
+            let L: i64 = n - a - b
+            if L >= 0 {
+                let mut e: i64 = 0
+                if a == 2 { e = e + 1 }
+                if b == 1 { e = e + 1 }
+                let start_p: i64 = L % 2
+                let max_p: i64 = L / 3
+                let mut p: i64 = start_p
+                while p <= max_p {
+                    let rem: i64 = L - 3 * p
+                    let q: i64 = rem / 2
+                    let k: i64 = 1 + p + q
+                    let mut term: i64 = nCk(k - 1, p, fact, invfact, mod)
+                    term = (term * pow2[p]) % mod
+                    term = (term * fact[k]) % mod
+                    term = (term * fact[p + e]) % mod
+                    term = (term * fact[k - 1]) % mod
+                    res = (res + term) % mod
+                    p = p + 2
+                }
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    return res
+}
+
+function main() -> i32 {
+    let MOD: i64 = 100000007
+    let N: i64 = 1000000
+    let fact: ptr<i64> = calloc(N + 1, 8)
+    let invfact: ptr<i64> = calloc(N + 1, 8)
+    let pow2: ptr<i64> = calloc(N / 3 + 4, 8)
+    if fact == null || invfact == null || pow2 == null { return 1 }
+
+    fact[0] = 1
+    let mut i: i64 = 1
+    while i <= N {
+        fact[i] = (fact[i - 1] * i) % MOD
+        i = i + 1
+    }
+    invfact[N] = modpow(fact[N], MOD - 2, MOD)
+    i = N
+    while i > 0 {
+        invfact[i - 1] = (invfact[i] * i) % MOD
+        i = i - 1
+    }
+    pow2[0] = 1
+    i = 1
+    while i <= N / 3 + 3 {
+        pow2[i] = (pow2[i - 1] * 2) % MOD
+        i = i + 1
+    }
+
+    let ans: i64 = T(N, fact, invfact, pow2, MOD)
+    printf("%lld\n", ans)
+    free(pow2)
+    free(invfact)
+    free(fact)
+    return 0
+}

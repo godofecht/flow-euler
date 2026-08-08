@@ -1,0 +1,89 @@
+# Project Euler 462
+# Permutation of 3-smooth Numbers — hook-length SYT via log-summation.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log(x: f64) -> f64
+    function log10(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function floor(x: f64) -> f64
+    function pow(x: f64, y: f64) -> f64
+}
+
+function main() -> i32 {
+    let N: i64 = 1000000000000000000
+    let rows: ptr<i32> = calloc(64, 4)
+    if rows == null { return 1 }
+    let mut rc: i32 = 0
+    let mut pow3: i64 = 1
+    while pow3 <= N {
+        let limit: i64 = N / pow3
+        # bit_length(limit) = floor(log2(limit))+1
+        let mut bits: i32 = 0
+        let mut t: i64 = limit
+        while t > 0 {
+            bits = bits + 1
+            t = t / 2
+        }
+        rows[rc] = bits
+        rc = rc + 1
+        if pow3 > N / 3 { break }
+        pow3 = pow3 * 3
+    }
+
+    let mut ncells: i64 = 0
+    let mut i: i32 = 0
+    while i < rc {
+        ncells = ncells + (rows[i] as i64)
+        i = i + 1
+    }
+
+    let max_len: i32 = rows[0]
+    let col_h: ptr<i32> = calloc((max_len as i64) + 1, 4)
+    if col_h == null { return 1 }
+    let mut h: i32 = rc
+    let mut j: i32 = 0
+    while j < max_len {
+        while h > 0 && rows[h - 1] <= j {
+            h = h - 1
+        }
+        col_h[j] = h
+        j = j + 1
+    }
+
+    # log(F) = sum log(k) - sum log(hook)
+    let mut logf: f64 = 0.0
+    let mut k: i64 = 2
+    while k <= ncells {
+        logf = logf + log(k as f64)
+        k = k + 1
+    }
+    i = 0
+    while i < rc {
+        let row_len: i32 = rows[i]
+        j = 0
+        while j < row_len {
+            let hook: i32 = row_len - j + col_h[j] - i - 1
+            logf = logf - log(hook as f64)
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let log10e: f64 = log10(exp(1.0))
+    let log10x: f64 = logf * log10e
+    let expv: i64 = floor(log10x) as i64
+    let frac: f64 = log10x - (expv as f64)
+    let mut mant: f64 = pow(10.0, frac)
+    let mut mant_r: f64 = floor(mant * 10000000000.0 + 0.5) / 10000000000.0
+    let mut exp_out: i64 = expv
+    if mant_r >= 10.0 {
+        mant_r = mant_r / 10.0
+        exp_out = exp_out + 1
+    }
+    printf("%.10fe%lld\n", mant_r, exp_out)
+    free(col_h)
+    free(rows)
+    return 0
+}

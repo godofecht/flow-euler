@@ -1,0 +1,63 @@
+# Project Euler 178
+# Count pandigital step numbers with at most 40 digits.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let N: i32 = 40
+    # dp[2][10][1024] rolling
+    let dp: ptr<i64> = calloc(2 * 10 * 1024, 8)
+    if dp == null { return 1 }
+    let mut d: i32 = 1
+    while d <= 9 {
+        dp[0 * 10 * 1024 + d * 1024 + (1 << d)] = 1
+        d = d + 1
+    }
+    let mut total: i64 = 0
+    # count length 1: none pandigital
+    let mut n: i32 = 1
+    while n < N {
+        let cur: i32 = (n - 1) % 2
+        let nxt: i32 = n % 2
+        # clear nxt
+        let mut i: i32 = 0
+        while i < 10 * 1024 {
+            dp[nxt * 10 * 1024 + i] = 0
+            i = i + 1
+        }
+        let mut last: i32 = 0
+        while last < 10 {
+            let mut mask: i32 = 0
+            while mask < 1024 {
+                let v: i64 = dp[cur * 10 * 1024 + last * 1024 + mask]
+                if v != 0 {
+                    if last > 0 {
+                        let nd: i32 = last - 1
+                        let nm: i32 = mask | (1 << nd)
+                        dp[nxt * 10 * 1024 + nd * 1024 + nm] = dp[nxt * 10 * 1024 + nd * 1024 + nm] + v
+                    }
+                    if last < 9 {
+                        let nd: i32 = last + 1
+                        let nm: i32 = mask | (1 << nd)
+                        dp[nxt * 10 * 1024 + nd * 1024 + nm] = dp[nxt * 10 * 1024 + nd * 1024 + nm] + v
+                    }
+                }
+                mask = mask + 1
+            }
+            last = last + 1
+        }
+        # after computing length n+1, add pandigital counts
+        last = 0
+        while last < 10 {
+            total = total + dp[nxt * 10 * 1024 + last * 1024 + 1023]
+            last = last + 1
+        }
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    free(dp)
+    return 0
+}

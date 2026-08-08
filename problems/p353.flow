@@ -1,0 +1,557 @@
+# Project Euler 353
+# Sum M(2^n-1) for n=1..15, risk of shortest paths on lattice sphere.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function realloc(p: ptr<void>, size: i64) -> ptr<void>
+    function acos(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function abs64(x: i64) -> i64 {
+    if x < 0 { return 0 - x }
+    return x
+}
+
+function hget(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64) -> i64 {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 {
+        if keys[slot] == key { return vals[slot] }
+        slot = (slot + 1) & (cap - 1)
+    }
+    return 0 - 1
+}
+
+function hput(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, val: i64) -> void {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 && keys[slot] != key {
+        slot = (slot + 1) & (cap - 1)
+    }
+    used[slot] = 1
+    keys[slot] = key
+    vals[slot] = val
+}
+
+function pack3(a: i64, b: i64, c: i64) -> i64 {
+    # pack three signed 20-bit-ish coords into i64 (offset)
+    let o: i64 = 200000
+    return ((a + o) << 40) | ((b + o) << 20) | (c + o)
+}
+
+function choose_L(r: i64) -> i64 {
+    if r <= 512 { return 2 * r }
+    if r < 8191 { return 256 }
+    return 512
+}
+
+function main() -> i32 {
+    let max_r: i64 = (1 << 15) - 1
+    let max_lim: i64 = 2 * max_r
+    let spf: ptr<i32> = calloc(max_lim + 1, 4)
+    let mut i: i64 = 0
+    while i <= max_lim {
+        spf[i] = i as i32
+        i = i + 1
+    }
+    if max_lim >= 1 { spf[1] = 1 }
+    let lim: i64 = isqrt(max_lim)
+    i = 2
+    while i <= lim {
+        if (spf[i] as i64) == i {
+            let mut j: i64 = i * i
+            while j <= max_lim {
+                if (spf[j] as i64) == j { spf[j] = i as i32 }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    # prime_rep open addressing: key=p, val=(a<<32)|b
+    let RCAP: i64 = 1 << 17
+    let rkeys: ptr<i64> = calloc(RCAP, 8)
+    let rvals: ptr<i64> = calloc(RCAP, 8)
+    let rused: ptr<i8> = calloc(RCAP, 1)
+    i = 2
+    while i <= max_lim {
+        if (spf[i] as i64) == i && (i & 3) == 1 {
+            let root: i64 = isqrt(i)
+            let mut a: i64 = 0 - 1
+            let mut b: i64 = 0
+            let mut x: i64 = 1
+            while x <= root {
+                let y2: i64 = i - x * x
+                let y: i64 = isqrt(y2)
+                if y * y == y2 {
+                    a = x
+                    b = y
+                    break
+                }
+                x = x + 1
+            }
+            if a < b {
+                let t: i64 = a
+                a = b
+                b = t
+            }
+            hput(rkeys, rvals, rused, RCAP, i, (a << 32) | b)
+        }
+        i = i + 1
+    }
+
+    let PI: f64 = 3.14159265358979323846
+    let mut total: f64 = 0.0
+    let mut nbit: i64 = 1
+    while nbit <= 15 {
+        let r: i64 = (1 << nbit) - 1
+        let L: i64 = choose_L(r)
+        let r2: i64 = r * r
+
+        # Generate points with z>=0
+        let CAP_P: i64 = 400000
+        let xs: ptr<i32> = calloc(CAP_P, 4)
+        let ys: ptr<i32> = calloc(CAP_P, 4)
+        let zs: ptr<i32> = calloc(CAP_P, 4)
+        let mut np: i64 = 0
+        let mut start: i64 = 0 - 1
+        let mut z: i64 = 0
+        while z <= r {
+            let s: i64 = r2 - z * z
+            if s == 0 {
+                xs[np] = 0
+                ys[np] = 0
+                zs[np] = z as i32
+                if z == r { start = np }
+                np = np + 1
+            } else {
+                let aa: i64 = r - z
+                let bb: i64 = r + z
+                # factor aa*bb into map of primes
+                let FCAP: i64 = 64
+                let fp: ptr<i64> = calloc(FCAP, 8)
+                let fe: ptr<i64> = calloc(FCAP, 8)
+                let mut fc: i64 = 0
+                let mut xx: i64 = aa
+                while xx > 1 {
+                    let p: i64 = spf[xx] as i64
+                    let mut e: i64 = 0
+                    while xx % p == 0 {
+                        xx = xx / p
+                        e = e + 1
+                    }
+                    let mut found: i64 = 0 - 1
+                    let mut t: i64 = 0
+                    while t < fc {
+                        if fp[t] == p { found = t; break }
+                        t = t + 1
+                    }
+                    if found >= 0 {
+                        fe[found] = fe[found] + e
+                    } else {
+                        fp[fc] = p
+                        fe[fc] = e
+                        fc = fc + 1
+                    }
+                }
+                xx = bb
+                while xx > 1 {
+                    let p: i64 = spf[xx] as i64
+                    let mut e: i64 = 0
+                    while xx % p == 0 {
+                        xx = xx / p
+                        e = e + 1
+                    }
+                    let mut found: i64 = 0 - 1
+                    let mut t: i64 = 0
+                    while t < fc {
+                        if fp[t] == p { found = t; break }
+                        t = t + 1
+                    }
+                    if found >= 0 {
+                        fe[found] = fe[found] + e
+                    } else {
+                        fp[fc] = p
+                        fe[fc] = e
+                        fc = fc + 1
+                    }
+                }
+
+                # sumsq pairs from factors
+                let mut scalar: i64 = 1
+                let mut e2: i64 = 0
+                let mut odd2: i64 = 0
+                let mut ti: i64 = 0
+                while ti < fc {
+                    if fp[ti] == 2 {
+                        e2 = fe[ti]
+                        scalar = scalar << (e2 / 2)
+                        odd2 = e2 & 1
+                    }
+                    ti = ti + 1
+                }
+                # reps list
+                let RMAX: i64 = 1024
+                let rx: ptr<i64> = calloc(RMAX, 8)
+                let ry: ptr<i64> = calloc(RMAX, 8)
+                let mut rc: i64 = 1
+                rx[0] = 1
+                ry[0] = 0
+                let mut ok: i64 = 1
+                ti = 0
+                while ti < fc {
+                    let p: i64 = fp[ti]
+                    let e: i64 = fe[ti]
+                    if p == 2 {
+                        ti = ti + 1
+                        continue
+                    }
+                    if (p & 3) == 3 {
+                        if (e & 1) == 1 {
+                            ok = 0
+                            break
+                        }
+                        let mut t: i64 = 0
+                        while t < e / 2 {
+                            scalar = scalar * p
+                            t = t + 1
+                        }
+                        ti = ti + 1
+                        continue
+                    }
+                    # p ≡ 1 mod 4
+                    let repv: i64 = hget(rkeys, rvals, rused, RCAP, p)
+                    let pa: i64 = repv >> 32
+                    let pb: i64 = repv & 4294967295
+                    # powers of gp and gpc
+                    let powx: ptr<i64> = calloc(e + 2, 8)
+                    let powy: ptr<i64> = calloc(e + 2, 8)
+                    let powcx: ptr<i64> = calloc(e + 2, 8)
+                    let powcy: ptr<i64> = calloc(e + 2, 8)
+                    powx[0] = 1; powy[0] = 0
+                    powcx[0] = 1; powcy[0] = 0
+                    let mut k: i64 = 0
+                    while k < e {
+                        # gauss_mul with (pa,pb) and (pa,-pb)
+                        powx[k + 1] = powx[k] * pa - powy[k] * pb
+                        powy[k + 1] = powx[k] * pb + powy[k] * pa
+                        powcx[k + 1] = powcx[k] * pa - powcy[k] * (0 - pb)
+                        powcy[k + 1] = powcx[k] * (0 - pb) + powcy[k] * pa
+                        k = k + 1
+                    }
+                    let nrx: ptr<i64> = calloc(RMAX, 8)
+                    let nry: ptr<i64> = calloc(RMAX, 8)
+                    let mut nrc: i64 = 0
+                    let mut ri: i64 = 0
+                    while ri < rc {
+                        k = 0
+                        while k <= e {
+                            let x1: i64 = powx[k]
+                            let y1: i64 = powy[k]
+                            let x2: i64 = powcx[e - k]
+                            let y2: i64 = powcy[e - k]
+                            # gauss_mul (rx,ry)*(tx,ty) then * (x1,y1)*(x2,y2)
+                            let tx: i64 = x1 * x2 - y1 * y2
+                            let ty: i64 = x1 * y2 + y1 * x2
+                            nrx[nrc] = rx[ri] * tx - ry[ri] * ty
+                            nry[nrc] = rx[ri] * ty + ry[ri] * tx
+                            nrc = nrc + 1
+                            k = k + 1
+                        }
+                        ri = ri + 1
+                    }
+                    rc = nrc
+                    ri = 0
+                    while ri < rc {
+                        rx[ri] = nrx[ri]
+                        ry[ri] = nry[ri]
+                        ri = ri + 1
+                    }
+                    free(nry); free(nrx); free(powcy); free(powcx); free(powy); free(powx)
+                    ti = ti + 1
+                }
+                if ok == 1 {
+                    if odd2 == 1 {
+                        let mut ri: i64 = 0
+                        while ri < rc {
+                            let x: i64 = rx[ri]
+                            let y: i64 = ry[ri]
+                            rx[ri] = x - y
+                            ry[ri] = x + y
+                            ri = ri + 1
+                        }
+                    }
+                    if scalar != 1 {
+                        let mut ri: i64 = 0
+                        while ri < rc {
+                            rx[ri] = rx[ri] * scalar
+                            ry[ri] = ry[ri] * scalar
+                            ri = ri + 1
+                        }
+                    }
+                    # unique canonical pairs
+                    let UCAP: i64 = 1 << 10
+                    let uk: ptr<i64> = calloc(UCAP, 8)
+                    let uu: ptr<i8> = calloc(UCAP, 1)
+                    let mut ri: i64 = 0
+                    while ri < rc {
+                        let mut a: i64 = abs64(rx[ri])
+                        let mut b: i64 = abs64(ry[ri])
+                        if a < b {
+                            let t: i64 = a
+                            a = b
+                            b = t
+                        }
+                        let key: i64 = (a << 32) | b
+                        let mut slot: i64 = key
+                        if slot < 0 { slot = 0 - slot }
+                        slot = slot & (UCAP - 1)
+                        let mut seen: i64 = 0
+                        while uu[slot] != 0 {
+                            if uk[slot] == key { seen = 1; break }
+                            slot = (slot + 1) & (UCAP - 1)
+                        }
+                        if seen == 0 {
+                            uu[slot] = 1
+                            uk[slot] = key
+                            # expand signs
+                            let mut sx: array<i64, 2> = [a, 0 - a]
+                            let mut sy: array<i64, 2> = [b, 0 - b]
+                            let mut nx: i64 = 2
+                            let mut ny: i64 = 2
+                            if a == 0 { nx = 1; sx[0] = 0 }
+                            if b == 0 { ny = 1; sy[0] = 0 }
+                            if a == b {
+                                let mut ix: i64 = 0
+                                while ix < nx {
+                                    let mut iy: i64 = 0
+                                    while iy < ny {
+                                        xs[np] = sx[ix] as i32
+                                        ys[np] = sy[iy] as i32
+                                        zs[np] = z as i32
+                                        np = np + 1
+                                        iy = iy + 1
+                                    }
+                                    ix = ix + 1
+                                }
+                            } else {
+                                let mut ix: i64 = 0
+                                while ix < nx {
+                                    let mut iy: i64 = 0
+                                    while iy < ny {
+                                        xs[np] = sx[ix] as i32
+                                        ys[np] = sy[iy] as i32
+                                        zs[np] = z as i32
+                                        np = np + 1
+                                        xs[np] = sy[iy] as i32
+                                        ys[np] = sx[ix] as i32
+                                        zs[np] = z as i32
+                                        np = np + 1
+                                        iy = iy + 1
+                                    }
+                                    ix = ix + 1
+                                }
+                            }
+                        }
+                        ri = ri + 1
+                    }
+                    free(uu); free(uk)
+                }
+                free(ry); free(rx); free(fe); free(fp)
+            }
+            z = z + 1
+        }
+
+        # ref_risk
+        let inv_r2: f64 = 1.0 / (r2 as f64)
+        let inv_pi: f64 = 1.0 / PI
+        let ref_risk: ptr<f64> = calloc(r + 1, 8)
+        z = 0
+        while z <= r {
+            let mut c: f64 = 1.0 - 2.0 * ((z * z) as f64) * inv_r2
+            if c < (0.0 - 1.0) { c = 0.0 - 1.0 }
+            let t: f64 = acos(c) * inv_pi
+            ref_risk[z] = t * t
+            z = z + 1
+        }
+
+        # spatial hash: key -> linked list head index into list arrays
+        let HCAP: i64 = 1 << 18
+        let hkeys: ptr<i64> = calloc(HCAP, 8)
+        let hhead: ptr<i32> = calloc(HCAP, 4)
+        let hused: ptr<i8> = calloc(HCAP, 1)
+        let mut hi: i64 = 0
+        while hi < HCAP {
+            hhead[hi] = -1
+            hi = hi + 1
+        }
+        let nextp: ptr<i32> = calloc(np, 4)
+        i = 0
+        while i < np {
+            let cx: i64 = (xs[i] as i64) / L
+            let cy: i64 = (ys[i] as i64) / L
+            let cz: i64 = (zs[i] as i64) / L
+            # fix negative division toward -inf for cell
+            let mut cx2: i64 = cx
+            let mut cy2: i64 = cy
+            let mut cz2: i64 = cz
+            if (xs[i] as i64) < 0 && (xs[i] as i64) % L != 0 { cx2 = cx - 1 }
+            if (ys[i] as i64) < 0 && (ys[i] as i64) % L != 0 { cy2 = cy - 1 }
+            if (zs[i] as i64) < 0 && (zs[i] as i64) % L != 0 { cz2 = cz - 1 }
+            let key: i64 = pack3(cx2, cy2, cz2)
+            let mut slot: i64 = key
+            if slot < 0 { slot = 0 - slot }
+            slot = slot & (HCAP - 1)
+            while hused[slot] != 0 && hkeys[slot] != key {
+                slot = (slot + 1) & (HCAP - 1)
+            }
+            if hused[slot] == 0 {
+                hused[slot] = 1
+                hkeys[slot] = key
+                hhead[slot] = -1
+            }
+            nextp[i] = hhead[slot]
+            hhead[slot] = i as i32
+            i = i + 1
+        }
+
+        # Dijkstra
+        let INF: f64 = 1.0e100
+        let dist: ptr<f64> = calloc(np, 8)
+        i = 0
+        while i < np {
+            dist[i] = INF
+            i = i + 1
+        }
+        dist[start] = 0.0
+        let HEAP_CAP: i64 = np * 64 + 1024
+        let heap_d: ptr<f64> = calloc(HEAP_CAP, 8)
+        let heap_v: ptr<i32> = calloc(HEAP_CAP, 4)
+        heap_d[0] = 0.0
+        heap_v[0] = start as i32
+        let mut hs: i64 = 1
+        let mut best: f64 = 0.5
+
+        while hs > 0 {
+            let d: f64 = heap_d[0]
+            let u: i64 = heap_v[0] as i64
+            hs = hs - 1
+            if hs > 0 {
+                heap_d[0] = heap_d[hs]
+                heap_v[0] = heap_v[hs]
+                let mut idx: i64 = 0
+                while true {
+                    let l: i64 = 2 * idx + 1
+                    let rr: i64 = l + 1
+                    let mut smallest: i64 = idx
+                    if l < hs && heap_d[l] < heap_d[smallest] { smallest = l }
+                    if rr < hs && heap_d[rr] < heap_d[smallest] { smallest = rr }
+                    if smallest == idx { break }
+                    let td: f64 = heap_d[idx]
+                    let tv: i32 = heap_v[idx]
+                    heap_d[idx] = heap_d[smallest]
+                    heap_v[idx] = heap_v[smallest]
+                    heap_d[smallest] = td
+                    heap_v[smallest] = tv
+                    idx = smallest
+                }
+            }
+            if d != dist[u] { continue }
+            if 2.0 * d >= best { break }
+            let z0: i64 = zs[u] as i64
+            let cand: f64 = 2.0 * d + ref_risk[z0]
+            if cand < best { best = cand }
+            let x0: i64 = xs[u] as i64
+            let y0: i64 = ys[u] as i64
+            let mut cx: i64 = x0 / L
+            let mut cy: i64 = y0 / L
+            let mut cz: i64 = z0 / L
+            if x0 < 0 && x0 % L != 0 { cx = cx - 1 }
+            if y0 < 0 && y0 % L != 0 { cy = cy - 1 }
+            if z0 < 0 && z0 % L != 0 { cz = cz - 1 }
+            let mut dxcell: i64 = 0 - 1
+            while dxcell <= 1 {
+                let mut dycell: i64 = 0 - 1
+                while dycell <= 1 {
+                    let mut dzcell: i64 = 0 - 1
+                    while dzcell <= 1 {
+                        let key: i64 = pack3(cx + dxcell, cy + dycell, cz + dzcell)
+                        let mut slot: i64 = key
+                        if slot < 0 { slot = 0 - slot }
+                        slot = slot & (HCAP - 1)
+                        let mut found: i64 = 0
+                        while hused[slot] != 0 {
+                            if hkeys[slot] == key { found = 1; break }
+                            slot = (slot + 1) & (HCAP - 1)
+                        }
+                        if found == 1 {
+                            let mut v: i64 = hhead[slot] as i64
+                            while v != 0 - 1 {
+                                if v != u {
+                                    let dx: i64 = (xs[v] as i64) - x0
+                                    let dy: i64 = (ys[v] as i64) - y0
+                                    let dz: i64 = (zs[v] as i64) - z0
+                                    if dx <= L && dx >= (0 - L) && dy <= L && dy >= (0 - L) && dz <= L && dz >= (0 - L) {
+                                        let dot: i64 = x0 * (xs[v] as i64) + y0 * (ys[v] as i64) + z0 * (zs[v] as i64)
+                                        let mut c: f64 = (dot as f64) * inv_r2
+                                        if c > 1.0 { c = 1.0 }
+                                        if c < (0.0 - 1.0) { c = 0.0 - 1.0 }
+                                        let tt: f64 = acos(c) * inv_pi
+                                        let w: f64 = tt * tt
+                                        let nd: f64 = d + w
+                                        if nd < dist[v] - 1.0e-15 {
+                                            dist[v] = nd
+                                            let mut idx: i64 = hs
+                                            heap_d[idx] = nd
+                                            heap_v[idx] = v as i32
+                                            hs = hs + 1
+                                            while idx > 0 {
+                                                let par: i64 = (idx - 1) / 2
+                                                if heap_d[par] <= heap_d[idx] { break }
+                                                let td: f64 = heap_d[par]
+                                                let tv: i32 = heap_v[par]
+                                                heap_d[par] = heap_d[idx]
+                                                heap_v[par] = heap_v[idx]
+                                                heap_d[idx] = td
+                                                heap_v[idx] = tv
+                                                idx = par
+                                            }
+                                        }
+                                    }
+                                }
+                                v = nextp[v] as i64
+                            }
+                        }
+                        dzcell = dzcell + 1
+                    }
+                    dycell = dycell + 1
+                }
+                dxcell = dxcell + 1
+            }
+        }
+        total = total + best
+        free(heap_v); free(heap_d); free(dist)
+        free(nextp); free(hused); free(hhead); free(hkeys)
+        free(ref_risk); free(zs); free(ys); free(xs)
+        nbit = nbit + 1
+    }
+
+    # print with 10 decimals
+    printf("%.10f\n", total)
+    return 0
+}

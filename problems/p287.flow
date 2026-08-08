@@ -1,0 +1,29 @@
+# Project Euler 287
+# Minimal quadtree encoding length for D_24.
+
+function is_black(x: i64, y: i64, size: i64) -> bool {
+    let middle: i64 = size >> 1
+    let threshold: i64 = middle * middle
+    let dx: i64 = x - middle
+    let dy: i64 = y - middle
+    return dx * dx + dy * dy <= threshold
+}
+
+function encode(from_x: i64, from_y: i64, to_x: i64, to_y: i64, is_first: bool, size: i64) -> i64 {
+    if from_x == to_x { return 2 }
+    let a: bool = is_black(from_x, from_y, size)
+    let b: bool = is_black(to_x, from_y, size)
+    let c: bool = is_black(to_x, to_y, size)
+    let d: bool = is_black(from_x, to_y, size)
+    if a == b && b == c && c == d && !is_first { return 2 }
+    if from_x + 1 == to_x { return 1 + 8 }
+    let half: i64 = (to_x - from_x + 1) / 2
+    return encode(from_x, from_y + half, to_x - half, to_y, false, size) + encode(from_x + half, from_y + half, to_x, to_y, false, size) + encode(from_x, from_y, to_x - half, to_y - half, false, size) + encode(from_x + half, from_y, to_x, to_y - half, false, size) + 1
+}
+
+function main() -> i32 {
+    let one: i64 = 1
+    let size: i64 = one << 24
+    printf("%lld\n", encode(0, 0, size - 1, size - 1, true, size))
+    return 0
+}

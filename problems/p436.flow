@@ -1,0 +1,13 @@
+# Project Euler 436
+# P(second player wins) = (1 + 14e - 5e^2) / 4.
+
+extern {
+    function exp(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let e: f64 = exp(1.0)
+    let p: f64 = (1.0 + 14.0 * e - 5.0 * e * e) / 4.0
+    printf("%.10f\n", p)
+    return 0
+}

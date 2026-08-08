@@ -1,0 +1,132 @@
+# Project Euler 377
+# Last 9 digits of sum_{i=1..17} f(13^i) for digit-sum numbers without 0.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mat_mul(A: ptr<i64>, B: ptr<i64>, out: ptr<i64>, mod: i64) -> void {
+    let mut i: i32 = 0
+    while i < 18 {
+        let mut j: i32 = 0
+        while j < 18 {
+            let mut s: i64 = 0
+            let mut t: i32 = 0
+            while t < 18 {
+                s = (s + A[i * 18 + t] * B[t * 18 + j]) % mod
+                t = t + 1
+            }
+            out[i * 18 + j] = s
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function mat_vec(A: ptr<i64>, v: ptr<i64>, out: ptr<i64>, mod: i64) -> void {
+    let mut i: i32 = 0
+    while i < 18 {
+        let mut s: i64 = 0
+        let mut j: i32 = 0
+        while j < 18 {
+            s = (s + A[i * 18 + j] * v[j]) % mod
+            j = j + 1
+        }
+        out[i] = s
+        i = i + 1
+    }
+}
+
+function mat_copy(src: ptr<i64>, dst: ptr<i64>) -> void {
+    let mut i: i32 = 0
+    while i < 324 {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function vec_copy(src: ptr<i64>, dst: ptr<i64>) -> void {
+    let mut i: i32 = 0
+    while i < 18 {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function f_of(n0: i64, powers: ptr<i64>, v0: ptr<i64>, mod: i64) -> i64 {
+    let v: ptr<i64> = calloc(18, 8)
+    let tmp: ptr<i64> = calloc(18, 8)
+    if v == null || tmp == null { return 0 }
+    vec_copy(v0, v)
+    let mut n: i64 = n0
+    let mut bit: i32 = 0
+    while n > 0 {
+        if n % 2 == 1 {
+            mat_vec(powers + (bit as i64) * 324, v, tmp, mod)
+            vec_copy(tmp, v)
+        }
+        n = n / 2
+        bit = bit + 1
+    }
+    let ans: i64 = v[9]
+    free(tmp)
+    free(v)
+    return ans
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000
+    let powers: ptr<i64> = calloc(64 * 324, 8)
+    let tmp: ptr<i64> = calloc(324, 8)
+    let v0: ptr<i64> = calloc(18, 8)
+    if powers == null || tmp == null || v0 == null { return 1 }
+
+    # Build M into powers[0]
+    let M: ptr<i64> = powers
+    let mut j: i32 = 0
+    while j < 9 {
+        M[0 * 18 + j] = 10 % MOD
+        j = j + 1
+    }
+    let mut i: i32 = 1
+    while i < 9 {
+        M[i * 18 + (i - 1)] = 1
+        i = i + 1
+    }
+    j = 0
+    while j < 9 {
+        M[9 * 18 + j] = (j + 1) as i64
+        M[9 * 18 + 9 + j] = 1
+        j = j + 1
+    }
+    i = 10
+    while i < 18 {
+        M[i * 18 + (i - 1)] = 1
+        i = i + 1
+    }
+
+    let mut b: i32 = 1
+    while b < 64 {
+        mat_mul(powers + ((b - 1) as i64) * 324, powers + ((b - 1) as i64) * 324, tmp, MOD)
+        mat_copy(tmp, powers + (b as i64) * 324)
+        b = b + 1
+    }
+
+    v0[0] = 1
+
+    let mut total: i64 = 0
+    let mut pow13: i64 = 13
+    let mut ii: i32 = 1
+    while ii <= 17 {
+        total = (total + f_of(pow13, powers, v0, MOD)) % MOD
+        if ii < 17 { pow13 = pow13 * 13 }
+        ii = ii + 1
+    }
+
+    printf("%lld\n", total)
+    free(v0)
+    free(tmp)
+    free(powers)
+    return 0
+}

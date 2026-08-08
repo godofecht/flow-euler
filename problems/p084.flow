@@ -1,0 +1,176 @@
+# Project Euler 084
+# Monopoly modal string for 4-sided dice via Markov steady state.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+function next_rail(pos: i32) -> i32 {
+    if pos < 5 { return 5 }
+    if pos < 15 { return 15 }
+    if pos < 25 { return 25 }
+    if pos < 35 { return 35 }
+    return 5
+}
+
+function next_util(pos: i32) -> i32 {
+    if pos < 12 { return 12 }
+    if pos < 28 { return 28 }
+    return 12
+}
+
+function main() -> i32 {
+    # State: (square, doubles_in_a_row 0..2) → 120 states
+    let NS: i32 = 120
+    let p: ptr<f64> = calloc(NS as i64, 8)
+    let q: ptr<f64> = calloc(NS as i64, 8)
+    if p == null || q == null { return 1 }
+    p[0] = 1.0  # GO, 0 doubles
+
+    let sides: i32 = 4
+    let die_n: f64 = (sides * sides) as f64
+    let mut iter: i32 = 0
+    while iter < 200 {
+        let mut s: i32 = 0
+        while s < NS {
+            q[s] = 0.0
+            s = s + 1
+        }
+        s = 0
+        while s < NS {
+            let prob: f64 = p[s]
+            if prob > 0.0 {
+                let sq: i32 = s / 3
+                let dbl: i32 = s % 3
+                let mut d1: i32 = 1
+                while d1 <= sides {
+                    let mut d2: i32 = 1
+                    while d2 <= sides {
+                        let pr: f64 = prob / die_n
+                        let is_dbl: bool = d1 == d2
+                        if is_dbl && dbl == 2 {
+                            # third double → JAIL
+                            q[10 * 3 + 0] = q[10 * 3 + 0] + pr
+                        } else {
+                            let mut nd: i32 = 0
+                            if is_dbl {
+                                nd = dbl + 1
+                            }
+                            let mut pos: i32 = (sq + d1 + d2) % 40
+                            # resolve Chance / CC / G2J (one card draw each, 16 cards)
+                            if pos == 30 {
+                                pos = 10
+                                nd = 0
+                            } elif pos == 7 || pos == 22 || pos == 36 {
+                                # Chance: 16 equally likely
+                                let mut card: i32 = 0
+                                while card < 16 {
+                                    let mut np: i32 = pos
+                                    let mut nd2: i32 = nd
+                                    if card == 0 { np = 0 }
+                                    elif card == 1 { np = 10; nd2 = 0 }
+                                    elif card == 2 { np = 11 }
+                                    elif card == 3 { np = 24 }
+                                    elif card == 4 { np = 39 }
+                                    elif card == 5 { np = 5 }
+                                    elif card == 6 || card == 7 { np = next_rail(pos) }
+                                    elif card == 8 { np = next_util(pos) }
+                                    elif card == 9 {
+                                        np = (pos + 37) % 40
+                                        # back 3 may land on CC
+                                        if np == 33 || np == 2 || np == 17 {
+                                            # nested CC
+                                            let mut c2: i32 = 0
+                                            while c2 < 16 {
+                                                let mut npp: i32 = np
+                                                let mut nd3: i32 = nd2
+                                                if c2 == 0 { npp = 0 }
+                                                elif c2 == 1 { npp = 10; nd3 = 0 }
+                                                if npp == 30 { npp = 10; nd3 = 0 }
+                                                q[npp * 3 + nd3] = q[npp * 3 + nd3] + pr / 16.0 / 16.0
+                                                c2 = c2 + 1
+                                            }
+                                            card = card + 1
+                                            continue
+                                        }
+                                    }
+                                    if np == 30 { np = 10; nd2 = 0 }
+                                    q[np * 3 + nd2] = q[np * 3 + nd2] + pr / 16.0
+                                    card = card + 1
+                                }
+                                d2 = d2 + 1
+                                continue
+                            } elif pos == 2 || pos == 17 || pos == 33 {
+                                let mut card: i32 = 0
+                                while card < 16 {
+                                    let mut np: i32 = pos
+                                    let mut nd2: i32 = nd
+                                    if card == 0 { np = 0 }
+                                    elif card == 1 { np = 10; nd2 = 0 }
+                                    if np == 30 { np = 10; nd2 = 0 }
+                                    q[np * 3 + nd2] = q[np * 3 + nd2] + pr / 16.0
+                                    card = card + 1
+                                }
+                                d2 = d2 + 1
+                                continue
+                            }
+                            q[pos * 3 + nd] = q[pos * 3 + nd] + pr
+                        }
+                        d2 = d2 + 1
+                    }
+                    d1 = d1 + 1
+                }
+            }
+            s = s + 1
+        }
+        memcpy(p, q, (NS as i64) * 8)
+        iter = iter + 1
+    }
+
+    let visits: ptr<f64> = calloc(40, 8)
+    if visits == null { return 1 }
+    let mut i: i32 = 0
+    while i < 40 {
+        visits[i] = p[i * 3] + p[i * 3 + 1] + p[i * 3 + 2]
+        i = i + 1
+    }
+    let mut a: i32 = 0
+    let mut b: i32 = 1
+    let mut c: i32 = 2
+    if visits[b] > visits[a] {
+        let t: i32 = a
+        a = b
+        b = t
+    }
+    if visits[c] > visits[a] {
+        let t: i32 = a
+        a = c
+        c = t
+    }
+    if visits[c] > visits[b] {
+        let t: i32 = b
+        b = c
+        c = t
+    }
+    i = 3
+    while i < 40 {
+        if visits[i] > visits[a] {
+            c = b
+            b = a
+            a = i
+        } elif visits[i] > visits[b] {
+            c = b
+            b = i
+        } elif visits[i] > visits[c] {
+            c = i
+        }
+        i = i + 1
+    }
+    printf("%lld\n", (a as i64) * 10000 + (b as i64) * 100 + (c as i64))
+    free(p)
+    free(q)
+    free(visits)
+    return 0
+}

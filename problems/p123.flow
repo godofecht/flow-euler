@@ -1,0 +1,59 @@
+# Project Euler 123
+# Least n such that (p_n-1)^n + (p_n+1)^n mod p_n^2 > 10^9.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    # Need primes up to roughly n~21000, p~250000
+    let limit: i64 = 1000000
+    let sieve: ptr<i8> = calloc(limit, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p < limit {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m < limit {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let primes: ptr<i64> = calloc(100000, 8)
+    if primes == null { free(sieve); return 1 }
+    let mut pc: i32 = 0
+    let mut i: i64 = 2
+    while i < limit {
+        if sieve[i] == 0 {
+            primes[pc] = i
+            pc = pc + 1
+        }
+        i = i + 1
+    }
+
+    let thresh: i64 = 10000000000
+    let mut n: i32 = 1
+    while n <= pc {
+        # For odd n: rem = 2*n*p mod p^2 = 2*n*p (since 2*n*p < p^2 for n < p/2)
+        # For even n: rem = 2
+        if n % 2 == 1 {
+            let pn: i64 = primes[n - 1]
+            let rem: i64 = (2 * (n as i64) * pn) % (pn * pn)
+            if rem > thresh {
+                printf("%lld\n", n as i64)
+                free(primes)
+                free(sieve)
+                return 0
+            }
+        }
+        n = n + 1
+    }
+    free(primes)
+    free(sieve)
+    return 1
+}

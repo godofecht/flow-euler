@@ -1,0 +1,51 @@
+# Project Euler 115
+# Least n such that fill_ways(n, m=50) > 1_000_000.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function ways(n: i32, m: i32, a: ptr<i64>) -> i64 {
+    a[0] = 1
+    let mut i: i32 = 1
+    while i <= n {
+        a[i] = a[i - 1]
+        let mut k: i32 = m
+        while k <= i {
+            if k == i {
+                a[i] = a[i] + 1
+            } else {
+                a[i] = a[i] + a[i - k - 1]
+            }
+            k = k + 1
+        }
+        i = i + 1
+    }
+    return a[n]
+}
+
+function main() -> i32 {
+    let m: i32 = 50
+    let max_n: i32 = 200
+    let a: ptr<i64> = calloc((max_n + 1) as i64, 8)
+    if a == null { return 1 }
+    let mut n: i32 = m
+    while n <= max_n {
+        # recompute from scratch each time (small)
+        let mut j: i32 = 0
+        while j <= n {
+            a[j] = 0
+            j = j + 1
+        }
+        let w: i64 = ways(n, m, a)
+        if w > 1000000 {
+            printf("%lld\n", n as i64)
+            free(a)
+            return 0
+        }
+        n = n + 1
+    }
+    free(a)
+    return 1
+}

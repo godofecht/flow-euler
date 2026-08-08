@@ -1,0 +1,57 @@
+# Project Euler 223
+# Almost right-angled triangles I: a^2+b^2=c^2+1, perimeter <= 25e6.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let LIM: i64 = 25000000
+    let CAP: i64 = 20000000
+    let sa: ptr<i32> = calloc(CAP, 4)
+    let sb: ptr<i32> = calloc(CAP, 4)
+    let sc: ptr<i32> = calloc(CAP, 4)
+    if sa == null || sb == null || sc == null { return 1 }
+    let mut sp: i64 = 0
+    sa[0] = 1; sb[0] = 1; sc[0] = 1; sp = 1
+    sa[1] = 1; sb[1] = 2; sc[1] = 2; sp = 2
+    let mut count: i64 = 0
+    while sp > 0 {
+        sp = sp - 1
+        let a: i64 = sa[sp] as i64
+        let b: i64 = sb[sp] as i64
+        let c: i64 = sc[sp] as i64
+        if a + b + c > LIM { continue }
+        count = count + 1
+        # A
+        let mut x: i64 = a - 2 * b + 2 * c
+        let mut y: i64 = 2 * a - b + 2 * c
+        let z: i64 = 2 * a - 2 * b + 3 * c
+        if x > y { let t: i64 = x; x = y; y = t }
+        if x + y + z <= LIM {
+            sa[sp] = x as i32; sb[sp] = y as i32; sc[sp] = z as i32; sp = sp + 1
+        }
+        # B
+        x = a + 2 * b + 2 * c
+        y = 2 * a + b + 2 * c
+        let z2: i64 = 2 * a + 2 * b + 3 * c
+        if x > y { let t2: i64 = x; x = y; y = t2 }
+        if x + y + z2 <= LIM {
+            sa[sp] = x as i32; sb[sp] = y as i32; sc[sp] = z2 as i32; sp = sp + 1
+        }
+        # C
+        if a != b {
+            x = 0 - a + 2 * b + 2 * c
+            y = 0 - 2 * a + b + 2 * c
+            let z3: i64 = 0 - 2 * a + 2 * b + 3 * c
+            if x > y { let t3: i64 = x; x = y; y = t3 }
+            if x + y + z3 <= LIM {
+                sa[sp] = x as i32; sb[sp] = y as i32; sc[sp] = z3 as i32; sp = sp + 1
+            }
+        }
+    }
+    printf("%lld\n", count)
+    free(sa); free(sb); free(sc)
+    return 0
+}
