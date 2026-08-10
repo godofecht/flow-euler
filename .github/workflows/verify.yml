@@ -2,9 +2,9 @@ name: Verify
 
 on:
   push:
-    branches: [cursor/flow-euler-solutions]
+    branches: [main]
   pull_request:
-    branches: [cursor/flow-euler-solutions]
+    branches: [main]
 
 jobs:
   verify:
