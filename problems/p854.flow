@@ -1,0 +1,37 @@
+# Project Euler 854
+# Pisano Periods 2 — product of M(p) for p<=1e6 mod 1234567891.
+
+const MOD: i64 = 1234567891
+const TARGET: i64 = 1000000
+
+function solve() -> i64 {
+    let mut res: i64 = 2 % MOD
+    let max_m: i64 = TARGET / 2
+    let mut f_prev: i64 = 0
+    let mut f_cur: i64 = 1
+    let mut l_prev: i64 = 2 % MOD
+    let mut l_cur: i64 = 1 % MOD
+    let mut m: i64 = 2
+    while m <= max_m {
+        let f_next: i64 = (f_prev + f_cur) % MOD
+        f_prev = f_cur
+        f_cur = f_next
+        let l_next: i64 = (l_prev + l_cur) % MOD
+        l_prev = l_cur
+        l_cur = l_next
+        if m >= 3 {
+            if (m & 1) == 0 {
+                res = ((res as i128) * (f_cur as i128) % (MOD as i128)) as i64
+            } else {
+                res = ((res as i128) * (l_cur as i128) % (MOD as i128)) as i64
+            }
+        }
+        m = m + 1
+    }
+    return res
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve())
+    return 0
+}

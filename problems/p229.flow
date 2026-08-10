@@ -1,20 +1,11 @@
 # Project Euler 229
 # Numbers representable as a^2+b^2, a^2+2b^2, a^2+3b^2, a^2+7b^2 below 2e9.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function main() -> i32 {

@@ -1,0 +1,107 @@
+# Project Euler 675
+# 2^omega(n): sum of S(i!) for i=2..10^7, where S(n) = prod_{p^e || n} (2e+1), mod 1e9+87.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000087
+
+function mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000
+
+    # Smallest prime factor sieve
+    let spf: ptr<i64> = calloc(N + 1, 8)
+    let primes: ptr<i64> = calloc(N / 5 + 100, 8)
+    let mut npc: i64 = 0
+
+    if spf == null || primes == null { return 1 }
+
+    for x in 2..(N + 1) {
+        if spf[x] == 0 {
+            spf[x] = x
+            primes[npc] = x
+            npc = npc + 1
+        }
+        let spfx: i64 = spf[x]
+        for j in 0..npc {
+            let p: i64 = primes[j]
+            let y: i64 = p * x
+            if y > N { break }
+            spf[y] = p
+            if p == spfx { break }
+        }
+    }
+
+    # Compute v_2(N!) to size the inverse table
+    let mut v2_fact: i64 = 0
+    let mut power: i64 = 2
+    while power <= N {
+        v2_fact = v2_fact + N / power
+        power = power * 2
+    }
+
+    # Inverse table up to 2*v2_fact + 1
+    let inv_limit: i64 = 2 * v2_fact + 1
+    let inv: ptr<i64> = calloc(inv_limit + 1, 8)
+    if inv == null { return 1 }
+    inv[1] = 1
+    for x in 2..(inv_limit + 1) {
+        inv[x] = (MOD - (MOD / x) * inv[MOD % x] % MOD) % MOD
+    }
+
+    # Exponents of each prime in the running factorial
+    let exps: ptr<i64> = calloc(N + 1, 8)
+    if exps == null { return 1 }
+
+    let mut running: i64 = 1
+    let mut total: i64 = 0
+
+    for i in 2..(N + 1) {
+        let mut x: i64 = i
+        while x > 1 {
+            let p: i64 = spf[x]
+            let mut count: i64 = 0
+            while x % p == 0 {
+                x = x / p
+                count = count + 1
+            }
+
+            let old_exp: i64 = exps[p]
+            let new_exp: i64 = old_exp + count
+            let old_factor: i64 = 2 * old_exp + 1
+            let new_factor: i64 = 2 * new_exp + 1
+            let t1: i128 = (running as i128) * (new_factor as i128) % (MOD as i128)
+            let t2: i128 = (t1 * (inv[old_factor] as i128)) % (MOD as i128)
+            running = t2 as i64
+            exps[p] = new_exp
+        }
+
+        total = (total + running) % MOD
+    }
+
+    printf("%lld\n", total)
+
+    free(exps)
+    free(inv)
+    free(primes)
+    free(spf)
+    return 0
+}

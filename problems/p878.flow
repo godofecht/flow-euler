@@ -1,0 +1,98 @@
+# Project Euler 878
+# XOR-Equation B — count orbits with invariant <= 1e6 and b <= 1e17.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function clmul(x0: i64, y0: i64) -> i64 {
+    let mut x: i64 = x0
+    let mut y: i64 = y0
+    if x == 0 || y == 0 { return 0 }
+    let mut bx: i64 = 0
+    let mut by: i64 = 0
+    let mut t: i64 = x
+    while t > 0 {
+        bx = bx + (t & 1)
+        t = t >> 1
+    }
+    t = y
+    while t > 0 {
+        by = by + (t & 1)
+        t = t >> 1
+    }
+    if bx < by {
+        let tmp: i64 = x
+        x = y
+        y = tmp
+    }
+    let mut result: i64 = 0
+    while y != 0 {
+        let bit: i64 = y & -y
+        let mut sh: i64 = 0
+        let mut b: i64 = bit
+        while b > 1 {
+            b = b >> 1
+            sh = sh + 1
+        }
+        result = result ^ (x << sh)
+        y = y ^ bit
+    }
+    return result
+}
+
+function count_forward(a0: i64, b0: i64, limit: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    let mut total: i64 = 0
+    while b <= limit {
+        total = total + 1
+        let na: i64 = b
+        let nb: i64 = a ^ (b << 1)
+        a = na
+        b = nb
+    }
+    return total
+}
+
+function G(limit: i64, max_value: i64) -> i64 {
+    if max_value == 0 { return 1 }
+    let mut bl: i64 = 0
+    let mut mv: i64 = max_value
+    while mv > 0 {
+        bl = bl + 1
+        mv = mv >> 1
+    }
+    let seed_limit: i64 = 1 << ((bl + 2) / 2)
+    let squares: ptr<i64> = calloc(seed_limit, 8)
+    let mut x: i64 = 0
+    while x < seed_limit {
+        squares[x] = clmul(x, x)
+        x = x + 1
+    }
+    let mut total: i64 = 1
+    let mut a: i64 = 0
+    while a < seed_limit {
+        let square_a: i64 = squares[a]
+        let mut b: i64 = a
+        if b < 1 { b = 1 }
+        while b < seed_limit {
+            let invariant: i64 = square_a ^ squares[b] ^ (clmul(a, b) << 1)
+            if invariant <= max_value {
+                if (b ^ (a << 1)) > a {
+                    total = total + count_forward(a, b, limit)
+                }
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    free(squares)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", G(100000000000000000, 1000000))
+    return 0
+}

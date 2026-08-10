@@ -1,19 +1,10 @@
 # Project Euler 183
 # Sum D(N) for N=5..10000; D=N if (N/k*)^k* non-terminating else -N.
 
+import euler.nt { gcd }
+
 extern {
     function round(x: f64) -> f64
-}
-
-function gcd(a: i64, b: i64) -> i64 {
-    let mut x: i64 = a
-    let mut y: i64 = b
-    while y != 0 {
-        let t: i64 = x % y
-        x = y
-        y = t
-    }
-    return x
 }
 
 function is_terminating(n: i64, k: i64) -> bool {

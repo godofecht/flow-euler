@@ -1,0 +1,217 @@
+# Project Euler 642: Sum of Largest Prime Factors
+# F(n) = sum of LPF(i) for i=2..n. Compute F(201820182018) mod 10^9.
+# Uses Min_25-style prime sum table + recursive contribution.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+
+# Globals for recursion
+let mut g_N: i64 = 0
+let mut g_root: i64 = 0
+let mut g_nprimes: i64 = 0
+let mut g_primes: ptr<i64> = null
+let mut g_pi: ptr<i64> = null  # pi[x] = prime counting function
+let mut g_prime_sums: ptr<i64> = null  # prime sum table
+let mut g_idx_small: ptr<i64> = null
+let mut g_idx_large: ptr<i64> = null
+let mut g_lower_prime_sum: ptr<i64> = null
+
+# Memoization: key = bound * (nprimes+1) + idx
+# Use hash table
+const HASH_SIZE: i64 = 4000007
+let mut g_memo_keys: ptr<i64> = null
+let mut g_memo_vals: ptr<i64> = null
+
+function prime_sum_upto(x: i64) -> i64 {
+    if x <= g_root {
+        return g_prime_sums[g_idx_small[x]]
+    }
+    return g_prime_sums[g_idx_large[g_N / x]]
+}
+
+function terminal_prime_sum(x: i64, idx: i64) -> i64 {
+    if idx >= g_nprimes {
+        if x <= g_primes[g_nprimes - 1] { return 0 }
+    } else {
+        if x < g_primes[idx] { return 0 }
+    }
+    let r: i64 = (prime_sum_upto(x) - g_lower_prime_sum[idx]) % MOD
+    if r < 0 { r = r + MOD }
+    return r
+}
+
+function contribution(bound: i64, idx: i64) -> i64 {
+    let isqrt_bound: i64 = isqrt(bound)
+    # end = pi[isqrt(bound)]
+    let mut end: i64 = g_pi[isqrt_bound]
+
+    let mut total: i64 = terminal_prime_sum(bound, idx)
+    if idx >= end { return total }
+
+    # Check memo
+    let key: i64 = bound * (g_nprimes + 1) + idx
+    let h: i64 = key % HASH_SIZE
+    if g_memo_keys[h] == key { return g_memo_vals[h] }
+
+    for i in idx..end {
+        let p: i64 = g_primes[i]
+        let mut power: i64 = p
+        let power_limit: i64 = bound / p
+        let next_idx: i64 = i + 1
+
+        while power <= power_limit {
+            let child_bound: i64 = bound / power
+            let child_end: i64 = g_pi[isqrt(child_bound)]
+            let child: i64
+            if next_idx >= child_end {
+                child = terminal_prime_sum(child_bound, next_idx)
+            } else {
+                child = contribution(child_bound, next_idx)
+            }
+            total = (total + child + p) % MOD
+            if power > bound / p { break }
+            power = power * p
+        }
+    }
+
+    total = total % MOD
+    if total < 0 { total = total + MOD }
+    g_memo_keys[h] = key
+    g_memo_vals[h] = total
+    return total
+}
+
+function main() -> i32 {
+    g_N = 201820182018
+    g_root = isqrt(g_N)
+
+    # Build prime sum table (Min_25 sieve)
+    # Values: descending distinct floor(N/i)
+    let vals: ptr<i64> = calloc(2 * g_root + 10, 8)
+    let mut m: i64 = 0
+    let mut i_val: i64 = 1
+    while i_val <= g_N {
+        let q: i64 = g_N / i_val
+        vals[m] = q
+        m = m + 1
+        i_val = g_N / q + 1
+    }
+
+    g_idx_small = calloc(g_root + 1, 8)
+    g_idx_large = calloc(g_root + 1, 8)
+    for idx in 0..m {
+        let v: i64 = vals[idx]
+        if v <= g_root {
+            g_idx_small[v] = idx
+        } else {
+            g_idx_large[g_N / v] = idx
+        }
+    }
+
+    # Initialize prime_sums = v*(v+1)/2 - 1 mod MOD
+    g_prime_sums = calloc(m, 8)
+    for idx in 0..m {
+        let v: i64 = vals[idx]
+        let mut s: i128 = (v as i128) * ((v + 1) as i128) / 2 - 1
+        s = s % (MOD as i128)
+        g_prime_sums[idx] = s as i64
+    }
+
+    # Sieve primes up to root
+    let is_comp: ptr<i64> = calloc(g_root + 1, 8)
+    g_primes = calloc(g_root / 10 + 100, 8)
+    g_nprimes = 0
+    for i in 2..(g_root + 1) {
+        if is_comp[i] == 0 {
+            g_primes[g_nprimes] = i
+            g_nprimes = g_nprimes + 1
+            let mut j: i64 = i * i
+            while j <= g_root {
+                is_comp[j] = 1
+                j = j + i
+            }
+        }
+    }
+    free(is_comp)
+
+    # Min_25 sieve: for each prime p, update prime_sums
+    for pi in 0..g_nprimes {
+        let p: i64 = g_primes[pi]
+        let p2: i64 = p * p
+        if p2 > g_N { break }
+
+        # Find limit: number of vals >= p2
+        let mut lo_k: i64 = 0
+        let mut hi_k: i64 = m
+        while lo_k < hi_k {
+            let mid: i64 = (lo_k + hi_k) / 2
+            if vals[mid] >= p2 { lo_k = mid + 1 } else { hi_k = mid }
+        }
+        let limit: i64 = lo_k
+        if limit == 0 { continue }
+
+        let base_idx: i64 = g_idx_small[p - 1]
+        let sum_before_p: i64 = g_prime_sums[base_idx]
+
+        for j in 0..limit {
+            let v: i64 = vals[j]
+            let quotient: i64 = v / p
+            let qidx: i64
+            if quotient <= g_root {
+                qidx = g_idx_small[quotient]
+            } else {
+                qidx = g_idx_large[g_N / quotient]
+            }
+            let mut delta: i128 = (p as i128) * ((g_prime_sums[qidx] - sum_before_p) as i128)
+            delta = delta % (MOD as i128)
+            let mut new_val: i128 = (g_prime_sums[j] as i128) - delta
+            new_val = new_val % (MOD as i128)
+            if new_val < 0 { new_val = new_val + (MOD as i128) }
+            g_prime_sums[j] = new_val as i64
+        }
+    }
+
+    # Build pi[x] = prime counting function for x = 0..root
+    g_pi = calloc(g_root + 1, 8)
+    let mut count: i64 = 0
+    let mut pidx: i64 = 0
+    for v in 0..(g_root + 1) {
+        if pidx < g_nprimes && g_primes[pidx] == v {
+            count = count + 1
+            pidx = pidx + 1
+        }
+        g_pi[v] = count
+    }
+
+    # Build lower_prime_sum
+    g_lower_prime_sum = calloc(g_nprimes + 1, 8)
+    for idx in 0..g_nprimes {
+        let p: i64 = g_primes[idx]
+        g_lower_prime_sum[idx] = g_prime_sums[g_idx_small[p - 1]]
+    }
+    g_lower_prime_sum[g_nprimes] = g_prime_sums[g_idx_small[g_primes[g_nprimes - 1]]]
+
+    # Init memo
+    g_memo_keys = calloc(HASH_SIZE, 8)
+    g_memo_vals = calloc(HASH_SIZE, 8)
+
+    let ans: i64 = contribution(g_N, 0)
+    printf("%lld\n", ans)
+
+    free(g_memo_vals)
+    free(g_memo_keys)
+    free(g_lower_prime_sum)
+    free(g_pi)
+    free(g_primes)
+    free(g_prime_sums)
+    free(g_idx_large)
+    free(g_idx_small)
+    free(vals)
+    return 0
+}

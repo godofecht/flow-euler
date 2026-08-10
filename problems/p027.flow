@@ -2,17 +2,7 @@
 # Product of coefficients a,b for n² + a·n + b producing most primes
 # for consecutive n starting at 0 (|a| < 1000, |b| ≤ 1000).
 
-function is_prime(n: i64) -> bool {
-    if n < 2 { return false }
-    if n < 4 { return true }
-    if n % 2 == 0 || n % 3 == 0 { return false }
-    let mut i: i64 = 5
-    while i * i <= n {
-        if n % i == 0 || n % (i + 2) == 0 { return false }
-        i = i + 6
-    }
-    return true
-}
+import euler.nt { is_prime }
 
 function streak(a: i64, b: i64) -> i64 {
     let mut n: i64 = 0
@@ -29,18 +19,14 @@ function streak(a: i64, b: i64) -> i64 {
 function main() -> i32 {
     let mut best_n: i64 = 0
     let mut best_prod: i64 = 0
-    let mut a: i64 = -999
-    while a < 1000 {
-        let mut b: i64 = -1000
-        while b <= 1000 {
+    for a in -999..1000 {
+        for b in -1000..1001 {
             let n: i64 = streak(a, b)
             if n > best_n {
                 best_n = n
                 best_prod = a * b
             }
-            b = b + 1
         }
-        a = a + 1
     }
     printf("%lld\n", best_prod)
     return 0

@@ -1,0 +1,78 @@
+# Project Euler 887
+# Bounded Binary Search — sum Q(N,d) for d=0..7, N<=7^10.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Memo: key = q*16 + (d+8) since d can be small negatives; use hash
+const HSIZE: i64 = 1 << 20
+let mut HKEY: ptr<i64> = null
+let mut HVAL: ptr<i64> = null
+let mut HUSE: ptr<i8> = null
+
+function pack(q: i64, d: i64) -> i64 {
+    return (q << 32) ^ (d + 1000000000)
+}
+
+function max_n(q: i64, d: i64) -> i64 {
+    if d < 0 { return 1 }
+    if q == 0 { return 1 }
+    if d >= q - 1 {
+        return 1 << q
+    }
+    let key: i64 = pack(q, d)
+    let mut h: i64 = (key * 11400714819323198485) & (HSIZE - 1)
+    while HUSE[h] != 0 {
+        if HKEY[h] == key { return HVAL[h] }
+        h = (h + 1) & (HSIZE - 1)
+    }
+    let left: i64 = max_n(q - 1, d - 1)
+    let ans: i64 = left + max_n(q - 1, left + d - 1)
+    HUSE[h] = 1
+    HKEY[h] = key
+    HVAL[h] = ans
+    return ans
+}
+
+function sum_Q_upto(limit: i64, d: i64) -> i64 {
+    if limit <= 0 { return 0 }
+    if d == 0 {
+        return limit * (limit - 1) / 2
+    }
+    let mut total: i64 = 0
+    let mut prev_cap: i64 = 0
+    let mut q: i64 = 0
+    while prev_cap < limit {
+        let mut cap: i64 = max_n(q, d)
+        if cap > limit { cap = limit }
+        total = total + q * (cap - prev_cap)
+        prev_cap = cap
+        q = q + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    HKEY = calloc(HSIZE, 8)
+    HVAL = calloc(HSIZE, 8)
+    HUSE = calloc(HSIZE, 1)
+    let mut limit: i64 = 1
+    let mut i: i64 = 0
+    while i < 10 {
+        limit = limit * 7
+        i = i + 1
+    }
+    let mut ans: i64 = 0
+    let mut d: i64 = 0
+    while d <= 7 {
+        ans = ans + sum_Q_upto(limit, d)
+        d = d + 1
+    }
+    printf("%lld\n", ans)
+    free(HKEY)
+    free(HVAL)
+    free(HUSE)
+    return 0
+}

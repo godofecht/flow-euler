@@ -1,0 +1,22 @@
+# Project Euler 700
+# Eulercoin: minima of (a*n mod m) via Frobenius/max-min iteration.
+
+function main() -> i32 {
+    let modulus: i64 = 4503599627370517
+    let multiplier: i64 = 1504170715041707
+    let mut maxe: i64 = multiplier
+    let mut mine: i64 = multiplier
+    let mut total: i64 = multiplier
+    while mine != 1 {
+        let middle: i64 = (maxe + mine) % modulus
+        if middle > maxe {
+            maxe = middle
+        }
+        if middle < mine {
+            mine = middle
+            total = total + mine
+        }
+    }
+    printf("%lld\n", total)
+    return 0
+}

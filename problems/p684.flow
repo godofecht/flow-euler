@@ -1,0 +1,49 @@
+# Project Euler 684
+# Inverse digit sum: sum_{i=2..90} S(F_i) mod 1e9+7.
+
+const MOD: i64 = 1000000007
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function S_mod(k: i64) -> i64 {
+    if k <= 0 { return 0 }
+    let q: i64 = k / 9
+    let r: i64 = k % 9
+    let p10: i64 = modpow(10, q, MOD)
+    let mut part_full: i64 = (5 * ((p10 - 1 + MOD) % MOD) - 9 * (q % MOD)) % MOD
+    if part_full < 0 { part_full = part_full + MOD }
+    let tri: i64 = (r + 1) * (r + 2) / 2
+    let mut part_tail: i64 = (p10 * (tri % MOD) - (r + 1)) % MOD
+    if part_tail < 0 { part_tail = part_tail + MOD }
+    return (part_full + part_tail) % MOD
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut f0: i64 = 0
+    let mut f1: i64 = 1
+    let mut i: i64 = 2
+    while i <= 90 {
+        let next: i64 = f0 + f1
+        f0 = f1
+        f1 = next
+        total = (total + S_mod(f1)) % MOD
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

@@ -1,28 +1,7 @@
 # Project Euler 130
 # Sum of first twenty-five composites n with gcd(n,10)=1 and (n-1) divisible by A(n).
 
-function mod_pow(base: i64, exp: i64, mod: i64) -> i64 {
-    let mut r: i64 = 1
-    let mut b: i64 = base % mod
-    let mut e: i64 = exp
-    while e > 0 {
-        if e % 2 == 1 { r = (r * b) % mod }
-        b = (b * b) % mod
-        e = e / 2
-    }
-    return r
-}
-
-function is_prime(n: i64) -> bool {
-    if n < 2 { return false }
-    if n % 2 == 0 { return n == 2 }
-    let mut d: i64 = 3
-    while d * d <= n {
-        if n % d == 0 { return false }
-        d = d + 2
-    }
-    return true
-}
+import euler.nt { is_prime, mod_pow }
 
 function main() -> i32 {
     let mut total: i64 = 0

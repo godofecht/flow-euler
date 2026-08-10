@@ -1,0 +1,156 @@
+# Project Euler 676: Matching Digit Sums
+# Digit DP over binary representation, tracking diff of digit sums in two bases.
+# Sum over (k,l) pairs of M(10^16, 2^k, 2^l), last 16 digits.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 10000000000000000  # 10^16
+const MAX_DIFF: i64 = 2000
+const ARR_SIZE: i64 = 4001
+const OFFSET: i64 = 2000
+
+function M_power2_bases(n: i64, k: i64, l: i64) -> i64 {
+    if n <= 0 { return 0 }
+
+    # Extract bits of n (MSB first)
+    let mut B: i64 = 0
+    let mut tmp: i64 = n
+    while tmp > 0 { B = B + 1; tmp = tmp >> 1 }
+
+    # bits[p] = bit at position p (0=LSB, B-1=MSB)
+    # We process from MSB to LSB
+    # tight_count[diff+offset], tight_sum[diff+offset]
+    let tight_cnt: ptr<i64> = calloc(ARR_SIZE, 8)
+    let tight_sum: ptr<i64> = calloc(ARR_SIZE, 8)
+    let loose_cnt: ptr<i64> = calloc(ARR_SIZE, 8)
+    let loose_sum: ptr<i64> = calloc(ARR_SIZE, 8)
+
+    let new_tight_cnt: ptr<i64> = calloc(ARR_SIZE, 8)
+    let new_tight_sum: ptr<i64> = calloc(ARR_SIZE, 8)
+    let new_loose_cnt: ptr<i64> = calloc(ARR_SIZE, 8)
+    let new_loose_sum: ptr<i64> = calloc(ARR_SIZE, 8)
+
+    # Initialize: tight state with diff=0, count=1, sum=0
+    tight_cnt[OFFSET] = 1
+
+    for idx in 0..B {
+        # Bit position from MSB: p = B-1-idx
+        let p: i64 = B - 1 - idx
+        # Bit value at this position in n
+        let lim: i64 = (n >> p) & 1
+
+        # Contribution to diff if this bit is 1
+        let pk: i64 = p % k
+        let pl: i64 = p % l
+        let mut ck: i64 = 1
+        for _ in 0..pk { ck = ck * 2 }
+        let mut cl: i64 = 1
+        for _ in 0..pl { cl = cl * 2 }
+        let c: i64 = ck - cl
+        # Weight (value contribution if bit is 1)
+        let mut w: i64 = 1
+        for _ in 0..p { w = w * 2 }
+
+        # Clear new arrays
+        for i in 0..ARR_SIZE {
+            new_tight_cnt[i] = 0
+            new_tight_sum[i] = 0
+            new_loose_cnt[i] = 0
+            new_loose_sum[i] = 0
+        }
+
+        # Extend loose states: next bit can be 0 or 1
+        for d in 0..ARR_SIZE {
+            if loose_cnt[d] == 0 { continue }
+            let cnt: i64 = loose_cnt[d]
+            let sm: i64 = loose_sum[d]
+
+            # bit 0: diff unchanged
+            new_loose_cnt[d] = (new_loose_cnt[d] + cnt) % MOD
+            new_loose_sum[d] = (new_loose_sum[d] + sm) % MOD
+
+            # bit 1: diff += c
+            let d1: i64 = d + c
+            if d1 >= 0 && d1 < ARR_SIZE {
+                new_loose_cnt[d1] = (new_loose_cnt[d1] + cnt) % MOD
+                let wcnt: i128 = (w as i128) * (cnt as i128)
+                new_loose_sum[d1] = ((new_loose_sum[d1] as i128 + sm as i128 + wcnt % (MOD as i128)) % (MOD as i128)) as i64
+            }
+        }
+
+        # Extend tight states
+        for d in 0..ARR_SIZE {
+            if tight_cnt[d] == 0 { continue }
+            let cnt: i64 = tight_cnt[d]
+            let sm: i64 = tight_sum[d]
+
+            if lim == 0 {
+                # only bit 0 keeps tight
+                new_tight_cnt[d] = (new_tight_cnt[d] + cnt) % MOD
+                new_tight_sum[d] = (new_tight_sum[d] + sm) % MOD
+            } else {
+                # choose 0 -> becomes loose
+                new_loose_cnt[d] = (new_loose_cnt[d] + cnt) % MOD
+                new_loose_sum[d] = (new_loose_sum[d] + sm) % MOD
+
+                # choose 1 -> stays tight
+                let d1: i64 = d + c
+                if d1 >= 0 && d1 < ARR_SIZE {
+                    new_tight_cnt[d1] = (new_tight_cnt[d1] + cnt) % MOD
+                    let wcnt2: i128 = (w as i128) * (cnt as i128)
+                    new_tight_sum[d1] = ((new_tight_sum[d1] as i128 + sm as i128 + wcnt2 % (MOD as i128)) % (MOD as i128)) as i64
+                }
+            }
+        }
+
+        # Swap: copy new to current
+        for i in 0..ARR_SIZE {
+            tight_cnt[i] = new_tight_cnt[i]
+            tight_sum[i] = new_tight_sum[i]
+            loose_cnt[i] = new_loose_cnt[i]
+            loose_sum[i] = new_loose_sum[i]
+        }
+    }
+
+    # Answer: sum of values where diff = 0
+    let mut result: i64 = 0
+    result = (result + tight_sum[OFFSET]) % MOD
+    result = (result + loose_sum[OFFSET]) % MOD
+
+    free(new_loose_sum)
+    free(new_loose_cnt)
+    free(new_tight_sum)
+    free(new_tight_cnt)
+    free(loose_sum)
+    free(loose_cnt)
+    free(tight_sum)
+    free(tight_cnt)
+
+    return result
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000000000000  # 10^16
+    let mut total: i64 = 0
+
+    # k=3, l=1
+    total = (total + M_power2_bases(N, 3, 1)) % MOD
+    # k=4, l=1,2
+    total = (total + M_power2_bases(N, 4, 1)) % MOD
+    total = (total + M_power2_bases(N, 4, 2)) % MOD
+    # k=5, l=1,2,3
+    total = (total + M_power2_bases(N, 5, 1)) % MOD
+    total = (total + M_power2_bases(N, 5, 2)) % MOD
+    total = (total + M_power2_bases(N, 5, 3)) % MOD
+    # k=6, l=1,2,3,4
+    total = (total + M_power2_bases(N, 6, 1)) % MOD
+    total = (total + M_power2_bases(N, 6, 2)) % MOD
+    total = (total + M_power2_bases(N, 6, 3)) % MOD
+    total = (total + M_power2_bases(N, 6, 4)) % MOD
+
+    printf("%016lld\n", total)
+    return 0
+}

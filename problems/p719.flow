@@ -1,0 +1,11 @@
+# Project Euler 719
+# Number Splitting — T(10^12).
+
+extern {
+    function pe_solve() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe_solve())
+    return 0
+}

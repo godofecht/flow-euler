@@ -1,0 +1,40 @@
+# Project Euler 710
+# Least n>=43 with t(n)≡0 (mod 10^6).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let N: i64 = 2000000
+    let c1: ptr<i64> = calloc(N + 1, 8)
+    let c2: ptr<i64> = calloc(N + 1, 8)
+    let sc1: ptr<i64> = calloc(N + 1, 8)
+    let sc2: ptr<i64> = calloc(N + 1, 8)
+    let t: ptr<i64> = calloc(N + 1, 8)
+    if c1 == null { return 1 }
+    let mod: i64 = 1000000
+    c1[0] = 1; c1[1] = 1; c1[2] = 1
+    c2[2] = 1
+    sc1[0] = 1; sc1[1] = 2; sc1[2] = 3
+    sc2[2] = 1
+    t[2] = 1
+    let mut n: i64 = 2
+    while (t[n] != 0) || (n < 43) {
+        n = n + 1
+        c2[n] = (sc2[n - 1] + c1[n - 2]) % mod
+        c1[n] = (sc1[n - 1] - c1[n - 2]) % mod
+        if c1[n] < 0 { c1[n] = c1[n] + mod }
+        sc2[n] = (sc2[n - 1] + c2[n]) % mod
+        sc1[n] = (sc1[n - 1] + c1[n]) % mod
+        if n % 2 == 0 {
+            t[n] = (sc2[n / 2] + c1[n / 2 - 1]) % mod
+        } else {
+            t[n] = sc2[n / 2] % mod
+        }
+    }
+    printf("%lld\n", n)
+    free(c1); free(c2); free(sc1); free(sc2); free(t)
+    return 0
+}

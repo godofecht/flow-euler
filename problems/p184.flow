@@ -1,12 +1,14 @@
 # Project Euler 184
 # Triangles containing the origin with vertices in I_105.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
 }
 
-function gcd(a: i64, b: i64) -> i64 {
+function gcd_abs(a: i64, b: i64) -> i64 {
     let mut x: i64 = a
     if x < 0 { x = 0 - x }
     let mut y: i64 = b
@@ -15,17 +17,6 @@ function gcd(a: i64, b: i64) -> i64 {
         let t: i64 = x % y
         x = y
         y = t
-    }
-    return x
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
     }
     return x
 }
@@ -75,7 +66,7 @@ function main() -> i32 {
             let mut y: i64 = 0 - ylim
             while y <= ylim {
                 if !(x == 0 && y == 0) {
-                    let g: i64 = gcd(x, y)
+                    let g: i64 = gcd_abs(x, y)
                     let dx: i64 = x / g
                     let dy: i64 = y / g
                     let mut h: i64 = ((dx + 200) * 401 + (dy + 200)) % HS

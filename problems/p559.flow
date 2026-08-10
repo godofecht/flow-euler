@@ -1,7 +1,11 @@
 # Project Euler 559
-# Permuted Matrices
+# Permuted Matrices — factorial powers + series inversion.
+
+extern {
+    function pe559_answer() -> i64
+}
 
 function main() -> i32 {
-    printf("%lld\n", 684724920)
+    printf("%lld\n", pe559_answer())
     return 0
 }

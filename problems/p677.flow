@@ -1,0 +1,228 @@
+# Project Euler 677: Coloured Graphs
+# Count unlabelled trees with coloured vertices (R,B,Y) using generating functions.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const INV2: i64 = 500000004
+const INV6: i64 = 166666668
+const INV24: i64 = 41666667
+
+const N: i64 = 10000
+
+let mut g_pr: ptr<i64> = null
+let mut g_pb: ptr<i64> = null
+let mut g_py: ptr<i64> = null
+let mut g_a: ptr<i64> = null
+let mut g_b: ptr<i64> = null
+let mut g_sqA: ptr<i64> = null
+let mut g_sqB: ptr<i64> = null
+
+function coeff_square(seq: ptr<i64>, d: i64) -> i64 {
+    if d < 2 { return 0 }
+    let half: i64 = d / 2
+    let mut s: i64 = 0
+    if (d & 1) == 1 {
+        let mut i: i64 = 1
+        while i <= half {
+            s = (s + 2 * seq[i] * seq[d - i]) % MOD
+            i = i + 1
+        }
+    } else {
+        let mid: i64 = seq[half]
+        s = mid * mid % MOD
+        let mut i: i64 = 1
+        while i < half {
+            s = (s + 2 * seq[i] * seq[d - i]) % MOD
+            i = i + 1
+        }
+    }
+    return s
+}
+
+function compute_planted() -> void {
+    g_pr = calloc(N + 1, 8)
+    g_pb = calloc(N + 1, 8)
+    g_py = calloc(N + 1, 8)
+    g_a = calloc(N + 1, 8)
+    g_b = calloc(N + 1, 8)
+    g_sqA = calloc(N + 1, 8)
+    g_sqB = calloc(N + 1, 8)
+
+    for n in 1..(N + 1) {
+        let d: i64 = n - 1
+
+        # sqA[d] and sqB[d]
+        let sqa: i64 = coeff_square(g_a, d)
+        let sqb: i64 = coeff_square(g_b, d)
+        g_sqA[d] = sqa
+        g_sqB[d] = sqb
+
+        # cube coefficient of A^3 at degree d
+        let cube: i64
+        if d < 3 {
+            cube = 0
+        } else {
+            let mut s: i64 = 0
+            for i in 1..d {
+                s = (s + g_a[i] * g_sqA[d - i]) % MOD
+            }
+            cube = s
+        }
+
+        # prod coefficient of A(x)*A(x^2) at degree d
+        let prod: i64
+        if d < 3 {
+            prod = 0
+        } else {
+            let mut s: i64 = 0
+            let mut j: i64 = 1
+            while j <= d / 2 {
+                let i: i64 = d - 2 * j
+                if i <= 0 { break }
+                s = (s + g_a[i] * g_a[j]) % MOD
+                j = j + 1
+            }
+            prod = s
+        }
+
+        # F2_total
+        let mut f2: i64 = g_a[d]
+        if d == 0 { f2 = f2 + 1 }
+        let mut tmp2: i64 = sqa
+        if (d & 1) == 0 { tmp2 = tmp2 + g_a[d / 2] }
+        f2 = (f2 + (tmp2 % MOD) * INV2) % MOD
+
+        # F2_nonY
+        let mut f2n: i64 = g_b[d]
+        if d == 0 { f2n = f2n + 1 }
+        let mut tmp2n: i64 = sqb
+        if (d & 1) == 0 { tmp2n = tmp2n + g_b[d / 2] }
+        f2n = (f2n + (tmp2n % MOD) * INV2) % MOD
+
+        # SET_3(A) term
+        let mut t3: i64 = (cube + 3 * prod) % MOD
+        if d % 3 == 0 { t3 = (t3 + 2 * g_a[d / 3]) % MOD }
+        t3 = (t3 * INV6) % MOD
+
+        let f3: i64 = (f2 + t3) % MOD
+
+        g_pr[n] = f3
+        g_pb[n] = f2
+        g_py[n] = f2n
+
+        let bn: i64 = (f3 + f2) % MOD
+        g_b[n] = bn
+        g_a[n] = (bn + f2n) % MOD
+    }
+}
+
+function f3_nony_at_degree(d: i64, n: i64) -> i64 {
+    let f2n: i64 = g_py[n]
+    if d < 3 { return f2n }
+
+    let mut s: i64 = 0
+    for i in 1..d {
+        s = (s + g_b[i] * g_sqB[d - i]) % MOD
+    }
+    let cube: i64 = s
+
+    s = 0
+    let mut j: i64 = 1
+    while j <= d / 2 {
+        let i: i64 = d - 2 * j
+        if i <= 0 { break }
+        s = (s + g_b[i] * g_b[j]) % MOD
+        j = j + 1
+    }
+    let prod: i64 = s
+
+    let mut t3: i64 = (cube + 3 * prod) % MOD
+    if d % 3 == 0 { t3 = (t3 + 2 * g_b[d / 3]) % MOD }
+    t3 = (t3 * INV6) % MOD
+
+    return (f2n + t3) % MOD
+}
+
+function set4_total_at_degree(d: i64) -> i64 {
+    if d < 4 { return 0 }
+
+    # A1^4: (sqA)^2
+    let a1_4: i64 = coeff_square(g_sqA, d)
+
+    # A1^2 A2: sqA * A(x^2)
+    let mut s: i64 = 0
+    let mut k: i64 = 1
+    while k <= d / 2 {
+        s = (s + g_sqA[d - 2 * k] * g_a[k]) % MOD
+        k = k + 1
+    }
+    let a1_2_a2: i64 = s
+
+    # A2^2: (A^2)(x^2)
+    let mut a2_2: i64 = 0
+    if (d & 1) == 0 { a2_2 = g_sqA[d / 2] }
+
+    # A1 A3: A * A(x^3)
+    s = 0
+    k = 1
+    while k <= d / 3 {
+        s = (s + g_a[d - 3 * k] * g_a[k]) % MOD
+        k = k + 1
+    }
+    let a1_a3: i64 = s
+
+    # A4: A(x^4)
+    let mut a4: i64 = 0
+    if d % 4 == 0 { a4 = g_a[d / 4] }
+
+    let term: i64 = (a1_4 + 6 * a1_2_a2 + 3 * a2_2 + 8 * a1_a3 + 6 * a4) % MOD
+    return (term * INV24) % MOD
+}
+
+function compute_g(n: i64) -> i64 {
+    let d: i64 = n - 1
+
+    # Vertex-rooted
+    let f3_total: i64 = g_pr[n]
+    let f4_total: i64 = (f3_total + set4_total_at_degree(d)) % MOD
+    let f3_nony: i64 = f3_nony_at_degree(d, n)
+    let V: i64 = (f4_total + f3_total + f3_nony) % MOD
+
+    # Edge-rooted
+    let sqA_n: i64 = coeff_square(g_a, n)
+    let sqPY_n: i64 = coeff_square(g_py, n)
+
+    let mut A2_n: i64 = 0
+    if (n & 1) == 0 { A2_n = g_a[n / 2] }
+    let mut PY2_n: i64 = 0
+    if (n & 1) == 0 { PY2_n = g_py[n / 2] }
+
+    let D: i64 = (sqA_n - sqPY_n) % MOD
+    let mut E: i64 = ((sqA_n + A2_n - sqPY_n - PY2_n) % MOD) * INV2 % MOD
+
+    let mut result: i64 = (V + E - D) % MOD
+    if result < 0 { result = result + MOD }
+    return result
+}
+
+function main() -> i32 {
+    compute_planted()
+
+    # Compute sqA[N] for the final answer
+    g_sqA[N] = coeff_square(g_a, N)
+
+    printf("%lld\n", compute_g(N))
+
+    free(g_sqB)
+    free(g_sqA)
+    free(g_b)
+    free(g_a)
+    free(g_py)
+    free(g_pb)
+    free(g_pr)
+    return 0
+}

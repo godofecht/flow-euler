@@ -1,7 +1,11 @@
 # Project Euler 566
-# Cake Icing Puzzle
+# Cake Icing Puzzle — signed-permutation atomization + CRT on flip cycles.
+
+extern {
+    function pe566_answer() -> i64
+}
 
 function main() -> i32 {
-    printf("%lld\n", 329569369413585)
+    printf("%lld\n", pe566_answer())
     return 0
 }

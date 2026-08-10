@@ -1,12 +1,14 @@
 # Project Euler 180
 # Sum of distinct s=x+y+z for golden triples of order 35; answer = num+den of total.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
 }
 
-function gcd(a: i64, b: i64) -> i64 {
+function gcd_abs(a: i64, b: i64) -> i64 {
     let mut x: i64 = a
     if x < 0 { x = 0 - x }
     let mut y: i64 = b
@@ -15,17 +17,6 @@ function gcd(a: i64, b: i64) -> i64 {
         let t: i64 = x % y
         x = y
         y = t
-    }
-    return x
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
     }
     return x
 }
@@ -43,7 +34,7 @@ function main() -> i32 {
     while b <= K {
         let mut a: i64 = 1
         while a < b {
-            if gcd(a, b) == 1 {
+            if gcd_abs(a, b) == 1 {
                 nums[qc] = a
                 dens[qc] = b
                 qc = qc + 1
@@ -73,14 +64,14 @@ function main() -> i32 {
             # n=1: z = x+y = (xn*yd + yn*xd)/(xd*yd)
             let mut zn: i64 = xn * yd + yn * xd
             let mut zd: i64 = xd * yd
-            let g: i64 = gcd(zn, zd)
+            let g: i64 = gcd_abs(zn, zd)
             zn = zn / g
             zd = zd / g
             # check in Q: 0 < zn < zd <= K
             if zn > 0 && zn < zd && zd <= K {
                 let mut snum: i64 = xn * yd * zd + yn * xd * zd + zn * xd * yd
                 let mut sden: i64 = xd * yd * zd
-                let g2: i64 = gcd(snum, sden)
+                let g2: i64 = gcd_abs(snum, sden)
                 snum = snum / g2
                 sden = sden / g2
                 # insert if new
@@ -105,13 +96,13 @@ function main() -> i32 {
             # z = (xn*yn)/(xd*yd) * (xd*yd)/den_sum = (xn*yn)/den_sum
             zn = xn * yn
             zd = den_sum
-            let g3: i64 = gcd(zn, zd)
+            let g3: i64 = gcd_abs(zn, zd)
             zn = zn / g3
             zd = zd / g3
             if zn > 0 && zn < zd && zd <= K {
                 let mut snum: i64 = xn * yd * zd + yn * xd * zd + zn * xd * yd
                 let mut sden: i64 = xd * yd * zd
-                let g2: i64 = gcd(snum, sden)
+                let g2: i64 = gcd_abs(snum, sden)
                 snum = snum / g2
                 sden = sden / g2
                 let mut found: bool = false
@@ -130,7 +121,7 @@ function main() -> i32 {
             # n=2: z^2 = x^2+y^2
             let z2n: i64 = xn * xn * yd * yd + yn * yn * xd * xd
             let z2d: i64 = xd * xd * yd * yd
-            let g4: i64 = gcd(z2n, z2d)
+            let g4: i64 = gcd_abs(z2n, z2d)
             let z2nr: i64 = z2n / g4
             let z2dr: i64 = z2d / g4
             let sn2: i64 = isqrt(z2nr)
@@ -138,13 +129,13 @@ function main() -> i32 {
             if sn2 * sn2 == z2nr && sd2 * sd2 == z2dr {
                 zn = sn2
                 zd = sd2
-                let g5: i64 = gcd(zn, zd)
+                let g5: i64 = gcd_abs(zn, zd)
                 zn = zn / g5
                 zd = zd / g5
                 if zn > 0 && zn < zd && zd <= K {
                     let mut snum: i64 = xn * yd * zd + yn * xd * zd + zn * xd * yd
                     let mut sden: i64 = xd * yd * zd
-                    let g2: i64 = gcd(snum, sden)
+                    let g2: i64 = gcd_abs(snum, sden)
                     snum = snum / g2
                     sden = sden / g2
                     let mut found: bool = false
@@ -169,7 +160,7 @@ function main() -> i32 {
             # z2 = (xn*yn/(xd*yd))^2 / (x2y2n/x2y2d) = (xn*yn)^2 * x2y2d / ((xd*yd)^2 * x2y2n)
             let mut zz_n: i64 = xn * yn * xn * yn * x2y2d
             let mut zz_d: i64 = xd * yd * xd * yd * x2y2n
-            let g6: i64 = gcd(zz_n, zz_d)
+            let g6: i64 = gcd_abs(zz_n, zz_d)
             zz_n = zz_n / g6
             zz_d = zz_d / g6
             let sn3: i64 = isqrt(zz_n)
@@ -177,13 +168,13 @@ function main() -> i32 {
             if sn3 * sn3 == zz_n && sd3 * sd3 == zz_d {
                 zn = sn3
                 zd = sd3
-                let g5: i64 = gcd(zn, zd)
+                let g5: i64 = gcd_abs(zn, zd)
                 zn = zn / g5
                 zd = zd / g5
                 if zn > 0 && zn < zd && zd <= K {
                     let mut snum: i64 = xn * yd * zd + yn * xd * zd + zn * xd * yd
                     let mut sden: i64 = xd * yd * zd
-                    let g2: i64 = gcd(snum, sden)
+                    let g2: i64 = gcd_abs(snum, sden)
                     snum = snum / g2
                     sden = sden / g2
                     let mut found: bool = false

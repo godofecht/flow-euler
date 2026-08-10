@@ -1,0 +1,34 @@
+# Project Euler 661
+# Long chess match: closed-form E_A for killed birth-death chain; H(50).
+
+extern {
+    function sqrt(x: f64) -> f64
+}
+
+function expected_times_a_leading(p_a: f64, p_b: f64, p_stop: f64) -> f64 {
+    let q: f64 = 1.0 - p_stop
+    let a: f64 = q * p_a
+    let b: f64 = q * p_b
+    let c: f64 = p_stop + q * (p_a + p_b)
+    let mut disc: f64 = c * c - 4.0 * a * b
+    if disc < 0.0 && disc > (0.0 - 0.000000000000001) { disc = 0.0 }
+    let s: f64 = sqrt(disc)
+    let r2: f64 = (c + s) / (2.0 * a)
+    let r1: f64 = b / (a * r2)
+    return (1.0 / p_stop + 1.0 / q) * (1.0 - r1) / (r2 - r1)
+}
+
+function main() -> i32 {
+    let mut total: f64 = 0.0
+    let mut k: i64 = 3
+    while k <= 50 {
+        let kf: f64 = k as f64
+        let p_a: f64 = 1.0 / sqrt(kf + 3.0)
+        let p_b: f64 = p_a + 1.0 / (kf * kf)
+        let p_stop: f64 = 1.0 / (kf * kf * kf)
+        total = total + expected_times_a_leading(p_a, p_b, p_stop)
+        k = k + 1
+    }
+    printf("%.4f\n", total)
+    return 0
+}

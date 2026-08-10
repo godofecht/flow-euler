@@ -1,0 +1,15 @@
+# Project Euler 997
+# Compatible dice arrangements in an x×y×z box: F(9,10,11).
+
+function f(x: i64, y: i64, z: i64) -> i64 {
+    let one: i64 = 1
+    let shift: i64 = x + y + z - 1
+    let a: i64 = one << shift
+    let b: i64 = (one << x) + (one << y) + (one << z) - 4
+    return 3 * a * b
+}
+
+function main() -> i32 {
+    printf("%lld\n", f(9, 10, 11))
+    return 0
+}

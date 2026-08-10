@@ -1,0 +1,80 @@
+# Project Euler 856
+# Expecting Pair — expected cards until first pair (DP over rank buckets).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const HASH_N: i64 = 1 << 20
+
+let mut keys: ptr<i64> = null
+let mut vals: ptr<f64> = null
+let mut used: ptr<i8> = null
+
+function pack(cur: i64, a0: i64, a1: i64, a2: i64, a3: i64, a4: i64) -> i64 {
+    return (((((cur * 16 + a0) * 16 + a1) * 16 + a2) * 16 + a3) * 16 + a4)
+}
+
+function expected_additional(cur: i64, a0: i64, a1: i64, a2: i64, a3: i64, a4: i64) -> f64 {
+    let remaining: i64 = cur + a1 + 2 * a2 + 3 * a3 + 4 * a4
+    if remaining == 0 {
+        return 0.0
+    }
+    let key: i64 = pack(cur, a0, a1, a2, a3, a4)
+    let mut h: i64 = (key * 11400714819323198485) & (HASH_N - 1)
+    while used[h] != 0 {
+        if keys[h] == key {
+            return vals[h]
+        }
+        h = (h + 1) & (HASH_N - 1)
+    }
+
+    let mut result: f64 = 1.0
+    # count = 1..4: draw a rank with that many cards left
+    let mut count: i64 = 1
+    while count <= 4 {
+        let mut ranks: i64 = 0
+        if count == 1 { ranks = a1 }
+        if count == 2 { ranks = a2 }
+        if count == 3 { ranks = a3 }
+        if count == 4 { ranks = a4 }
+        if ranks > 0 {
+            let mut na0: i64 = a0
+            let mut na1: i64 = a1
+            let mut na2: i64 = a2
+            let mut na3: i64 = a3
+            let mut na4: i64 = a4
+            if count == 1 { na1 = na1 - 1 }
+            if count == 2 { na2 = na2 - 1 }
+            if count == 3 { na3 = na3 - 1 }
+            if count == 4 { na4 = na4 - 1 }
+            # return old current-rank remainder into its bucket
+            if cur == 0 { na0 = na0 + 1 }
+            if cur == 1 { na1 = na1 + 1 }
+            if cur == 2 { na2 = na2 + 1 }
+            if cur == 3 { na3 = na3 + 1 }
+            if cur == 4 { na4 = na4 + 1 }
+            let nxt: f64 = expected_additional(count - 1, na0, na1, na2, na3, na4)
+            result = result + ((count as f64) * (ranks as f64) / (remaining as f64)) * nxt
+        }
+        count = count + 1
+    }
+
+    used[h] = 1
+    keys[h] = key
+    vals[h] = result
+    return result
+}
+
+function main() -> i32 {
+    keys = calloc(HASH_N, 8)
+    vals = calloc(HASH_N, 8)
+    used = calloc(HASH_N, 1)
+    let ans: f64 = 1.0 + expected_additional(3, 0, 0, 0, 0, 12)
+    printf("%.8f\n", ans)
+    free(keys)
+    free(vals)
+    free(used)
+    return 0
+}

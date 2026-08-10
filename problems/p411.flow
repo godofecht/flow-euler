@@ -1,20 +1,11 @@
 # Project Euler 411
 # sum_{k=1..30} S(k^5): longest nondecreasing path through modular stations.
 
+import euler.nt { gcd }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-function gcd(a0: i64, b0: i64) -> i64 {
-    let mut a: i64 = a0
-    let mut b: i64 = b0
-    while b != 0 {
-        let t: i64 = a % b
-        a = b
-        b = t
-    }
-    return a
 }
 
 function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {

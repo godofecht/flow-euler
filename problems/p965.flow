@@ -1,0 +1,44 @@
+# Project Euler 965
+# Expected Minimal Fractional Value — Farey adjacent sum F(10^4).
+
+function farey_integral_expected_min(N: i64) -> f64 {
+    let mut a: i64 = 0
+    let mut b: i64 = 1
+    let mut c: i64 = 1
+    let mut d: i64 = N
+    let mut total: f64 = 0.0
+    let mut comp: f64 = 0.0
+    let mut partial: f64 = 0.0
+    let mut cnt: i64 = 0
+    while !(a == 1 && b == 1) {
+        partial = partial + 0.5 / ((b * d * d) as f64)
+        cnt = cnt + 1
+        if (cnt & 4095) == 0 {
+            let y: f64 = partial - comp
+            let t: f64 = total + y
+            comp = (t - total) - y
+            total = t
+            partial = 0.0
+        }
+        let k: i64 = (N + b) / d
+        let a2: i64 = c
+        let b2: i64 = d
+        let c2: i64 = k * c - a
+        let d2: i64 = k * d - b
+        a = a2
+        b = b2
+        c = c2
+        d = d2
+    }
+    if partial != 0.0 {
+        let y2: f64 = partial - comp
+        let t2: f64 = total + y2
+        total = t2
+    }
+    return total
+}
+
+function main() -> i32 {
+    printf("%.13f\n", farey_integral_expected_min(10000))
+    return 0
+}

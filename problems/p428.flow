@@ -1,0 +1,11 @@
+# Project Euler 428
+# Necklace of Circles T(10^9) via Min_25-style summatory F,G over (m,6)=1.
+
+extern {
+    function pe428_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe428_answer())
+    return 0
+}

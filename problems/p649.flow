@@ -1,0 +1,138 @@
+# Project Euler 649
+# Low-Prime Chessboard Nim: M(10000019, 100) last 9 digits.
+# Grundy numbers for subtraction game {2,3,5,7}, XOR convolution power.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+
+# mex lookup for 5 values (0..4)
+function mex5(mask: i64) -> i64 {
+    let mut m: i64 = 0
+    while (mask >> m) & 1 == 1 { m = m + 1 }
+    return m
+}
+
+# Grundy frequencies for 1D subtraction game with moves {2,3,5,7}
+function heap_grundy_freq(n: i64, freq: ptr<i64>) -> void {
+    for i in 0..5 { freq[i] = 0 }
+    if n <= 0 { return }
+
+    let ring: ptr<i64> = calloc(8, 8)
+
+    # Handle t=0..6 with boundary checks
+    let limit: i64 = n
+    if limit > 7 { limit = 7 }
+    for t in 0..limit {
+        let mut mask: i64 = 0
+        if t >= 2 { mask = mask | (1 << ring[(t - 2) & 7]) }
+        if t >= 3 { mask = mask | (1 << ring[(t - 3) & 7]) }
+        if t >= 5 { mask = mask | (1 << ring[(t - 5) & 7]) }
+        if t >= 7 { mask = mask | (1 << ring[(t - 7) & 7]) }
+        let g: i64 = mex5(mask)
+        ring[t & 7] = g
+        freq[g] = freq[g] + 1
+    }
+
+    # From t>=7 all four moves available
+    for t in 7..n {
+        let mask: i64 = (1 << ring[(t - 2) & 7]) | (1 << ring[(t - 3) & 7]) | (1 << ring[(t - 5) & 7]) | (1 << ring[(t - 7) & 7])
+        let g: i64 = mex5(mask)
+        ring[t & 7] = g
+        freq[g] = freq[g] + 1
+    }
+
+    free(ring)
+}
+
+# XOR convolution of length-8 vectors
+function xor_conv(u: ptr<i64>, v: ptr<i64>, w: ptr<i64>, mod: i64) -> void {
+    for i in 0..8 { w[i] = 0 }
+    for i in 0..8 {
+        if u[i] == 0 { continue }
+        for j in 0..8 {
+            if v[j] == 0 { continue }
+            let idx: i64 = i ^ j
+            w[idx] = (w[idx] + u[i] * v[j]) % mod
+        }
+    }
+}
+
+# XOR convolution power: base^exp
+function xor_power(base: ptr<i64>, exp0: i64, res: ptr<i64>, mod: i64) -> void {
+    let tmp: ptr<i64> = calloc(8, 8)
+    let b: ptr<i64> = calloc(8, 8)
+    for i in 0..8 { b[i] = base[i] }
+    for i in 0..8 { res[i] = 0 }
+    res[0] = 1
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            xor_conv(res, b, tmp, mod)
+            for i in 0..8 { res[i] = tmp[i] }
+        }
+        xor_conv(b, b, tmp, mod)
+        for i in 0..8 { b[i] = tmp[i] }
+        e = e / 2
+    }
+    free(b)
+    free(tmp)
+}
+
+function mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let n: i64 = 10000019
+    let c: i64 = 100
+
+    # Grundy frequencies for 1D game
+    let freq: ptr<i64> = calloc(5, 8)
+    heap_grundy_freq(n, freq)
+
+    # Board nimber counts: a[k] = #{(x,y) : g(x) XOR g(y) = k}
+    let a: ptr<i64> = calloc(8, 8)
+    for i in 0..5 {
+        if freq[i] == 0 { continue }
+        for j in 0..5 {
+            if freq[j] == 0 { continue }
+            a[i ^ j] = a[i ^ j] + freq[i] * freq[j]
+        }
+    }
+
+    # Reduce mod
+    let a_mod: ptr<i64> = calloc(8, 8)
+    for i in 0..8 { a_mod[i] = a[i] % MOD }
+
+    # XOR power: distribution of XOR of c coins
+    let dist: ptr<i64> = calloc(8, 8)
+    xor_power(a_mod, c, dist, MOD)
+
+    let losing: i64 = dist[0]
+    let total: i64 = mod_pow((n * n) % MOD, c, MOD)
+    let ans: i64 = (total - losing % MOD + MOD) % MOD
+
+    printf("%09lld\n", ans)
+
+    free(dist)
+    free(a_mod)
+    free(a)
+    free(freq)
+    return 0
+}

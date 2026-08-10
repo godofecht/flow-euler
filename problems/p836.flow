@@ -1,0 +1,11 @@
+# Project Euler 836
+# A Bold Proposition — first letters of bold words.
+
+extern {
+    function pe_solve_print() -> void
+}
+
+function main() -> i32 {
+    pe_solve_print()
+    return 0
+}

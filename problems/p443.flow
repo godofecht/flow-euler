@@ -1,16 +1,7 @@
 # Project Euler 443
 # g(10^15): jump via least prime factor of 2n-1.
 
-function gcd(a0: i64, b0: i64) -> i64 {
-    let mut a: i64 = a0
-    let mut b: i64 = b0
-    while b != 0 {
-        let t: i64 = a % b
-        a = b
-        b = t
-    }
-    return a
-}
+import euler.nt { gcd }
 
 function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
     let mut r: i64 = 1
@@ -28,7 +19,7 @@ function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
     return r
 }
 
-function is_prime(n: i64) -> bool {
+function is_prime_mr(n: i64) -> bool {
     if n < 2 { return false }
     let small: array<i64, 12> = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
     let mut i: i32 = 0
@@ -71,7 +62,7 @@ function is_prime(n: i64) -> bool {
 }
 
 function smallest_prime_factor(n0: i64) -> i64 {
-    if is_prime(n0) { return n0 }
+    if is_prime_mr(n0) { return n0 }
     if n0 % 3 == 0 { return 3 }
     let mut f: i64 = 5
     let mut step: i64 = 2

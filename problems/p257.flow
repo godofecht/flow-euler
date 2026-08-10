@@ -1,27 +1,7 @@
 # Project Euler 257
 # Count triangles with angular-bisector area ratio integer, perimeter <= 1e8.
 
-function gcd(a0: i64, b0: i64) -> i64 {
-    let mut a: i64 = a0
-    let mut b: i64 = b0
-    while b != 0 {
-        let t: i64 = a % b
-        a = b
-        b = t
-    }
-    return a
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
-}
+import euler.nt { gcd, isqrt }
 
 function main() -> i32 {
     let N: i64 = 100000000

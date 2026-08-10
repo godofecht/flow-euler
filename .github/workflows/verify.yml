@@ -1,0 +1,30 @@
+name: Verify
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  verify:
+    runs-on: macos-14
+    # Several full-scale Euler solvers intentionally run for minutes.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout Flow compiler
+        run: |
+          git clone https://github.com/flooooooooooow/flow.git "$HOME/flow"
+
+      - name: Install native dependencies
+        run: |
+          brew install gmp mpfr
+
+      - name: Verify all solutions
+        env:
+          FLOW_HOST: python
+        run: |
+          export FLOW_REPO="$HOME/flow"
+          ./scripts/verify.sh

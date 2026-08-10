@@ -1,0 +1,134 @@
+# Project Euler 665: Proportionate Nim
+# Greedily build losing pairs using successor-DSU structures.
+# f(10^7) = sum of (a+b) over losing positions with a+b <= 10^7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function dsu_find(parent: ptr<i64>, x: i64) -> i64 {
+    let mut cx: i64 = x
+    while parent[cx] != cx {
+        parent[cx] = parent[parent[cx]]
+        cx = parent[cx]
+    }
+    return cx
+}
+
+function dsu_mark(parent: ptr<i64>, x: i64) -> void {
+    if parent[x] == x {
+        parent[x] = dsu_find(parent, x + 1)
+    }
+}
+
+function main() -> i32 {
+    let M: i64 = 10000000
+    let half: i64 = M / 2
+    let max_coord: i64 = M * 5 / 4 + 100
+
+    # DSU for coordinates and differences
+    let coord_parent: ptr<i64> = calloc(max_coord + 2, 8)
+    let diff_parent: ptr<i64> = calloc(max_coord + 2, 8)
+    if coord_parent == null || diff_parent == null { return 1 }
+    for i in 0..(max_coord + 2) {
+        coord_parent[i] = i
+        diff_parent[i] = i
+    }
+
+    # DSU for v = x - 2y, range [-2*max_coord, max_coord]
+    let v_min: i64 = -2 * max_coord
+    let v_offset: i64 = -v_min
+    let v_len: i64 = 3 * max_coord + 1
+    let v_parent: ptr<i64> = calloc(v_len + 1, 8)
+    if v_parent == null { return 1 }
+    for i in 0..(v_len + 1) {
+        v_parent[i] = i
+    }
+
+    # Helper for v operations
+    # v_idx(v) = v + v_offset
+    # v_find(i) = dsu_find(v_parent, i)
+    # v_mark(v): mark v as used
+
+    # Base losing position (0,0)
+    dsu_mark(coord_parent, 0)
+    dsu_mark(diff_parent, 0)
+    # v_mark(0)
+    let i0: i64 = 0 + v_offset
+    if v_parent[i0] == i0 {
+        v_parent[i0] = dsu_find(v_parent, i0 + 1)
+    }
+
+    let mut total: i64 = 0
+    let mut a: i64 = 1
+
+    while true {
+        a = dsu_find(coord_parent, a)
+        if a > half { break }
+
+        let mut b: i64 = a + 1
+        let mut d: i64 = 0
+        let mut v1: i64 = 0
+        let mut v2: i64 = 0
+        while true {
+            b = dsu_find(coord_parent, b)
+
+            d = b - a
+            if diff_parent[d] != d {
+                let nd: i64 = dsu_find(diff_parent, d)
+                b = a + nd
+                continue
+            }
+
+            v1 = b - 2 * a
+            let i1: i64 = v1 + v_offset
+            if v_parent[i1] != i1 {
+                let ni: i64 = dsu_find(v_parent, i1)
+                if ni >= v_len { return 1 }
+                let next_v: i64 = ni - v_offset
+                b = 2 * a + next_v
+                continue
+            }
+
+            # Second orientation: a - 2b
+            v2 = a - 2 * b
+            let i2: i64 = v2 + v_offset
+            if v_parent[i2] != i2 {
+                b = b + 1
+                continue
+            }
+
+            break
+        }
+
+        # Record losing pair (a,b)
+        dsu_mark(coord_parent, a)
+        dsu_mark(coord_parent, b)
+        dsu_mark(diff_parent, d)
+        # v_mark(v1)
+        let iv1: i64 = v1 + v_offset
+        if v_parent[iv1] == iv1 {
+            v_parent[iv1] = dsu_find(v_parent, iv1 + 1)
+        }
+        # v_mark(v2)
+        let iv2: i64 = v2 + v_offset
+        if v_parent[iv2] == iv2 {
+            v_parent[iv2] = dsu_find(v_parent, iv2 + 1)
+        }
+
+        let s: i64 = a + b
+        if s <= M {
+            total = total + s
+        }
+
+        a = a + 1
+    }
+
+    printf("%lld\n", total)
+
+    free(v_parent)
+    free(diff_parent)
+    free(coord_parent)
+    return 0
+}

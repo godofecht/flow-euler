@@ -1,0 +1,48 @@
+# Project Euler 899
+# DistribuNim I — count losing ordered pairs (a,b) with 1<=a,b<=7^17.
+
+function L(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut U: i64 = 0
+    let mut k: i64 = 1
+    while (1 << (k - 1)) <= n {
+        let lo: i64 = 1 << (k - 1)
+        let mut hi: i64 = (1 << k) - 1
+        if hi > n { hi = n }
+        if hi >= lo {
+            let A_k: i64 = hi - lo + 1
+            let M: i64 = 1 << k
+            let mut C_k: i64 = 0
+            if n >= M - 1 {
+                C_k = (n - (M - 1)) / M + 1
+            }
+            U = U + A_k * C_k
+        }
+        k = k + 1
+    }
+    # Diagonal losing positions: a=b=2^k-1. Count = floor(log2(n+1)).
+    let mut D: i64 = 0
+    let mut t: i64 = n + 1
+    while t > 1 {
+        t = t >> 1
+        D = D + 1
+    }
+    return 2 * U - D
+}
+
+function ipow(base: i64, exp: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) != 0 { r = r * b }
+        b = b * b
+        e = e >> 1
+    }
+    return r
+}
+
+function main() -> i32 {
+    printf("%lld\n", L(ipow(7, 17)))
+    return 0
+}

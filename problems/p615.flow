@@ -1,0 +1,11 @@
+# Project Euler 615
+# Numbers with a given number of prime factors: 10^6-th omega=10^6 number mod.
+
+extern {
+    function pe615_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe615_answer())
+    return 0
+}

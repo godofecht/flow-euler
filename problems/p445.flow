@@ -1,0 +1,11 @@
+# Project Euler 445
+# Retractions A: S(10^7)=sum R(C(N,k)) mod 10^9+7 via unitary sigma*.
+
+extern {
+    function pe445_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe445_answer())
+    return 0
+}

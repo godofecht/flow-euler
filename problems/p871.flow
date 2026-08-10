@@ -1,0 +1,131 @@
+# Project Euler 871
+# Drifting Subsets — max drifting size sum for f_n(x)=x^3+x+1 mod n, n=100001..100100.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function drifting_subset_size(n: i64) -> i64 {
+    let mut f: ptr<i64> = calloc(n, 8)
+    let mut indeg: ptr<i64> = calloc(n, 8)
+    let mut x: i64 = 0
+    while x < n {
+        let y: i64 = ((x * x % n) * x + x + 1) % n
+        f[x] = y
+        indeg[y] = indeg[y] + 1
+        x = x + 1
+    }
+    let mut sum_a: ptr<i64> = calloc(n, 8)
+    let mut best: ptr<i8> = calloc(n, 1)
+    let mut q: ptr<i64> = calloc(n, 8)
+    let mut qh: i64 = 0
+    let mut qt: i64 = 0
+    x = 0
+    while x < n {
+        if indeg[x] == 0 {
+            q[qt] = x
+            qt = qt + 1
+        }
+        x = x + 1
+    }
+    while qh < qt {
+        let u: i64 = q[qh]
+        qh = qh + 1
+        let dp0_u: i64 = sum_a[u] + (best[u] as i64)
+        let v: i64 = f[u]
+        sum_a[v] = sum_a[v] + dp0_u
+        if best[u] == 0 { best[v] = 1 }
+        indeg[v] = indeg[v] - 1
+        if indeg[v] == 0 {
+            q[qt] = v
+            qt = qt + 1
+        }
+    }
+    let mut visited: ptr<i8> = calloc(n, 1)
+    let mut total: i64 = 0
+    let mut start: i64 = 0
+    while start < n {
+        if indeg[start] != 0 && visited[start] == 0 {
+            let mut cycle: ptr<i64> = calloc(n, 8)
+            let mut k: i64 = 0
+            let mut cur: i64 = start
+            while visited[cur] == 0 {
+                visited[cur] = 1
+                cycle[k] = cur
+                k = k + 1
+                cur = f[cur]
+            }
+            if k == 1 {
+                let v: i64 = cycle[0]
+                total = total + sum_a[v] + (best[v] as i64)
+            } else {
+                let mut deltas: ptr<i64> = calloc(k, 8)
+                let mut base: i64 = 0
+                let mut i: i64 = 0
+                while i < k {
+                    let v: i64 = cycle[i]
+                    let d: i64 = best[v] as i64
+                    deltas[i] = d
+                    base = base + sum_a[v] + d
+                    i = i + 1
+                }
+                let mut dp2: i64 = 0
+                let mut dp1: i64 = 0
+                i = 0
+                while i < k - 1 {
+                    let w: i64 = 1 - deltas[i] - deltas[i + 1]
+                    let mut take: i64 = dp2 + w
+                    let mut dp: i64 = dp1
+                    if take > dp1 { dp = take }
+                    dp2 = dp1
+                    dp1 = dp
+                    i = i + 1
+                }
+                let gain_a: i64 = dp1
+                let w_last: i64 = 1 - deltas[k - 1] - deltas[0]
+                let mut gain_b: i64 = w_last
+                if k > 2 {
+                    dp2 = 0
+                    dp1 = 0
+                    i = 1
+                    while i < k - 2 {
+                        let w: i64 = 1 - deltas[i] - deltas[i + 1]
+                        let mut take: i64 = dp2 + w
+                        let mut dp: i64 = dp1
+                        if take > dp1 { dp = take }
+                        dp2 = dp1
+                        dp1 = dp
+                        i = i + 1
+                    }
+                    gain_b = w_last + dp1
+                }
+                let mut best_cycle_gain: i64 = gain_a
+                if gain_b > best_cycle_gain { best_cycle_gain = gain_b }
+                if best_cycle_gain < 0 { best_cycle_gain = 0 }
+                total = total + base + best_cycle_gain
+                free(deltas)
+            }
+            free(cycle)
+        }
+        start = start + 1
+    }
+    free(f)
+    free(indeg)
+    free(sum_a)
+    free(best)
+    free(q)
+    free(visited)
+    return total
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut i: i64 = 1
+    while i <= 100 {
+        total = total + drifting_subset_size(100000 + i)
+        i = i + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

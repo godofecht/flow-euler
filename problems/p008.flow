@@ -29,18 +29,14 @@ function load_digits(path: string, out: ptr<i32>, cap: i32) -> i32 {
 
 function solve(digits: ptr<i32>, n: i32, window: i32) -> i64 {
     let mut best: i64 = 0
-    let mut i: i32 = 0
-    while i + window <= n {
+    for i in 0..(n - window + 1) {
         let mut prod: i64 = 1
-        let mut j: i32 = 0
-        while j < window {
+        for j in 0..window {
             prod = prod * (digits[i + j] as i64)
-            j = j + 1
         }
         if prod > best {
             best = prod
         }
-        i = i + 1
     }
     return best
 }

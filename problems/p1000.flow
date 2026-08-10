@@ -1,0 +1,282 @@
+# Project Euler 1000
+# Meta-problem: M from I(1000), X(1000), C(1000) triple product recurrence.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function ones_in_bit(n: i64, bit: i64) -> i64 {
+    if n < 0 { return 0 }
+    let half: i64 = 1 << bit
+    let period: i64 = half << 1
+    let value_count: i64 = n + 1
+    let full: i64 = value_count / period
+    let rem: i64 = value_count % period
+    let extra: i64 = rem - half
+    if extra < 0 { extra = 0 }
+    return full * half + extra
+}
+
+function max_and(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut total: i64 = 0
+    let mut bit: i64 = 0
+    let mut v: i64 = n
+    while v > 0 {
+        let count: i64 = ones_in_bit(n, bit)
+        let smaller: i64 = count / 2
+        let larger: i64 = count - smaller
+        total = total + (1 << bit) * smaller * larger
+        v = v / 2
+        bit = bit + 1
+    }
+    return total
+}
+
+function max_xor_sum(n: i64) -> i64 {
+    if n <= 1 { return 0 }
+    let mut vb: i64 = 1
+    let mut t: i64 = n
+    while t > 1 {
+        t = t / 2
+        vb = vb + 1
+    }
+    let payload: i64 = 2 * vb
+    let vmask: i64 = (1 << vb) - 1
+    let squares: ptr<i64> = calloc(n + 1, 8)
+    let mut i: i64 = 0
+    while i <= n {
+        squares[i] = i * i
+        i = i + 1
+    }
+    let ec: i64 = n * (n - 1) / 2
+    let edges: ptr<i64> = calloc(ec, 8)
+    let mut e: i64 = 0
+    let mut left: i64 = 1
+    while left <= n {
+        let ls: i64 = squares[left]
+        let mut right: i64 = left + 1
+        while right <= n {
+            let weight: i64 = ls ^ squares[right]
+            edges[e] = (weight << payload) | (left << vb) | right
+            e = e + 1
+            right = right + 1
+        }
+        left = left + 1
+    }
+    # sort edges (heap sort)
+    let mut hs: i64 = ec / 2 - 1
+    while hs >= 0 {
+        let mut root: i64 = hs
+        while 1 == 1 {
+            let mut largest: i64 = root
+            let lch: i64 = 2 * root + 1
+            let rch: i64 = lch + 1
+            if lch < ec && edges[lch] > edges[largest] { largest = lch }
+            if rch < ec && edges[rch] > edges[largest] { largest = rch }
+            if largest == root { break }
+            let tmp: i64 = edges[root]
+            edges[root] = edges[largest]
+            edges[largest] = tmp
+            root = largest
+        }
+        hs = hs - 1
+    }
+    let mut end: i64 = ec - 1
+    while end > 0 {
+        let tmp2: i64 = edges[0]
+        edges[0] = edges[end]
+        edges[end] = tmp2
+        let mut root2: i64 = 0
+        let lim: i64 = end
+        while 1 == 1 {
+            let mut largest2: i64 = root2
+            let l2: i64 = 2 * root2 + 1
+            let r2: i64 = l2 + 1
+            if l2 < lim && edges[l2] > edges[largest2] { largest2 = l2 }
+            if r2 < lim && edges[r2] > edges[largest2] { largest2 = r2 }
+            if largest2 == root2 { break }
+            let t3: i64 = edges[root2]
+            edges[root2] = edges[largest2]
+            edges[largest2] = t3
+            root2 = largest2
+        }
+        end = end - 1
+    }
+
+    let best: ptr<i64> = calloc(n + 1, 8)
+    let pending: ptr<i64> = calloc(n + 1, 8)
+    let mut pi: i64 = 0
+    while pi <= n {
+        pending[pi] = -1
+        pi = pi + 1
+    }
+    let touched: ptr<i64> = calloc(n + 1, 8)
+    let mut index: i64 = 0
+    while index < ec {
+        let weight: i64 = edges[index] >> payload
+        let mut tc: i64 = 0
+        let mut next_index: i64 = index
+        while next_index < ec && (edges[next_index] >> payload) == weight {
+            let packed: i64 = edges[next_index]
+            let L: i64 = (packed >> vb) & vmask
+            let R: i64 = packed & vmask
+            let candL: i64 = best[R] + weight
+            if candL > pending[L] {
+                if pending[L] < 0 {
+                    touched[tc] = L
+                    tc = tc + 1
+                }
+                pending[L] = candL
+            }
+            let candR: i64 = best[L] + weight
+            if candR > pending[R] {
+                if pending[R] < 0 {
+                    touched[tc] = R
+                    tc = tc + 1
+                }
+                pending[R] = candR
+            }
+            next_index = next_index + 1
+        }
+        let mut ti: i64 = 0
+        while ti < tc {
+            let v2: i64 = touched[ti]
+            if pending[v2] > best[v2] { best[v2] = pending[v2] }
+            pending[v2] = -1
+            ti = ti + 1
+        }
+        index = next_index
+    }
+    let mut ans: i64 = 0
+    let mut v3: i64 = 0
+    while v3 <= n {
+        if best[v3] > ans { ans = best[v3] }
+        v3 = v3 + 1
+    }
+    free(squares)
+    free(edges)
+    free(best)
+    free(pending)
+    free(touched)
+    return ans
+}
+
+function count_unreachable_pivot(limit: i64, pivot: i64) -> i64 {
+    let mut bit_count: i64 = 1
+    let mut tmp: i64 = limit
+    while tmp > 1 {
+        tmp = tmp / 2
+        bit_count = bit_count + 1
+    }
+    let counts: ptr<i64> = calloc(8, 8)
+    let nextc: ptr<i64> = calloc(8, 8)
+    counts[7] = 1
+    let mut bit: i64 = bit_count - 1
+    while bit >= 0 {
+        let mut mi: i64 = 0
+        while mi < 8 {
+            nextc[mi] = 0
+            mi = mi + 1
+        }
+        let limit_bit: i64 = (limit >> bit) & 1
+        let mut tight: i64 = 0
+        while tight < 8 {
+            let ways: i64 = counts[tight]
+            if ways > 0 {
+                let mut pat: i64 = 0
+                while pat < 8 {
+                    let mut use: i32 = 0
+                    if bit > pivot {
+                        if pat == 0 || pat == 3 || pat == 5 || pat == 6 { use = 1 }
+                    } else {
+                        if bit == pivot {
+                            if pat == 7 { use = 1 }
+                        } else {
+                            use = 1
+                        }
+                    }
+                    if use == 1 {
+                        let mut next_tight: i64 = 0
+                        let mut valid: i32 = 1
+                        let mut pile: i64 = 0
+                        while pile < 3 {
+                            let pile_mask: i64 = 1 << pile
+                            if (tight & pile_mask) != 0 {
+                                let chosen: i64 = (pat >> pile) & 1
+                                if chosen > limit_bit {
+                                    valid = 0
+                                    break
+                                }
+                                if chosen == limit_bit {
+                                    next_tight = next_tight | pile_mask
+                                }
+                            }
+                            pile = pile + 1
+                        }
+                        if valid == 1 {
+                            nextc[next_tight] = nextc[next_tight] + ways
+                        }
+                    }
+                    pat = pat + 1
+                }
+            }
+            tight = tight + 1
+        }
+        mi = 0
+        while mi < 8 {
+            counts[mi] = nextc[mi]
+            mi = mi + 1
+        }
+        bit = bit - 1
+    }
+    let mut s: i64 = 0
+    let mut j: i64 = 0
+    while j < 8 {
+        s = s + counts[j]
+        j = j + 1
+    }
+    free(counts)
+    free(nextc)
+    return s
+}
+
+function count_unreachable_nim(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let limit: i64 = n - 1
+    let mut bit_count: i64 = 1
+    let mut tmp: i64 = limit
+    while tmp > 1 {
+        tmp = tmp / 2
+        bit_count = bit_count + 1
+    }
+    let mut total: i64 = 0
+    let mut pivot: i64 = 0
+    while pivot < bit_count {
+        total = total + count_unreachable_pivot(limit, pivot)
+        pivot = pivot + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    let I: i64 = max_and(1000) % MOD
+    let X: i64 = max_xor_sum(1000) % MOD
+    let C: i64 = count_unreachable_nim(1000) % MOD
+    let mut m0: i64 = I
+    let mut m1: i64 = X
+    let mut m2: i64 = C
+    let mut k: i64 = 3
+    while k <= 1000 {
+        let nxt: i64 = m2 * m1 % MOD * m0 % MOD
+        m0 = m1
+        m1 = m2
+        m2 = nxt
+        k = k + 1
+    }
+    printf("%lld\n", m2)
+    return 0
+}

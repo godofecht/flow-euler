@@ -1,0 +1,145 @@
+# Project Euler 655
+# Divisible Palindromes: count palindromes < 10^32 divisible by 10000019.
+# Uses residue-class DP building palindromes from center outward.
+
+import euler.nt { mod_pow }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mod_inv(a: i64, m: i64) -> i64 {
+    return mod_pow(a, m - 2, m)
+}
+
+function main() -> i32 {
+    let max_len: i64 = 32
+    let m: i64 = 10000019
+
+    # Precompute powers of 10 mod m
+    let pow10: ptr<i64> = calloc(max_len + 1, 8)
+    pow10[0] = 1
+    for i in 1..(max_len + 1) {
+        pow10[i] = pow10[i - 1] * 10 % m
+    }
+
+    let inv10: i64 = mod_inv(10, m)
+
+    let dp: ptr<i64> = calloc(m, 8)
+    let tmp: ptr<i64> = calloc(m, 8)
+    let window: ptr<i64> = calloc(10, 8)
+
+    if dp == null || tmp == null || window == null { return 1 }
+
+    let mut total: i64 = 0
+
+    # Length 1: digits 1..9 (exclude 0)
+    for d in 1..10 {
+        if d % m == 0 { total = total + 1 }
+    }
+
+    # Even lengths: start from empty string (length 0)
+    for i in 0..m { dp[i] = 0 }
+    dp[0] = 1
+    let mut cur_len: i64 = 0
+    while cur_len + 2 <= max_len {
+        let new_len: i64 = cur_len + 2
+        let c: i64 = (pow10[new_len - 1] + 1) % m
+        let prev_zero: i64 = dp[0]
+
+        # tmp[j] = dp[j * inv10 mod m]
+        let mut src: i64 = 0
+        for j in 0..m {
+            tmp[j] = dp[src]
+            src = src + inv10
+            if src >= m { src = src - m }
+        }
+
+        # Fast update: visit residues in order 0, c, 2c, ... (mod m)
+        # Along this cycle, digit-sum is a cyclic sliding window of size 10
+        let mut idx: i64 = (-10 * c) % m
+        if idx < 0 { idx = idx + m }
+        let mut s: i64 = 0
+        for t in 0..10 {
+            let v: i64 = tmp[idx]
+            window[t] = v
+            s = s + v
+            idx = idx + c
+            if idx >= m { idx = idx - m }
+        }
+
+        let mut idx2: i64 = 0
+        let mut pos: i64 = 0
+        for _i in 0..m {
+            let v: i64 = tmp[idx2]
+            let old: i64 = window[pos]
+            s = s + v - old
+            window[pos] = v
+            pos = pos + 1
+            if pos == 10 { pos = 0 }
+            dp[idx2] = s
+            idx2 = idx2 + c
+            if idx2 >= m { idx2 = idx2 - m }
+        }
+
+        total = total + dp[0] - prev_zero
+
+        cur_len = new_len
+    }
+
+    # Odd lengths: start from 1-digit center (0..9)
+    for i in 0..m { dp[i] = 0 }
+    for d in 0..10 {
+        dp[d % m] = dp[d % m] + 1
+    }
+    cur_len = 1
+    while cur_len + 2 <= max_len {
+        let new_len: i64 = cur_len + 2
+        let c: i64 = (pow10[new_len - 1] + 1) % m
+        let prev_zero: i64 = dp[0]
+
+        let mut src: i64 = 0
+        for j in 0..m {
+            tmp[j] = dp[src]
+            src = src + inv10
+            if src >= m { src = src - m }
+        }
+
+        let mut idx: i64 = (-10 * c) % m
+        if idx < 0 { idx = idx + m }
+        let mut s: i64 = 0
+        for t in 0..10 {
+            let v: i64 = tmp[idx]
+            window[t] = v
+            s = s + v
+            idx = idx + c
+            if idx >= m { idx = idx - m }
+        }
+
+        let mut idx2: i64 = 0
+        let mut pos: i64 = 0
+        for _i in 0..m {
+            let v: i64 = tmp[idx2]
+            let old: i64 = window[pos]
+            s = s + v - old
+            window[pos] = v
+            pos = pos + 1
+            if pos == 10 { pos = 0 }
+            dp[idx2] = s
+            idx2 = idx2 + c
+            if idx2 >= m { idx2 = idx2 - m }
+        }
+
+        total = total + dp[0] - prev_zero
+        cur_len = new_len
+    }
+
+    printf("%lld\n", total)
+
+    free(window)
+    free(tmp)
+    free(dp)
+    free(pow10)
+    return 0
+}

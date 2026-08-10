@@ -1,0 +1,109 @@
+# Project Euler 627
+# Distinct products F(30,10001) via Ehrhart cubic * rising factorial.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function modinv(a: i64) -> i64 {
+    return modpow(a % MOD, MOD - 2, MOD)
+}
+
+function rising_mod(a0: i64, k: i64) -> i64 {
+    let mut res: i64 = 1
+    let mut a: i64 = a0 % MOD
+    let mut i: i64 = 0
+    while i < k {
+        res = (res * ((a + i) % MOD)) % MOD
+        i = i + 1
+    }
+    return res
+}
+
+function eval_cubic(f0: i64, f1: i64, f2: i64, f3: i64, n0: i64) -> i64 {
+    let mut d1: i64 = (f1 - f0) % MOD
+    if d1 < 0 { d1 = d1 + MOD }
+    let mut d2: i64 = (f2 - 2 * (f1 % MOD) + f0) % MOD
+    if d2 < 0 { d2 = d2 + MOD }
+    let mut d3: i64 = (f3 - 3 * (f2 % MOD) + 3 * (f1 % MOD) - f0) % MOD
+    if d3 < 0 { d3 = d3 + MOD }
+    let n: i64 = n0 % MOD
+    let c1: i64 = n
+    let c2: i64 = n * ((n - 1 + MOD) % MOD) % MOD * modinv(2) % MOD
+    let c3: i64 = n * ((n - 1 + MOD) % MOD) % MOD * ((n - 2 + MOD) % MOD) % MOD * modinv(6) % MOD
+    return (f0 + d1 * c1 % MOD + d2 * c2 % MOD + d3 * c3 % MOD) % MOD
+}
+
+function main() -> i32 {
+    let maxp: i64 = 30 * 30 * 30
+    let cur: ptr<i8> = calloc(maxp + 1, 1)
+    let nxt: ptr<i8> = calloc(maxp + 1, 1)
+    let F: ptr<i64> = calloc(4, 8)
+    if cur == null || nxt == null || F == null { return 1 }
+    cur[1] = 1
+    F[0] = 1
+    let mut s: i64 = 1
+    while s <= 3 {
+        let mut x: i64 = 0
+        while x <= maxp {
+            nxt[x] = 0
+            x = x + 1
+        }
+        x = 1
+        while x <= maxp {
+            if cur[x] != 0 {
+                let mut m: i64 = 1
+                while m <= 30 {
+                    let y: i64 = x * m
+                    if y <= maxp {
+                        nxt[y] = 1
+                    }
+                    m = m + 1
+                }
+            }
+            x = x + 1
+        }
+        let tmp: ptr<i8> = cur
+        cur = nxt
+        nxt = tmp
+        let mut cnt: i64 = 0
+        x = 1
+        while x <= maxp {
+            if cur[x] != 0 { cnt = cnt + 1 }
+            x = x + 1
+        }
+        F[s] = cnt
+        s = s + 1
+    }
+    let c0: i64 = F[0] * modinv(rising_mod(1, 7)) % MOD
+    let c1: i64 = F[1] * modinv(rising_mod(2, 7)) % MOD
+    let c2: i64 = F[2] * modinv(rising_mod(3, 7)) % MOD
+    let c3: i64 = F[3] * modinv(rising_mod(4, 7)) % MOD
+    let n: i64 = 10001
+    let c_at: i64 = eval_cubic(c0, c1, c2, c3, n)
+    let ans: i64 = rising_mod(n + 1, 7) * c_at % MOD
+    printf("%lld\n", ans)
+    free(cur)
+    free(nxt)
+    free(F)
+    return 0
+}

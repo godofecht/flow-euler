@@ -1,0 +1,45 @@
+# Project Euler 804
+# Counting Binary Quadratic Representations — T(10^16).
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function T(N: i64) -> i64 {
+    if N <= 0 { return 0 }
+    let A: i64 = 4 * N
+    let B: i64 = 163
+    let ymax: i64 = isqrt(A / B)
+    let t0: i64 = isqrt(A)
+    let mut total: i64 = t0 + 1 - (t0 & 1)
+    let mut By2: i64 = 0
+    let mut Bdelta: i64 = B
+    let twoB: i64 = 2 * B
+    let mut y: i64 = 1
+    while y <= ymax {
+        By2 = By2 + Bdelta
+        Bdelta = Bdelta + twoB
+        let t: i64 = isqrt(A - By2)
+        let mut c: i64 = 0
+        if (y & 1) != 0 {
+            c = t + (t & 1)
+        } else {
+            c = t + 1 - (t & 1)
+        }
+        total = total + 2 * c
+        y = y + 1
+    }
+    return total - 1
+}
+
+function main() -> i32 {
+    printf("%lld\n", T(10000000000000000))
+    return 0
+}

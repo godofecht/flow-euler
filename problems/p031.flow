@@ -12,15 +12,11 @@ function main() -> i32 {
     let ways: ptr<i64> = calloc((target + 1) as i64, 8)
     if ways == null { return 1 }
     ways[0] = 1
-    let mut ci: i32 = 0
-    while ci < 8 {
+    for ci in 0..8 {
         let c: i32 = coins[ci]
-        let mut x: i32 = c
-        while x <= target {
+        for x in c..(target + 1) {
             ways[x] = ways[x] + ways[x - c]
-            x = x + 1
         }
-        ci = ci + 1
     }
     printf("%lld\n", ways[target])
     free(ways)

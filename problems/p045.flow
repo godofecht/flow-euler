@@ -1,17 +1,7 @@
 # Project Euler 045
 # Next triangle number after 40755 that is also pentagonal and hexagonal.
 
-function isqrt(n: i64) -> i64 {
-    if n < 0 { return 0 }
-    if n < 2 { return n }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
-}
+import euler.nt { isqrt }
 
 function is_pent(x: i64) -> bool {
     let target: i64 = 24 * x + 1

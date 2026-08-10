@@ -1,7 +1,11 @@
 # Project Euler 591
-# Best Approximations by Quadratic Integers
+# Best Approximations by Quadratic Integers — Ostrowski α-numeration + Chudnovsky π.
+
+extern {
+    function pe591_answer() -> i64
+}
 
 function main() -> i32 {
-    printf("%lld\n", 526007984625966)
+    printf("%lld\n", pe591_answer())
     return 0
 }

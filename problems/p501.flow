@@ -1,20 +1,11 @@
 # Project Euler 501
 # Eight Divisors — count n<=10^12 with d(n)=8 via fixed-limit pi table.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-function isqrt(n: i64) -> i64 {
-    if n < 2 { return n }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function iroot(n: i64, k: i32) -> i64 {

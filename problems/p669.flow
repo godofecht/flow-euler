@@ -1,0 +1,25 @@
+# Project Euler 669: The King's Banquet
+# Fibonacci seating: position 89194853094755498 in a sequence mod 99194853094755497.
+# Uses modular arithmetic with i128 intermediates.
+
+function main() -> i32 {
+    let y: i64 = 99194853094755497
+    let z: i64 = 61305790721611591
+    let pos: i64 = 89194853094755498
+
+    let mult: i64 = pos / 2
+
+    # temp = (y - z * mult) % y = (-(z * mult)) % y
+    let zmod: i64 = z % y
+    let multmod: i64 = mult % y
+    let prod: i128 = (zmod as i128) * (multmod as i128) % (y as i128)
+    let temp: i64 = (y - (prod as i64) % y + y) % y
+
+    # pos is even: temp = (-temp) % y
+    if pos % 2 == 0 {
+        temp = (y - temp) % y
+    }
+
+    printf("%lld\n", temp)
+    return 0
+}

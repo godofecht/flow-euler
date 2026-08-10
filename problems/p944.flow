@@ -1,0 +1,115 @@
+# Project Euler 944
+# Sum of Elevisors — S(10^14) mod 1234567891 via O(sqrt n) modular sum.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+const MOD: i64 = 1234567891
+
+function modpow(base0: i64, exp0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % MOD
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (b as i128) % (MOD as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (MOD as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function sum_range_mod(l: i64, r: i64) -> i64 {
+    let mut cnt: i64 = r - l + 1
+    let mut a: i64 = l + r
+    if (a & 1) == 0 {
+        a = a / 2
+    } else {
+        cnt = cnt / 2
+    }
+    return ((a % MOD) as i128 * (cnt % MOD) as i128 % (MOD as i128)) as i64
+}
+
+function isqrt(n: i64) -> i64 {
+    let mut B: i64 = (sqrt(n as f64)) as i64
+    while (B + 1) * (B + 1) <= n { B = B + 1 }
+    while B * B > n { B = B - 1 }
+    return B
+}
+
+function S(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let inv2: i64 = modpow(2, MOD - 2)
+    let two: i64 = 2
+    let pow2_n: i64 = modpow(2, n)
+    let pow2_n_minus1: i64 = ((pow2_n as i128) * (inv2 as i128) % (MOD as i128)) as i64
+    let mut half_nnp1: i64 = 0
+    if (n & 1) == 0 {
+        half_nnp1 = ((n / 2) % MOD) * ((n + 1) % MOD) % MOD
+    } else {
+        half_nnp1 = (n % MOD) * (((n + 1) / 2) % MOD) % MOD
+    }
+    let first_term: i64 = ((pow2_n_minus1 as i128) * (half_nnp1 as i128) % (MOD as i128)) as i64
+    let B: i64 = isqrt(n)
+    let L: i64 = 200000
+    let mut pow2_small: ptr<i64> = calloc(L + 1, 8)
+    pow2_small[0] = 1
+    let mut i: i64 = 1
+    while i <= L {
+        pow2_small[i] = (pow2_small[i - 1] * 2) % MOD
+        i = i + 1
+    }
+    let mut U_small: i64 = 0
+    let mut q: i64 = n
+    let mut a: i64 = modpow(inv2, q)
+    let mut x: i64 = 1
+    while x <= B {
+        U_small = (U_small + ((x % MOD) as i128 * (a as i128) % (MOD as i128)) as i64) % MOD
+        if x == B { break }
+        let next_q: i64 = n / (x + 1)
+        let delta: i64 = q - next_q
+        if delta <= L {
+            a = ((a as i128) * (pow2_small[delta] as i128) % (MOD as i128)) as i64
+        } else {
+            a = ((a as i128) * (modpow(2, delta) as i128) % (MOD as i128)) as i64
+        }
+        q = next_q
+        x = x + 1
+    }
+    let mut U_large: i64 = 0
+    let mut prev_r: i64 = n / (B + 1)
+    let mut weight: i64 = modpow(inv2, B)
+    let mut qq: i64 = B
+    while qq >= 1 {
+        let r: i64 = n / qq
+        let mut l: i64 = prev_r + 1
+        prev_r = r
+        if r <= B {
+            weight = (weight * two) % MOD
+            qq = qq - 1
+            continue
+        }
+        if l <= B { l = B + 1 }
+        if l <= r {
+            let sum_x: i64 = sum_range_mod(l, r)
+            U_large = (U_large + ((sum_x as i128) * (weight as i128) % (MOD as i128)) as i64) % MOD
+        }
+        weight = (weight * two) % MOD
+        qq = qq - 1
+    }
+    let U: i64 = (U_small + U_large) % MOD
+    let second_term: i64 = ((pow2_n as i128) * (U as i128) % (MOD as i128)) as i64
+    free(pow2_small)
+    let mut ans: i64 = (first_term - second_term) % MOD
+    if ans < 0 { ans = ans + MOD }
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(100000000000000))
+    return 0
+}

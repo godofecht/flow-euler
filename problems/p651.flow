@@ -1,0 +1,366 @@
+# Project Euler 651: Patterned Cylinders
+# Uses Burnside's lemma over D_a x D_b, surjections count, modular arithmetic.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function pow_mod(base: i64, exp: i64, m: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % m
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 { r = (r * b) % m }
+        b = (b * b) % m
+        e = e >> 1
+    }
+    return r
+}
+
+function mygcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y > 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+# Sieve primes up to 20000
+const MAX_PRIME: i64 = 20001
+let mut g_primes: ptr<i64> = null
+let mut g_nprimes: i64 = 0
+
+function sieve_primes() -> void {
+    let bs: ptr<i8> = calloc(MAX_PRIME, 1)
+    for i in 0..MAX_PRIME { bs[i] = 1 }
+    bs[0] = 0
+    bs[1] = 0
+    let r: i64 = isqrt(MAX_PRIME)
+    for i in 2..(r + 1) {
+        if bs[i] == 1 {
+            let mut j: i64 = i * i
+            while j < MAX_PRIME {
+                bs[j] = 0
+                j = j + i
+            }
+        }
+    }
+    let mut cnt: i64 = 0
+    for i in 0..MAX_PRIME {
+        if bs[i] == 1 { cnt = cnt + 1 }
+    }
+    g_primes = calloc(cnt, 8)
+    let mut idx: i64 = 0
+    for i in 0..MAX_PRIME {
+        if bs[i] == 1 {
+            g_primes[idx] = i
+            idx = idx + 1
+        }
+    }
+    g_nprimes = cnt
+    free(bs)
+}
+
+# Factorize n, store primes and exponents in arrays
+# Returns number of factors
+function factorize(n: i64, fps: ptr<i64>, fes: ptr<i64>) -> i64 {
+    let mut x: i64 = n
+    let mut nf: i64 = 0
+    for i in 0..g_nprimes {
+        let p: i64 = g_primes[i]
+        if p * p > x { break }
+        if x % p == 0 {
+            let mut e: i64 = 0
+            while x % p == 0 {
+                x = x / p
+                e = e + 1
+            }
+            fps[nf] = p
+            fes[nf] = e
+            nf = nf + 1
+        }
+    }
+    if x > 1 {
+        fps[nf] = x
+        fes[nf] = 1
+        nf = nf + 1
+    }
+    return nf
+}
+
+# Enumerate divisors with totient
+# Returns count, fills divs[] and phis[]
+function divisors_phi(nf: i64, fps: ptr<i64>, fes: ptr<i64>, divs: ptr<i64>, phis: ptr<i64>) -> i64 {
+    divs[0] = 1
+    phis[0] = 1
+    let mut count: i64 = 1
+    for i in 0..nf {
+        let p: i64 = fps[i]
+        let e: i64 = fes[i]
+        let prev_count: i64 = count
+        let mut pk: i64 = 1
+        for k in 0..(e + 1) {
+            let phi_pk: i64
+            if k == 0 {
+                phi_pk = 1
+            } else {
+                phi_pk = (pk / p) * (p - 1)
+            }
+            if k > 0 {
+                for j in 0..prev_count {
+                    divs[count] = divs[j] * pk
+                    phis[count] = phis[j] * phi_pk
+                    count = count + 1
+                }
+            }
+            pk = pk * p
+        }
+    }
+    return count
+}
+
+# Dihedral types: cycle_length_counts and multiplicity
+# We store as: types_cycles[i] = cycle length, types_count[i] = number of cycles, types_mult[i] = multiplicity
+# But a type can have multiple cycle lengths. Use a flat representation:
+# type_data = [n_types][max_cycles_per_type][3] (cycle_len, count, multiplicity)
+# Simpler: store as list of (cycle_len, count, multiplicity) triples, with a separator
+
+# Actually, let's use a different approach. For each type, store:
+# - number of distinct cycle lengths
+# - for each: cycle_length and count
+# - multiplicity
+
+const MAX_TYPES: i64 = 10000
+const MAX_CYCLES_PER_TYPE: i64 = 3
+
+let mut g_type_ncyc: ptr<i64> = null  # [MAX_TYPES]
+let mut g_type_mult: ptr<i64> = null  # [MAX_TYPES]
+let mut g_type_clen: ptr<i64> = null  # [MAX_TYPES * MAX_CYCLES_PER_TYPE]
+let mut g_type_ccnt: ptr<i64> = null  # [MAX_TYPES * MAX_CYCLES_PER_TYPE]
+
+function init_type_arrays() -> void {
+    g_type_ncyc = calloc(MAX_TYPES, 8)
+    g_type_mult = calloc(MAX_TYPES, 8)
+    g_type_clen = calloc(MAX_TYPES * MAX_CYCLES_PER_TYPE, 8)
+    g_type_ccnt = calloc(MAX_TYPES * MAX_CYCLES_PER_TYPE, 8)
+}
+
+function dihedral_types(n: i64) -> i64 {
+    # Returns number of types, fills g_type_* arrays
+    let fps: ptr<i64> = calloc(20, 8)
+    let fes: ptr<i64> = calloc(20, 8)
+    let nf: i64 = factorize(n, fps, fes)
+
+    let divs: ptr<i64> = calloc(10000, 8)
+    let phis: ptr<i64> = calloc(10000, 8)
+    let ndiv: i64 = divisors_phi(nf, fps, fes, divs, phis)
+
+    let mut ntypes: i64 = 0
+
+    # Rotations
+    for i in 0..ndiv {
+        let L: i64 = divs[i]
+        let phiL: i64 = phis[i]
+        g_type_ncyc[ntypes] = 1
+        g_type_mult[ntypes] = phiL
+        g_type_clen[ntypes * MAX_CYCLES_PER_TYPE + 0] = L
+        g_type_ccnt[ntypes * MAX_CYCLES_PER_TYPE + 0] = n / L
+        ntypes = ntypes + 1
+    }
+
+    # Reflections
+    if n % 2 == 1 {
+        g_type_ncyc[ntypes] = 2
+        g_type_mult[ntypes] = n
+        g_type_clen[ntypes * MAX_CYCLES_PER_TYPE + 0] = 1
+        g_type_ccnt[ntypes * MAX_CYCLES_PER_TYPE + 0] = 1
+        g_type_clen[ntypes * MAX_CYCLES_PER_TYPE + 1] = 2
+        g_type_ccnt[ntypes * MAX_CYCLES_PER_TYPE + 1] = (n - 1) / 2
+        ntypes = ntypes + 1
+    } else {
+        g_type_ncyc[ntypes] = 2
+        g_type_mult[ntypes] = n / 2
+        g_type_clen[ntypes * MAX_CYCLES_PER_TYPE + 0] = 1
+        g_type_ccnt[ntypes * MAX_CYCLES_PER_TYPE + 0] = 2
+        g_type_clen[ntypes * MAX_CYCLES_PER_TYPE + 1] = 2
+        g_type_ccnt[ntypes * MAX_CYCLES_PER_TYPE + 1] = (n - 2) / 2
+        ntypes = ntypes + 1
+
+        g_type_ncyc[ntypes] = 1
+        g_type_mult[ntypes] = n / 2
+        g_type_clen[ntypes * MAX_CYCLES_PER_TYPE + 0] = 2
+        g_type_ccnt[ntypes * MAX_CYCLES_PER_TYPE + 0] = n / 2
+        ntypes = ntypes + 1
+    }
+
+    free(phis)
+    free(divs)
+    free(fes)
+    free(fps)
+    return ntypes
+}
+
+function cycles_on_grid(type_a_idx: i64, type_b_idx: i64) -> i64 {
+    let na: i64 = g_type_ncyc[type_a_idx]
+    let nb: i64 = g_type_ncyc[type_b_idx]
+    let mut total: i64 = 0
+    for i in 0..na {
+        let la: i64 = g_type_clen[type_a_idx * MAX_CYCLES_PER_TYPE + i]
+        let ca: i64 = g_type_ccnt[type_a_idx * MAX_CYCLES_PER_TYPE + i]
+        for j in 0..nb {
+            let lb: i64 = g_type_clen[type_b_idx * MAX_CYCLES_PER_TYPE + j]
+            let cb: i64 = g_type_ccnt[type_b_idx * MAX_CYCLES_PER_TYPE + j]
+            total = total + ca * cb * mygcd(la, lb)
+        }
+    }
+    return total
+}
+
+function surjections_count(cycles: i64, m: i64, comb: ptr<i64>) -> i64 {
+    let mut s: i64 = 0
+    for k in 0..(m + 1) {
+        let base: i64 = m - k
+        let term: i64 = (comb[k] * pow_mod(base, cycles, MOD)) % MOD
+        if (k & 1) == 1 {
+            s = s - term
+        } else {
+            s = s + term
+        }
+    }
+    s = s % MOD
+    if s < 0 { s = s + MOD }
+    return s
+}
+
+# Compute C(m, k) for k=0..m
+function compute_comb(m: i64, comb: ptr<i64>) -> void {
+    # Compute exact C(m,k) for k=0..m, then reduce mod MOD
+    # C(m,k) fits in i64 for m<=40 (max C(40,20) ~ 1.38e11)
+    comb[0] = 1
+    for k in 1..(m + 1) {
+        comb[k] = comb[k - 1] * (m - k + 1) / k
+    }
+    for k in 0..(m + 1) {
+        comb[k] = comb[k] % MOD
+    }
+}
+
+function f(m: i64, a: i64, b: i64) -> i64 {
+    let ntypes_a: i64 = dihedral_types(a)
+    # Save type_a data
+    let saved_ncyc_a: ptr<i64> = calloc(MAX_TYPES, 8)
+    let saved_mult_a: ptr<i64> = calloc(MAX_TYPES, 8)
+    let saved_clen_a: ptr<i64> = calloc(MAX_TYPES * MAX_CYCLES_PER_TYPE, 8)
+    let saved_ccnt_a: ptr<i64> = calloc(MAX_TYPES * MAX_CYCLES_PER_TYPE, 8)
+    for i in 0..ntypes_a {
+        saved_ncyc_a[i] = g_type_ncyc[i]
+        saved_mult_a[i] = g_type_mult[i]
+        for j in 0..MAX_CYCLES_PER_TYPE {
+            saved_clen_a[i * MAX_CYCLES_PER_TYPE + j] = g_type_clen[i * MAX_CYCLES_PER_TYPE + j]
+            saved_ccnt_a[i * MAX_CYCLES_PER_TYPE + j] = g_type_ccnt[i * MAX_CYCLES_PER_TYPE + j]
+        }
+    }
+
+    let ntypes_b: i64 = dihedral_types(b)
+
+    # Aggregate weights by number of cycles
+    # Max cycles is a*b, use a hash map approach
+    # Since a,b <= F_40 ~ 10^8, a*b can be huge. But the number of distinct cycle counts is small.
+    # Use arrays: weights_cycles[0..ntypes_a*ntypes_b], weights_val[0..ntypes_a*ntypes_b]
+    let max_pairs: i64 = ntypes_a * ntypes_b + 1
+    let w_cycles: ptr<i64> = calloc(max_pairs, 8)
+    let w_vals: ptr<i64> = calloc(max_pairs, 8)
+    let mut n_weights: i64 = 0
+
+    for ia in 0..ntypes_a {
+        let mult_a: i64 = saved_mult_a[ia]
+        for ib in 0..ntypes_b {
+            let mult_b: i64 = g_type_mult[ib]
+            # Compute cycles using saved type_a and current type_b
+            let na: i64 = saved_ncyc_a[ia]
+            let nb: i64 = g_type_ncyc[ib]
+            let mut c: i64 = 0
+            for i in 0..na {
+                let la: i64 = saved_clen_a[ia * MAX_CYCLES_PER_TYPE + i]
+                let ca: i64 = saved_ccnt_a[ia * MAX_CYCLES_PER_TYPE + i]
+                for j in 0..nb {
+                    let lb: i64 = g_type_clen[ib * MAX_CYCLES_PER_TYPE + j]
+                    let cb: i64 = g_type_ccnt[ib * MAX_CYCLES_PER_TYPE + j]
+                    c = c + ca * cb * mygcd(la, lb)
+                }
+            }
+
+            let w: i64 = (mult_a * mult_b) % MOD
+
+            # Find or add cycle count
+            let mut found: i64 = -1
+            for wi in 0..n_weights {
+                if w_cycles[wi] == c { found = wi }
+            }
+            if found == -1 {
+                w_cycles[n_weights] = c
+                w_vals[n_weights] = w
+                n_weights = n_weights + 1
+            } else {
+                w_vals[found] = (w_vals[found] + w) % MOD
+            }
+        }
+    }
+
+    let comb: ptr<i64> = calloc(m + 1, 8)
+    compute_comb(m, comb)
+
+    let mut num: i64 = 0
+    for wi in 0..n_weights {
+        let val: i64 = surjections_count(w_cycles[wi], m, comb)
+        num = (num + w_vals[wi] * val) % MOD
+    }
+
+    let den: i64 = (4 * (a % MOD) * (b % MOD)) % MOD
+    let result: i64 = (num * pow_mod(den, MOD - 2, MOD)) % MOD
+
+    free(comb)
+    free(w_vals)
+    free(w_cycles)
+    free(saved_ccnt_a)
+    free(saved_clen_a)
+    free(saved_mult_a)
+    free(saved_ncyc_a)
+    return result
+}
+
+function main() -> i32 {
+    sieve_primes()
+    init_type_arrays()
+
+    # Fibonacci numbers F[0..40]
+    let fib: ptr<i64> = calloc(41, 8)
+    fib[0] = 0
+    fib[1] = 1
+    for i in 2..41 {
+        fib[i] = fib[i - 1] + fib[i - 2]
+    }
+
+    let mut ans: i64 = 0
+    for i in 4..41 {
+        ans = (ans + f(i, fib[i - 1], fib[i])) % MOD
+    }
+
+    printf("%lld\n", ans)
+
+    free(fib)
+    free(g_type_ccnt)
+    free(g_type_clen)
+    free(g_type_mult)
+    free(g_type_ncyc)
+    free(g_primes)
+    return 0
+}

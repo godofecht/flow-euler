@@ -1,22 +1,13 @@
 # Project Euler 513
 # Integral Median — F(100000) via floor-sum trapezoid queries.
 
+import euler.nt { isqrt }
+
 const CAP: i64 = 65536
 
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-function isqrt(n: i64) -> i64 {
-    if n < 2 { return n }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function abs64(x: i64) -> i64 {

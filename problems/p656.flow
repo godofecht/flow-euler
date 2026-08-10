@@ -1,0 +1,82 @@
+# Project Euler 656
+# Palindromic Sequences: sum of H_100(sqrt(beta)) for non-square beta in 2..1000.
+# Uses continued fraction periods and palindromic prefix length formula.
+
+import euler.nt { isqrt }
+
+# Compute the continued fraction period of sqrt(n) for non-square n.
+# Returns period length in *plen, period coefficients in *period.
+function cf_period(n: i64, period: ptr<i64>) -> i64 {
+    let a0: i64 = isqrt(n)
+    let mut m: i64 = 0
+    let mut d: i64 = 1
+    let mut a: i64 = a0
+    let mut len: i64 = 0
+    while true {
+        m = d * a - m
+        d = (n - m * m) / d
+        a = (a0 + m) / d
+        period[len] = a
+        len = len + 1
+        if a == 2 * a0 { break }
+    }
+    return len
+}
+
+# Compute H_g(sqrt(beta)) mod 10^15 using the continued fraction period.
+# Palindromic prefix lengths: n = q_{k-2} + t * q_{k-1} for odd k, 1 <= t <= a_k.
+function H_mod(period: ptr<i64>, plen: i64, g: i64, mod: i64) -> i64 {
+    let mut q_m1: i64 = 0
+    let mut q0: i64 = 1
+    let mut k: i64 = 1
+    let mut i: i64 = 0
+    let mut count: i64 = 0
+    let mut s: i64 = 0
+    while count < g {
+        let a: i64 = period[i]
+        i = i + 1
+        if i == plen { i = 0 }
+
+        if k % 2 == 1 {
+            let remaining: i64 = g - count
+            let tmax: i64 = a
+            if tmax > remaining { tmax = remaining }
+            # sum_{t=1..tmax} (q_m1 + t*q0) = tmax*q_m1 + q0*tmax*(tmax+1)/2
+            let t1: i128 = ((tmax % mod) as i128) * ((q_m1 % mod) as i128) % (mod as i128)
+            s = (s + (t1 as i64)) % mod
+            let tri_val: i64 = (tmax * (tmax + 1) / 2) % mod
+            let t2: i128 = ((q0 % mod) as i128) * (tri_val as i128) % (mod as i128)
+            s = (s + (t2 as i64)) % mod
+            count = count + tmax
+        }
+
+        let q1: i64 = (((a as i128) * (q0 as i128) + (q_m1 as i128)) % (mod as i128)) as i64
+        q_m1 = q0
+        q0 = q1
+        k = k + 1
+    }
+    return s % mod
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000000000000
+    let LIMIT_BETA: i64 = 1000
+    let G: i64 = 100
+
+    let period: ptr<i64> = calloc(256, 8)
+    if period == null { return 1 }
+
+    let mut total: i64 = 0
+    for beta in 2..(LIMIT_BETA + 1) {
+        let r: i64 = isqrt(beta)
+        if r * r == beta { continue }
+        let plen: i64 = cf_period(beta, period)
+        let h: i64 = H_mod(period, plen, G, MOD)
+        total = (total + h) % MOD
+        if total < 0 { total = total + MOD }
+    }
+
+    printf("%015lld\n", total)
+    free(period)
+    return 0
+}

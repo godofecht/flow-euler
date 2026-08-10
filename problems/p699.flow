@@ -1,0 +1,310 @@
+# Project Euler 699: Triffle Numbers
+# T(N) = sum of n <= N where sigma(n)/n reduces to a/b with b = 3^k, k > 0.
+# Uses seeds (2^a * 3^b * 5^c) and DFS with Pollard's rho factorization.
+
+import euler.nt { gcd, is_prime, mod_pow, mulmod }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+const N: i64 = 100000000000000  # 10^14
+
+# ---- Pollard's rho ----
+let mut g_rng_state: i64 = 42
+
+function rng_next() -> i64 {
+    g_rng_state = g_rng_state * 6364136223846793005 + 1442695040888963407
+    return g_rng_state
+}
+
+function rng_range(lo: i64, hi: i64) -> i64 {
+    let r: i64 = rng_next()
+    if r < 0 { r = -r }
+    return lo + (r % (hi - lo + 1))
+}
+
+function pollard_rho(n: i64) -> i64 {
+    if n % 2 == 0 { return 2 }
+    if n % 3 == 0 { return 3 }
+    while true {
+        let c: i64 = rng_range(1, n - 1)
+        let mut x: i64 = rng_range(0, n - 1)
+        let mut y: i64 = x
+        let mut d: i64 = 1
+        while d == 1 {
+            x = (mulmod(x, x, n) + c) % n
+            y = (mulmod(y, y, n) + c) % n
+            y = (mulmod(y, y, n) + c) % n
+            let diff: i64
+            if x > y { diff = x - y } else { diff = y - x }
+            d = gcd(diff, n)
+        }
+        if d != n { return d }
+    }
+    return 0
+}
+
+# Factorization into prime powers (stored in parallel arrays)
+# Returns count of distinct prime factors
+function factorize(n: i64, fps: ptr<i64>, fes: ptr<i64>) -> i64 {
+    let mut nf: i64 = 0
+    let mut x: i64 = n
+    if x == 1 { return 0 }
+
+    # Trial division by small primes
+    let small_primes: ptr<i64> = calloc(12, 8)
+    small_primes[0] = 2; small_primes[1] = 3; small_primes[2] = 5
+    small_primes[3] = 7; small_primes[4] = 11; small_primes[5] = 13
+    small_primes[6] = 17; small_primes[7] = 19; small_primes[8] = 23
+    small_primes[9] = 29; small_primes[10] = 31; small_primes[11] = 37
+
+    for i in 0..12 {
+        let p: i64 = small_primes[i]
+        if x % p == 0 {
+            let mut cnt: i64 = 0
+            while x % p == 0 { x = x / p; cnt = cnt + 1 }
+            fps[nf] = p
+            fes[nf] = cnt
+            nf = nf + 1
+            if x == 1 { free(small_primes); return nf }
+        }
+    }
+    free(small_primes)
+
+    if x == 1 { return nf }
+    if is_prime(x) {
+        fps[nf] = x
+        fes[nf] = 1
+        return nf + 1
+    }
+
+    # Pollard's rho recursion (iterative with stack)
+    let stack: ptr<i64> = calloc(100, 8)
+    let mut sp: i64 = 0
+    stack[sp] = x; sp = sp + 1
+
+    while sp > 0 {
+        sp = sp - 1
+        let m: i64 = stack[sp]
+        if m == 1 { continue }
+        if is_prime(m) {
+            # Check if already in fps
+            let mut found: i64 = -1
+            for i in 0..nf {
+                if fps[i] == m { found = i }
+            }
+            if found >= 0 {
+                fes[found] = fes[found] + 1
+            } else {
+                fps[nf] = m
+                fes[nf] = 1
+                nf = nf + 1
+            }
+            continue
+        }
+        let d: i64 = pollard_rho(m)
+        stack[sp] = d; sp = sp + 1
+        stack[sp] = m / d; sp = sp + 1
+    }
+    free(stack)
+    return nf
+}
+
+function is_power_of_3(n: i64) -> i64 {
+    if n <= 0 { return -1 }
+    let mut k: i64 = 0
+    let mut x: i64 = n
+    while x % 3 == 0 { x = x / 3; k = k + 1 }
+    if x == 1 { return k } else { return -1 }
+}
+
+function sigma_prime_power(p: i64, e: i64) -> i64 {
+    let mut s: i64 = 1
+    let mut pp: i64 = 1
+    for i in 0..e {
+        pp = pp * p
+        s = s + pp
+    }
+    return s
+}
+
+# ---- Hash set for visited ----
+const VIS_HASH_SIZE: i64 = 20000003
+let mut g_vis_keys: ptr<i64> = null
+
+function vis_init() -> void {
+    g_vis_keys = calloc(VIS_HASH_SIZE, 8)
+}
+
+function vis_check_or_add(n: i64) -> bool {
+    let mut h: i64 = n % VIS_HASH_SIZE
+    if h < 0 { h = h + VIS_HASH_SIZE }
+    while g_vis_keys[h] != 0 {
+        if g_vis_keys[h] == n { return false }
+        h = h + 1
+        if h >= VIS_HASH_SIZE { h = 0 }
+    }
+    g_vis_keys[h] = n
+    return true
+}
+
+# ---- Factorization cache ----
+const FAC_HASH_SIZE: i64 = 20000003
+let mut g_fac_keys: ptr<i64> = null
+let mut g_fac_data: ptr<i64> = null  # each entry: nf, then pairs (p, e)
+
+function fac_cache_init() -> void {
+    g_fac_keys = calloc(FAC_HASH_SIZE, 8)
+    g_fac_data = calloc(FAC_HASH_SIZE * 22, 8)  # up to 20 prime factors + nf
+}
+
+function fac_cache_get(x: i64, out_fps: ptr<i64>, out_fes: ptr<i64>) -> i64 {
+    let mut h: i64 = x % FAC_HASH_SIZE
+    if h < 0 { h = h + FAC_HASH_SIZE }
+    while g_fac_keys[h] != 0 {
+        if g_fac_keys[h] == x {
+            let base: i64 = h * 22
+            let nf: i64 = g_fac_data[base]
+            for i in 0..nf {
+                out_fps[i] = g_fac_data[base + 1 + i * 2]
+                out_fes[i] = g_fac_data[base + 2 + i * 2]
+            }
+            return nf
+        }
+        h = h + 1
+        if h >= FAC_HASH_SIZE { h = 0 }
+    }
+    # Not found: factorize and store
+    let nf: i64 = factorize(x, out_fps, out_fes)
+    g_fac_keys[h] = x
+    let base: i64 = h * 22
+    g_fac_data[base] = nf
+    for i in 0..nf {
+        g_fac_data[base + 1 + i * 2] = out_fps[i]
+        g_fac_data[base + 2 + i * 2] = out_fes[i]
+    }
+    return nf
+}
+
+# ---- DFS ----
+let mut g_total: i64 = 0
+
+function dfs(n: i64, num: i64, den: i64) -> void {
+    if not vis_check_or_add(n) { return }
+
+    let k: i64 = is_power_of_3(den)
+    if k > 0 { g_total = g_total + n }
+
+    if den == 1 { return }
+    if den % 3 != 0 { return }
+    if num == 1 { return }
+
+    let fps: ptr<i64> = calloc(64, 8)
+    let fes: ptr<i64> = calloc(64, 8)
+    let nf: i64 = fac_cache_get(num, fps, fes)
+
+    for i in 0..nf {
+        let p: i64 = fps[i]
+        if p <= 5 { continue }
+        if n % p == 0 { continue }
+
+        let mut pp: i64 = 1
+        for e in 1..(fes[i] + 1) {
+            pp = pp * p
+            if n > N / pp { break }
+
+            let sp: i64 = sigma_prime_power(p, e)
+            let new_num: i64 = (num / pp) * sp
+            let mut new_den: i64 = den
+
+            let g: i64 = gcd(new_num, new_den)
+            let nn: i64 = new_num / g
+            let nd: i64 = new_den / g
+            dfs(n * pp, nn, nd)
+        }
+    }
+
+    free(fes)
+    free(fps)
+}
+
+function main() -> i32 {
+    vis_init()
+    fac_cache_init()
+
+    # Build seeds: n = 2^a * 3^b * 5^c, b >= 1, n <= N
+    let pow2: ptr<i64> = calloc(50, 8)
+    let pow3: ptr<i64> = calloc(30, 8)
+    let pow5: ptr<i64> = calloc(20, 8)
+
+    pow2[0] = 1
+    let mut n2: i64 = 1
+    let mut a_max: i64 = 0
+    while pow2[a_max] * 2 <= N {
+        a_max = a_max + 1
+        pow2[a_max] = pow2[a_max - 1] * 2
+    }
+
+    pow3[0] = 1
+    let mut n3: i64 = 1
+    let mut b_max: i64 = 0
+    while pow3[b_max] * 3 <= N {
+        b_max = b_max + 1
+        pow3[b_max] = pow3[b_max - 1] * 3
+    }
+
+    pow5[0] = 1
+    let mut c_max: i64 = 0
+    while pow5[c_max] * 5 <= N {
+        c_max = c_max + 1
+        pow5[c_max] = pow5[c_max - 1] * 5
+    }
+
+    let tmp_fps: ptr<i64> = calloc(64, 8)
+    let tmp_fes: ptr<i64> = calloc(64, 8)
+
+    for a in 0..(a_max + 1) {
+        let pa: i64 = pow2[a]
+        let sig2: i64
+        if a > 0 { sig2 = pa * 2 - 1 } else { sig2 = 1 }
+
+        for b in 1..(b_max + 1) {
+            let pb: i64 = pow3[b]
+            if pa * pb > N { break }
+            let sig3: i64 = (pb * 3 - 1) / 2
+
+            for c in 0..(c_max + 1) {
+                let pc: i64 = pow5[c]
+                let n: i64 = pa * pb * pc
+                if n > N { break }
+                let sig5: i64
+                if c > 0 { sig5 = (pc * 5 - 1) / 4 } else { sig5 = 1 }
+                let sig: i64 = sig2 * sig3 * sig5
+
+                let g: i64 = gcd(n, sig)
+                let num: i64 = sig / g
+                let den: i64 = n / g
+
+                if den % 3 != 0 { continue }
+                if den == 1 { continue }
+
+                dfs(n, num, den)
+            }
+        }
+    }
+
+    printf("%lld\n", g_total)
+
+    free(tmp_fes)
+    free(tmp_fps)
+    free(pow5)
+    free(pow3)
+    free(pow2)
+    free(g_fac_data)
+    free(g_fac_keys)
+    free(g_vis_keys)
+    return 0
+}

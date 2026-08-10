@@ -1,0 +1,45 @@
+# Project Euler 906
+# A Collective Decision — Condorcet winner probability P(20000).
+
+function agreement_probability(n: i64) -> f64 {
+    if n == 1 { return 1.0 }
+    let N: i64 = n - 1
+    let factor: f64 = (N + 1) as f64 / ((n * n) as f64)
+    let mut s: f64 = 0.0
+    let mut c: f64 = 0.0
+    let mut a: i64 = 0
+    while a <= N {
+        let bmax: i64 = N - a
+        let mut term: f64 = 1.0 / ((a + 1) as f64)
+        let mut y: f64 = term - c
+        let mut t: f64 = s + y
+        c = (t - s) - y
+        s = t
+        let mut g: f64 = 1.0
+        let mut num: f64 = (N - a) as f64
+        let mut den: f64 = N as f64
+        let mut b: i64 = 1
+        while b <= bmax {
+            g = g * (num / den)
+            num = num - 1.0
+            den = den - 1.0
+            term = g / ((a + b + 1) as f64)
+            y = term - c
+            t = s + y
+            c = (t - s) - y
+            s = t
+            let rem: i64 = bmax - b
+            if rem > 0 && term * (rem as f64) < 1e-20 {
+                break
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    return factor * s
+}
+
+function main() -> i32 {
+    printf("%.10f\n", agreement_probability(20000))
+    return 0
+}

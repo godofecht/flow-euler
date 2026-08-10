@@ -1,0 +1,36 @@
+# Project Euler 820
+# nth Digit Reciprocals — S(n)=sum_k floor(10*(10^(n-1) mod k)/k).
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    if mod == 1 { return 0 }
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function d(n: i64, k: i64) -> i64 {
+    return (10 * modpow(10, n - 1, k)) / k
+}
+
+function S(n: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut k: i64 = 1
+    while k <= n {
+        total = total + d(n, k)
+        k = k + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(10000000))
+    return 0
+}

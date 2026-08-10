@@ -1,0 +1,79 @@
+# Project Euler 868
+# Belfry Maths — Steinhaus–Johnson–Trotter rank of a word.
+
+function sjt_rank(perm: ptr<i64>, n: i64) -> i64 {
+    if n <= 1 { return 0 }
+    let mut pos: i64 = 0
+    while pos < n {
+        if perm[pos] == n { break }
+        pos = pos + 1
+    }
+    # remove n into base[0..n-2]
+    let mut base: [i64; 32]
+    let mut j: i64 = 0
+    let mut i: i64 = 0
+    while i < n {
+        if i != pos {
+            base[j] = perm[i]
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let r: i64 = sjt_rank(&base[0], n - 1)
+    let mut t: i64 = pos
+    if (r & 1) == 0 {
+        t = n - 1 - pos
+    }
+    return r * n + t
+}
+
+function swaps_to_reach(word: ptr<i8>, n: i64) -> i64 {
+    # Map letters to 1..n by sorted order
+    let mut letters: [i8; 32]
+    let mut i: i64 = 0
+    while i < n {
+        letters[i] = word[i]
+        i = i + 1
+    }
+    # insertion sort copy for ranking
+    let mut sorted: [i8; 32]
+    i = 0
+    while i < n {
+        sorted[i] = letters[i]
+        i = i + 1
+    }
+    let mut a: i64 = 1
+    while a < n {
+        let key: i8 = sorted[a]
+        let mut b: i64 = a
+        while b > 0 && sorted[b - 1] > key {
+            sorted[b] = sorted[b - 1]
+            b = b - 1
+        }
+        sorted[b] = key
+        a = a + 1
+    }
+    let mut perm: [i64; 32]
+    i = 0
+    while i < n {
+        let ch: i8 = letters[i]
+        let mut rank: i64 = 1
+        let mut j: i64 = 0
+        while j < n {
+            if sorted[j] == ch {
+                rank = j + 1
+                break
+            }
+            j = j + 1
+        }
+        perm[i] = rank
+        i = i + 1
+    }
+    return sjt_rank(&perm[0], n)
+}
+
+function main() -> i32 {
+    let word: ptr<i8> = "NOWPICKBELFRYMATHS"
+    printf("%lld\n", swaps_to_reach(word, 18))
+    return 0
+}

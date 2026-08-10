@@ -29,14 +29,12 @@ function cycle_len(d: i64) -> i64 {
 function main() -> i32 {
     let mut best_d: i64 = 0
     let mut best_len: i64 = 0
-    let mut d: i64 = 2
-    while d < 1000 {
+    for d in 2..1000 {
         let len: i64 = cycle_len(d)
         if len > best_len {
             best_len = len
             best_d = d
         }
-        d = d + 1
     }
     printf("%lld\n", best_d)
     return 0

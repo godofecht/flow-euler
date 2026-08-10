@@ -1,16 +1,7 @@
 # Project Euler 142
 # Find x+y+z where x>y>z>0 and six pairwise ± sums/diffs are square.
 
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
-}
+import euler.nt { isqrt }
 
 function is_square(n: i64) -> bool {
     if n <= 0 { return false }

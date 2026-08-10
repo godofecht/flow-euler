@@ -1,0 +1,61 @@
+# Project Euler 900
+# DistribuNim II — S(N) via order-5 linear recurrence mod 900497239.
+
+const MOD: i64 = 900497239
+
+function next_pow2_gt(x: i64) -> i64 {
+    let mut p: i64 = 1
+    while p <= x {
+        p = p << 1
+    }
+    return p
+}
+
+function t(n: i64) -> i64 {
+    let p: i64 = next_pow2_gt(n)
+    let mut v: i64 = (-(n * n) - (n & 1)) % p
+    if v < 0 { v = v + p }
+    return v
+}
+
+function S_mod(N: i64) -> i64 {
+    # Seed with exact S(1)..S(5) from closed form (sum to 2^5=32).
+    let mut S: [i64; 6]
+    S[0] = 0
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n <= 32 {
+        total = total + t(n)
+        if n == 2 { S[1] = total }
+        if n == 4 { S[2] = total }
+        if n == 8 { S[3] = total }
+        if n == 16 { S[4] = total }
+        if n == 32 { S[5] = total }
+        n = n + 1
+    }
+    if N <= 5 {
+        return S[N] % MOD
+    }
+    let mut p0: i64 = S[5] % MOD
+    let mut p1: i64 = S[4] % MOD
+    let mut p2: i64 = S[3] % MOD
+    let mut p3: i64 = S[2] % MOD
+    let mut p4: i64 = S[1] % MOD
+    let mut k: i64 = 6
+    while k <= N {
+        let mut neu: i64 = (7 * p0 - 6 * p1 - 48 * p2 + 112 * p3 - 64 * p4) % MOD
+        if neu < 0 { neu = neu + MOD }
+        p4 = p3
+        p3 = p2
+        p2 = p1
+        p1 = p0
+        p0 = neu
+        k = k + 1
+    }
+    return p0
+}
+
+function main() -> i32 {
+    printf("%lld\n", S_mod(10000))
+    return 0
+}

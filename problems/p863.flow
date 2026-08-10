@@ -1,0 +1,63 @@
+# Project Euler 863
+# Different Dice — expected rolls to emulate n-sided die with d5/d6.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fabs(x: f64) -> f64
+}
+
+function R(n: i64) -> f64 {
+    let nxt5: ptr<i64> = calloc(n, 8)
+    let nxt6: ptr<i64> = calloc(n, 8)
+    let c5: ptr<f64> = calloc(n, 8)
+    let c6: ptr<f64> = calloc(n, 8)
+    let E: ptr<f64> = calloc(n, 8)
+    let mut s: i64 = 1
+    while s < n {
+        let t5: i64 = 5 * s
+        let r5: i64 = t5 % n
+        nxt5[s] = r5
+        if r5 == 0 { c5[s] = 0.0 } else { c5[s] = (r5 as f64) / (t5 as f64) }
+        let t6: i64 = 6 * s
+        let r6: i64 = t6 % n
+        nxt6[s] = r6
+        if r6 == 0 { c6[s] = 0.0 } else { c6[s] = (r6 as f64) / (t6 as f64) }
+        s = s + 1
+    }
+    let mut iter: i64 = 0
+    while iter < 10000 {
+        let mut delta: f64 = 0.0
+        s = n - 1
+        while s > 0 {
+            let v0: f64 = 1.0 + c5[s] * E[nxt5[s]]
+            let v1: f64 = 1.0 + c6[s] * E[nxt6[s]]
+            let mut neu: f64 = v0
+            if v1 < v0 { neu = v1 }
+            let diff: f64 = fabs(neu - E[s])
+            if diff > delta { delta = diff }
+            E[s] = neu
+            s = s - 1
+        }
+        if delta < 1e-15 { break }
+        iter = iter + 1
+    }
+    let ans: f64 = E[1]
+    free(nxt5)
+    free(nxt6)
+    free(c5)
+    free(c6)
+    free(E)
+    return ans
+}
+
+function main() -> i32 {
+    let mut total: f64 = 0.0
+    let mut k: i64 = 2
+    while k <= 1000 {
+        total = total + R(k)
+        k = k + 1
+    }
+    printf("%.6f\n", total)
+    return 0
+}

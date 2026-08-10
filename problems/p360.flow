@@ -3,20 +3,11 @@
 # Even radius: S(2m)=2*S(m), so S(10^10)=2^10 * S(5^10).
 # S(5^10) via lattice enumeration on reduced odd radius formulas.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function brute_S(r: i64) -> i64 {

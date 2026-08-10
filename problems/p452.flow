@@ -1,6 +1,8 @@
 # Project Euler 452
 # Minimal Product-sum Numbers II — summatory multiplicative g via Lehmer π.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
@@ -45,17 +47,6 @@ function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
         e = e / 2
     }
     return r
-}
-
-function isqrt(n: i64) -> i64 {
-    if n < 2 { return n }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function iroot(n: i64, k: i64) -> i64 {

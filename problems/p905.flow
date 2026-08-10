@@ -1,0 +1,112 @@
+# Project Euler 905
+# Now I Know — epistemic hat game reduced to accelerated Euclidean process.
+# Sum F(a^b, b^a, a^b+b^a) for a=1..7, b=1..19.
+
+function ipow(base: i64, exp: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 { r = r * b }
+        b = b * b
+        e = e / 2
+    }
+    return r
+}
+
+function k_fast(state0: i64, a0: i64, b0: i64) -> i64 {
+    let mut state: i64 = state0
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    let mut cost: i64 = 0
+    while a != b {
+        if state == 2 {
+            if a > b {
+                let p: i64 = (a - 1) / (2 * b)
+                if p > 0 {
+                    cost = cost + p
+                    a = a - 2 * b * p
+                } else {
+                    cost = cost + 1
+                    state = 0
+                    let na: i64 = b
+                    let nb: i64 = a - b
+                    a = na
+                    b = nb
+                }
+            } else {
+                let p2: i64 = (b - 1) / (2 * a)
+                if p2 > 0 {
+                    cost = cost + p2
+                    b = b - 2 * a * p2
+                } else {
+                    cost = cost + 1
+                    state = 1
+                    b = b - a
+                }
+            }
+        } else {
+            if state == 0 {
+                if a > b {
+                    let p3: i64 = (a - 1) / (2 * b)
+                    if p3 > 0 {
+                        cost = cost + p3
+                        a = a - 2 * b * p3
+                    } else {
+                        cost = cost + 1
+                        state = 1
+                        a = a - b
+                    }
+                } else {
+                    state = 2
+                    let na2: i64 = b - a
+                    let nb2: i64 = a
+                    a = na2
+                    b = nb2
+                }
+            } else {
+                if a > b {
+                    state = 0
+                    a = a - b
+                } else {
+                    state = 2
+                    b = b - a
+                }
+            }
+        }
+    }
+    if state == 2 {
+        return cost + 1
+    }
+    return cost
+}
+
+function F(A: i64, B: i64, C: i64) -> i64 {
+    if A == B + C {
+        return 3 * k_fast(0, B, C) + 1
+    }
+    if B == A + C {
+        return 3 * k_fast(1, A, C) + 2
+    }
+    if C == A + B {
+        return 3 * k_fast(2, A, B)
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+    let mut a: i64 = 1
+    while a <= 7 {
+        let mut b: i64 = 1
+        while b <= 19 {
+            let A: i64 = ipow(a, b)
+            let B: i64 = ipow(b, a)
+            total = total + F(A, B, A + B)
+            b = b + 1
+        }
+        a = a + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

@@ -1,0 +1,160 @@
+# Project Euler 681: Maximal Area
+# Uses Brahmagupta's formula. SP(n) = sum of perimeters of cyclic quadrilaterals
+# with integer area k <= n.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let n: i64 = 1000000
+
+    # Build SPF sieve up to n
+    let spf: ptr<i64> = calloc(n + 1, 8)
+    if spf == null { return 1 }
+    for i in 0..(n + 1) { spf[i] = i }
+
+    let root: i64 = isqrt(n)
+    for i in 2..(root + 1) {
+        if spf[i] == i {
+            let start: i64 = i * i
+            let mut j: i64 = start
+            while j <= n {
+                if spf[j] == j { spf[j] = i }
+                j = j + i
+            }
+        }
+    }
+
+    # Divisor buffer (max divisors of k^2 is small, ~240 for k<=10^6)
+    let max_divs: i64 = 2000
+    let divs: ptr<i64> = calloc(max_divs, 8)
+    if divs == null { return 1 }
+
+    # Temp factorization buffer
+    let max_primes: i64 = 20
+    let fac_p: ptr<i64> = calloc(max_primes, 8)
+    let fac_e: ptr<i64> = calloc(max_primes, 8)
+
+    let mut total: i64 = 0
+
+    for k in 1..(n + 1) {
+        let k2: i64 = k * k
+
+        # Factorize k
+        let mut nfac: i64 = 0
+        let mut x: i64 = k
+        while x > 1 {
+            let p: i64 = spf[x]
+            let mut e: i64 = 0
+            while x % p == 0 {
+                x = x / p
+                e = e + 1
+            }
+            fac_p[nfac] = p
+            fac_e[nfac] = e
+            nfac = nfac + 1
+        }
+
+        # Generate all divisors of k^2 that are <= k
+        # k^2 has exponents 2*e for each prime
+        divs[0] = 1
+        let mut ndivs: i64 = 1
+
+        for fi in 0..nfac {
+            let p: i64 = fac_p[fi]
+            let e2: i64 = 2 * fac_e[fi]
+            let old_count: i64 = ndivs
+
+            # Generate powers p^1, p^2, ..., p^(2e)
+            let mut pe: i64 = 1
+            for _ in 0..e2 {
+                pe = pe * p
+                for di in 0..old_count {
+                    let v: i64 = divs[di] * pe
+                    if v <= k {
+                        divs[ndivs] = v
+                        ndivs = ndivs + 1
+                        if ndivs >= max_divs { return 1 }
+                    }
+                }
+            }
+        }
+
+        # Sort divs (insertion sort, small arrays)
+        for i in 1..ndivs {
+            let key: i64 = divs[i]
+            let mut j: i64 = i
+            while j > 0 && divs[j - 1] > key {
+                divs[j] = divs[j - 1]
+                j = j - 1
+            }
+            divs[j] = key
+        }
+
+        let dlen: i64 = ndivs
+
+        # Iterate over T, W, V
+        for ti in 0..dlen {
+            let T: i64 = divs[ti]
+            if T * T > k { break }
+
+            let k2_div_T: i64 = k2 / T
+
+            for wi in ti..dlen {
+                let W: i64 = divs[wi]
+                if W * W * W > k2_div_T { break }
+
+                if k2_div_T % W != 0 { continue }
+
+                let R: i64 = k2_div_T / W
+                let mut vmax: i64 = isqrt(R)
+                if vmax < W { break }
+                if vmax > k { vmax = k }
+
+                let S: i64 = W + T
+                # disc = S^2 + 4*R
+                let disc: i64 = S * S + 4 * R
+                let rt: i64 = isqrt(disc)
+                let mut vmin: i64 = (rt - S) / 2 + 1
+                if vmin < W { vmin = W }
+                if vmin > vmax { continue }
+
+                # Binary search for first divs[vi] >= vmin
+                let mut lo: i64 = wi
+                let mut hi: i64 = dlen
+                while lo < hi {
+                    let mid: i64 = (lo + hi) / 2
+                    if divs[mid] < vmin { lo = mid + 1 }
+                    else { hi = mid }
+                }
+
+                for vi in lo..dlen {
+                    let V: i64 = divs[vi]
+                    if V > vmax { break }
+                    if R % V != 0 { continue }
+
+                    let U: i64 = R / V
+                    if U < V { continue }
+                    if U >= V + S { continue }
+
+                    let p: i64 = U + V + S
+                    if p % 2 != 0 { continue }
+
+                    total = total + p
+                }
+            }
+        }
+    }
+
+    printf("%lld\n", total)
+
+    free(fac_e)
+    free(fac_p)
+    free(divs)
+    free(spf)
+    return 0
+}

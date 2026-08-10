@@ -1,0 +1,276 @@
+# Project Euler 632: Square Prime Factors
+# P(N) = product of non-zero C_k(N) mod 10^9+7, N=10^16.
+# C_k(N) = count of integers 1..N with exactly k square prime factors.
+# Uses linear sieve for mu/omega, recursive squarefree counting, binomial inversion.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+
+# Globals for recursive squarefree counting
+let mut g_primes: ptr<i64> = null
+let mut g_nprimes: i64 = 0
+
+function pi(x: i64) -> i64 {
+    # Binary search for number of primes <= x
+    let mut lo: i64 = 0
+    let mut hi: i64 = g_nprimes
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if g_primes[mid] <= x { lo = mid + 1 } else { hi = mid }
+    }
+    return lo
+}
+
+function kth_root_floor(n: i64, k: i64) -> i64 {
+    if k == 2 { return isqrt(n) }
+    # Binary search for k-th root
+    let mut lo: i64 = 1
+    let mut hi: i64 = 2
+    # Find upper bound
+    while hi > 0 {
+        let mut p: i64 = 1
+        let mut ok: i64 = 1
+        for _ in 0..k {
+            if p > n / hi { ok = 0 }
+            if ok == 1 { p = p * hi }
+        }
+        if ok == 0 { break }
+        hi = hi * 2
+        if hi > 1000000000 { break }
+    }
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        let mut p: i64 = 1
+        let mut ok: i64 = 1
+        for _ in 0..k {
+            if p > n / mid { ok = 0 }
+            if ok == 1 { p = p * mid }
+        }
+        if ok == 1 { lo = mid } else { hi = mid }
+    }
+    return lo
+}
+
+# Memoized count_squarefree_products(x, k, start)
+# Count of numbers <= x that are products of exactly k distinct primes
+# from primes[start:], strictly increasing.
+const MEMO_SIZE: i64 = 4000007
+let mut g_memo_key: ptr<i64> = null
+let mut g_memo_val: ptr<i64> = null
+
+function memo_key(x: i64, k: i64, start: i64) -> i64 {
+    return x * 1000 + k * 100 + start
+}
+
+function count_sqfree(x: i64, k: i64, start: i64) -> i64 {
+    if k == 0 { return 1 }
+    if k == 1 { return pi(x) - start }
+
+    let limit: i64 = kth_root_floor(x, k)
+    # Binary search for end = number of primes <= limit
+    let end: i64 = pi(limit)
+    if end <= start { return 0 }
+
+    # Check memo
+    let key: i64 = memo_key(x, k, start)
+    let h: i64 = key % MEMO_SIZE
+    if g_memo_key[h] == key { return g_memo_val[h] }
+
+    let mut res: i64 = 0
+    for i in start..end {
+        let p: i64 = g_primes[i]
+        res = res + count_sqfree(x / p, k - 1, i + 1)
+    }
+
+    g_memo_key[h] = key
+    g_memo_val[h] = res
+    return res
+}
+
+function prefix_count(x: i64, r: i64) -> i64 {
+    if r == 0 {
+        if x >= 1 { return 1 }
+        return 0
+    }
+    return count_sqfree(x, r, 0)
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000000000000  # 10^16
+    let sqrtN: i64 = isqrt(N)
+
+    # Sieve primes up to sqrtN (10^8)
+    # Use odd-only byte sieve
+    let sieve_size: i64 = (sqrtN + 1) / 2
+    let sieve: ptr<i8> = calloc(sieve_size, 1)
+    for i in 0..sieve_size { sieve[i] = 1 }
+    sieve[0] = 0  # 1 is not prime
+
+    let limit: i64 = isqrt(sqrtN)
+    for i in 1..(limit / 2 + 1) {
+        if sieve[i] == 1 {
+            let p: i64 = 2 * i + 1
+            let mut j: i64 = (p * p) / 2
+            while j < sieve_size {
+                sieve[j] = 0
+                j = j + p
+            }
+        }
+    }
+
+    # Count primes and store
+    let mut nprimes: i64 = 1  # prime 2
+    for i in 1..sieve_size {
+        if sieve[i] == 1 { nprimes = nprimes + 1 }
+    }
+
+    g_primes = calloc(nprimes, 8)
+    g_primes[0] = 2
+    let mut pidx: i64 = 1
+    for i in 1..sieve_size {
+        if sieve[i] == 1 {
+            g_primes[pidx] = 2 * i + 1
+            pidx = pidx + 1
+        }
+    }
+    g_nprimes = nprimes
+    free(sieve)
+
+    # Init memo for count_sqfree
+    g_memo_key = calloc(MEMO_SIZE, 8)
+    g_memo_val = calloc(MEMO_SIZE, 8)
+
+    # Small primes for recursion (up to 10000)
+    let mut nsmall: i64 = 0
+    for i in 0..nprimes {
+        if g_primes[i] <= 10000 { nsmall = nsmall + 1 }
+        else { break }
+    }
+
+    # max_possible_k: product of first k primes <= sqrtN
+    let mut prod: i64 = 1
+    let mut kmax: i64 = 0
+    for i in 0..nsmall {
+        if prod <= sqrtN / g_primes[i] {
+            prod = prod * g_primes[i]
+            kmax = kmax + 1
+        } else {
+            break
+        }
+    }
+
+    # Linear sieve for mu and omega up to L0
+    let L0: i64 = 5000000
+    if L0 > sqrtN { kmax = kmax }  # L0 cap
+
+    let mu: ptr<i8> = calloc(L0 + 1, 1)
+    let omega: ptr<i8> = calloc(L0 + 1, 1)
+    let is_comp: ptr<i8> = calloc(L0 + 1, 1)
+    let lprimes: ptr<i64> = calloc(L0 / 10 + 100, 8)
+    let mut nlprimes: i64 = 0
+
+    mu[1] = 1
+    for i in 2..(L0 + 1) {
+        if is_comp[i] == 0 {
+            lprimes[nlprimes] = i
+            nlprimes = nlprimes + 1
+            mu[i] = -1
+            omega[i] = 1
+        }
+        for j in 0..nlprimes {
+            let p: i64 = lprimes[j]
+            let ip: i64 = i * p
+            if ip > L0 { break }
+            is_comp[ip] = 1
+            if i % p == 0 {
+                mu[ip] = 0
+                omega[ip] = omega[i]
+                break
+            } else {
+                mu[ip] = -mu[i]
+                omega[ip] = omega[i] + 1
+            }
+        }
+    }
+    free(is_comp)
+    free(lprimes)
+
+    # Compute S[r] = sum_{squarefree d, omega(d)=r} floor(N / d^2)
+    let S: ptr<i64> = calloc(kmax + 1, 8)
+
+    # Small d up to L0
+    for d in 1..(L0 + 1) {
+        if mu[d] != 0 {
+            let r: i64 = omega[d] as i64
+            if r <= kmax {
+                S[r] = S[r] + N / (d * d)
+            }
+        }
+    }
+
+    free(mu)
+    free(omega)
+
+    # For d > L0, q = floor(N/d^2) is small
+    let qmax: i64 = N / ((L0 + 1) * (L0 + 1))
+    for q in 1..(qmax + 1) {
+        let hi: i64 = isqrt(N / q)
+        let lo: i64 = isqrt(N / (q + 1))
+        let a: i64 = lo
+        if L0 > a { a = L0 }
+        if hi <= a { continue }
+        for r in 0..(kmax + 1) {
+            let cnt: i64 = prefix_count(hi, r) - prefix_count(a, r)
+            if cnt != 0 {
+                S[r] = S[r] + q * cnt
+            }
+        }
+    }
+
+    # Binomial inversion: C[k] = S[k] - sum_{j>k} C[j] * comb[j][k]
+    let comb: ptr<i64> = calloc((kmax + 1) * (kmax + 1), 8)
+    for n in 0..(kmax + 1) {
+        comb[n * (kmax + 1) + 0] = 1
+        comb[n * (kmax + 1) + n] = 1
+        for r in 1..n {
+            comb[n * (kmax + 1) + r] = comb[(n - 1) * (kmax + 1) + r - 1] + comb[(n - 1) * (kmax + 1) + r]
+        }
+    }
+
+    let C: ptr<i64> = calloc(kmax + 1, 8)
+    for k in 0..(kmax + 1) {
+        let rev_k: i64 = kmax - k
+        let mut val: i64 = S[rev_k]
+        for j in (rev_k + 1)..(kmax + 1) {
+            val = val - C[j] * comb[j * (kmax + 1) + rev_k]
+        }
+        C[rev_k] = val
+    }
+
+    # Product of non-zero C[k] mod MOD
+    let mut ans: i64 = 1
+    for k in 0..(kmax + 1) {
+        if C[k] != 0 {
+            let v: i64 = C[k] % MOD
+            if v < 0 { v = v + MOD }
+            ans = (ans * v) % MOD
+        }
+    }
+
+    printf("%lld\n", ans)
+
+    free(C)
+    free(comb)
+    free(S)
+    free(g_memo_val)
+    free(g_memo_key)
+    free(g_primes)
+    return 0
+}

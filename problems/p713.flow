@@ -1,0 +1,24 @@
+# Project Euler 713
+# L(N)=sum_m T(N,m) via floor-block Dirichlet summation.
+
+function L(N: i64) -> i64 {
+    if N < 2 { return 0 }
+    let mut total: i64 = 0
+    let mut k: i64 = 1
+    let k_end: i64 = N - 1
+    while k <= k_end {
+        let q: i64 = N / k
+        let mut k_max: i64 = N / q
+        if k_max > k_end { k_max = k_end }
+        let cnt: i64 = k_max - k + 1
+        let sum_k: i64 = (k + k_max) * cnt / 2
+        total = total + cnt * N * q - (q * (q + 1) / 2) * sum_k
+        k = k_max + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", L(10000000))
+    return 0
+}

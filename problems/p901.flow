@@ -1,0 +1,76 @@
+# Project Euler 901
+# Well Drilling — optimal increasing depths via admissibility boundary.
+# E[T] = d1 + 1 + sum exp(-d_n) under d_{n+1} = exp(d_n - d_{n-1}).
+
+extern {
+    function exp(x: f64) -> f64
+}
+
+function is_admissible(first: f64) -> i32 {
+    let mut prev: f64 = 0.0
+    let mut cur: f64 = first
+    let mut step: i32 = 0
+    while step < 200 {
+        let gap: f64 = cur - prev
+        if gap <= 0.0 { return 0 }
+        if cur > 80.0 || gap > 80.0 { return 1 }
+        prev = cur
+        cur = exp(gap)
+        step = step + 1
+    }
+    return 1
+}
+
+function expected_cost(first: f64) -> f64 {
+    let mut prev: f64 = 0.0
+    let mut cur: f64 = first
+    let mut total: f64 = first + 1.0
+    let mut step: i32 = 0
+    while step < 200 {
+        total = total + exp(0.0 - cur)
+        if cur > 80.0 { break }
+        let nxt: f64 = exp(cur - prev)
+        prev = cur
+        cur = nxt
+        step = step + 1
+    }
+    return total
+}
+
+function upper_branch_boundary() -> f64 {
+    let mut prev_x: f64 = 0.6
+    let mut prev_ok: i32 = is_admissible(prev_x)
+    let mut x: f64 = 0.61
+    let mut low: f64 = 0.0
+    let mut high: f64 = 0.0
+    let mut found: i32 = 0
+    while x <= 1.5 {
+        let ok: i32 = is_admissible(x)
+        if prev_ok == 0 && ok == 1 {
+            low = prev_x
+            high = x
+            found = 1
+            break
+        }
+        prev_x = x
+        prev_ok = ok
+        x = x + 0.01
+    }
+    if found == 0 { return 0.0 }
+    let mut i: i32 = 0
+    while i < 90 {
+        let mid: f64 = (low + high) * 0.5
+        if is_admissible(mid) == 1 {
+            high = mid
+        } else {
+            low = mid
+        }
+        i = i + 1
+    }
+    return high
+}
+
+function main() -> i32 {
+    printf("%.9f\n", expected_cost(upper_branch_boundary()))
+    return 0
+}

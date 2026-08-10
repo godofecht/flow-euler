@@ -1,0 +1,121 @@
+# Project Euler 612
+# Friend numbers: f(10^18) mod 1000267129 via digit-mask DP.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000267129
+const MASKS: i64 = 1024
+const SZ: i64 = 4096
+
+function main() -> i32 {
+    let m: i64 = 999999999999999999
+    let digs: ptr<i32> = calloc(20, 4)
+    let mut tmp: i64 = m
+    let mut nd: i64 = 0
+    while tmp > 0 {
+        digs[nd] = (tmp % 10) as i32
+        tmp = tmp / 10
+        nd = nd + 1
+    }
+    let mut a: i64 = 0
+    let mut b: i64 = nd - 1
+    while a < b {
+        let t: i32 = digs[a]
+        digs[a] = digs[b]
+        digs[b] = t
+        a = a + 1
+        b = b - 1
+    }
+
+    let dp: ptr<i64> = calloc(SZ, 8)
+    let nxt: ptr<i64> = calloc(SZ, 8)
+    if dp == null || nxt == null { return 1 }
+    # key = mask*4 + started*2 + tight
+    dp[1] = 1
+
+    let mut di: i64 = 0
+    while di < nd {
+        let lim_digit: i64 = digs[di] as i64
+        let mut k: i64 = 0
+        while k < SZ {
+            nxt[k] = 0
+            k = k + 1
+        }
+        k = 0
+        while k < SZ {
+            let cnt: i64 = dp[k]
+            if cnt != 0 {
+                let mask: i64 = k / 4
+                let started: i64 = (k / 2) % 2
+                let tight: i64 = k % 2
+                let mut lim: i64 = 9
+                if tight == 1 { lim = lim_digit }
+                let mut d: i64 = 0
+                while d <= lim {
+                    let mut ntight: i64 = 0
+                    if tight == 1 && d == lim { ntight = 1 }
+                    let mut nmask: i64 = 0
+                    let mut nstarted: i64 = 0
+                    if started == 0 && d == 0 {
+                        nmask = 0
+                        nstarted = 0
+                    } else {
+                        if started == 0 {
+                            nmask = 1 << d
+                        } else {
+                            nmask = mask | (1 << d)
+                        }
+                        nstarted = 1
+                    }
+                    let nkey: i64 = nmask * 4 + nstarted * 2 + ntight
+                    nxt[nkey] = nxt[nkey] + cnt
+                    d = d + 1
+                }
+            }
+            k = k + 1
+        }
+        let sw: ptr<i64> = dp
+        dp = nxt
+        nxt = sw
+        di = di + 1
+    }
+
+    let counts: ptr<i64> = calloc(MASKS, 8)
+    k = 0
+    while k < SZ {
+        let started: i64 = (k / 2) % 2
+        if started == 1 && dp[k] != 0 {
+            counts[k / 4] = counts[k / 4] + dp[k]
+        }
+        k = k + 1
+    }
+
+    let mut disjoint: i128 = 0
+    a = 1
+    while a < MASKS {
+        let ca: i64 = counts[a]
+        if ca != 0 {
+            b = a + 1
+            while b < MASKS {
+                if (a & b) == 0 {
+                    disjoint = disjoint + (ca as i128) * (counts[b] as i128)
+                }
+                b = b + 1
+            }
+        }
+        a = a + 1
+    }
+    let tp: i128 = (m as i128) * ((m - 1) as i128) / 2
+    let friend: i128 = tp - disjoint
+    let mut ans: i64 = (friend % (MOD as i128)) as i64
+    if ans < 0 { ans = ans + MOD }
+    printf("%lld\n", ans)
+    free(digs)
+    free(dp)
+    free(nxt)
+    free(counts)
+    return 0
+}

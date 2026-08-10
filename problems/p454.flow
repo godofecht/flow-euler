@@ -1,20 +1,11 @@
 # Project Euler 454
 # Diophantine Reciprocals III — F(10^12) via Möbius + floor sums.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function sum_floor_segment(x: i64, lo: i64, hi0: i64) -> i64 {

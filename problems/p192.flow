@@ -1,16 +1,7 @@
 # Project Euler 192
 # Sum of denominators of best approximations to sqrt(n), bound 10^12, n<=100000.
 
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
-}
+import euler.nt { isqrt }
 
 function best_denom(n: i64, bound: i64) -> i64 {
     let a0: i64 = isqrt(n)

@@ -1,6 +1,8 @@
 # Project Euler 562
 # Maximal Perimeter — empty lattice triangles maximizing T(r) for r=10^7.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
@@ -19,17 +21,6 @@ function igcd(a0: i64, b0: i64) -> i64 {
         b = t
     }
     return a
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut yy: i64 = (x + 1) / 2
-    while yy < x {
-        x = yy
-        yy = (x + n / x) / 2
-    }
-    return x
 }
 
 function iabs(x: i64) -> i64 {

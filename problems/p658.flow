@@ -1,0 +1,108 @@
+# Project Euler 658
+# Incomplete Words II: S(10^7, 10^12) mod 1e9+7.
+# O(k) with linear sieve for power computation.
+
+import euler.nt { mod_pow }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function main() -> i32 {
+    let k: i64 = 10000000
+    let n: i64 = 1000000000000
+
+    let limit: i64 = k - 1
+    let e: i64 = (n + 1) % (MOD - 1)
+
+    # Modular inverses up to k+1
+    let inv: ptr<i64> = calloc(k + 2, 8)
+    if inv == null { return 1 }
+    inv[1] = 1
+    for i in 2..(k + 2) {
+        inv[i] = (MOD - (MOD / i) * inv[MOD % i] % MOD) % MOD
+    }
+
+    # Linear sieve for smallest prime factor and x^e mod MOD
+    let spf: ptr<i64> = calloc(limit + 1, 8)
+    let powe: ptr<i64> = calloc(limit + 1, 8)
+    let primes: ptr<i64> = calloc(limit / 10 + 100, 8)
+    let mut npc: i64 = 0
+
+    if spf == null || powe == null { return 1 }
+
+    powe[0] = 0
+    if limit >= 1 { powe[1] = 1 }
+
+    for i in 2..(limit + 1) {
+        if spf[i] == 0 {
+            spf[i] = i
+            primes[npc] = i
+            npc = npc + 1
+            powe[i] = mod_pow(i, e, MOD)
+        }
+        let pi: i64 = powe[i]
+        let si: i64 = spf[i]
+        for j in 0..npc {
+            let p: i64 = primes[j]
+            let v: i64 = i * p
+            if v > limit { break }
+            spf[v] = p
+            let t: i128 = (pi as i128) * (powe[p] as i128) % (MOD as i128)
+            powe[v] = t as i64
+            if p == si { break }
+        }
+    }
+
+    let inv2: i64 = (MOD + 1) / 2
+    let mut inv2pow: i64 = inv2
+    let neg2: i64 = MOD - 2
+    let k1: i64 = k + 1
+    # s = (-1)^(k+1), k=10^7 even => s = -1
+    let s: i64 = MOD - 1
+    let n1: i64 = (n + 1) % MOD
+
+    let mut term: i64 = 1
+    let mut T: i64 = 1
+    let mut ans: i64 = 0
+
+    for m in 0..(limit + 1) {
+        # G(m) = 1 + m + ... + m^n
+        let mut G: i64 = 1
+        if m == 1 { G = n1 }
+        if m >= 2 {
+            let t1: i128 = ((powe[m] - 1 + MOD) as i128) * (inv[m - 1] as i128) % (MOD as i128)
+            G = t1 as i64
+        }
+
+        # A = 1 - 2^{-(m+1)} * (1 - s*T)
+        let inner: i64 = (1 - s * T % MOD + MOD) % MOD
+        let t2: i128 = (inv2pow as i128) * (inner as i128) % (MOD as i128)
+        let A: i64 = (1 - (t2 as i64) + MOD) % MOD
+
+        let t3: i128 = (G as i128) * (A as i128) % (MOD as i128)
+        ans = (ans + (t3 as i64)) % MOD
+
+        if m == limit { break }
+
+        # Update term: term = term * (k+1-m)/(m+1) * (-2)
+        let t4: i128 = (term as i128) * ((k1 - m) as i128) % (MOD as i128)
+        term = (t4 * (inv[m + 1] as i128) % (MOD as i128)) as i64
+        let t5: i128 = (term as i128) * (neg2 as i128) % (MOD as i128)
+        term = t5 as i64
+        T = (T + term) % MOD
+
+        inv2pow = inv2pow * inv2 % MOD
+    }
+
+    printf("%lld\n", ans)
+
+    free(primes)
+    free(powe)
+    free(spf)
+    free(inv)
+    return 0
+}

@@ -1,0 +1,33 @@
+# Project Euler 866
+# Tidying Up B — E(n)=(2n-1)*sum E(k)E(n-1-k) mod 987654319.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 987654319
+
+function expected_product(n: i64) -> i64 {
+    let E: ptr<i64> = calloc(n + 1, 8)
+    E[0] = 1
+    let mut length: i64 = 1
+    while length <= n {
+        let mut s: i64 = 0
+        let mut k: i64 = 0
+        while k < length {
+            s = (s + ((E[k] as i128) * (E[length - 1 - k] as i128) % (MOD as i128)) as i64) % MOD
+            k = k + 1
+        }
+        E[length] = (((2 * length - 1) as i128) * (s as i128) % (MOD as i128)) as i64
+        length = length + 1
+    }
+    let ans: i64 = E[n]
+    free(E)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", expected_product(100))
+    return 0
+}

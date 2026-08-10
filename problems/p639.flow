@@ -1,0 +1,212 @@
+# Project Euler 639: Summing a Multiplicative Function
+# S_k(n) = sum f_k(i) for i=1..n, f_k(p^e) = p^k
+# Sum over k=1..50 of S_k(10^12) mod 10^9+7.
+# Uses powerful number DFS + Stirling numbers for power sums.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+const KMAX: i64 = 50
+const N_TARGET: i64 = 1000000000000  # 10^12
+const MAX_PRECOMP: i64 = 1000000  # isqrt(10^12)
+const STRIDE: i64 = MAX_PRECOMP + 1
+
+# Global arrays for DFS
+let mut g_n: i64 = 0
+let mut g_m: i64 = 0
+let mut g_primes: ptr<i64> = null
+let mut g_p2: ptr<i64> = null
+let mut g_c: ptr<i64> = null
+let mut g_ans_k: i64 = 0
+let mut g_ps32: ptr<i32> = null  # power sum table (i32 array)
+let mut g_coeff: ptr<i64> = null  # Stirling coeff [k][j], flattened
+let mut g_cache_keys: ptr<i64> = null
+let mut g_cache_vals: ptr<i64> = null
+let mut g_cache_count: i64 = 0
+
+function power_sum_large(t: i64, k: i64, row: ptr<i64>) -> i64 {
+    # sum_{m=1..t} m^k mod MOD using falling factorial formula
+    # sum = sum_{j=1..k} S2(k,j)/(j+1) * (t+1)_{j+1}
+    let n_mod: i64 = t % MOD
+    let mut prod: i64 = (n_mod + 1) % MOD
+    let mut res: i64 = 0
+    for j in 1..(k + 1) {
+        let factor: i64 = (n_mod + 1 - j) % MOD
+        if factor < 0 { factor = factor + MOD }
+        prod = (prod * factor) % MOD
+        res = (res + row[j] * prod) % MOD
+    }
+    return res
+}
+
+function powsum(t: i64, k: i64, base: i64, row: ptr<i64>) -> i64 {
+    if t <= MAX_PRECOMP {
+        return g_ps32[base + t] as i64
+    }
+    # Hash-based cache: use t % HASH_SIZE as index
+    let h: i64 = t % 2000003
+    if g_cache_keys[h] == t { return g_cache_vals[h] }
+    let v: i64 = power_sum_large(t, k, row)
+    g_cache_keys[h] = t
+    g_cache_vals[h] = v
+    return v
+}
+
+function dfs(start_idx: i64, v: i64, w: i64, k: i64, base: i64, row: ptr<i64>) -> void {
+    g_ans_k = (g_ans_k + powsum(g_n / v, k, base, row) * w) % MOD
+
+    # Find last prime index where v * p2[i] <= g_n using binary search
+    # p2 is sorted ascending, so we need largest i with p2[i] <= g_n / v
+    let limit_val: i64 = g_n / v
+    let mut lo: i64 = start_idx
+    let mut hi: i64 = g_m
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if g_p2[mid] <= limit_val { lo = mid + 1 } else { hi = mid }
+    }
+    let end_idx: i64 = lo
+
+    for i in start_idx..end_idx {
+        let vv: i64 = v * g_p2[i]
+        let ww: i64 = (w * g_c[i]) % MOD
+        let p: i64 = g_primes[i]
+        let mut vvv: i64 = vv
+        while vvv <= g_n {
+            dfs(i + 1, vvv, ww, k, base, row)
+            if vvv > g_n / p { break }
+            vvv = vvv * p
+        }
+    }
+}
+
+function main() -> i32 {
+    let limit: i64 = isqrt(N_TARGET)
+
+    # Sieve primes up to limit
+    let is_comp: ptr<i64> = calloc(limit + 1, 8)
+    let primes: ptr<i64> = calloc(limit / 10 + 100, 8)
+    let mut m: i64 = 0
+    for i in 2..(limit + 1) {
+        if is_comp[i] == 0 {
+            primes[m] = i
+            m = m + 1
+            let mut j: i64 = i * i
+            while j <= limit {
+                is_comp[j] = 1
+                j = j + i
+            }
+        }
+    }
+    free(is_comp)
+
+    # p2[i] = primes[i]^2
+    let p2: ptr<i64> = calloc(m, 8)
+    for i in 0..m { p2[i] = primes[i] * primes[i] }
+
+    # Build Stirling numbers S2[n][k] and coeff[n][j] = S2[n][j] * inv(j+1)
+    # Flattened: S2[n*(KMAX+1)+k], coeff[n*(KMAX+1)+j]
+    let stirling: ptr<i64> = calloc((KMAX + 1) * (KMAX + 1), 8)
+    stirling[0] = 1  # S2[0][0] = 1
+    for n in 1..(KMAX + 1) {
+        for k in 1..(n + 1) {
+            stirling[n * (KMAX + 1) + k] = (stirling[(n - 1) * (KMAX + 1) + k - 1] + k * stirling[(n - 1) * (KMAX + 1) + k]) % MOD
+        }
+    }
+
+    # Modular inverses of 1..KMAX+1
+    let inv: ptr<i64> = calloc(KMAX + 2, 8)
+    inv[1] = 1
+    for i in 2..(KMAX + 2) {
+        inv[i] = (MOD - (MOD / i)) * inv[MOD % i] % MOD
+    }
+
+    let coeff: ptr<i64> = calloc((KMAX + 1) * (KMAX + 1), 8)
+    for n in 1..(KMAX + 1) {
+        for j in 1..(n + 1) {
+            coeff[n * (KMAX + 1) + j] = stirling[n * (KMAX + 1) + j] * inv[j + 1] % MOD
+        }
+    }
+    free(stirling)
+
+    # Build power sum table
+    let ps_size: i64 = (KMAX + 1) * STRIDE
+    let ps32: ptr<i32> = calloc(ps_size, 4)
+    if ps32 == null {
+        printf("Failed to allocate power sum table\n")
+        return 1
+    }
+    g_ps32 = ps32
+
+    for t in 1..STRIDE {
+        let x: i64 = t
+        let mut p: i64 = x
+        for k in 1..(KMAX + 1) {
+            let idx: i64 = k * STRIDE + t
+            let prev: i64 = ps32[idx - 1]
+            ps32[idx] = ((prev as i64 + p) % MOD) as i32
+            p = (p * x) % MOD
+        }
+    }
+
+    # Set up globals for DFS
+    g_n = N_TARGET
+    g_m = m
+    g_primes = primes
+    g_p2 = p2
+    
+    # Cache for large powsum values (hash table)
+    let cache_size: i64 = 2000003
+    g_cache_keys = calloc(cache_size, 8)
+    g_cache_vals = calloc(cache_size, 8)
+    g_cache_count = 0
+
+    # c[i] = p^k - p^{2k} mod MOD, updated per k
+    let c: ptr<i64> = calloc(m, 8)
+    g_c = c
+
+    # pk[i] = p_i^k mod MOD
+    let pk_arr: ptr<i64> = calloc(m, 8)
+    for i in 0..m { pk_arr[i] = 1 }
+
+    let mut total: i64 = 0
+
+    for k in 1..(KMAX + 1) {
+        # Update pk and c
+        for i in 0..m {
+            let pkv: i64 = (pk_arr[i] * primes[i]) % MOD
+            pk_arr[i] = pkv
+            c[i] = (pkv - (pkv * pkv) % MOD) % MOD
+            if c[i] < 0 { c[i] = c[i] + MOD }
+        }
+
+        let base: i64 = k * STRIDE
+        let row: ptr<i64> = coeff + k * (KMAX + 1)
+
+        g_ans_k = 0
+        # Clear cache
+        memset(g_cache_keys as ptr<void>, 0, 2000003 * 8)
+
+        dfs(0, 1, 1, k, base, row)
+
+        total = (total + g_ans_k) % MOD
+    }
+
+    printf("%lld\n", total)
+
+    free(pk_arr)
+    free(c)
+    free(g_cache_vals)
+    free(g_cache_keys)
+    free(ps32)
+    free(coeff)
+    free(inv)
+    free(p2)
+    free(primes)
+    return 0
+}

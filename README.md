@@ -1,5 +1,7 @@
 # Flow × Project Euler
 
+[![Verify](https://github.com/godofecht/flow-euler/actions/workflows/verify.yml/badge.svg)](https://github.com/godofecht/flow-euler/actions/workflows/verify.yml)
+
 Solving [Project Euler](https://projecteuler.net) in [Flow](https://github.com/flooooooooooow/flow) — a statically typed language that reads close to high-level math code and compiles to native C (and MLIR).
 
 **Thesis:** Flow’s syntax is expressive enough to write number-theory algorithms clearly; its compilation path makes those programs as fast as (or faster than) hand-written C.
@@ -43,21 +45,26 @@ Reproduce with `./scripts/bench.sh`.
 
 ## Progress
 
-| Range | Status |
-|-------|--------|
-| 001–200 | done |
-| 201–400 | in progress |
-| 401–600 | in progress (destubbing) |
-| 601–1000 | in progress |
+766 problems solved. Of the 750 problems with known answers in `answers.txt`, 728 have Flow solutions (22 remain unsolved, mostly requiring floating-point, bignum, or file input).
+
+| Range | Solved | Status |
+|-------|--------|--------|
+| 001-200 | 200 | done |
+| 201-400 | 200 | done |
+| 401-600 | 200 | done |
+| 601-1000 | 166 | in progress |
+
+61 problems use native C/C++ helpers (`problems/native/`) for NTT, i128, or multiprecision arithmetic.
 
 ## Layout
 
 ```
-problems/   # one Flow file per Euler problem
-data/       # input grids / digit strings when needed
-bench/      # C twins + timing harness
-scripts/    # run / verify / bench
-answers.txt # expected answers for automated checks
+problems/        # one Flow file per Euler problem
+problems/native/ # C/C++ helpers for problems needing NTT, i128, or multiprecision
+data/            # input grids / digit strings when needed
+bench/           # C twins + timing harness
+scripts/         # run / verify / bench
+answers.txt      # expected answers for automated checks
 ```
 
 ## Example — PE 001

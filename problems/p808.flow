@@ -1,0 +1,121 @@
+# Project Euler 808
+# Reversible Prime Squares — sum of first 50 reversible prime squares.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function reverse_num(x: i64) -> i64 {
+    let mut n: i64 = x
+    let mut r: i64 = 0
+    while n > 0 {
+        r = r * 10 + (n % 10)
+        n = n / 10
+    }
+    return r
+}
+
+function is_palindrome(x: i64) -> i32 {
+    if reverse_num(x) == x { return 1 }
+    return 0
+}
+
+function solve() -> i64 {
+    let limit: i64 = 50000000
+    let is_prime: ptr<i8> = calloc(limit + 1, 1)
+    # 0 = prime after sieve setup; mark composites as 1
+    is_prime[0] = 1
+    is_prime[1] = 1
+    let mut i: i64 = 2
+    while i * i <= limit {
+        if is_prime[i] == 0 {
+            let mut j: i64 = i * i
+            while j <= limit {
+                is_prime[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let values: ptr<i64> = calloc(200, 8)
+    let mut vcount: i64 = 0
+    let mut p: i64 = 11  # skip tiny primes; start past 2,3,5,7
+    while p <= limit {
+        if is_prime[p] == 0 {
+            let sq: i64 = p * p
+            if is_palindrome(sq) == 0 {
+                let rev: i64 = reverse_num(sq)
+                let r: i64 = isqrt(rev)
+                if r * r == rev && r <= limit && is_prime[r] == 0 {
+                    # add both if unique
+                    let mut found: i32 = 0
+                    let mut k: i64 = 0
+                    while k < vcount {
+                        if values[k] == sq { found = 1 }
+                        k = k + 1
+                    }
+                    if found == 0 {
+                        values[vcount] = sq
+                        vcount = vcount + 1
+                    }
+                    found = 0
+                    k = 0
+                    while k < vcount {
+                        if values[k] == rev { found = 1 }
+                        k = k + 1
+                    }
+                    if found == 0 {
+                        values[vcount] = rev
+                        vcount = vcount + 1
+                    }
+                }
+            }
+        }
+        p = p + 1
+    }
+
+    # sort values
+    let mut a: i64 = 0
+    while a < vcount {
+        let mut b: i64 = a + 1
+        while b < vcount {
+            if values[b] < values[a] {
+                let t: i64 = values[a]
+                values[a] = values[b]
+                values[b] = t
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let mut total: i64 = 0
+    let mut ntake: i64 = 50
+    if vcount < ntake { ntake = vcount }
+    a = 0
+    while a < ntake {
+        total = total + values[a]
+        a = a + 1
+    }
+    free(is_prime)
+    free(values)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve())
+    return 0
+}

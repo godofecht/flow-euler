@@ -1,0 +1,96 @@
+# Project Euler 604
+# Convex Path in Square: F(10^18).
+# Maximize lattice points on a strictly convex increasing curve in N×N square.
+# Use primitive step vectors (a,b) with gcd(a,b)=1, grouped by s=a+b.
+# Count = φ(s) per group, width/height = s*φ(s)/2. Greedy + remainder.
+
+import euler.nt { gcd, isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function iroot3(n: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = 2
+    while hi * hi * hi <= n { hi = hi * 2 }
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if mid * mid * mid <= n { lo = mid }
+        elif mid * mid * mid > n { hi = mid }
+    }
+    return lo
+}
+
+function main() -> i32 {
+    let N: i64 = 1000000000000000000
+
+    # M ≈ (10N)^(1/3) + margin, but 10*N overflows i64 so use iroot3(N)*3
+    let mut M: i64 = iroot3(N) * 3 + 1000
+    if M < 10 { M = 10 }
+
+    # Linear sieve for totients up to M+1
+    let phi: ptr<i64> = calloc(M + 2, 8)
+    if phi == null { return 1 }
+    let is_comp: ptr<i8> = calloc(M + 2, 1)
+    if is_comp == null { return 1 }
+    let primes: ptr<i32> = calloc(M / 3 + 10, 4)
+    if primes == null { return 1 }
+
+    phi[1] = 1
+    let mut pc: i64 = 0
+    for i in 2..(M + 2) {
+        if is_comp[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            phi[i] = i - 1
+        }
+        for j in 0..pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > M + 1 { break }
+            is_comp[ip] = 1
+            if i % p == 0 { phi[ip] = phi[i] * p; break }
+            elif i % p != 0 { phi[ip] = phi[i] * (p - 1) }
+        }
+    }
+
+    # Find max t with sum_{s=2..t} s*phi(s) <= 2*N
+    let target: i64 = 2 * N
+    let mut sum_sphi: i64 = 0
+    let mut t: i64 = 1
+    let mut base_phi: i64 = 0
+    let mut base_sphi: i64 = 0
+    for i in 2..(M + 1) {
+        let sp: i64 = i * phi[i]
+        if sum_sphi + sp > target { break }
+        sum_sphi = sum_sphi + sp
+        t = i
+        base_phi = base_phi + phi[i]
+        base_sphi = sum_sphi
+    }
+
+    let R: i64 = N - base_sphi / 2
+    let s0: i64 = t + 1
+    let p_count: i64 = R / s0
+    let mut add: i64 = 2 * p_count
+    let r: i64 = R - p_count * s0
+
+    # Try to add one more single vector from layer s0
+    if r > 0 {
+        for a in 1..s0 {
+            if gcd(a, s0) == 1 && a <= r && (s0 - a) <= r {
+                add = add + 1
+                break
+            }
+        }
+    }
+
+    printf("%lld\n", base_phi + add + 1)
+
+    free(primes)
+    free(is_comp)
+    free(phi)
+    return 0
+}

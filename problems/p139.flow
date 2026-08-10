@@ -1,24 +1,14 @@
 # Project Euler 139
 # Count Pythagorean tiles with perimeter ≤ 10^8 where c divides |a-b|.
 
-function gcd(a0: i64, b0: i64) -> i64 {
-    let mut a: i64 = a0
-    let mut b: i64 = b0
-    while b != 0 {
-        let t: i64 = a % b
-        a = b
-        b = t
-    }
-    return a
-}
+import euler.nt { gcd }
 
 function main() -> i32 {
     let max_len: i64 = 100000000
     let mut num: i64 = 0
     let mut m: i64 = 2
     while 2 * m * m < max_len {
-        let mut n: i64 = 1
-        while n < m {
+        for n in 1..m {
             if (m + n) % 2 == 1 && gcd(m, n) == 1 {
                 let a: i64 = m * m - n * n
                 let b: i64 = 2 * m * n
@@ -30,7 +20,6 @@ function main() -> i32 {
                     num = num + max_len / per
                 }
             }
-            n = n + 1
         }
         m = m + 1
     }

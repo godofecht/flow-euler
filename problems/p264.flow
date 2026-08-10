@@ -1,21 +1,15 @@
 # Project Euler 264
 # Sum perimeters of lattice triangles with circumcenter O and orthocenter (5,0).
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
     function sqrt(x: f64) -> f64
 }
 
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x { x = y; y = (x + n / x) / 2 }
-    return x
-}
-
-function gcd(a0: i64, b0: i64) -> i64 {
+function gcd_abs(a0: i64, b0: i64) -> i64 {
     let mut a: i64 = a0
     let mut b: i64 = b0
     if a < 0 { a = -a }
@@ -132,13 +126,13 @@ function main() -> i32 {
                 if q != 1 { q = q + 1; continue }
             }
             if p == 0 && q == 0 { q = q + 1; continue }
-            if gcd(p, q) != 1 { q = q + 1; continue }
+            if gcd_abs(p, q) != 1 { q = q + 1; continue }
             let m: i64 = p2 + q * q
             if m == 0 || m > m_limit { q = q + 1; continue }
 
             let a40: i64 = (40 * p) % m
             let b100: i64 = 100 % m
-            let d0: i64 = gcd(a40, m)
+            let d0: i64 = gcd_abs(a40, m)
             if b100 % d0 != 0 { q = q + 1; continue }
             let m1: i64 = m / d0
             let a1: i64 = a40 / d0

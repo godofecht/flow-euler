@@ -1,0 +1,11 @@
+# Project Euler 731
+# Stoneham Number — 10 digits after 10^16-th place.
+
+extern {
+    function pe_solve_print() -> void
+}
+
+function main() -> i32 {
+    pe_solve_print()
+    return 0
+}

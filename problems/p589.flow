@@ -1,7 +1,11 @@
 # Project Euler 589
-# Poohsticks Marathon
+# Real solver in problems/native/p589.c (linked by scripts/run.sh).
+
+extern {
+    function pe589_answer() -> f64
+}
 
 function main() -> i32 {
-    printf("%.2f\n", 131776959.25)
+    printf("%.2f\n", pe589_answer())
     return 0
 }

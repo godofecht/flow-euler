@@ -1,0 +1,28 @@
+# Project Euler 686
+# Powers of two with leading digits 123: p(123, 678910).
+
+extern {
+    function log(x: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let L: i64 = 123
+    let n: i64 = 678910
+    let digits: f64 = 3.0
+    let lower: f64 = log(L as f64) / log(10.0) - (digits - 1.0)
+    let upper: f64 = log((L + 1) as f64) / log(10.0) - (digits - 1.0)
+    let cons: f64 = log(2.0) / log(10.0)
+    let mut count: i64 = 0
+    let mut j: i64 = 0
+    while count != n {
+        j = j + 1
+        let temp: f64 = (j as f64) * cons
+        let frac: f64 = temp - floor(temp)
+        if frac > lower && frac < upper {
+            count = count + 1
+        }
+    }
+    printf("%lld\n", j)
+    return 0
+}

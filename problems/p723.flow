@@ -1,0 +1,44 @@
+# Project Euler 723
+# Square sums of lattices — S via multiplicative A-functions on target exponents.
+
+function A1(e: i64) -> i64 { return (e + 1) * (e + 2) / 2 }
+function A2(e: i64) -> i64 { return (e + 1) * (e + 2) * (2 * e + 3) / 6 }
+function A3(e: i64) -> i64 { return (A2(e) + e / 2 + 1) / 2 }
+function A4(e: i64) -> i64 { let v: i64 = A1(e); return v * v }
+function A5(e: i64) -> i64 { return (e + 1) * (e + 2) * (e * e + 3 * e + 3) / 6 }
+
+function prod_A(which: i64, e0: i64, e1: i64, e2: i64, e3: i64, e4: i64, e5: i64, e6: i64, e7: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i64 = 0
+    while i < 8 {
+        let e: i64 = e0
+        if i == 1 { e = e1 }
+        if i == 2 { e = e2 }
+        if i == 3 { e = e3 }
+        if i == 4 { e = e4 }
+        if i == 5 { e = e5 }
+        if i == 6 { e = e6 }
+        if i == 7 { e = e7 }
+        let mut v: i64 = 0
+        if which == 1 { v = A1(e) }
+        if which == 2 { v = A2(e) }
+        if which == 3 { v = A3(e) }
+        if which == 4 { v = A4(e) }
+        if which == 5 { v = A5(e) }
+        r = r * v
+        i = i + 1
+    }
+    return r
+}
+
+function main() -> i32 {
+    # exponents of 5^6 * 13^3 * 17^2 * 29 * 37 * 41 * 53 * 61
+    let t1: i64 = prod_A(1, 6, 3, 2, 1, 1, 1, 1, 1)
+    let t2: i64 = prod_A(2, 6, 3, 2, 1, 1, 1, 1, 1)
+    let t3: i64 = prod_A(3, 6, 3, 2, 1, 1, 1, 1, 1)
+    let t4: i64 = prod_A(4, 6, 3, 2, 1, 1, 1, 1, 1)
+    let t5: i64 = prod_A(5, 6, 3, 2, 1, 1, 1, 1, 1)
+    let ans: i64 = 7 * t1 - 14 * t2 - 4 * t3 + 8 * t4 + 4 * t5
+    printf("%lld\n", ans)
+    return 0
+}

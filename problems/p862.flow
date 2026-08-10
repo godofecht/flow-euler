@@ -1,0 +1,61 @@
+# Project Euler 862
+# Larger Digit Permutation — S(12) via digit-multiset enumeration.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut FACT: ptr<i64> = null
+let mut TOTAL: i64 = 0
+let mut D0: i64 = 0
+let mut R: i64 = 0
+let mut FK1: i64 = 0
+
+function rec(digit: i64, rem: i64, denom_prod: i64) -> void {
+    if digit == 10 {
+        if rem != 0 { return }
+        let denom: i64 = FACT[D0] * denom_prod
+        let M: i64 = (R * FK1) / denom
+        TOTAL = TOTAL + M * (M - 1) / 2
+        return
+    }
+    if digit == 9 {
+        rec(10, 0, denom_prod * FACT[rem])
+        return
+    }
+    let mut c: i64 = 0
+    while c <= rem {
+        rec(digit + 1, rem - c, denom_prod * FACT[c])
+        c = c + 1
+    }
+}
+
+function S(k: i64) -> i64 {
+    if k <= 1 { return 0 }
+    FACT = calloc(k + 1, 8)
+    FACT[0] = 1
+    let mut i: i64 = 1
+    while i <= k {
+        FACT[i] = FACT[i - 1] * i
+        i = i + 1
+    }
+    FK1 = FACT[k - 1]
+    TOTAL = 0
+    D0 = 0
+    while D0 <= k {
+        R = k - D0
+        if R > 0 {
+            rec(1, R, 1)
+        }
+        D0 = D0 + 1
+    }
+    let ans: i64 = TOTAL
+    free(FACT)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(12))
+    return 0
+}

@@ -1,0 +1,152 @@
+# Project Euler 940
+# Two-Dimensional Recurrence — matrix powering; S(50) mod 1123581313.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1123581313
+
+function mmul(A: ptr<i64>, B: ptr<i64>, R: ptr<i64>) -> void {
+    R[0] = (A[0] * B[0] + A[1] * B[2]) % MOD
+    R[1] = (A[0] * B[1] + A[1] * B[3]) % MOD
+    R[2] = (A[2] * B[0] + A[3] * B[2]) % MOD
+    R[3] = (A[2] * B[1] + A[3] * B[3]) % MOD
+}
+
+function mpow(base: ptr<i64>, exp: i64, out: ptr<i64>) -> void {
+    out[0] = 1
+    out[1] = 0
+    out[2] = 0
+    out[3] = 1
+    let tmp: ptr<i64> = calloc(4, 8)
+    let cur: ptr<i64> = calloc(4, 8)
+    cur[0] = base[0]
+    cur[1] = base[1]
+    cur[2] = base[2]
+    cur[3] = base[3]
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 {
+            mmul(out, cur, tmp)
+            out[0] = tmp[0]
+            out[1] = tmp[1]
+            out[2] = tmp[2]
+            out[3] = tmp[3]
+        }
+        mmul(cur, cur, tmp)
+        cur[0] = tmp[0]
+        cur[1] = tmp[1]
+        cur[2] = tmp[2]
+        cur[3] = tmp[3]
+        e = e / 2
+    }
+    free(tmp)
+    free(cur)
+}
+
+function find_idx(vals: ptr<i64>, n: i64, key: i64) -> i64 {
+    let mut i: i64 = 0
+    while i < n {
+        if vals[i] == key { return i }
+        i = i + 1
+    }
+    return -1
+}
+
+function S(k: i64) -> i64 {
+    let fib: ptr<i64> = calloc(k + 1, 8)
+    fib[0] = 0
+    fib[1] = 1
+    let mut i: i64 = 2
+    while i <= k {
+        fib[i] = fib[i - 1] + fib[i - 2]
+        i = i + 1
+    }
+    let idx_vals: ptr<i64> = calloc(k, 8)
+    let mut nv: i64 = 0
+    let mut t: i64 = 2
+    while t <= k {
+        idx_vals[nv] = fib[t]
+        nv = nv + 1
+        t = t + 1
+    }
+    # unique sorted
+    let uniq: ptr<i64> = calloc(nv, 8)
+    let mut nu: i64 = 0
+    let mut a: i64 = 0
+    while a < nv {
+        let v: i64 = idx_vals[a]
+        if find_idx(uniq, nu, v) < 0 {
+            uniq[nu] = v
+            nu = nu + 1
+        }
+        a = a + 1
+    }
+
+    let MAT_M: ptr<i64> = calloc(4, 8)
+    MAT_M[0] = 1
+    MAT_M[1] = 1
+    MAT_M[2] = 3
+    MAT_M[3] = 2
+    let MAT_N: ptr<i64> = calloc(4, 8)
+    MAT_N[0] = MOD - 1
+    MAT_N[1] = 1
+    MAT_N[2] = 1
+    MAT_N[3] = 2
+
+    # Store matrices flat: nu * 4
+    let powM: ptr<i64> = calloc(nu * 4, 8)
+    let powN: ptr<i64> = calloc(nu * 4, 8)
+    let mut u: i64 = 0
+    while u < nu {
+        let outm: ptr<i64> = calloc(4, 8)
+        let outn: ptr<i64> = calloc(4, 8)
+        mpow(MAT_M, uniq[u], outm)
+        mpow(MAT_N, uniq[u], outn)
+        powM[u * 4 + 0] = outm[0]
+        powM[u * 4 + 1] = outm[1]
+        powM[u * 4 + 2] = outm[2]
+        powM[u * 4 + 3] = outm[3]
+        powN[u * 4 + 0] = outn[0]
+        powN[u * 4 + 1] = outn[1]
+        powN[u * 4 + 2] = outn[2]
+        powN[u * 4 + 3] = outn[3]
+        free(outm)
+        free(outn)
+        u = u + 1
+    }
+
+    let mut total: i64 = 0
+    let mut mi: i64 = 0
+    while mi < nv {
+        let m: i64 = idx_vals[mi]
+        let im: i64 = find_idx(uniq, nu, m)
+        let p0: i64 = (powM[im * 4 + 0] * 0 + powM[im * 4 + 1] * 1) % MOD
+        let p1: i64 = (powM[im * 4 + 2] * 0 + powM[im * 4 + 3] * 1) % MOD
+        let q0: i64 = (p0 + p1) % MOD
+        let mut ni: i64 = 0
+        while ni < nv {
+            let n: i64 = idx_vals[ni]
+            let inn: i64 = find_idx(uniq, nu, n)
+            let a_mn: i64 = (powN[inn * 4 + 0] * p0 + powN[inn * 4 + 1] * q0) % MOD
+            total = (total + a_mn) % MOD
+            ni = ni + 1
+        }
+        mi = mi + 1
+    }
+    free(powM)
+    free(powN)
+    free(MAT_M)
+    free(MAT_N)
+    free(uniq)
+    free(idx_vals)
+    free(fib)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(50))
+    return 0
+}

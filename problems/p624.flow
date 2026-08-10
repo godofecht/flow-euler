@@ -1,0 +1,76 @@
+# Project Euler 624
+# Two Heads: Q(P(10^18), 1000000009) via matrix geometric series mod p.
+
+const P: i64 = 1000000009
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let n: i64 = 1000000000000000000
+    # B = A^n where A = [[1,1],[1,0]]
+    let mut a00: i64 = 1
+    let mut a01: i64 = 1
+    let mut a10: i64 = 1
+    let mut a11: i64 = 0
+    let mut r00: i64 = 1
+    let mut r01: i64 = 0
+    let mut r10: i64 = 0
+    let mut r11: i64 = 1
+    let mut e: i64 = n
+    while e > 0 {
+        if (e & 1) == 1 {
+            let n00: i64 = (r00 * a00 + r01 * a10) % P
+            let n01: i64 = (r00 * a01 + r01 * a11) % P
+            let n10: i64 = (r10 * a00 + r11 * a10) % P
+            let n11: i64 = (r10 * a01 + r11 * a11) % P
+            r00 = n00; r01 = n01; r10 = n10; r11 = n11
+        }
+        let b00: i64 = (a00 * a00 + a01 * a10) % P
+        let b01: i64 = (a00 * a01 + a01 * a11) % P
+        let b10: i64 = (a10 * a00 + a11 * a10) % P
+        let b11: i64 = (a10 * a01 + a11 * a11) % P
+        a00 = b00; a01 = b01; a10 = b10; a11 = b11
+        e = e / 2
+    }
+    let inv2: i64 = (P + 1) / 2
+    let s: i64 = modpow(inv2, n, P)
+    let m00: i64 = r00 * s % P
+    let m01: i64 = r01 * s % P
+    let m10: i64 = r10 * s % P
+    let m11: i64 = r11 * s % P
+    let i00: i64 = (1 - m00 + P) % P
+    let i01: i64 = (0 - m01 + P) % P
+    let i10: i64 = (0 - m10 + P) % P
+    let i11: i64 = (1 - m11 + P) % P
+    let mut det: i64 = (i00 * i11 - i01 * i10) % P
+    if det < 0 { det = det + P }
+    let inv_det: i64 = modpow(det, P - 2, P)
+    # inv = [[i11, -i01], [-i10, i00]] * inv_det
+    let inv00: i64 = i11 * inv_det % P
+    let inv01: i64 = ((0 - i01 + P) % P) * inv_det % P
+    let inv10: i64 = ((0 - i10 + P) % P) * inv_det % P
+    let inv11: i64 = i00 * inv_det % P
+    # w = inv * [0,1]
+    let w0: i64 = inv01
+    let w1: i64 = inv11
+    # x = M * w
+    let x1: i64 = (m10 * w0 + m11 * w1) % P
+    let mut q: i64 = x1 % P
+    if q == 0 { q = P }
+    printf("%lld\n", q)
+    return 0
+}

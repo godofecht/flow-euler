@@ -2,16 +2,7 @@
 # Shortened binary expansion for f(n)/f(n-1) = 123456789/987654321.
 # Harness expects integer: concatenate run lengths (drop commas).
 
-function gcd(a0: i64, b0: i64) -> i64 {
-    let mut a: i64 = a0
-    let mut b: i64 = b0
-    while b != 0 {
-        let t: i64 = a % b
-        a = b
-        b = t
-    }
-    return a
-}
+import euler.nt { gcd }
 
 function digit_shift(v: i64) -> i64 {
     if v == 0 { return 10 }
@@ -46,7 +37,7 @@ function main() -> i32 {
             sb[nsteps] = 1
             sc[nsteps] = k as i32
             a = a - k * b
-        } else {
+        } elif a < b {
             let k2: i64 = (b - 1) / a
             sb[nsteps] = 0
             sc[nsteps] = k2 as i32
@@ -68,7 +59,7 @@ function main() -> i32 {
         let count: i32 = sc[i]
         if bit == cur_bit {
             cur_len = cur_len + count
-        } else {
+        } elif bit != cur_bit {
             sbe[nsbe] = cur_len
             nsbe = nsbe + 1
             cur_bit = bit
@@ -80,11 +71,9 @@ function main() -> i32 {
     nsbe = nsbe + 1
 
     let mut ans: i64 = 0
-    let mut j: i32 = 0
-    while j < nsbe {
+    for j in 0..nsbe {
         let v: i64 = sbe[j] as i64
         ans = ans * digit_shift(v) + v
-        j = j + 1
     }
     printf("%lld\n", ans)
     return 0

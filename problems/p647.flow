@@ -1,0 +1,36 @@
+# Project Euler 647
+# Linear transforms of polygonal numbers: S(10^12).
+
+function F(k: i64, N: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut i: i64 = 1
+    while true {
+        let a: i64 = 2 * (k - 2) * i + 1
+        let b: i64 = (4 - k) * i
+        let A: i64 = a * a
+        let B: i64 = ((k - 2) * b * b + (4 - k) * b) / 2
+        let mx: i64 = A
+        if B > mx { mx = B }
+        if mx > N { break }
+        total = total + A + B
+        i = i + 1
+    }
+    return total
+}
+
+function S(N: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut k: i64 = 3
+    while true {
+        let t: i64 = F(k, N)
+        if t == 0 { break }
+        total = total + t
+        k = k + 2
+    }
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(1000000000000))
+    return 0
+}

@@ -1,0 +1,164 @@
+# Project Euler 662
+# Fibonacci Paths: F(10000, 10000) mod 1e9+7.
+# DP over grid, steps where sqrt(dx^2+dy^2) is a Fibonacci number.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function main() -> i32 {
+    let W: i64 = 10000
+    let H: i64 = 10000
+
+    # Generate Fibonacci numbers up to sqrt(W^2 + H^2)
+    let max_len: i64 = isqrt(W * W + H * H)
+    let fibs: ptr<i64> = calloc(100, 8)
+    fibs[0] = 1
+    fibs[1] = 2
+    let mut nfibs: i64 = 2
+    while fibs[nfibs - 1] + fibs[nfibs - 2] <= max_len {
+        fibs[nfibs] = fibs[nfibs - 1] + fibs[nfibs - 2]
+        nfibs = nfibs + 1
+    }
+
+    # Enumerate step vectors (dx, dy) with dx^2 + dy^2 = fib^2
+    # Store as flat arrays: steps_dx[], steps_dy[], nsteps
+    let steps_dx: ptr<i64> = calloc(20000, 8)
+    let steps_dy: ptr<i64> = calloc(20000, 8)
+    let mut nsteps: i64 = 0
+
+    # Use a simple set: just collect all and deduplicate later
+    for fi in 0..nfibs {
+        let f: i64 = fibs[fi]
+        let ff: i64 = f * f
+        let lim: i64 = f
+        if lim > W { lim = W }
+        for dx in 0..(lim + 1) {
+            let dy2: i64 = ff - dx * dx
+            if dy2 < 0 { continue }
+            let dy: i64 = isqrt(dy2)
+            if dy * dy == dy2 && dy <= H {
+                if dx != 0 || dy != 0 {
+                    # Check for duplicates
+                    let mut dup: bool = false
+                    for j in 0..nsteps {
+                        if steps_dx[j] == dx && steps_dy[j] == dy {
+                            dup = true
+                            break
+                        }
+                    }
+                    if !dup {
+                        steps_dx[nsteps] = dx
+                        steps_dy[nsteps] = dy
+                        nsteps = nsteps + 1
+                    }
+                }
+            }
+        }
+    }
+
+    # Separate vertical (dx=0) and horizontal (dx>0) steps
+    let vert_dy: ptr<i64> = calloc(nsteps, 8)
+    let prev_dx: ptr<i64> = calloc(nsteps, 8)
+    let prev_dy: ptr<i64> = calloc(nsteps, 8)
+    let mut nvert: i64 = 0
+    let mut nprev: i64 = 0
+    let mut max_dx: i64 = 0
+
+    for i in 0..nsteps {
+        if steps_dx[i] == 0 {
+            vert_dy[nvert] = steps_dy[i]
+            nvert = nvert + 1
+        } else {
+            prev_dx[nprev] = steps_dx[i]
+            prev_dy[nprev] = steps_dy[i]
+            nprev = nprev + 1
+            if steps_dx[i] > max_dx { max_dx = steps_dx[i] }
+        }
+    }
+
+    # Sort vertical steps by dy (insertion sort)
+    for i in 1..nvert {
+        let key: i64 = vert_dy[i]
+        let mut j: i64 = i
+        while j > 0 && vert_dy[j - 1] > key {
+            vert_dy[j] = vert_dy[j - 1]
+            j = j - 1
+        }
+        vert_dy[j] = key
+    }
+
+    # Sort previous column steps by dx (insertion sort)
+    for i in 1..nprev {
+        let kdx: i64 = prev_dx[i]
+        let kdy: i64 = prev_dy[i]
+        let mut j: i64 = i
+        while j > 0 && prev_dx[j - 1] > kdx {
+            prev_dx[j] = prev_dx[j - 1]
+            prev_dy[j] = prev_dy[j - 1]
+            j = j - 1
+        }
+        prev_dx[j] = kdx
+        prev_dy[j] = kdy
+    }
+
+    # DP with circular buffer of columns (flat array: buf * (H+1))
+    let buf: i64 = max_dx + 1
+    let col_size: i64 = H + 1
+    let buffer: ptr<i64> = calloc(buf * col_size, 8)
+    let incoming: ptr<i64> = calloc(H + 1, 8)
+
+    if buffer == null || incoming == null { return 1 }
+
+    for x in 0..(W + 1) {
+        let col_off: i64 = (x % buf) * col_size
+
+        for y in 0..(H + 1) { incoming[y] = 0 }
+
+        for i in 0..nprev {
+            let dx: i64 = prev_dx[i]
+            if dx > x { break }
+            let dy: i64 = prev_dy[i]
+            let src_off: i64 = ((x - dx) % buf) * col_size
+            if dy == 0 {
+                for y in 0..(H + 1) {
+                    incoming[y] = (incoming[y] + buffer[src_off + y]) % MOD
+                }
+            } else {
+                let limit: i64 = H - dy
+                for y in 0..(limit + 1) {
+                    incoming[y + dy] = (incoming[y + dy] + buffer[src_off + y]) % MOD
+                }
+            }
+        }
+
+        if x == 0 { incoming[0] = incoming[0] + 1 }
+
+        for y in 0..(H + 1) {
+            let mut val: i64 = incoming[y]
+            for vi in 0..nvert {
+                let dy: i64 = vert_dy[vi]
+                if dy > y { break }
+                val = (val + buffer[col_off + y - dy]) % MOD
+            }
+            buffer[col_off + y] = val
+        }
+    }
+
+    printf("%lld\n", buffer[(W % buf) * col_size + H])
+
+    free(buffer)
+    free(incoming)
+    free(vert_dy)
+    free(prev_dx)
+    free(prev_dy)
+    free(steps_dx)
+    free(steps_dy)
+    free(fibs)
+    return 0
+}

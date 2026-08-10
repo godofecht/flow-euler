@@ -1,0 +1,67 @@
+# Project Euler 960
+# Spanning forests / Cayley: F(100) mod 10^9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function modmul(a: i64, b: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (MOD as i128)) as i64
+}
+
+function modpow(base0: i64, exp0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % MOD
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) != 0 { r = modmul(r, b) }
+        b = modmul(b, b)
+        e = e >> 1
+    }
+    return r
+}
+
+function F(n: i64) -> i64 {
+    let mut fact: ptr<i64> = calloc(n + 1, 8)
+    let mut invfact: ptr<i64> = calloc(n + 1, 8)
+    fact[0] = 1
+    let mut i: i64 = 1
+    while i <= n {
+        fact[i] = modmul(fact[i - 1], i)
+        i = i + 1
+    }
+    invfact[n] = modpow(fact[n], MOD - 2)
+    i = n
+    while i > 0 {
+        invfact[i - 1] = modmul(invfact[i], i)
+        i = i - 1
+    }
+    let mut S: i64 = 0
+    let inv2: i64 = (MOD + 1) / 2
+    let mut k: i64 = 1
+    while k <= n / 2 {
+        let mut trees_k: i64 = 1
+        if k > 1 { trees_k = modpow(k, k - 2) }
+        let trees_nk: i64 = modpow(n - k, n - k - 2)
+        let mut ways: i64 = modmul(fact[n], modmul(invfact[k], invfact[n - k]))
+        ways = modmul(ways, trees_k)
+        ways = modmul(ways, trees_nk)
+        ways = modmul(ways, k)
+        ways = modmul(ways, n - k)
+        if 2 * k == n { ways = modmul(ways, inv2) }
+        S = (S + modmul(k, ways)) % MOD
+        k = k + 1
+    }
+    let ans: i64 = modmul(S, fact[n - 1])
+    free(fact)
+    free(invfact)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", F(100))
+    return 0
+}

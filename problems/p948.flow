@@ -1,0 +1,51 @@
+# Project Euler 948
+# Left vs Right — Catalan-based recurrence for F(n). Find F(60).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let n_max: i64 = 60
+    let m_max: i64 = n_max / 2
+    let Cat: ptr<i64> = calloc(m_max + 1, 8)
+    let A: ptr<i64> = calloc(n_max + 1, 8)
+    let B: ptr<i64> = calloc(n_max + 1, 8)
+    let C: ptr<i64> = calloc(n_max + 1, 8)
+    if Cat == null || A == null || B == null || C == null { return 1 }
+    Cat[0] = 1
+    let mut n: i64 = 1
+    while n <= m_max {
+        let mut s: i64 = 0
+        let mut i: i64 = 0
+        while i < n {
+            s = s + Cat[i] * Cat[n - 1 - i]
+            i = i + 1
+        }
+        Cat[n] = s
+        n = n + 1
+    }
+    C[2] = 1
+    n = 3
+    while n <= n_max {
+        C[n] = (1 as i64) << (n - 2)
+        if (n & 1) == 0 {
+            let m: i64 = n / 2
+            A[n] = 2 * A[n - 1]
+            B[n] = 2 * B[n - 1] + Cat[m - 1]
+        } else {
+            let m2: i64 = (n - 1) / 2
+            A[n] = 2 * A[n - 1] + Cat[m2 - 1]
+            B[n] = 2 * B[n - 1]
+        }
+        n = n + 1
+    }
+    let F60: i64 = 2 * A[60] + B[60] + C[60]
+    printf("%lld\n", F60)
+    free(Cat)
+    free(A)
+    free(B)
+    free(C)
+    return 0
+}

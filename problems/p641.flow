@@ -1,0 +1,164 @@
+# Project Euler 641: A Long Row of Dice
+# f(n) = count of dice showing 1 after the process.
+# Uses Mobius sieve, Mertens function, squarefree counting.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+function icbrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut hi: i64 = 1
+    let mut bits: i64 = 0
+    let mut tmp: i64 = n
+    while tmp > 0 { bits = bits + 1; tmp = tmp >> 1 }
+    hi = 1 << ((bits + 2) / 3)
+    let mut lo: i64 = hi >> 1
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) >> 1
+        let m3: i64 = mid * mid * mid
+        if m3 <= n { lo = mid } else { hi = mid }
+    }
+    return lo
+}
+
+# Mobius sieve
+let mut g_mu: ptr<i8> = null
+let mut g_mertens_small: ptr<i64> = null
+let mut g_sqfree_small: ptr<i64> = null
+let mut g_limit: i64 = 0
+
+function mobius_sieve(limit: i64) -> void {
+    g_mu = calloc(limit + 1, 1)
+    g_mu[1] = 1
+
+    let primes: ptr<i64> = calloc(limit / 10 + 100, 8)
+    let mut nprimes: i64 = 0
+    let is_comp: ptr<i8> = calloc(limit + 1, 1)
+
+    for i in 2..(limit + 1) {
+        if is_comp[i] == 0 {
+            primes[nprimes] = i
+            nprimes = nprimes + 1
+            g_mu[i] = -1
+        }
+        for j in 0..nprimes {
+            let p: i64 = primes[j]
+            let ip: i64 = i * p
+            if ip > limit { break }
+            is_comp[ip] = 1
+            if i % p == 0 {
+                g_mu[ip] = 0
+                break
+            } else {
+                g_mu[ip] = -g_mu[i]
+            }
+        }
+    }
+
+    g_mertens_small = calloc(limit + 1, 8)
+    g_sqfree_small = calloc(limit + 1, 8)
+    let mut s: i64 = 0
+    let mut q: i64 = 0
+    for i in 1..(limit + 1) {
+        s = s + (g_mu[i] as i64)
+        g_mertens_small[i] = s
+        if g_mu[i] != 0 { q = q + 1 }
+        g_sqfree_small[i] = q
+    }
+
+    g_limit = limit
+    free(is_comp)
+    free(primes)
+}
+
+# Mertens cache using hash map (open addressing)
+const MEMO_SIZE: i64 = 2000003
+let mut g_mertens_key: ptr<i64> = null
+let mut g_mertens_val: ptr<i64> = null
+
+function mertens(n: i64) -> i64 {
+    if n <= g_limit { return g_mertens_small[n] }
+
+    let h: i64 = n % MEMO_SIZE
+    if g_mertens_key[h] == n { return g_mertens_val[h] }
+
+    let mut res: i64 = 1
+    let mut i: i64 = 2
+    while i <= n {
+        let q: i64 = n / i
+        let j: i64 = n / q
+        res = res - (j - i + 1) * mertens(q)
+        i = j + 1
+    }
+
+    g_mertens_key[h] = n
+    g_mertens_val[h] = res
+    return res
+}
+
+function squarefree_count(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    if n <= g_limit { return g_sqfree_small[n] }
+
+    let m: i64 = isqrt(n)
+    let mut res: i64 = 0
+    let mut d: i64 = 1
+    while d <= m {
+        let k: i64 = n / (d * d)
+        let d_max: i64 = isqrt(n / k)
+        res = res + (g_mertens_small[d_max] - g_mertens_small[d - 1]) * k
+        d = d_max + 1
+    }
+    return res
+}
+
+function count_f(n: i64) -> i64 {
+    let M: i64 = isqrt(n)
+    let z_max: i64 = isqrt(M)
+
+    let c: i64 = icbrt(z_max)
+    let limit: i64 = c * c + 10
+    let sq: i64 = isqrt(z_max) + 10
+    if sq > limit { limit = sq }
+    if 1000 > limit { limit = 1000 }
+
+    mobius_sieve(limit)
+
+    g_mertens_key = calloc(MEMO_SIZE, 8)
+    g_mertens_val = calloc(MEMO_SIZE, 8)
+
+    let Y: i64 = icbrt(M)
+
+    let mut S0: i64 = 0
+    let mut S1: i64 = 0
+    for y in 1..(Y + 1) {
+        let y3: i64 = y * y * y
+        let R: i64 = isqrt(M / y3)
+        let yp1: i64 = y + 1
+        let yp13: i64 = yp1 * yp1 * yp1
+        let L: i64
+        if yp13 <= M { L = isqrt(M / yp13) } else { L = 0 }
+        if R == L { continue }
+        S0 = S0 + y * (squarefree_count(R) - squarefree_count(L))
+        S1 = S1 + y * (mertens(R) - mertens(L))
+    }
+
+    free(g_mertens_val)
+    free(g_mertens_key)
+    free(g_sqfree_small)
+    free(g_mertens_small)
+    free(g_mu)
+
+    return (S0 + S1) / 2
+}
+
+function main() -> i32 {
+    let n: i64 = 1000000000000000000000000000000000000  # 10^36
+    printf("%lld\n", count_f(n))
+    return 0
+}

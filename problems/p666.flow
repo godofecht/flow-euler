@@ -1,0 +1,100 @@
+# Project Euler 666
+# Polymorphic bacteria extinction probability via branching-process fixed point.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let k: i64 = 500
+    let m: i64 = 10
+    let MOD: i64 = 10007
+    let N: i64 = k * m
+    let r: ptr<i32> = calloc(N, 4)
+    if r == null { return 1 }
+    r[0] = 306
+    let mut n: i64 = 1
+    while n < N {
+        let x: i64 = r[n - 1] as i64
+        r[n] = ((x * x) % MOD) as i32
+        n = n + 1
+    }
+    let a0: ptr<f64> = calloc(k, 8)
+    let a1: ptr<f64> = calloc(k, 8)
+    let a2: ptr<f64> = calloc(k, 8)
+    let a3: ptr<f64> = calloc(k, 8)
+    let a4: ptr<f64> = calloc(k, 8)
+    let mut_to: ptr<i32> = calloc(k, 4)
+    let split_to: ptr<i32> = calloc(k, 4)
+    let spawn_to: ptr<i32> = calloc(k, 4)
+    if a0 == null || a1 == null || a2 == null || a3 == null || a4 == null { return 1 }
+    let inv_m: f64 = 1.0 / (m as f64)
+    let mut i: i64 = 0
+    while i < k {
+        let mut c0: i64 = 0
+        let mut c1: i64 = 0
+        let mut c2: i64 = 0
+        let mut c3: i64 = 0
+        let mut c4: i64 = 0
+        let base: i64 = i * m
+        let mut j: i64 = 0
+        while j < m {
+            let q: i64 = (r[base + j] as i64) % 5
+            if q == 0 { c0 = c0 + 1 }
+            elif q == 1 { c1 = c1 + 1 }
+            elif q == 2 { c2 = c2 + 1 }
+            elif q == 3 { c3 = c3 + 1 }
+            else { c4 = c4 + 1 }
+            j = j + 1
+        }
+        a0[i] = (c0 as f64) * inv_m
+        a1[i] = (c1 as f64) * inv_m
+        a2[i] = (c2 as f64) * inv_m
+        a3[i] = (c3 as f64) * inv_m
+        a4[i] = (c4 as f64) * inv_m
+        mut_to[i] = ((2 * i) % k) as i32
+        split_to[i] = (((i * i) + 1) % k) as i32
+        spawn_to[i] = ((i + 1) % k) as i32
+        i = i + 1
+    }
+    let p: ptr<f64> = calloc(k, 8)
+    let newp: ptr<f64> = calloc(k, 8)
+    let mut iter: i64 = 0
+    while iter < 2000000 {
+        let mut max_delta: f64 = 0.0
+        i = 0
+        while i < k {
+            let pi: f64 = p[i]
+            let pm: f64 = p[mut_to[i] as i64]
+            let ps: f64 = p[split_to[i] as i64]
+            let psp: f64 = p[spawn_to[i] as i64]
+            let val: f64 = a0[i] + a1[i] * (pi * pi) + a2[i] * pm + a3[i] * (ps * ps * ps) + a4[i] * (pi * psp)
+            newp[i] = val
+            let mut d: f64 = val - pi
+            if d < 0.0 { d = 0.0 - d }
+            if d > max_delta { max_delta = d }
+            i = i + 1
+        }
+        i = 0
+        while i < k {
+            p[i] = newp[i]
+            i = i + 1
+        }
+        if max_delta < 1.0e-14 { break }
+        iter = iter + 1
+    }
+    printf("%.8f\n", p[0])
+    free(r)
+    free(a0)
+    free(a1)
+    free(a2)
+    free(a3)
+    free(a4)
+    free(mut_to)
+    free(split_to)
+    free(spawn_to)
+    free(p)
+    free(newp)
+    return 0
+}

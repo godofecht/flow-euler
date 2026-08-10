@@ -1,0 +1,11 @@
+# Project Euler 446
+# Retractions B: F(10^7)=sum R(n^4+4) mod 10^9+7 via k^2+1 factorization.
+
+extern {
+    function pe446_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe446_answer())
+    return 0
+}

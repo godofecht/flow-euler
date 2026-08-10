@@ -1,20 +1,11 @@
 # Project Euler 127
 # Sum of c for abc-hits with c < 120000.
 
+import euler.nt { gcd }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-function gcd(a0: i64, b0: i64) -> i64 {
-    let mut a: i64 = a0
-    let mut b: i64 = b0
-    while b != 0 {
-        let t: i64 = a % b
-        a = b
-        b = t
-    }
-    return a
 }
 
 function main() -> i32 {

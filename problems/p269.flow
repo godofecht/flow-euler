@@ -4,6 +4,7 @@
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
+    function p269_native() -> i64
 }
 
 function encode_state(c: ptr<i64>, m: i64) -> i64 {
@@ -125,6 +126,10 @@ function count_for(ks: ptr<i64>, m: i64, length: i64) -> i64 {
 }
 
 function main() -> i32 {
+    # Nine simultaneous root constraints require 72 bits of state.  The
+    # native helper uses an unsigned 128-bit state key (Flow i64 is too small).
+    printf("%lld\n", p269_native())
+    return 0
     let root0: i64 = 1000000000000000
     let mut union_count: i64 = 0
     let ks: ptr<i64> = calloc(9, 8)

@@ -1,0 +1,168 @@
+# Project Euler 617
+# Mirror Power Sequence: D(10^18) = sum C(n) for n=2..10^18.
+# Valid n = t^(e^a) + t^(e^b) with t>1 primitive (not an e-th power), 0≤a<b.
+# For b=1: count primitive t with t+t^e ≤ N via integer roots.
+# For b≥2: enumerate t (search space is tiny since t^(e^b) grows fast).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# min(base^exp, cap+1) with early stop
+function pow_capped(base0: i64, exp0: i64, cap: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut a: i64 = base0
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 {
+            result = result * a
+            if result > cap { return cap + 1 }
+        }
+        e = e / 2
+        if e > 0 {
+            a = a * a
+            if a > cap { a = cap + 1 }
+        }
+    }
+    return result
+}
+
+# floor(n^(1/k)) via binary search
+function int_nth_root(n: i64, k: i64) -> i64 {
+    if k <= 1 { return n }
+    if n < 2 { return n }
+    let mut lo: i64 = 1
+    let mut hi: i64 = 2
+    while pow_capped(hi, k, n) <= n { hi = hi * 2 }
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if pow_capped(mid, k, n) <= n { lo = mid }
+        if pow_capped(mid, k, n) > n { hi = mid }
+    }
+    return lo
+}
+
+# Largest t with t + t^e ≤ N
+function max_t_for_b1(N: i64, e: i64) -> i64 {
+    if N < 4 { return 1 }
+    let mut hi: i64 = int_nth_root(N, e) + 1
+    let mut lo: i64 = 1
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if mid + pow_capped(mid, e, N) <= N { lo = mid }
+        if mid + pow_capped(mid, e, N) > N { hi = mid }
+    }
+    return lo
+}
+
+function ipow(base0: i64, exp0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0
+    let mut e: i64 = exp0
+    while e > 0 {
+        if e % 2 == 1 { r = r * b }
+        b = b * b
+        e = e / 2
+    }
+    return r
+}
+
+function count_for_exponent(N: i64, e: i64) -> i64 {
+    let mut total: i64 = 0
+
+    # b=1: n = t + t^e, count primitive t (not exact e-th powers)
+    let t_max: i64 = max_t_for_b1(N, e)
+    total = total + t_max - int_nth_root(t_max, e)
+
+    if N <= 4 { return total }
+
+    # b≥2: enumerate. Find max b such that 2^(e^b) ≤ N-2
+    # max_exp = floor(log2(N-2))
+    let mut max_exp: i64 = 0
+    let mut tmp: i64 = N - 2
+    while tmp > 1 { max_exp = max_exp + 1; tmp = tmp / 2 }
+
+    # Collect valid b values
+    let MAXB: i64 = 64
+    let bs: ptr<i64> = calloc(MAXB, 8)
+    if bs == null { return -1 }
+    let mut nbs: i64 = 0
+    let mut b: i64 = 2
+    while nbs < MAXB {
+        let exp: i64 = ipow(e, b)
+        if exp > max_exp { break }
+        if 2 + (1 << exp) > N { break }
+        bs[nbs] = b
+        nbs = nbs + 1
+        b = b + 1
+    }
+
+    if nbs == 0 { free(bs); return total }
+
+    # Precompute non-primitive set (exact e-th powers up to max t)
+    let mut max_t_limit: i64 = 0
+    let mut bi: i64 = 0
+    while bi < nbs {
+        let exp: i64 = ipow(e, bs[bi])
+        let tl: i64 = int_nth_root(N - 2, exp)
+        if tl > max_t_limit { max_t_limit = tl }
+        bi = bi + 1
+    }
+
+    let u_max: i64 = int_nth_root(max_t_limit, e)
+    # Mark e-th powers in a set (use a hash or array)
+    let non_prim: ptr<i8> = calloc(max_t_limit + 1, 1)
+    if non_prim == null { free(bs); return -1 }
+    let mut u: i64 = 2
+    while u <= u_max {
+        let pk: i64 = ipow(u, e)
+        if pk <= max_t_limit { non_prim[pk] = 1 }
+        u = u + 1
+    }
+
+    # For each b, enumerate primitive t
+    bi = 0
+    while bi < nbs {
+        let bval: i64 = bs[bi]
+        let exp: i64 = ipow(e, bval)
+        let t_limit: i64 = int_nth_root(N - 2, exp)
+        let mut t: i64 = 2
+        while t <= t_limit {
+            if non_prim[t] == 0 {
+                # Build power tower p[0..b], p[k] = t^(e^k)
+                # Count valid a in [0..b-1] with p[a] + p[b] ≤ N
+                let top: i64 = pow_capped(t, exp, N)
+                let mut pa: i64 = 1  # p[0] = t^1 = t
+                let mut ek: i64 = 1  # e^0 = 1
+                let mut a: i64 = 0
+                while a < bval {
+                    if pa + top <= N {
+                        total = total + bval
+                    }
+                    ek = ek * e
+                    pa = pow_capped(t, ek, N)
+                    a = a + 1
+                }
+            }
+            t = t + 1
+        }
+        bi = bi + 1
+    }
+
+    free(non_prim)
+    free(bs)
+    return total
+}
+
+function main() -> i32 {
+    let N: i64 = 1000000000000000000
+    let mut total: i64 = 0
+    let mut e: i64 = 2
+    while 2 + (1 << e) <= N {
+        total = total + count_for_exponent(N, e)
+        e = e + 1
+    }
+    printf("%lld\n", total)
+    return 0
+}

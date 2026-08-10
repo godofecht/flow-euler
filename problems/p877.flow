@@ -1,0 +1,20 @@
+# Project Euler 877
+# XOR-Equation A — XOR of ladder sequence s_{n+2}=(s_{n+1}<<1)^s_n up to N.
+
+function X(N: i64) -> i64 {
+    let mut s_prev: i64 = 0
+    let mut s_cur: i64 = 3
+    let mut acc: i64 = 0
+    while s_cur <= N {
+        acc = acc ^ s_cur
+        let next: i64 = (s_cur << 1) ^ s_prev
+        s_prev = s_cur
+        s_cur = next
+    }
+    return acc
+}
+
+function main() -> i32 {
+    printf("%lld\n", X(1000000000000000000))
+    return 0
+}

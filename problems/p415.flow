@@ -1,0 +1,11 @@
+# Project Euler 415
+# Titanic sets on (N+1)^2 lattice, N=10^11, mod 10^8 via totient sums.
+
+extern {
+    function pe415_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe415_answer())
+    return 0
+}

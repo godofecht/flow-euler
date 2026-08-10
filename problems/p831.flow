@@ -1,0 +1,11 @@
+# Project Euler 831
+# Triple Product — first 10 base-7 digits of g(142857).
+
+extern {
+    function pe_solve_print() -> void
+}
+
+function main() -> i32 {
+    pe_solve_print()
+    return 0
+}

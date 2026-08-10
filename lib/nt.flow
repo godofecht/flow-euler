@@ -1,0 +1,91 @@
+# @module euler.nt
+# @means  Shared number-theory helpers for Project Euler (i64, no GC).
+# @tier   definitions-only
+#
+# Trial arithmetic only — keeps the same C-shaped loops problems already use.
+# Import:  import euler.nt { gcd, lcm, is_prime, mod_pow, isqrt }
+
+export function gcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+export function lcm(a: i64, b: i64) -> i64 {
+    if a == 0 || b == 0 {
+        return 0
+    }
+    return a / gcd(a, b) * b
+}
+
+export function isqrt(n: i64) -> i64 {
+    if n < 2 {
+        return n
+    }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+# Binary modular exponentiation. Uses mulmod so intermediates stay in range
+# even when mod is near 2^63 (e.g. 10^10).
+export function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    let mut b: i64 = b0 % mod
+    let mut result: i64 = 0
+    while b > 0 {
+        if b % 2 == 1 {
+            result = (result + a) % mod
+        }
+        a = (a * 2) % mod
+        b = b / 2
+    }
+    return result
+}
+
+export function mod_pow(base: i64, exp: i64, mod: i64) -> i64 {
+    if mod == 1 {
+        return 0
+    }
+    let mut result: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            result = mulmod(result, b, mod)
+        }
+        b = mulmod(b, b, mod)
+        e = e / 2
+    }
+    return result
+}
+
+# 6k±1 trial division — fine for PE checks on modest n.
+export function is_prime(n: i64) -> bool {
+    if n < 2 {
+        return false
+    }
+    if n < 4 {
+        return true
+    }
+    if n % 2 == 0 || n % 3 == 0 {
+        return false
+    }
+    let mut i: i64 = 5
+    while i * i <= n {
+        if n % i == 0 || n % (i + 2) == 0 {
+            return false
+        }
+        i = i + 6
+    }
+    return true
+}

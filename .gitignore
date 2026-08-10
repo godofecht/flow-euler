@@ -3,3 +3,4 @@ bench/bin/
 *.o
 .DS_Store
 a.out
+.build/

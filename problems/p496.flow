@@ -1,20 +1,11 @@
 # Project Euler 496
 # Incenter/circumcenter — F(10^9) via A=2B triangle parametrization.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function squarefree_divs(p: i64, spf: ptr<i32>, ds: ptr<i64>, cs: ptr<i64>) -> i64 {
