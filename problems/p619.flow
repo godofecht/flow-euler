@@ -1,0 +1,11 @@
+# Project Euler 619
+# Square subsets: GF(2) rank of squarefree kernels on [1e6,1234567].
+
+extern {
+    function pe619_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe619_answer())
+    return 0
+}

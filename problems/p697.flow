@@ -1,0 +1,21 @@
+# Project Euler 697
+# Randomly decaying sequences: Wilson-Hilferty gamma quantile / ln(10).
+
+extern {
+    function log(x: f64) -> f64
+    function sqrt(x: f64) -> f64
+    function round(x: f64) -> f64
+}
+
+function compute(n: f64) -> f64 {
+    let z: f64 = 0.6744897501960817
+    let df: f64 = 2.0 * n
+    let t: f64 = 1.0 - 2.0 / (9.0 * df) + z * sqrt(2.0 / (9.0 * df))
+    let chi2: f64 = df * t * t * t
+    return round((0.5 * chi2) / log(10.0) * 100.0) / 100.0
+}
+
+function main() -> i32 {
+    printf("%.2f\n", compute(10000000.0))
+    return 0
+}

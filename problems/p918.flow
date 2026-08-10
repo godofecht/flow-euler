@@ -1,0 +1,77 @@
+# Project Euler 918
+# Recursive Sequence Summation
+# a(1)=1; a(2n)=2a(n); a(2n+1)=a(n)-3a(n+1)
+# S(N)=4-a(N/2) (even); 4-3a(N/2+1) (odd). Find S(10^12).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const CAP: i64 = 1 << 20
+let mut keys: ptr<i64> = null
+let mut vals: ptr<i64> = null
+let mut used: ptr<i8> = null
+
+function hmix(x: i64) -> i64 {
+    let mut z: i64 = x + 0x9e3779b97f4a7c15
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9
+    z = (z ^ (z >> 27)) * 0x94d049bb133111eb
+    return z ^ (z >> 31)
+}
+
+function memo_get(n: i64) -> i64 {
+    let mut i: i64 = hmix(n) & (CAP - 1)
+    while used[i] != 0 {
+        if keys[i] == n { return vals[i] }
+        i = (i + 1) & (CAP - 1)
+    }
+    return 9223372036854775807
+}
+
+function memo_put(n: i64, v: i64) -> void {
+    let mut i: i64 = hmix(n) & (CAP - 1)
+    while used[i] != 0 {
+        if keys[i] == n {
+            vals[i] = v
+            return
+        }
+        i = (i + 1) & (CAP - 1)
+    }
+    used[i] = 1
+    keys[i] = n
+    vals[i] = v
+}
+
+function a(n: i64) -> i64 {
+    if n == 1 { return 1 }
+    let cached: i64 = memo_get(n)
+    if cached != 9223372036854775807 { return cached }
+    let mut res: i64 = 0
+    if (n & 1) == 0 {
+        res = 2 * a(n / 2)
+    } else {
+        res = a(n / 2) - 3 * a(n / 2 + 1)
+    }
+    memo_put(n, res)
+    return res
+}
+
+function S(N: i64) -> i64 {
+    if (N & 1) == 0 {
+        return 4 - a(N / 2)
+    }
+    return 4 - 3 * a(N / 2 + 1)
+}
+
+function main() -> i32 {
+    keys = calloc(CAP, 8)
+    vals = calloc(CAP, 8)
+    used = calloc(CAP, 1)
+    if keys == null || vals == null || used == null { return 1 }
+    printf("%lld\n", S(1000000000000))
+    free(keys)
+    free(vals)
+    free(used)
+    return 0
+}

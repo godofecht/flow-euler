@@ -1,0 +1,185 @@
+# Project Euler 616
+# Creative numbers <= 1e12: perfect powers minus p^q minus 16.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function ipow(base: i64, exp: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 {
+            if r > 1000000000000 / b { return -1 }
+            r = r * b
+        }
+        e = e / 2
+        if e > 0 {
+            if b > 1000000000000 / b { return -1 }
+            b = b * b
+        }
+    }
+    return r
+}
+
+function iroot(limit: i64, exp: i64) -> i64 {
+    # largest a with a^exp <= limit
+    let mut lo: i64 = 1
+    let mut hi: i64 = limit
+    if exp >= 2 {
+        hi = isqrt(limit) + 2
+        if hi > limit { hi = limit }
+    }
+    while lo < hi {
+        let mid: i64 = (lo + hi + 1) / 2
+        let p: i64 = ipow(mid, exp)
+        if p < 0 || p > limit { hi = mid - 1 } else { lo = mid }
+    }
+    return lo
+}
+
+function heapify(a: ptr<i64>, n: i64, i0: i64) -> void {
+    let mut i: i64 = i0
+    while true {
+        let mut largest: i64 = i
+        let l: i64 = 2 * i + 1
+        let r: i64 = 2 * i + 2
+        if l < n && a[l] > a[largest] { largest = l }
+        if r < n && a[r] > a[largest] { largest = r }
+        if largest == i { break }
+        let t: i64 = a[i]
+        a[i] = a[largest]
+        a[largest] = t
+        i = largest
+    }
+}
+
+function heapsort(a: ptr<i64>, n: i64) -> void {
+    let mut i: i64 = n / 2 - 1
+    while i >= 0 {
+        heapify(a, n, i)
+        i = i - 1
+    }
+    i = n - 1
+    while i > 0 {
+        let t: i64 = a[0]
+        a[0] = a[i]
+        a[i] = t
+        heapify(a, i, 0)
+        i = i - 1
+    }
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 1000000000000
+    # Collect perfect powers
+    let arr: ptr<i64> = calloc(2000000, 8)
+    if arr == null { return 1 }
+    let mut n: i64 = 0
+    let mut exp: i64 = 2
+    while exp <= 40 {
+        let base: i64 = iroot(LIMIT, exp)
+        let mut a: i64 = 2
+        while a <= base {
+            let p: i64 = ipow(a, exp)
+            if p > 0 && p <= LIMIT {
+                arr[n] = p
+                n = n + 1
+            }
+            a = a + 1
+        }
+        exp = exp + 1
+    }
+    heapsort(arr, n)
+    let mut sum_pp: i64 = 0
+    let mut i: i64 = 0
+    while i < n {
+        if i == 0 || arr[i] != arr[i - 1] {
+            sum_pp = sum_pp + arr[i]
+        }
+        i = i + 1
+    }
+    # primes <= 1e6
+    let M: i64 = 1000000
+    let sieve: ptr<i8> = calloc(M + 1, 1)
+    let primes: ptr<i32> = calloc(M / 5 + 10, 4)
+    if sieve == null || primes == null { return 1 }
+    i = 2
+    while i <= M {
+        sieve[i] = 1
+        i = i + 1
+    }
+    let mut p: i64 = 2
+    while p * p <= M {
+        if sieve[p] != 0 {
+            let mut q: i64 = p * p
+            while q <= M {
+                sieve[q] = 0
+                q = q + p
+            }
+        }
+        p = p + 1
+    }
+    let mut pn: i64 = 0
+    i = 2
+    while i <= M {
+        if sieve[i] != 0 {
+            primes[pn] = i as i32
+            pn = pn + 1
+        }
+        i = i + 1
+    }
+    let exps: ptr<i64> = calloc(12, 8)
+    exps[0] = 2; exps[1] = 3; exps[2] = 5; exps[3] = 7
+    exps[4] = 11; exps[5] = 13; exps[6] = 17; exps[7] = 19
+    exps[8] = 23; exps[9] = 29; exps[10] = 31; exps[11] = 37
+    let pp: ptr<i64> = calloc(200000, 8)
+    let mut m: i64 = 0
+    let mut ei: i64 = 0
+    while ei < 12 {
+        let qe: i64 = exps[ei]
+        let maxb: i64 = iroot(LIMIT, qe)
+        let mut j: i64 = 0
+        while j < pn {
+            let pr: i64 = primes[j] as i64
+            if pr > maxb { break }
+            let val: i64 = ipow(pr, qe)
+            if val > 0 && val <= LIMIT {
+                pp[m] = val
+                m = m + 1
+            }
+            j = j + 1
+        }
+        ei = ei + 1
+    }
+    heapsort(pp, m)
+    let mut sum_pq: i64 = 0
+    i = 0
+    while i < m {
+        if i == 0 || pp[i] != pp[i - 1] {
+            sum_pq = sum_pq + pp[i]
+        }
+        i = i + 1
+    }
+    let ans: i64 = sum_pp - sum_pq - 16
+    printf("%lld\n", ans)
+    free(arr)
+    free(sieve)
+    free(primes)
+    free(exps)
+    free(pp)
+    return 0
+}

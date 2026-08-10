@@ -33,15 +33,13 @@ function solve(limit: i64) -> i64 {
 
     let mut best_n: i64 = 1
     let mut best_len: i32 = 1
-    let mut n: i64 = 2
-    while n < limit {
+    for n in 2..limit {
         let len: i32 = collatz_len(n, memo, limit)
         memo[n] = len
         if len > best_len {
             best_len = len
             best_n = n
         }
-        n = n + 1
     }
     free(memo)
     return best_n

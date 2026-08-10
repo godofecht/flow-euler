@@ -1,8 +1,11 @@
 # Project Euler 502
-# Counting Castles
-# Castle generating functions / height recurrence mod 10^9+7.
+# Counting Castles — height/width generating-function recurrence mod 10^9+7.
+
+extern {
+    function pe502_answer() -> i64
+}
 
 function main() -> i32 {
-    printf("%lld\n", 749485217)
+    printf("%lld\n", pe502_answer())
     return 0
 }

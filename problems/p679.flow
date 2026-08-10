@@ -1,0 +1,11 @@
+# Project Euler 679
+# FREEFAREA words: Aho-Corasick DP counting f(30).
+
+extern {
+    function pe679_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe679_answer())
+    return 0
+}

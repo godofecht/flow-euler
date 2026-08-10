@@ -1,0 +1,188 @@
+# Project Euler 643: 2-Friendly
+# f(n) = sum_{t>=1} (S(floor(n/2^t)) - 1) mod 1e9+7
+# where S(m) = sum_{k=1..m} phi(k).
+# Uses Du Jiao sieve with pre-enumerated floor(N/i) values.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const LIMIT: i64 = 10000000
+const INV2: i64 = 500000004
+
+# Binary search for key in descending-sorted array, return index or -1
+function bsearch_desc(keys: ptr<i64>, n: i64, key: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = n - 1
+    while lo <= hi {
+        let mid: i64 = (lo + hi) / 2
+        if keys[mid] == key { return mid }
+        if keys[mid] > key { lo = mid + 1 }
+        else { hi = mid - 1 }
+    }
+    return -1
+}
+
+function main() -> i32 {
+    let N: i64 = 100000000000  # 10^11
+
+    # Step 1: Precompute phi prefix sums up to LIMIT
+    let phi: ptr<i64> = calloc(LIMIT + 1, 8)
+    if phi == null { return 1 }
+    phi[1] = 1
+
+    let is_comp: ptr<i8> = calloc(LIMIT + 1, 1)
+    let primes_arr: ptr<i64> = calloc(LIMIT / 10 + 100, 8)
+    let mut npc: i64 = 0
+
+    for i in 2..(LIMIT + 1) {
+        if is_comp[i] == 0 {
+            primes_arr[npc] = i
+            npc = npc + 1
+            phi[i] = i - 1
+        }
+        for j in 0..npc {
+            let p: i64 = primes_arr[j]
+            let ip: i64 = i * p
+            if ip > LIMIT { break }
+            is_comp[ip] = 1
+            if i % p == 0 {
+                phi[ip] = phi[i] * p
+                break
+            } else {
+                phi[ip] = phi[i] * (p - 1)
+            }
+        }
+    }
+
+    # Prefix sum of phi mod MOD
+    let pref: ptr<i64> = calloc(LIMIT + 1, 8)
+    let mut s: i64 = 0
+    for i in 1..(LIMIT + 1) {
+        s = (s + phi[i]) % MOD
+        pref[i] = s
+    }
+
+    free(is_comp)
+    free(primes_arr)
+    free(phi)
+
+    # Step 2: Enumerate all distinct floor(N/i) values for i >= 1
+    # Large values: N/i for i=1..root_n (already decreasing)
+    # Small values: 1..small_max (increasing, reverse to get decreasing)
+    # Merge them (large are all >= root_n, small are all <= root_n, possible overlap at root_n)
+    let root_n: i64 = isqrt(N)
+    let max_vals: i64 = 2 * root_n + 10
+
+    let keys: ptr<i64> = calloc(max_vals, 8)
+    let vals: ptr<i64> = calloc(max_vals, 8)
+    let mut nkeys: i64 = 0
+
+    # Large values: N/1, N/2, ..., N/root_n (decreasing)
+    for i in 1..(root_n + 1) {
+        keys[nkeys] = N / i
+        nkeys = nkeys + 1
+    }
+
+    # Small values: small_max down to 1 (decreasing)
+    let small_max: i64 = N / (root_n + 1)
+    for v in 0..small_max {
+        keys[nkeys] = small_max - v
+        nkeys = nkeys + 1
+    }
+
+    # Remove duplicates (consecutive equal values)
+    let mut unique: i64 = 0
+    for i in 0..nkeys {
+        if i == 0 || keys[i] != keys[i - 1] {
+            keys[unique] = keys[i]
+            unique = unique + 1
+        }
+    }
+    nkeys = unique
+
+    # Step 3: Compute S(v) for each v in INCREASING order
+    # (S(v) depends on S(w) for w < v, so process smallest first)
+    for idx in 0..nkeys {
+        let rev_idx: i64 = nkeys - 1 - idx
+        let v: i64 = keys[rev_idx]
+
+        if v <= LIMIT {
+            vals[rev_idx] = pref[v]
+            continue
+        }
+        if v == 0 {
+            vals[rev_idx] = 0
+            continue
+        }
+
+        # S(v) = v*(v+1)/2 - sum_{m=2..v} S(floor(v/m))
+        # Work mod MOD throughout
+        let mut result: i64 = 0
+        let v_mod: i64 = v % MOD
+        let vp1_mod: i64 = (v + 1) % MOD
+        # v*(v+1)/2 mod MOD = v_mod * vp1_mod / 2 mod MOD
+        # Since MOD is odd, /2 = * inverse(2) = * (MOD+1)/2
+        let mut tri_mod: i128 = (v_mod as i128) * (vp1_mod as i128) % (MOD as i128)
+        tri_mod = tri_mod * (INV2 as i128) % (MOD as i128)
+        result = tri_mod as i64
+
+        # Group by floor(v/m) values
+        let mut m: i64 = 2
+        while m <= v {
+            let w: i64 = v / m
+            if w == 0 { break }
+            let m_end: i64 = v / w  # largest m with floor(v/m) = w
+
+            # Look up S(w)
+            let sw: i64
+            if w <= LIMIT {
+                sw = pref[w]
+            } else {
+                let wi: i64 = bsearch_desc(keys, nkeys, w)
+                if wi < 0 { return 1 }
+                sw = vals[wi]
+            }
+
+            let count: i64 = m_end - m + 1
+            let count_mod: i64 = count % MOD
+            let term: i128 = (count_mod as i128) * (sw as i128) % (MOD as i128)
+            let mut r128: i128 = (result as i128) - term
+            r128 = r128 % (MOD as i128)
+            if r128 < 0 { r128 = r128 + (MOD as i128) }
+            result = r128 as i64
+
+            m = m_end + 1
+        }
+
+        vals[rev_idx] = result
+    }
+
+    # Step 4: Compute f(N) = sum_{t>=1} (S(floor(N/2^t)) - 1)
+    let mut ans: i64 = 0
+    let mut t: i64 = 1
+    while (N >> t) > 0 {
+        let m_val: i64 = N >> t
+        let sm: i64
+        if m_val <= LIMIT {
+            sm = pref[m_val]
+        } else {
+            let mi: i64 = bsearch_desc(keys, nkeys, m_val)
+            if mi < 0 { return 1 }
+            sm = vals[mi]
+        }
+        ans = (ans + sm - 1 + MOD) % MOD
+        t = t + 1
+    }
+
+    printf("%lld\n", ans)
+
+    free(vals)
+    free(keys)
+    free(pref)
+    return 0
+}

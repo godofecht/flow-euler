@@ -1,0 +1,430 @@
+# Project Euler 636: Restricted Factorisations
+# Count representations of n! as a^1 * b1^2 * b2^2 * c1^3 * c2^3 * c3^3 * d1^4 * d2^4 * d3^4 * d4^4
+# with pairwise distinct bases, order within groups not distinguished.
+# Uses inclusion-exclusion over set partitions of 10 slots, polynomial quotient ring for recurrence.
+# Answer mod 1e9+7.
+
+import euler.nt { isqrt, is_prime, mod_pow }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
+    function printf(fmt: string, ...) -> i32
+}
+
+const MOD: i64 = 1000000007
+const D: i64 = 30  # total weight sum
+
+# Slot weights: 1,2,2,3,3,3,4,4,4,4
+let mut g_weights: ptr<i64> = null
+
+function init_weights() -> void {
+    g_weights = calloc(10, 8)
+    g_weights[0] = 1
+    g_weights[1] = 2; g_weights[2] = 2
+    g_weights[3] = 3; g_weights[4] = 3; g_weights[5] = 3
+    g_weights[6] = 4; g_weights[7] = 4; g_weights[8] = 4; g_weights[9] = 4
+}
+
+# ---- Set partitions of {0..9} ----
+# We generate partitions recursively, compute for each:
+#   key = sorted list of block weight sums
+#   mu  = product over blocks of (-1)^(|B|-1) * (|B|-1)!
+# Then aggregate mu by key.
+
+const MAX_KEYS: i64 = 20000
+const MAX_KEY_LEN: i64 = 10
+
+let mut g_keys: ptr<i64> = null    # MAX_KEYS * MAX_KEY_LEN, sorted weight sums per key
+let mut g_key_lens: ptr<i64> = null  # length of each key
+let mut g_coeffs: ptr<i64> = null   # aggregated mu coefficient per key
+let mut g_nkeys: i64 = 0
+
+function factorial_small(n: i64) -> i64 {
+    let mut r: i64 = 1
+    for i in 1..(n + 1) { r = r * i }
+    return r
+}
+
+# Recursive partition builder
+# Uses global arrays for block state
+let mut g_block_members: ptr<i64> = null  # 10 blocks * 10 members
+let mut g_block_sizes: ptr<i64> = null    # 10 block sizes
+let mut g_n_blocks: i64 = 0
+
+function process_partition() -> void {
+    let mut mu: i64 = 1
+    let sums: ptr<i64> = calloc(10, 8)
+    let mut ns: i64 = 0
+    for b in 0..g_n_blocks {
+        let bs: i64 = g_block_sizes[b]
+        let mut s: i64 = 0
+        for m in 0..bs {
+            s = s + g_weights[g_block_members[b * 10 + m]]
+        }
+        sums[ns] = s
+        ns = ns + 1
+        let sign: i64
+        if (bs - 1) % 2 == 0 { sign = 1 } else { sign = 0 - 1 }
+        mu = mu * sign * factorial_small(bs - 1)
+    }
+    # Sort sums (bubble sort, ns <= 10)
+    for a in 0..ns {
+        for b in 0..ns - a - 1 {
+            if sums[b] > sums[b + 1] {
+                let t: i64 = sums[b]
+                sums[b] = sums[b + 1]
+                sums[b + 1] = t
+            }
+        }
+    }
+    # Find or insert key
+    let mut found: i64 = -1
+    for k in 0..g_nkeys {
+        if g_key_lens[k] == ns {
+            let mut is_match: bool = true
+            for j in 0..ns {
+                if g_keys[k * MAX_KEY_LEN + j] != sums[j] { is_match = false }
+            }
+            if is_match { found = k }
+        }
+    }
+    if found >= 0 {
+        g_coeffs[found] = g_coeffs[found] + mu
+    } else {
+        let k: i64 = g_nkeys
+        g_key_lens[k] = ns
+        for j in 0..ns { g_keys[k * MAX_KEY_LEN + j] = sums[j] }
+        g_coeffs[k] = mu
+        g_nkeys = g_nkeys + 1
+    }
+    free(sums)
+}
+
+function recurse_partition(i: i64) -> void {
+    if i == 10 {
+        process_partition()
+        return
+    }
+    # Place i in each existing block
+    for b in 0..g_n_blocks {
+        g_block_members[b * 10 + g_block_sizes[b]] = i
+        g_block_sizes[b] = g_block_sizes[b] + 1
+        recurse_partition(i + 1)
+        g_block_sizes[b] = g_block_sizes[b] - 1
+    }
+    # Place i in new block
+    g_block_members[g_n_blocks * 10 + 0] = i
+    g_block_sizes[g_n_blocks] = 1
+    g_n_blocks = g_n_blocks + 1
+    recurse_partition(i + 1)
+    g_n_blocks = g_n_blocks - 1
+}
+
+function build_partitions() -> void {
+    g_keys = calloc(MAX_KEYS * MAX_KEY_LEN, 8)
+    g_key_lens = calloc(MAX_KEYS, 8)
+    g_coeffs = calloc(MAX_KEYS, 8)
+    g_nkeys = 0
+
+    g_block_members = calloc(100, 8)
+    g_block_sizes = calloc(10, 8)
+    g_n_blocks = 0
+
+    recurse_partition(0)
+
+    free(g_block_sizes)
+    free(g_block_members)
+}
+
+# ---- Prime sieve ----
+function sieve_primes(n: i64, out: ptr<i64>) -> i64 {
+    let sieve: ptr<i64> = calloc(n + 1, 8)
+    let mut count: i64 = 0
+    for i in 2..(n + 1) {
+        if sieve[i] == 0 {
+            out[count] = i
+            count = count + 1
+            let mut j: i64 = i * i
+            while j <= n { sieve[j] = 1; j = j + i }
+        }
+    }
+    free(sieve)
+    return count
+}
+
+function factorial_prime_exp(n: i64, p: i64) -> i64 {
+    let mut e: i64 = 0
+    let mut m: i64 = n
+    while m > 0 { m = m / p; e = e + m }
+    return e
+}
+
+# ---- DP: coefficients of prod 1/(1-x^w) up to limit ----
+function coeffs_up_to(key: ptr<i64>, klen: i64, limit: i64, dp: ptr<i64>) -> void {
+    for i in 0..(limit + 1) { dp[i] = 0 }
+    dp[0] = 1
+    for ki in 0..klen {
+        let w: i64 = key[ki]
+        for i in w..(limit + 1) {
+            let v: i64 = dp[i] + dp[i - w]
+            if v >= MOD { v = v - MOD }
+            dp[i] = v
+        }
+    }
+}
+
+# ---- Polynomial quotient ring operations (degree D=30) ----
+# Q(x) = prod(1 - x^w), degree 30
+function poly_Q_from_key(key: ptr<i64>, klen: i64, q: ptr<i64>) -> void {
+    for i in 0..(D + 1) { q[i] = 0 }
+    q[0] = 1
+    for ki in 0..klen {
+        let w: i64 = key[ki]
+        let mut i: i64 = D - w
+        while i >= 0 {
+            q[i + w] = q[i + w] - q[i]
+            i = i - 1
+        }
+    }
+}
+
+# Multiply two degree<D polynomials in quotient ring
+# r[i] = -q[i+1] for i=0..D-1, representing x^D = r[0]*x^(D-1) + ... + r[D-1]
+function mul_mod_poly(a: ptr<i64>, b: ptr<i64>, r: ptr<i64>, out: ptr<i64>) -> void {
+    let tmp: ptr<i64> = calloc(2 * D - 1, 8)
+    for i in 0..(2 * D - 1) { tmp[i] = 0 }
+
+    for i in 0..D {
+        let ai: i64 = a[i]
+        if ai != 0 {
+            for j in 0..D {
+                let prod: i64 = (ai * b[j]) % MOD
+                tmp[i + j] = (tmp[i + j] + prod) % MOD
+            }
+        }
+    }
+
+    # Reduction from degree 2D-2 down to D
+    let mut k: i64 = 2 * D - 2
+    while k >= D {
+        let coef: i64 = tmp[k]
+        if coef != 0 {
+            for i in 0..D {
+                let idx: i64 = k - i - 1
+                if idx >= 0 {
+                    tmp[idx] = (tmp[idx] + coef * r[i]) % MOD
+                }
+            }
+        }
+        k = k - 1
+    }
+
+    for i in 0..D { out[i] = tmp[i] }
+    free(tmp)
+}
+
+function precompute_x_powers(r: ptr<i64>, maxbit: i64, pow_polys: ptr<i64>) -> void {
+    # pow_polys: maxbit * D
+    for i in 0..(maxbit * D) { pow_polys[i] = 0 }
+    pow_polys[1] = 1  # x^1
+    for b in 1..maxbit {
+        mul_mod_poly(
+            pow_polys + (b - 1) * D,
+            pow_polys + (b - 1) * D,
+            r,
+            pow_polys + b * D
+        )
+    }
+}
+
+function poly_x_n(pow_polys: ptr<i64>, n: i64, r: ptr<i64>, out: ptr<i64>) -> void {
+    for i in 0..D { out[i] = 0 }
+    out[0] = 1  # x^0
+    let mut bit: i64 = 0
+    let mut nn: i64 = n
+    let tmp: ptr<i64> = calloc(D, 8)
+    while nn > 0 {
+        if (nn & 1) == 1 {
+            # out = mul_mod_poly(out, pow_polys[bit])
+            for i in 0..D { tmp[i] = out[i] }
+            mul_mod_poly(tmp, pow_polys + bit * D, r, out)
+        }
+        nn = nn >> 1
+        bit = bit + 1
+    }
+    free(tmp)
+}
+
+function term_from_poly(init: ptr<i64>, poly: ptr<i64>) -> i64 {
+    let mut s: i64 = 0
+    for i in 0..D {
+        s = (s + poly[i] * init[i]) % MOD
+    }
+    return s
+}
+
+# ---- Main computation ----
+function compute_F(n: i64, cutoff: i64) -> i64 {
+    # Sieve primes up to n
+    let primes: ptr<i64> = calloc(n + 1, 8)
+    let nprimes: i64 = sieve_primes(n, primes)
+
+    # Compute exponent frequencies
+    # Group primes by exponent
+    let max_exp: i64 = factorial_prime_exp(n, primes[0])
+    let exps: ptr<i64> = calloc(nprimes, 8)
+    let cnts: ptr<i64> = calloc(nprimes, 8)
+    let mut n_exps: i64 = 0
+
+    for i in 0..nprimes {
+        let e: i64 = factorial_prime_exp(n, primes[i])
+        # Find or insert in exps
+        let mut found: i64 = -1
+        for j in 0..n_exps {
+            if exps[j] == e { found = j }
+        }
+        if found >= 0 {
+            cnts[found] = cnts[found] + 1
+        } else {
+            exps[n_exps] = e
+            cnts[n_exps] = 1
+            n_exps = n_exps + 1
+            if e > max_exp { max_exp = e }
+        }
+    }
+
+    let use_cutoff: i64 = cutoff
+    if max_exp < use_cutoff { use_cutoff = max_exp }
+
+    # inv288 = mod_pow(288, MOD-2, MOD)
+    let inv288: i64 = mod_pow(288, MOD - 2, MOD)
+
+    # Filter keys: if exponent 1 exists, only keep keys containing 1
+    let has_exp1: bool = false
+    for i in 0..n_exps {
+        if exps[i] == 1 { has_exp1 = true }
+    }
+
+    let dp: ptr<i64> = calloc(use_cutoff + 1, 8)
+    let q: ptr<i64> = calloc(D + 1, 8)
+    let r: ptr<i64> = calloc(D, 8)
+    let init: ptr<i64> = calloc(D, 8)
+    let pow_polys: ptr<i64> = calloc(20 * D, 8)
+    let large_vals: ptr<i64> = calloc(n_exps, 8)
+    let poly_res: ptr<i64> = calloc(D, 8)
+
+    let mut total: i64 = 0
+    let maxbit: i64 = 20
+
+    for k in 0..g_nkeys {
+        let klen: i64 = g_key_lens[k]
+        let key: ptr<i64> = g_keys + k * MAX_KEY_LEN
+
+        # Check if key contains 1 when needed
+        if has_exp1 {
+            let mut has1: bool = false
+            for j in 0..klen {
+                if key[j] == 1 { has1 = true }
+            }
+            if not has1 { continue }
+        }
+
+        # DP up to cutoff
+        coeffs_up_to(key, klen, use_cutoff, dp)
+
+        # Check if any large exponents need recurrence
+        let has_large: bool = false
+        for i in 0..n_exps {
+            if exps[i] > use_cutoff { has_large = true }
+        }
+
+        if has_large {
+            poly_Q_from_key(key, klen, q)
+            for i in 0..D {
+                let v: i64 = q[i + 1]
+                if v < 0 { r[i] = (v % MOD + MOD) % MOD } else { r[i] = v % MOD }
+            }
+            precompute_x_powers(r, maxbit, pow_polys)
+
+            # init = dp[0..D-1]
+            for i in 0..D {
+                if i <= use_cutoff { init[i] = dp[i] } else { init[i] = 0 }
+            }
+
+            for i in 0..n_exps {
+                if exps[i] > use_cutoff {
+                    poly_x_n(pow_polys, exps[i], r, poly_res)
+                    large_vals[i] = term_from_poly(init, poly_res)
+                }
+            }
+        }
+
+        let mut prod: i64 = 1
+        for i in 0..n_exps {
+            let val: i64
+            if exps[i] <= use_cutoff {
+                val = dp[exps[i]]
+            } else {
+                val = large_vals[i]
+            }
+            if val == 0 { prod = 0; break }
+            prod = (prod * mod_pow(val, cnts[i], MOD)) % MOD
+        }
+
+        if prod != 0 {
+            let c: i64 = g_coeffs[k] % MOD
+            if c < 0 { c = c + MOD }
+            total = (total + c * prod) % MOD
+        }
+    }
+
+    total = (total * inv288) % MOD
+
+    free(poly_res)
+    free(large_vals)
+    free(pow_polys)
+    free(init)
+    free(r)
+    free(q)
+    free(dp)
+    free(cnts)
+    free(exps)
+    free(primes)
+    return total
+}
+
+function main() -> i32 {
+    init_weights()
+    build_partitions()
+
+    # Tests
+    let t1: i64 = compute_F(25, 2000)
+    printf("F(25) = %lld (expected 4933)\n", t1)
+
+    let t2: i64 = compute_F(100, 5000)
+    printf("F(100) = %lld (expected 693952493)\n", t2)
+
+    let t3: i64 = compute_F(1000, 20000)
+    printf("F(1000) = %lld (expected 6364496)\n", t3)
+
+    # Debug: print number of keys
+    printf("nkeys = %lld\n", g_nkeys)
+    for k in 0..g_nkeys {
+        printf("key %lld: len=%lld coeff=%lld vals=", k, g_key_lens[k], g_coeffs[k])
+        for j in 0..g_key_lens[k] {
+            printf("%lld ", g_keys[k * MAX_KEY_LEN + j])
+        }
+        printf("\n")
+    }
+
+    let ans: i64 = compute_F(1000000, 13000)
+    printf("F(1000000) = %lld\n", ans)
+
+    free(g_coeffs)
+    free(g_key_lens)
+    free(g_keys)
+    free(g_weights)
+    return 0
+}

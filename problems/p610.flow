@@ -1,0 +1,11 @@
+# Project Euler 610
+# Roman Numerals II: expected value of minimal Roman process.
+
+extern {
+    function pe610_answer() -> f64
+}
+
+function main() -> i32 {
+    printf("%.8f\n", pe610_answer())
+    return 0
+}

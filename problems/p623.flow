@@ -1,0 +1,71 @@
+# Project Euler 623
+# Lambda-term counts by size up to 2000, mod 1e9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const LIMIT: i64 = 2000
+
+function main() -> i32 {
+    let next_layer: ptr<i64> = calloc(LIMIT + 1, 8)
+    if next_layer == null { return 1 }
+    let dmax: i64 = (LIMIT - 1) / 5
+    let mut depth: i64 = dmax
+    while depth >= 0 {
+        let max_size: i64 = LIMIT - 5 * depth
+        let current: ptr<i64> = calloc(max_size + 1, 8)
+        let convolution: ptr<i64> = calloc(max_size + 1, 8)
+        if current == null || convolution == null { return 1 }
+        let max_convolution_index: i64 = max_size - 2
+        let mut size: i64 = 1
+        while size <= max_size {
+            let mut value: i64 = 0
+            if size >= 2 { value = convolution[size - 2] }
+            if size == 1 { value = value + depth }
+            if size >= 5 {
+                let shifted: i64 = size - 5
+                if shifted <= LIMIT {
+                    value = value + next_layer[shifted]
+                }
+            }
+            value = value % MOD
+            current[size] = value
+            if value != 0 {
+                let double_value: i64 = (2 * value) % MOD
+                let upper: i64 = size - 1
+                if max_convolution_index - size < upper {
+                    upper = max_convolution_index - size
+                }
+                let mut other_size: i64 = 1
+                while other_size <= upper {
+                    let index: i64 = size + other_size
+                    let t: i128 = (convolution[index] as i128) + (double_value as i128) * (current[other_size] as i128)
+                    convolution[index] = (t % (MOD as i128)) as i64
+                    other_size = other_size + 1
+                }
+                let diagonal: i64 = 2 * size
+                if diagonal <= max_convolution_index {
+                    let t2: i128 = (convolution[diagonal] as i128) + (value as i128) * (value as i128)
+                    convolution[diagonal] = (t2 % (MOD as i128)) as i64
+                }
+            }
+            size = size + 1
+        }
+        free(next_layer)
+        next_layer = current
+        free(convolution)
+        depth = depth - 1
+    }
+    let mut cumulative: i64 = 0
+    let mut size: i64 = 0
+    while size <= LIMIT {
+        cumulative = (cumulative + next_layer[size]) % MOD
+        size = size + 1
+    }
+    free(next_layer)
+    printf("%lld\n", cumulative)
+    return 0
+}

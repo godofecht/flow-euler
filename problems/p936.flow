@@ -1,0 +1,200 @@
+# Project Euler 936
+# Peerless Trees — S(50) via planted OGFs + dissymmetry.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function convolve(a: ptr<i64>, b: ptr<i64>, res: ptr<i64>, max_n: i64) -> void {
+    let mut i: i64 = 0
+    while i <= max_n {
+        res[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i <= max_n {
+        if a[i] != 0 {
+            let mut j: i64 = 0
+            while j <= max_n - i {
+                if b[j] != 0 {
+                    res[i + j] = res[i + j] + a[i] * b[j]
+                }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+}
+
+function multiset_u(A: ptr<i64>, m: i64, max_d: i64, out: ptr<i64>) -> void {
+    let cols: i64 = max_d + 1
+    let mut E: ptr<i64> = calloc((m + 1) * cols, 8)
+    E[0] = 1
+    let mut d: i64 = 1
+    while d <= max_d {
+        let mut max_nn: i64 = m
+        if d < max_nn { max_nn = d }
+        let mut n: i64 = 1
+        while n <= max_nn {
+            let mut acc: i64 = 0
+            let mut k: i64 = 1
+            while k <= n {
+                let dk: i64 = d / k
+                let Enk: i64 = (n - k) * cols
+                let mut j: i64 = 1
+                while j <= dk {
+                    let aj: i64 = A[j]
+                    if aj != 0 {
+                        acc = acc + aj * E[Enk + (d - k * j)]
+                    }
+                    j = j + 1
+                }
+                k = k + 1
+            }
+            E[n * cols + d] = acc / n
+            n = n + 1
+        }
+        d = d + 1
+    }
+    let mut t: i64 = 0
+    while t <= max_d {
+        out[t] = E[m * cols + t]
+        t = t + 1
+    }
+    free(E)
+}
+
+function main() -> i32 {
+    let max_n: i64 = 50
+    let max_d: i64 = max_n - 1
+    let gcols: i64 = max_n + 1
+    let mut g: ptr<i64> = calloc(max_n * gcols, 8)
+    let mut total: ptr<i64> = calloc(max_n + 1, 8)
+    let stride_tn: i64 = (max_n + 1) * (max_d + 1)
+    let stride_n: i64 = max_d + 1
+    let mut eflat: ptr<i64> = calloc(max_n * stride_tn, 8)
+    let mut r: i64 = 0
+    while r < max_n {
+        eflat[r * stride_tn] = 1
+        r = r + 1
+    }
+    g[0 * gcols + 1] = 1
+    total[1] = 1
+    let mut s: i64 = 2
+    while s <= max_n {
+        let d: i64 = s - 1
+        let mut t: i64 = 0
+        while t < max_n {
+            let mut max_children: i64 = t
+            if d < max_children { max_children = d }
+            let mut n: i64 = 1
+            while n <= max_children {
+                let mut acc: i64 = 0
+                let mut k: i64 = 1
+                while k <= n {
+                    let dk: i64 = d / k
+                    let base: i64 = t * stride_tn + (n - k) * stride_n
+                    let mut j: i64 = 1
+                    while j <= dk {
+                        let aj: i64 = total[j] - g[t * gcols + j]
+                        if aj != 0 {
+                            acc = acc + aj * eflat[base + (d - k * j)]
+                        }
+                        j = j + 1
+                    }
+                    k = k + 1
+                }
+                eflat[t * stride_tn + n * stride_n + d] = acc / n
+                n = n + 1
+            }
+            t = t + 1
+        }
+        let mut tot_s: i64 = 0
+        let mut lim: i64 = max_n
+        if d + 1 < lim { lim = d + 1 }
+        t = 1
+        while t < lim {
+            let val: i64 = eflat[t * stride_tn + t * stride_n + d]
+            g[t * gcols + s] = val
+            tot_s = tot_s + val
+            t = t + 1
+        }
+        total[s] = tot_s
+        s = s + 1
+    }
+    let mut V: ptr<i64> = calloc(max_n + 1, 8)
+    let mut m: i64 = 0
+    while m < max_n {
+        let banned: i64 = m - 1
+        let mut A: ptr<i64> = calloc(max_d + 1, 8)
+        let mut sz: i64 = 1
+        while sz <= max_d {
+            let mut v: i64 = total[sz]
+            if banned >= 0 { v = v - g[banned * gcols + sz] }
+            A[sz] = v
+            sz = sz + 1
+        }
+        let mut coeff: ptr<i64> = calloc(max_d + 1, 8)
+        multiset_u(A, m, max_d, coeff)
+        let mut child_size: i64 = 0
+        while child_size <= max_d {
+            let c: i64 = coeff[child_size]
+            if c != 0 {
+                let nn: i64 = child_size + 1
+                if nn <= max_n { V[nn] = V[nn] + c }
+            }
+            child_size = child_size + 1
+        }
+        free(A)
+        free(coeff)
+        m = m + 1
+    }
+    let mut TT: ptr<i64> = calloc(max_n + 1, 8)
+    convolve(total, total, TT, max_n)
+    let mut sum_sq: ptr<i64> = calloc(max_n + 1, 8)
+    let mut tmp: ptr<i64> = calloc(max_n + 1, 8)
+    r = 0
+    while r < max_n {
+        # convolve row r of g with itself
+        let grow: i64 = r * gcols
+        let mut i: i64 = 0
+        while i <= max_n {
+            tmp[i] = 0
+            i = i + 1
+        }
+        i = 0
+        while i <= max_n {
+            if g[grow + i] != 0 {
+                let mut j: i64 = 0
+                while j <= max_n - i {
+                    if g[grow + j] != 0 {
+                        tmp[i + j] = tmp[i + j] + g[grow + i] * g[grow + j]
+                    }
+                    j = j + 1
+                }
+            }
+            i = i + 1
+        }
+        i = 0
+        while i <= max_n {
+            sum_sq[i] = sum_sq[i] + tmp[i]
+            i = i + 1
+        }
+        r = r + 1
+    }
+    let mut Earr: ptr<i64> = calloc(max_n + 1, 8)
+    let mut i: i64 = 0
+    while i <= max_n {
+        Earr[i] = (TT[i] - sum_sq[i]) / 2
+        i = i + 1
+    }
+    let mut Sans: i64 = 0
+    let mut n: i64 = 3
+    while n <= max_n {
+        Sans = Sans + V[n] - Earr[n]
+        n = n + 1
+    }
+    printf("%lld\n", Sans)
+    return 0
+}

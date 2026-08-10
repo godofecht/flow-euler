@@ -1,0 +1,195 @@
+# Project Euler 611: Hallway of Square Steps
+# Count n <= N where #representations n = a^2+b^2 (0<a<b) is odd.
+# Uses Lucy sieve for pi(x) and chi_sum(x).
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 1000000000000  # 10^12
+
+function main() -> i32 {
+    let root: i64 = isqrt(N)
+
+    # Build SPF sieve up to root
+    let spf: ptr<i64> = calloc(root + 1, 8)
+    for i in 0..(root + 1) { spf[i] = i }
+    for i in 2..(isqrt(root) + 1) {
+        if spf[i] == i {
+            let mut j: i64 = i * i
+            while j <= root {
+                if spf[j] == j { spf[j] = i }
+                j = j + i
+            }
+        }
+    }
+
+    # Build pi1_small prefix: pi1[x] = count of primes <= x with p ≡ 1 (mod 4)
+    let pi1_small: ptr<i64> = calloc(root + 1, 8)
+    let mut c: i64 = 0
+    for x in 2..(root + 1) {
+        if spf[x] == x && (x & 3) == 1 { c = c + 1 }
+        pi1_small[x] = c
+    }
+
+    # Build Lucy sieve tables
+    # vals: descending distinct floor(N/i)
+    let vals: ptr<i64> = calloc(2 * root + 10, 8)
+    let mut m: i64 = 0
+    let mut i_val: i64 = 1
+    while i_val <= N {
+        let q: i64 = N / i_val
+        vals[m] = q
+        m = m + 1
+        i_val = N / q + 1
+    }
+
+    # idx_big: for v > root, idx_big[N/v] = index in vals
+    let idx_big: ptr<i64> = calloc(root + 1, 8)
+    for idx in 0..m {
+        let v: i64 = vals[idx]
+        if v > root {
+            idx_big[N / v] = idx
+        }
+    }
+
+    # Initialize pi and schi
+    let pi_tab: ptr<i64> = calloc(m, 8)
+    let schi_tab: ptr<i64> = calloc(m, 8)
+    for j in 0..m {
+        let v: i64 = vals[j]
+        if v >= 2 { pi_tab[j] = v - 1 } else { pi_tab[j] = 0 }
+        # S_int(v) = count(1 mod4) - count(3 mod4) for n=1..v
+        # = ((v+3)/4) - ((v+1)/4)
+        let s_int: i64 = (v + 3) / 4 - (v + 1) / 4
+        schi_tab[j] = s_int - 1  # exclude n=1
+    }
+
+    # Lucy sieve: for each prime p up to sqrt(N)
+    for p in 2..(root + 1) {
+        if spf[p] != p { continue }
+        let p2: i64 = p * p
+        if p2 > N { break }
+
+        # k = upper_bound(p2) = number of vals >= p2
+        # vals is descending, find first index where vals[idx] < p2
+        let mut k: i64 = 0
+        let mut lo_k: i64 = 0
+        let mut hi_k: i64 = m
+        while lo_k < hi_k {
+            let mid: i64 = (lo_k + hi_k) / 2
+            if vals[mid] >= p2 { lo_k = mid + 1 } else { hi_k = mid }
+        }
+        k = lo_k
+        if k == 0 { continue }
+
+        # base values at p-1
+        let base_idx: i64 = m - (p - 1)
+        let base_pi: i64 = pi_tab[base_idx]
+        let base_s: i64 = schi_tab[base_idx]
+
+        # chi(p)
+        let chi_p: i64
+        if p == 2 { chi_p = 0 } else {
+            if (p & 3) == 1 { chi_p = 1 } else { chi_p = -1 }
+        }
+
+        for j in 0..k {
+            let v: i64 = vals[j]
+            let vp: i64 = v / p
+            let idx_vp: i64
+            if vp <= root {
+                idx_vp = m - vp
+            } else {
+                idx_vp = idx_big[N / vp]
+            }
+
+            pi_tab[j] = pi_tab[j] - (pi_tab[idx_vp] - base_pi)
+            if chi_p != 0 {
+                schi_tab[j] = schi_tab[j] - chi_p * (schi_tab[idx_vp] - base_s)
+            }
+        }
+    }
+
+    # pi1_query function (inline)
+    # For x <= root: pi1_small[x]
+    # For x > root: (pi_tab[idx] - 1 + schi_tab[idx]) / 2
+
+    # Enumerate odd u from 1 to root
+    let mut total: i64 = 0
+
+    # Temp buffer for excluded primes
+    let excluded: ptr<i64> = calloc(20, 8)
+
+    for u in 1..(root + 1) {
+        if u % 2 == 0 { continue }
+
+        let u2: i64 = u * u
+        let max2: i64 = N / u2
+
+        # Factor u using SPF, compute parity and excluded primes
+        let mut parity: i64 = 0
+        let mut n_excl: i64 = 0
+        let mut x: i64 = u
+        while x > 1 {
+            let p: i64 = spf[x]
+            let mut odd_exp: i64 = 0
+            while x % p == 0 {
+                x = x / p
+                odd_exp = odd_exp ^ 1
+            }
+            if odd_exp == 1 && (p & 3) == 1 {
+                parity = parity ^ 1
+                excluded[n_excl] = p
+                n_excl = n_excl + 1
+            }
+        }
+
+        # Case A: parity is odd -> add bit_length(max2)
+        if parity == 1 {
+            # Count k >= 0 with 2^k <= max2
+            let mut bl: i64 = 0
+            let mut tmp2: i64 = max2
+            while tmp2 > 0 { bl = bl + 1; tmp2 = tmp2 >> 1 }
+            total = total + bl
+        }
+
+        # Case B: n = 2^k * p * u^2, p ≡ 1 (mod4), p not in excluded
+        let mut xv: i64 = max2
+        while xv >= 5 {
+            # pi1_query(xv)
+            let cnt: i64
+            if xv <= root {
+                cnt = pi1_small[xv]
+            } else {
+                let idx: i64 = idx_big[N / xv]
+                let pi_x: i64 = pi_tab[idx]
+                let s_x: i64 = schi_tab[idx]
+                cnt = (pi_x - 1 + s_x) / 2
+            }
+
+            # Subtract excluded primes <= xv
+            let mut ex: i64 = 0
+            for ei in 0..n_excl {
+                if excluded[ei] <= xv { ex = ex + 1 }
+            }
+
+            total = total + cnt - ex
+            xv = xv / 2
+        }
+    }
+
+    printf("%lld\n", total)
+
+    free(excluded)
+    free(schi_tab)
+    free(pi_tab)
+    free(idx_big)
+    free(vals)
+    free(pi1_small)
+    free(spf)
+    return 0
+}

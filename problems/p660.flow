@@ -1,0 +1,424 @@
+# Project Euler 660: Pandigital triangles with a 120 degree angle
+# L^2 = x^2 + y^2 + x*y, enumerate primitive 120-degree triangles
+# and check pandigital property for bases 9..18.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function mygcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y > 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function egcd(a: i64, b: i64) -> i64 {
+    # Returns modular inverse of a mod b (assumes gcd=1)
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    let mut aa: i64 = a
+    let mut bb: i64 = b
+    while bb > 0 {
+        let q: i64 = aa / bb
+        let t: i64 = aa - q * bb
+        aa = bb
+        bb = t
+        let t2: i64 = x0 - q * x1
+        x0 = x1
+        x1 = t2
+    }
+    let mut r: i64 = x0 % b
+    if r < 0 { r = r + b }
+    return r
+}
+
+function ceil_div(a: i64, b: i64) -> i64 {
+    return (a + b - 1) / b
+}
+
+# Digit mask tables per base
+# t1[d], t2[v], t3[v], t3z[v]
+# We store per-base in arrays indexed by base (9..18)
+
+const MAX_BASE: i64 = 19
+const MAX_B3: i64 = 5833  # 18^3 = 5832
+
+let mut g_t1: ptr<i64> = null  # [MAX_BASE * MAX_BASE]
+let mut g_t2: ptr<i64> = null  # [MAX_BASE * MAX_BASE * MAX_BASE]
+let mut g_t3: ptr<i64> = null  # [MAX_BASE * MAX_B3]
+let mut g_t3z: ptr<i64> = null  # [MAX_BASE * MAX_B3]
+
+function init_tables() -> void {
+    g_t1 = calloc(MAX_BASE * MAX_BASE, 8)
+    g_t2 = calloc(MAX_BASE * MAX_BASE * MAX_BASE, 8)
+    g_t3 = calloc(MAX_BASE * MAX_B3, 8)
+    g_t3z = calloc(MAX_BASE * MAX_B3, 8)
+
+    for base in 9..MAX_BASE {
+        let b2: i64 = base * base
+        let b3: i64 = b2 * base
+
+        # t1
+        for d in 0..base {
+            g_t1[base * MAX_BASE + d] = 1 << d
+        }
+
+        # t2
+        for v in 0..(base * base) {
+            g_t2[base * MAX_BASE * MAX_BASE + v] = -1
+        }
+        for v in base..(base * base) {
+            let d0: i64 = v / base
+            let d1: i64 = v - d0 * base
+            if d0 != d1 {
+                g_t2[base * MAX_BASE * MAX_BASE + v] = (1 << d0) | (1 << d1)
+            }
+        }
+
+        # t3
+        for v in 0..b3 {
+            g_t3[base * MAX_B3 + v] = -1
+        }
+        for v in b2..b3 {
+            let d0: i64 = v / b2
+            let r: i64 = v - d0 * b2
+            let d1: i64 = r / base
+            let d2: i64 = r - d1 * base
+            if d0 != d1 && d0 != d2 && d1 != d2 {
+                g_t3[base * MAX_B3 + v] = (1 << d0) | (1 << d1) | (1 << d2)
+            }
+        }
+
+        # t3z
+        for v in 0..b3 {
+            g_t3z[base * MAX_B3 + v] = -1
+        }
+        for v in 0..b3 {
+            let d0: i64 = v / b2
+            let r: i64 = v - d0 * b2
+            let d1: i64 = r / base
+            let d2: i64 = r - d1 * base
+            if d0 != d1 && d0 != d2 && d1 != d2 {
+                g_t3z[base * MAX_B3 + v] = (1 << d0) | (1 << d1) | (1 << d2)
+            }
+        }
+    }
+}
+
+function mask_fixed_len(x: i64, d: i64, base: i64) -> i64 {
+    let b2: i64 = base * base
+    let b3: i64 = b2 * base
+
+    if d == 1 { return g_t1[base * MAX_BASE + x] }
+    if d == 2 { return g_t2[base * MAX_BASE * MAX_BASE + x] }
+    if d == 3 { return g_t3[base * MAX_B3 + x] }
+
+    let hi: i64 = x / b3
+    let lo: i64 = x - hi * b3
+
+    let mh: i64
+    let ml: i64
+
+    if d == 4 {
+        mh = g_t1[base * MAX_BASE + hi]
+        ml = g_t3z[base * MAX_B3 + lo]
+    } else { if d == 5 {
+        mh = g_t2[base * MAX_BASE * MAX_BASE + hi]
+        ml = g_t3z[base * MAX_B3 + lo]
+    } else {
+        # d == 6
+        mh = g_t3[base * MAX_B3 + hi]
+        ml = g_t3z[base * MAX_B3 + lo]
+    } }
+
+    if mh == -1 || ml == -1 { return -1 }
+    if (mh & ml) != 0 { return -1 }
+    return mh | ml
+}
+
+function main() -> i32 {
+    init_tables()
+
+    # Per-base settings
+    let limit_arr: ptr<i64> = calloc(MAX_BASE, 8)
+    let powb: ptr<i64> = calloc(MAX_BASE * 8, 8)  # [base * 8 + i]
+    let full_mask: ptr<i64> = calloc(MAX_BASE, 8)
+    let modM: ptr<i64> = calloc(MAX_BASE, 8)
+    let target_arr: ptr<i64> = calloc(MAX_BASE, 8)
+
+    for base in 9..MAX_BASE {
+        let D: i64 = (base + 2) / 3
+        let mut lim: i64 = 1
+        for _ in 0..D { lim = lim * base }
+        limit_arr[base] = lim - 1
+
+        powb[base * 8 + 0] = 1
+        for i in 0..7 { powb[base * 8 + i + 1] = powb[base * 8 + i] * base }
+
+        full_mask[base] = (1 << base) - 1
+        modM[base] = base - 1
+        if base % 2 == 0 {
+            target_arr[base] = 0
+        } else {
+            target_arr[base] = (base - 1) / 2
+        }
+    }
+
+    let sums: ptr<i64> = calloc(MAX_BASE, 8)
+
+    let max_a: i64 = limit_arr[18]
+    let max_m: i64 = isqrt(max_a) + 2
+
+    for m in 2..max_m {
+        let disc: i64 = 4 * max_a - 3 * m * m
+        if disc <= 0 { continue }
+        let mut nmax: i64 = (-m + isqrt(disc)) / 2
+        if nmax >= m { nmax = m - 1 }
+
+        let mm: i64 = m * m
+
+        for n in 1..(nmax + 1) {
+            if (m - n) % 3 == 0 { continue }
+            if mygcd(m, n) != 1 { continue }
+
+            let a: i64 = mm + m * n + n * n
+            if a > max_a { break }
+            let b: i64 = 2 * m * n + n * n
+            let c: i64 = mm - n * n
+
+            let start_base: i64
+            if a <= limit_arr[15] {
+                start_base = 9
+            } else { if a <= limit_arr[16] {
+                start_base = 16
+            } else { if a <= limit_arr[17] {
+                start_base = 17
+            } else {
+                start_base = 18
+            } } }
+
+            # Base 18 fast path
+            let s18: i64 = (a + b + c) % modM[18]
+            let step18: i64
+            if s18 == 0 { step18 = 1 } else { step18 = 17 }
+
+            let p18_5: i64 = powb[18 * 8 + 5]
+            let p18_6: i64 = powb[18 * 8 + 6]
+            let b3_18: i64 = 5832
+            let full18: i64 = full_mask[18]
+
+            let mut L: i64 = ceil_div(p18_5, a)
+            let mut R: i64 = (p18_6 - 1) / a
+            let L2: i64 = ceil_div(p18_5, b)
+            let R2: i64 = (p18_6 - 1) / b
+            if L2 > L { L = L2 }
+            if R2 < R { R = R2 }
+            if L <= R {
+                let L3: i64 = ceil_div(p18_5, c)
+                let R3: i64 = (p18_6 - 1) / c
+                if L3 > L { L = L3 }
+                if R3 < R { R = R3 }
+                if L <= R {
+                    if L < 1 { L = 1 }
+                    let mut k: i64
+                    let mut A: i64
+                    let mut B: i64
+                    let mut C: i64
+                    let incA: i64
+                    let incB: i64
+                    let incC: i64
+
+                    if step18 == 1 {
+                        k = L
+                        A = a * k
+                        B = b * k
+                        C = c * k
+                        incA = a
+                        incB = b
+                        incC = c
+                    } else {
+                        k = ((L + 16) / 17) * 17
+                        A = a * k
+                        B = b * k
+                        C = c * k
+                        incA = a * 17
+                        incB = b * 17
+                        incC = c * 17
+                    }
+
+                    while k <= R {
+                        let hi_a: i64 = A / b3_18
+                        let lo_a: i64 = A - hi_a * b3_18
+                        let ma: i64 = g_t3[18 * MAX_B3 + hi_a]
+                        if ma != -1 {
+                            let ml_a: i64 = g_t3z[18 * MAX_B3 + lo_a]
+                            if ml_a != -1 && (ma & ml_a) == 0 {
+                                let ma2: i64 = ma | ml_a
+
+                                let hi_b: i64 = B / b3_18
+                                let lo_b: i64 = B - hi_b * b3_18
+                                let mb: i64 = g_t3[18 * MAX_B3 + hi_b]
+                                if mb != -1 {
+                                    let ml_b: i64 = g_t3z[18 * MAX_B3 + lo_b]
+                                    if ml_b != -1 && (mb & ml_b) == 0 {
+                                        let mb2: i64 = mb | ml_b
+
+                                        if (ma2 & mb2) == 0 {
+                                            let hi_c: i64 = C / b3_18
+                                            let lo_c: i64 = C - hi_c * b3_18
+                                            let mc: i64 = g_t3[18 * MAX_B3 + hi_c]
+                                            if mc != -1 {
+                                                let ml_c: i64 = g_t3z[18 * MAX_B3 + lo_c]
+                                                if ml_c != -1 && (mc & ml_c) == 0 {
+                                                    let mc2: i64 = mc | ml_c
+                                                    if (ma2 & mc2) == 0 && (mb2 & mc2) == 0 && (ma2 | mb2 | mc2) == full18 {
+                                                        sums[18] = sums[18] + A
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        k = k + step18
+                        A = A + incA
+                        B = B + incB
+                        C = C + incC
+                    }
+                }
+            }
+
+            # Other bases
+            for base in start_base..18 {
+                if a > limit_arr[base] { continue }
+
+                let p_base: ptr<i64> = powb + base * 8
+                let fm: i64 = full_mask[base]
+                let M: i64 = modM[base]
+                let targ: i64 = target_arr[base]
+
+                let s: i64 = (a + b + c) % M
+
+                let step: i64
+                let residue: i64
+
+                if base % 2 == 0 {
+                    if s == 0 {
+                        step = 1
+                        residue = 0
+                    } else {
+                        let g: i64 = mygcd(s, M)
+                        step = M / g
+                        residue = 0
+                    }
+                } else {
+                    if s == 0 {
+                        if targ != 0 { continue }
+                        step = 1
+                        residue = 0
+                    } else {
+                        let g: i64 = mygcd(s, M)
+                        if targ % g != 0 { continue }
+                        step = M / g
+                        let inv: i64 = egcd((s / g) % step, step)
+                        residue = ((targ / g) * inv) % step
+                    }
+                }
+
+                # Enumerate digit length combos
+                let D: i64 = (base + 2) / 3
+                for da in 1..(D + 1) {
+                    for db in 1..(D + 1) {
+                        let dc: i64 = base - da - db
+                        if dc < 1 || dc > D { continue }
+
+                        let mut L2: i64 = ceil_div(p_base[da - 1], a)
+                        let mut R2: i64 = (p_base[da] - 1) / a
+                        if L2 > R2 { continue }
+
+                        let L2b: i64 = ceil_div(p_base[db - 1], b)
+                        let R2b: i64 = (p_base[db] - 1) / b
+                        if L2b > R2b { continue }
+                        if L2b > L2 { L2 = L2b }
+                        if R2b < R2 { R2 = R2b }
+                        if L2 > R2 { continue }
+
+                        let L3: i64 = ceil_div(p_base[dc - 1], c)
+                        let R3: i64 = (p_base[dc] - 1) / c
+                        if L3 > R3 { continue }
+                        if L3 > L2 { L2 = L3 }
+                        if R3 < R2 { R2 = R3 }
+                        if L2 > R2 { continue }
+                        if L2 < 1 { L2 = 1 }
+
+                        let mut k: i64
+                        if step == 1 {
+                            k = L2
+                        } else {
+                            let rem: i64 = L2 % step
+                            if rem <= residue {
+                                k = L2 + (residue - rem)
+                            } else {
+                                k = L2 + (step - (rem - residue))
+                            }
+                        }
+
+                        let mut A: i64 = a * k
+                        let mut B: i64 = b * k
+                        let mut C: i64 = c * k
+                        let incA: i64 = a * step
+                        let incB: i64 = b * step
+                        let incC: i64 = c * step
+
+                        while k <= R2 {
+                            let ma: i64 = mask_fixed_len(A, da, base)
+                            if ma != -1 {
+                                let mb: i64 = mask_fixed_len(B, db, base)
+                                if mb != -1 && (ma & mb) == 0 {
+                                    let mc: i64 = mask_fixed_len(C, dc, base)
+                                    if mc != -1 && (ma & mc) == 0 && (mb & mc) == 0 && (ma | mb | mc) == fm {
+                                        sums[base] = sums[base] + A
+                                    }
+                                }
+                            }
+
+                            k = k + step
+                            A = A + incA
+                            B = B + incB
+                            C = C + incC
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut ans: i64 = 0
+    for base in 9..MAX_BASE {
+        ans = ans + sums[base]
+    }
+
+    printf("%lld\n", ans)
+
+    free(sums)
+    free(target_arr)
+    free(modM)
+    free(full_mask)
+    free(powb)
+    free(limit_arr)
+    free(g_t3z)
+    free(g_t3)
+    free(g_t2)
+    free(g_t1)
+    return 0
+}

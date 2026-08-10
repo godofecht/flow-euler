@@ -1,0 +1,181 @@
+# Project Euler 606: Gozinta Chains II
+# S(N) = sum of k <= N with g(k)=252, where g(k)=252 iff k=(p*q)^3, p<q prime.
+# For N=10^36, M=cbrt(N)=10^12. Compute S mod 10^9.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+
+function icbrt(n: i64) -> i64 {
+    if n < 2 { return n }
+    let mut hi: i64 = 1
+    let mut bits: i64 = 0
+    let mut tmp: i64 = n
+    while tmp > 0 { bits = bits + 1; tmp = tmp >> 1 }
+    hi = 1 << ((bits + 2) / 3)
+    let mut lo: i64 = hi >> 1
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) >> 1
+        let m3: i64 = mid * mid * mid
+        if m3 <= n { lo = mid } else { hi = mid }
+    }
+    return lo
+}
+
+# Compute (v*(v+1)/2)^2 mod MOD, handling overflow
+function sum_cubes_mod(v: i64) -> i64 {
+    let a: i64
+    let b: i64
+    if v % 2 == 0 {
+        a = v / 2
+        b = v + 1
+    } else {
+        a = v
+        b = (v + 1) / 2
+    }
+    let t: i64 = (a % MOD) * (b % MOD) % MOD
+    return (t * t - 1) % MOD
+}
+
+function main() -> i32 {
+    let M: i64 = 1000000000000  # 10^12 = cbrt(10^36)
+    let r: i64 = isqrt(M)  # 10^6
+
+    # Sieve primes up to r
+    let bs: ptr<i8> = calloc(r + 1, 1)
+    for i in 0..(r + 1) { bs[i] = 1 }
+    bs[0] = 0
+    bs[1] = 0
+    let mut p: i64 = 2
+    while p * p <= r {
+        if bs[p] == 1 {
+            let mut j: i64 = p * p
+            while j <= r {
+                bs[j] = 0
+                j = j + p
+            }
+        }
+        p = p + 1
+    }
+
+    # Collect primes
+    let mut nprimes: i64 = 0
+    for i in 0..(r + 1) {
+        if bs[i] == 1 { nprimes = nprimes + 1 }
+    }
+    let primes: ptr<i64> = calloc(nprimes, 8)
+    let mut idx: i64 = 0
+    for i in 0..(r + 1) {
+        if bs[i] == 1 {
+            primes[idx] = i
+            idx = idx + 1
+        }
+    }
+
+    # Lucy sieve for prime cube sums
+    # Key values: V = [M/1, M/2, ..., M/r, r-1, r-2, ..., 1]
+    let big_len: i64 = r
+    let small_len: i64 = r - 1
+    let L: i64 = big_len + small_len  # total key values
+
+    let V: ptr<i64> = calloc(L, 8)
+    let S: ptr<i64> = calloc(L, 8)
+
+    # Fill V: big block first (decreasing), then small block
+    for i in 0..big_len {
+        V[i] = M / (i + 1)
+    }
+    let mut vi: i64 = big_len
+    let mut v: i64 = r - 1
+    while v >= 1 {
+        V[vi] = v
+        vi = vi + 1
+        v = v - 1
+    }
+
+    # Initialize S[i] = sum_{k=2..V[i]} k^3 mod MOD
+    for i in 0..L {
+        S[i] = sum_cubes_mod(V[i])
+    }
+
+    # Index helper: for small x <= r, index is L - x
+    # For big value M/d (d <= r), index is d - 1
+
+    # Sieve
+    for pi in 0..nprimes {
+        let p: i64 = primes[pi]
+        let p2: i64 = p * p
+        if p2 > M { break }
+        let p3: i64 = (p * p % MOD) * p % MOD
+
+        # sp = sum of prime^3 <= p-1
+        let sp: i64
+        if p == 2 {
+            sp = 0
+        } else {
+            sp = S[L - (p - 1)]
+        }
+
+        # Update big block: indices i=0..min(n//p2, r)-1
+        let mut blen: i64 = M / p2
+        if blen > r { blen = r }
+
+        for i in 0..blen {
+            let vv: i64 = V[i]
+            let denom_u: i64 = (i + 1) * p
+            let Su: i64
+            if denom_u <= r {
+                Su = S[denom_u - 1]
+            } else {
+                let u: i64 = vv / p
+                Su = S[L - u]
+            }
+            let diff: i64 = (Su - sp) % MOD
+            S[i] = (S[i] - p3 * diff) % MOD
+        }
+
+        # Update small tail: values from p^2 to r-1
+        let slen: i64 = r - p2
+        if slen > 0 {
+            let start: i64 = r  # first tail index in V
+            let end: i64 = r + slen
+            for j in start..end {
+                let vv: i64 = V[j]
+                let u: i64 = vv / p
+                let Su: i64 = S[L - u]
+                let diff: i64 = (Su - sp) % MOD
+                S[j] = (S[j] - p3 * diff) % MOD
+            }
+        }
+    }
+
+    # Compute total
+    let mut total: i64 = 0
+    for pi in 0..nprimes {
+        let p: i64 = primes[pi]
+        if M / p <= p { break }
+        # sum of q^3 for primes q with p < q <= M/p
+        let sum_up_to_qmax: i64 = S[p - 1]
+        let sum_up_to_p: i64 = S[L - p]
+        let sum_q: i64 = (sum_up_to_qmax - sum_up_to_p) % MOD
+        let p3: i64 = (p * p % MOD) * p % MOD
+        total = (total + p3 * sum_q) % MOD
+    }
+
+    # Ensure positive
+    total = total % MOD
+    if total < 0 { total = total + MOD }
+
+    printf("%lld\n", total)
+
+    free(S)
+    free(V)
+    free(primes)
+    free(bs)
+    return 0
+}

@@ -4,11 +4,19 @@
 const MOD: i64 = 1000000007
 const LIM: i64 = 1000000000000000
 const BRUTE: i64 = 4000
-const CAP: i64 = 262144
+const CAP: i64 = 1048576
 
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
+}
+
+function floordiv(a: i64, b: i64) -> i64 {
+    if b == 0 { return 0 }
+    let q: i64 = a / b
+    let r: i64 = a - q * b
+    if r != 0 && ((r > 0) != (b > 0)) { q = q - 1 }
+    return q
 }
 
 function f_gauss(a0: i64, b0: i64) -> i64 {
@@ -20,8 +28,8 @@ function f_gauss(a0: i64, b0: i64) -> i64 {
             a = a - 1
             cnt = cnt + 1
         }
-        let na: i64 = (b - a) / 2
-        let nb: i64 = -(a + b) / 2
+        let na: i64 = floordiv(b - a, 2)
+        let nb: i64 = floordiv(-(a + b), 2)
         a = na
         b = nb
     }
@@ -38,7 +46,7 @@ function count_parity(lo: i64, hi: i64, parity: i64) -> i64 {
     let mut first: i64 = lo
     if (lo & 1) != parity { first = lo + 1 }
     if first > hi { return 0 }
-    return (hi - first) / 2 + 1
+    return floordiv(hi - first, 2) + 1
 }
 
 function count_diamond(u0: i64, u1: i64, v0: i64, v1: i64) -> i64 {
@@ -51,11 +59,7 @@ function count_diamond(u0: i64, u1: i64, v0: i64, v1: i64) -> i64 {
 }
 
 function ceil_div(n: i64, d: i64) -> i64 {
-    if n >= 0 { return (n + d - 1) / d }
-    let q: i64 = n / d
-    let r: i64 = n - q * d
-    if r == 0 { return q }
-    return q + 1
+    return -floordiv(-n, d)
 }
 
 function hkey(a0: i64, a1: i64, b0: i64, b1: i64, tag: i64) -> i64 {
@@ -94,7 +98,7 @@ function brute_diamond(u0: i64, u1: i64, v0: i64, v1: i64) -> i64 {
         let mut v: i64 = v0
         if (v & 1) != parity { v = v + 1 }
         while v <= v1 {
-            s = s + f_gauss((u + v) / 2, (u - v) / 2)
+            s = s + f_gauss(floordiv(u + v, 2), floordiv(u - v, 2))
             v = v + 2
         }
         u = u + 1
@@ -113,9 +117,9 @@ function rect_to_diamond(x0: i64, x1: i64, y0: i64, y1: i64, r: i64,
 function diamond_to_rect(u0: i64, u1: i64, v0: i64, v1: i64, r: i64,
                          x0: ptr<i64>, x1: ptr<i64>, y0: ptr<i64>, y1: ptr<i64>) -> void {
     x0[0] = ceil_div(r - v1, 2)
-    x1[0] = (r - v0) / 2
+    x1[0] = floordiv(r - v0, 2)
     y0[0] = ceil_div(r - u1, 2)
-    y1[0] = (r - u0) / 2
+    y1[0] = floordiv(r - u0, 2)
 }
 
 function sum_region(tag: i32, a0: i64, a1: i64, b0: i64, b1: i64,
@@ -131,26 +135,35 @@ function sum_region(tag: i32, a0: i64, a1: i64, b0: i64, b1: i64,
 
     let key: i64 = hkey(a0, a1, b0, b1, tag as i64)
     let slot: i64 = hslot(key, keys, used)
-    if used[slot] == 1 { return vals[slot] }
+    if used[slot] == 1 && keys[slot] == key { return vals[slot] }
 
     let mut res: i64 = 0
     if tag == 0 {
         rect_to_diamond(a0, a1, b0, b1, 0, buf, buf + 1, buf + 2, buf + 3)
         res = sum_region(1, buf[0], buf[1], buf[2], buf[3], keys, vals, used, buf)
         rect_to_diamond(a0, a1, b0, b1, 1, buf, buf + 1, buf + 2, buf + 3)
-        res = (res + sum_region(1, buf[0], buf[1], buf[2], buf[3], keys, vals, used, buf)) % MOD
-        res = (res + count_diamond(buf[0], buf[1], buf[2], buf[3])) % MOD
+        let du0: i64 = buf[0]
+        let du1: i64 = buf[1]
+        let dv0: i64 = buf[2]
+        let dv1: i64 = buf[3]
+        res = (res + sum_region(1, du0, du1, dv0, dv1, keys, vals, used, buf)) % MOD
+        res = (res + count_diamond(du0, du1, dv0, dv1)) % MOD
     } else {
         diamond_to_rect(a0, a1, b0, b1, 0, buf, buf + 1, buf + 2, buf + 3)
         res = sum_region(0, buf[0], buf[1], buf[2], buf[3], keys, vals, used, buf)
         diamond_to_rect(a0, a1, b0, b1, 1, buf, buf + 1, buf + 2, buf + 3)
-        res = (res + sum_region(0, buf[0], buf[1], buf[2], buf[3], keys, vals, used, buf)) % MOD
-        res = (res + count_rect(buf[0], buf[1], buf[2], buf[3])) % MOD
+        let rx0: i64 = buf[0]
+        let rx1: i64 = buf[1]
+        let ry0: i64 = buf[2]
+        let ry1: i64 = buf[3]
+        res = (res + sum_region(0, rx0, rx1, ry0, ry1, keys, vals, used, buf)) % MOD
+        res = (res + count_rect(rx0, rx1, ry0, ry1)) % MOD
     }
 
-    used[slot] = 1
-    keys[slot] = key
-    vals[slot] = res
+    let store: i64 = hslot(key, keys, used)
+    used[store] = 1
+    keys[store] = key
+    vals[store] = res
     return res
 }
 

@@ -1,0 +1,57 @@
+# Project Euler 841
+# Regular Star Polygons — sum A(F_{n+1}, F_{n-1}) for n=3..34.
+
+extern {
+    function cos(x: f64) -> f64
+    function sin(x: f64) -> f64
+}
+
+const PI: f64 = 3.14159265358979323846
+
+function A(p: i64, q: i64) -> f64 {
+    let s: f64 = PI / (p as f64)
+    let p_sin_s: f64 = (p as f64) * sin(s)
+    let mut sign_odd: f64 = -1.0
+    if (q & 1) != 0 { sign_odd = 1.0 }
+    let mut cos_prev: f64 = 1.0
+    let mut C: f64 = 0.0
+    let mut c: f64 = 0.0
+    let mut k: i64 = 1
+    while k <= q {
+        let cos_k: f64 = cos((k as f64) * s)
+        let mut sign: f64 = -sign_odd
+        if (k & 1) != 0 { sign = sign_odd }
+        let term: f64 = sign / (cos_k * cos_prev)
+        let y: f64 = term - c
+        let t: f64 = C + y
+        c = (t - C) - y
+        C = t
+        cos_prev = cos_k
+        k = k + 1
+    }
+    return p_sin_s * C
+}
+
+function main() -> i32 {
+    let mut F: [i64; 40]
+    F[0] = 0
+    F[1] = 1
+    let mut i: i64 = 2
+    while i <= 35 {
+        F[i] = F[i - 1] + F[i - 2]
+        i = i + 1
+    }
+    let mut total: f64 = 0.0
+    let mut c: f64 = 0.0
+    let mut n: i64 = 3
+    while n <= 34 {
+        let a: f64 = A(F[n + 1], F[n - 1])
+        let y: f64 = a - c
+        let t: f64 = total + y
+        c = (t - total) - y
+        total = t
+        n = n + 1
+    }
+    printf("%.10f\n", total)
+    return 0
+}

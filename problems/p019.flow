@@ -29,25 +29,18 @@ function days_in_month(y: i32, m: i32) -> i32 {
 function main() -> i32 {
     # day-of-week: 0 = Monday ... 6 = Sunday, starting 1 Jan 1900
     let mut dow: i32 = 0
-    # advance through 1900
-    let mut m: i32 = 1
-    while m <= 12 {
+    for m in 1..13 {
         dow = (dow + days_in_month(1900, m)) % 7
-        m = m + 1
     }
 
     let mut count: i64 = 0
-    let mut y: i32 = 1901
-    while y <= 2000 {
-        m = 1
-        while m <= 12 {
+    for y in 1901..2001 {
+        for m in 1..13 {
             if dow == 6 {
                 count = count + 1
             }
             dow = (dow + days_in_month(y, m)) % 7
-            m = m + 1
         }
-        y = y + 1
     }
     printf("%lld\n", count)
     return 0

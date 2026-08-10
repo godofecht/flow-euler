@@ -1,0 +1,50 @@
+# Project Euler 938
+# Exhausting a Colour — P(R,B) via log-gamma closed form. P(24690, 12345).
+
+extern {
+    function lgamma(x: f64) -> f64
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function log1p(x: f64) -> f64
+}
+
+function log_add_exp(log_x: f64, log_y: f64, has_x: i32) -> f64 {
+    if has_x == 0 { return log_y }
+    let mut a: f64 = log_x
+    let mut b: f64 = log_y
+    if b > a {
+        let t: f64 = a
+        a = b
+        b = t
+    }
+    return a + log1p(exp(b - a))
+}
+
+function probability_black(R: i64, B: i64) -> f64 {
+    if B <= 0 { return 0.0 }
+    if R <= 0 { return 1.0 }
+    if (R & 1) == 1 { return 0.0 }
+    let a: i64 = R / 2
+    let b: i64 = B
+    if a == 0 { return 1.0 }
+    let log4: f64 = log(4.0)
+    let m: i64 = a - 1
+    let mut log_u: f64 = 0.0
+    let mut has: i32 = 0
+    let mut k: i64 = 1
+    while k <= b {
+        let log_g: f64 = lgamma((2 * k + 1) as f64) - 2.0 * lgamma((k + 1) as f64) - (k as f64) * log4
+        let n: i64 = a + b - k - 1
+        let log_binom: f64 = lgamma((n + 1) as f64) - lgamma((m + 1) as f64) - lgamma((n - m + 1) as f64)
+        log_u = log_add_exp(log_u, log_g + log_binom, has)
+        has = 1
+        k = k + 1
+    }
+    let log_C: f64 = lgamma((a + b) as f64 + 0.5) - lgamma(a as f64 + 0.5) - lgamma((b + 1) as f64)
+    return exp(log_u - log_C)
+}
+
+function main() -> i32 {
+    printf("%.10f\n", probability_black(24690, 12345))
+    return 0
+}

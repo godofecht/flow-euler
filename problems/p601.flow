@@ -1,0 +1,51 @@
+# Project Euler 601
+# Divisibility streaks: sum P(4^i, i) for i = 1..31.
+# P(n,s) = count of n in [1,n-1] with exact streak length s
+#        = floor((n-2)/lcm(1..s)) - floor((n-2)/lcm(1..s+1)).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while x != 0 {
+        let t: i64 = x
+        x = y % x
+        y = t
+    }
+    return y
+}
+
+function lcm(a: i64, b: i64) -> i64 {
+    return a / gcd(a, b) * b
+}
+
+function solve(limit: i64, streak: i64) -> i64 {
+    let mut multiple: i64 = streak
+    let mut i: i64 = 2
+    while i < streak {
+        multiple = lcm(multiple, i)
+        i = i + 1
+    }
+    let lim: i64 = limit - 2
+    let at_least: i64 = lim / multiple
+    multiple = lcm(multiple, streak + 1)
+    let too_many: i64 = lim / multiple
+    return at_least - too_many
+}
+
+function main() -> i32 {
+    let mut result: i64 = 0
+    let mut pow4: i64 = 4
+    let mut i: i64 = 1
+    while i <= 31 {
+        result = result + solve(pow4, i)
+        pow4 = pow4 * 4
+        i = i + 1
+    }
+    printf("%lld\n", result)
+    return 0
+}

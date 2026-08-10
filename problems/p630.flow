@@ -1,0 +1,161 @@
+# Project Euler 630: Crossed Lines
+# Generate 2500 pseudo-random points, form unique lines through pairs,
+# compute S(L) = M*(M-1) - sum c*(c-1) over parallel classes.
+
+import euler.nt { isqrt, gcd }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const A_BITS: i64 = 11
+const B_BITS: i64 = 12
+const D_BITS: i64 = 23
+const B_OFFSET: i64 = 1999
+const D_OFFSET: i64 = 4000000
+
+function main() -> i32 {
+    let npts: i64 = 2500
+
+    # Generate points
+    let px: ptr<i64> = calloc(npts, 8)
+    let py: ptr<i64> = calloc(npts, 8)
+    let s: i64 = 290797
+    let mut t_prev: i64 = s
+
+    for k in 0..npts {
+        # T_{2k}: s = s^2 mod 50515093
+        t_prev = (t_prev * t_prev) % 50515093
+        let t1: i64 = (t_prev % 2000) - 1000
+        # T_{2k+1}: s = s^2 mod 50515093
+        t_prev = (t_prev * t_prev) % 50515093
+        let t2: i64 = (t_prev % 2000) - 1000
+        px[k] = t1
+        py[k] = t2
+    }
+
+    # Assert first 3 points
+    if px[0] != 527 || py[0] != 144 { printf("FAIL p0\n"); return 1 }
+    if px[1] != -488 || py[1] != 732 { printf("FAIL p1\n"); return 1 }
+    if px[2] != -454 || py[2] != -947 { printf("FAIL p2\n"); return 1 }
+
+    # Generate line codes for all pairs
+    # npts*(npts-1)/2 = 2500*2499/2 = 3123750 codes max
+    let max_codes: i64 = npts * (npts - 1) / 2
+    let codes: ptr<i64> = calloc(max_codes, 8)
+    let mut ncodes: i64 = 0
+
+    for i in 0..(npts - 1) {
+        let x1: i64 = px[i]
+        let y1: i64 = py[i]
+        for j in (i + 1)..npts {
+            let x2: i64 = px[j]
+            let y2: i64 = py[j]
+            let dx: i64 = x2 - x1
+            let dy: i64 = y2 - y1
+            if dx == 0 && dy == 0 { continue }
+
+            let mut adx: i64 = dx
+            if adx < 0 { adx = -adx }
+            let mut ady: i64 = dy
+            if ady < 0 { ady = -ady }
+            let g: i64 = gcd(adx, ady)
+            let rdx: i64 = dx / g
+            let rdy: i64 = dy / g
+
+            # Normal (A,B) = (rdy, -rdx)
+            let mut A: i64 = rdy
+            let mut B: i64 = -rdx
+            if A < 0 || (A == 0 && B < 0) {
+                A = -A
+                B = -B
+            }
+
+            let normal_id: i64 = (A << B_BITS) | (B + B_OFFSET)
+            let D: i64 = A * x1 + B * y1
+            let code: i64 = (normal_id << D_BITS) | (D + D_OFFSET)
+            codes[ncodes] = code
+            ncodes = ncodes + 1
+        }
+    }
+
+    # Sort codes using manual quicksort
+    # Use iterative quicksort with stack
+    let stack_lo: ptr<i64> = calloc(ncodes, 8)
+    let stack_hi: ptr<i64> = calloc(ncodes, 8)
+    let mut sp: i64 = 0
+    stack_lo[0] = 0
+    stack_hi[0] = ncodes - 1
+    sp = 1
+
+    while sp > 0 {
+        sp = sp - 1
+        let lo: i64 = stack_lo[sp]
+        let hi: i64 = stack_hi[sp]
+        if lo >= hi { continue }
+
+        # Partition with last element as pivot
+        let pivot: i64 = codes[hi]
+        let mut i: i64 = lo - 1
+        for j in lo..hi {
+            if codes[j] <= pivot {
+                i = i + 1
+                let tmp: i64 = codes[i]
+                codes[i] = codes[j]
+                codes[j] = tmp
+            }
+        }
+        i = i + 1
+        let tmp2: i64 = codes[i]
+        codes[i] = codes[hi]
+        codes[hi] = tmp2
+
+        stack_lo[sp] = lo
+        stack_hi[sp] = i - 1
+        sp = sp + 1
+        stack_lo[sp] = i + 1
+        stack_hi[sp] = hi
+        sp = sp + 1
+    }
+    free(stack_lo)
+    free(stack_hi)
+
+    # Count unique lines and parallel classes
+    let mut M: i64 = 0
+    let mut sum_parallel: i64 = 0
+    let mut prev_code: i64 = -1
+    let mut prev_normal: i64 = -1
+    let mut c: i64 = 0
+
+    for i in 0..ncodes {
+        let code: i64 = codes[i]
+        if code == prev_code { continue }
+
+        M = M + 1
+        let normal: i64 = code >> D_BITS
+
+        if normal != prev_normal {
+            if prev_normal != -1 {
+                sum_parallel = sum_parallel + c * (c - 1)
+            }
+            prev_normal = normal
+            c = 1
+        } else {
+            c = c + 1
+        }
+
+        prev_code = code
+    }
+    if prev_normal != -1 {
+        sum_parallel = sum_parallel + c * (c - 1)
+    }
+
+    let S: i64 = M * (M - 1) - sum_parallel
+    printf("%lld\n", S)
+
+    free(codes)
+    free(py)
+    free(px)
+    return 0
+}

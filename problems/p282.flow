@@ -1,23 +1,14 @@
 # Project Euler 282
 # Sum A(n,n) for n=0..6 mod 14^8.
 
+import euler.nt { gcd }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
 }
 
-function gcd(a0: i64, b0: i64) -> i64 {
-    let mut a: i64 = a0
-    let mut b: i64 = b0
-    while b != 0 {
-        let t: i64 = a % b
-        a = b
-        b = t
-    }
-    return a
-}
-
-function mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
+function local_mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
     if mod == 1 { return 0 }
     let mut result: i64 = 1
     let mut base: i64 = base0 % mod
@@ -30,7 +21,7 @@ function mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
     return result
 }
 
-function mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
+function local_mulmod(a0: i64, b0: i64, mod: i64) -> i64 {
     let mut a: i64 = a0 % mod
     let mut b: i64 = b0 % mod
     if a < 0 { a = a + mod }
@@ -110,8 +101,8 @@ function carmichael(n0: i64) -> i64 {
 
 function crt_pair(a1: i64, m1: i64, a2: i64, m2: i64) -> i64 {
     let inv: i64 = mod_inverse(m1 % m2, m2)
-    let k: i64 = mulmod(((a2 - a1) % m2 + m2) % m2, inv, m2)
-    return (a1 + mulmod(k, m1, m1 * m2)) % (m1 * m2)
+    let k: i64 = local_mulmod(((a2 - a1) % m2 + m2) % m2, inv, m2)
+    return (a1 + local_mulmod(k, m1, m1 * m2)) % (m1 * m2)
 }
 
 function tower_geq(h: i64, limit: i64) -> bool {
@@ -167,7 +158,7 @@ function tetration_mod(height: i64, mod: i64) -> i64 {
     }
     let lam: i64 = carmichael(m)
     let exp2: i64 = tetration_mod(height - 1, lam)
-    let rodd: i64 = mod_pow(2, exp2, m)
+    let rodd: i64 = local_mod_pow(2, exp2, m)
     if k == 0 { return rodd }
     let one2: i64 = 1
     return crt_pair(r2, one2 << k, rodd, m)

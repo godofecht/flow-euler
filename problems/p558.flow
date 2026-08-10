@@ -1,7 +1,11 @@
 # Project Euler 558
-# Irrational Base
+# Real solver in problems/native/p558.{c,cpp} (linked by scripts/run.sh).
+
+extern {
+    function pe558_answer() -> i64
+}
 
 function main() -> i32 {
-    printf("%lld\n", 226754889)
+    printf("%lld\n", pe558_answer())
     return 0
 }

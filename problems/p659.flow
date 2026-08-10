@@ -1,0 +1,11 @@
+# Project Euler 659
+# Largest prime dividing successive n^2+k^2; sum P(k) for k<=1e7 mod 1e18.
+
+extern {
+    function pe659_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe659_answer())
+    return 0
+}

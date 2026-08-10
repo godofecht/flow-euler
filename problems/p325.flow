@@ -1,6 +1,8 @@
 # Project Euler 325
 # S(10^16) mod 7^10 via Beatty summatory functions.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
@@ -34,17 +36,6 @@ function modinv(a0: i64, mod: i64) -> i64 {
         x1 = tx
     }
     return ((x0 % mod) + mod) % mod
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function mul64_to_128(a: i64, b: i64, hi: ptr<i64>, lo: ptr<i64>) -> i32 {

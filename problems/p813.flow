@@ -1,0 +1,128 @@
+# Project Euler 813
+# XOR-Powers — degrees of (1+x+x^3)^exp over GF(2); sum 2^d mod 1e9+7.
+# exp = 8^12 * 12^8 = 2^52 * 6561; work in i128 for degree values.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function toggle(degs: ptr<i128>, n: ptr<i64>, val: i128) -> void {
+    let mut lo: i64 = 0
+    let mut hi: i64 = n[0]
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if degs[mid] < val {
+            lo = mid + 1
+        } else {
+            hi = mid
+        }
+    }
+    if lo < n[0] && degs[lo] == val {
+        let mut i: i64 = lo
+        while i + 1 < n[0] {
+            degs[i] = degs[i + 1]
+            i = i + 1
+        }
+        n[0] = n[0] - 1
+    } else {
+        let mut i: i64 = n[0]
+        while i > lo {
+            degs[i] = degs[i - 1]
+            i = i - 1
+        }
+        degs[lo] = val
+        n[0] = n[0] + 1
+    }
+}
+
+function solve() -> i64 {
+    # Bit values of exp = 6561 << 52
+    let bits: ptr<i128> = calloc(16, 16)
+    let mut bcount: i64 = 0
+    let mut coeff: i64 = 6561
+    let mut k: i64 = 0
+    while coeff > 0 {
+        if (coeff & 1) != 0 {
+            # 2^(52+k) as i128
+            let mut p: i128 = 1
+            let mut e: i64 = 0
+            while e < 52 + k {
+                p = p << 1
+                e = e + 1
+            }
+            bits[bcount] = p
+            bcount = bcount + 1
+        }
+        coeff = coeff >> 1
+        k = k + 1
+    }
+
+    let mut cap: i64 = 1
+    let mut i: i64 = 0
+    while i < bcount {
+        cap = cap * 3
+        i = i + 1
+    }
+    let degs: ptr<i128> = calloc(cap + 8, 16)
+    let mut n: i64 = 1
+    degs[0] = 0
+    i = 0
+    while i < bcount {
+        let bv: i128 = bits[i]
+        let newd: ptr<i128> = calloc(cap + 8, 16)
+        let mut nn: i64 = 0
+        let mut j: i64 = 0
+        while j < n {
+            let d0: i128 = degs[j]
+            toggle(newd, &nn, d0)
+            toggle(newd, &nn, d0 + bv)
+            toggle(newd, &nn, d0 + 3 * bv)
+            j = j + 1
+        }
+        j = 0
+        while j < nn {
+            degs[j] = newd[j]
+            j = j + 1
+        }
+        n = nn
+        free(newd)
+        i = i + 1
+    }
+
+    let mut ans: i64 = 0
+    i = 0
+    while i < n {
+        # 2^d mod MOD; reduce d mod (MOD-1)
+        let dmod: i64 = (degs[i] % ((MOD - 1) as i128)) as i64
+        if dmod < 0 {
+            # shouldn't happen for nonnegative degrees
+        }
+        ans = (ans + modpow(2, dmod, MOD)) % MOD
+        i = i + 1
+    }
+    free(bits)
+    free(degs)
+    return ans
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve())
+    return 0
+}

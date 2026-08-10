@@ -4,10 +4,8 @@
 function solve(size: i64) -> i64 {
     # Corners of layer with side 2k+1: n², n²-n+1, n²-2n+2, n²-3n+3 where n=2k+1
     let mut total: i64 = 1
-    let mut n: i64 = 3
-    while n <= size {
+    for n in 3..(size + 1) step 2 {
         total = total + 4 * n * n - 6 * (n - 1)
-        n = n + 2
     }
     return total
 }

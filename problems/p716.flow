@@ -1,0 +1,35 @@
+# Project Euler 716
+# C(H,W) mod 10^9+7 closed form for directed grid graphs.
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 { r = (r * b) % mod }
+        b = (b * b) % mod
+        e = e >> 1
+    }
+    return r
+}
+
+function C(h: i64, w: i64) -> i64 {
+    let mod: i64 = 1000000007
+    let pow2h: i64 = modpow(2, h, mod)
+    let pow2w: i64 = modpow(2, w, mod)
+    let pow2hw: i64 = (pow2h * pow2w) % mod
+    let term1: i64 = (9 * pow2hw) % mod
+    let mut term2: i64 = (2 * (h % mod) % mod * (w % mod)) % mod
+    term2 = (term2 * ((pow2h + pow2w + 1) % mod)) % mod
+    let mut term3: i64 = (8 * (((w % mod) * pow2h + (h % mod) * pow2w) % mod)) % mod
+    term3 = (mod - term3) % mod
+    let mut term4: i64 = (10 * ((pow2h + pow2w) % mod)) % mod
+    term4 = (mod - term4) % mod
+    let term5: i64 = (10 * ((h + w + 1) % mod)) % mod
+    return (((((term1 + term2) % mod) + term3) % mod + term4) % mod + term5) % mod
+}
+
+function main() -> i32 {
+    printf("%lld\n", C(10000, 20000))
+    return 0
+}

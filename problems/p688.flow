@@ -1,0 +1,50 @@
+# Project Euler 688
+# Piles of Plates: S(10^16) mod 1e9+7.
+# O(sqrt(N)) summation: for each k, q = floor((N - k(k-1)/2) / k),
+# contribution = q*(t+1) - k*q*(q+1)/2, where t = N - k(k-1)/2.
+
+import euler.nt { isqrt }
+
+const MOD: i64 = 1000000007
+
+function main() -> i32 {
+    let N: i64 = 10000000000000000
+    let inv2: i64 = (MOD + 1) / 2
+
+    # km = floor((sqrt(8N+1) - 1) / 2)
+    let km: i64 = (isqrt(8 * N + 1) - 1) / 2
+
+    let mut t: i64 = N
+    let mut t_mod: i64 = N % MOD
+    let mut total: i64 = 0
+    let mut k: i64 = 1
+
+    while k <= km {
+        let q: i64 = t / k
+        let q_mod: i64 = q % MOD
+
+        # term1 = q * (t+1) mod MOD
+        let mut x: i64 = t_mod + 1
+        if x >= MOD { x = x - MOD }
+        let term1: i128 = (q_mod as i128) * (x as i128) % (MOD as i128)
+
+        # term2 = k * q*(q+1)/2 mod MOD
+        let tri: i128 = (q_mod as i128) * ((q_mod + 1) as i128) % (MOD as i128)
+        let tri2: i128 = (tri * (inv2 as i128)) % (MOD as i128)
+        let term2: i128 = ((k as i128) * tri2) % (MOD as i128)
+
+        total = total + (term1 as i64)
+        if total >= MOD { total = total - MOD }
+        total = total - (term2 as i64)
+        if total < 0 { total = total + MOD }
+
+        t = t - k
+        t_mod = t_mod - (k % MOD)
+        if t_mod < 0 { t_mod = t_mod + MOD }
+
+        k = k + 1
+    }
+
+    printf("%lld\n", total)
+    return 0
+}

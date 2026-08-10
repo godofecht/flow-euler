@@ -1,0 +1,83 @@
+# Project Euler 822
+# Square the Smallest — S(10^4, 10^16) mod 1234567891.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1234567891
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function S(n: i64, m: i64) -> i64 {
+    let A: ptr<i64> = calloc(n - 1, 8)
+    let mut i: i64 = 0
+    while i < n - 1 {
+        A[i] = i + 2
+        i = i + 1
+    }
+    let mut k: i64 = 0
+    while 1 == 1 {
+        let mut mn: i64 = A[0]
+        let mut mx: i64 = A[0]
+        let mut mi: i64 = 0
+        i = 1
+        while i < n - 1 {
+            if A[i] < mn {
+                mn = A[i]
+                mi = i
+            }
+            if A[i] > mx { mx = A[i] }
+            i = i + 1
+        }
+        if mn * mn >= mx { break }
+        A[mi] = mn * mn
+        k = k + 1
+    }
+    # sort A
+    i = 0
+    while i < n - 1 {
+        let mut j: i64 = i + 1
+        while j < n - 1 {
+            if A[j] < A[i] {
+                let t: i64 = A[i]
+                A[i] = A[j]
+                A[j] = t
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let q: i64 = (m - k) / (n - 1)
+    let r: i64 = (m - k) % (n - 1)
+    let mut total: i64 = 0
+    i = 0
+    while i < n - 1 {
+        let mut exp2: i64 = q
+        if i < r { exp2 = q + 1 }
+        # A[i]^(2^exp2) mod MOD using phi(MOD)=MOD-1
+        let e: i64 = modpow(2, exp2, MOD - 1)
+        total = (total + modpow(A[i], e, MOD)) % MOD
+        i = i + 1
+    }
+    free(A)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(10000, 10000000000000000))
+    return 0
+}

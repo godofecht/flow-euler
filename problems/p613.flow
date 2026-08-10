@@ -1,0 +1,16 @@
+# Project Euler 613
+# Pythagorean Ant: closed-form average exit probability.
+
+extern {
+    function log(x: f64) -> f64
+    function sqrt(x: f64) -> f64
+    function pow(x: f64, y: f64) -> f64
+}
+
+function main() -> i32 {
+    let PI: f64 = 3.14159265358979323846
+    let num: f64 = pow(2.0, 16.0) * pow(3.0, 4.0) * sqrt(3.0 / 5.0) / pow(5.0, 12.0)
+    let result: f64 = 0.5 + log(num) / (12.0 * PI)
+    printf("%.10f\n", result)
+    return 0
+}

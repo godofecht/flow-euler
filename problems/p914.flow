@@ -1,0 +1,66 @@
+# Project Euler 914
+# Triangles inside Circles — max inradius of primitive Pythagorean
+# triple with hypotenuse < 2R. F(10^18).
+
+extern {
+    function sqrt(x: f64) -> f64
+}
+
+function igcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = sqrt(n as f64) as i64
+    while (x + 1) * (x + 1) <= n { x = x + 1 }
+    while x > 0 && x * x > n { x = x - 1 }
+    return x
+}
+
+function F(R: i64) -> i64 {
+    if R <= 0 { return 0 }
+    let limit: i64 = 2 * R - 1
+    if limit <= 0 { return 0 }
+    let sqrt2: f64 = sqrt(2.0)
+    let n0: i64 = sqrt(R as f64 / (2.0 + sqrt2)) as i64
+    let mut W: i64 = n0 / 2000 + 10000
+    if W < 10000 { W = 10000 }
+    let mut best: i64 = 0
+    let mut lo: i64 = n0 - W
+    if lo < 1 { lo = 1 }
+    let hi: i64 = n0 + W
+    let mut n: i64 = lo
+    while n <= hi {
+        let t: i64 = limit - n * n
+        if t > 0 {
+            let mut m: i64 = isqrt(t)
+            if m > n {
+                if ((m - n) & 1) == 0 {
+                    m = m - 1
+                }
+                while m > n && igcd(m, n) != 1 {
+                    m = m - 2
+                }
+                if m > n {
+                    let r: i64 = n * (m - n)
+                    if r > best { best = r }
+                }
+            }
+        }
+        n = n + 1
+    }
+    return best
+}
+
+function main() -> i32 {
+    printf("%lld\n", F(1000000000000000000))
+    return 0
+}

@@ -1,0 +1,207 @@
+# Project Euler 663: Sums of Subarrays
+# Segment tree with block decomposition for maximum subarray sum.
+# S(n, 10^7) to S(n, 10^7+200000) difference, n=10000003.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const NEG_INF: i64 = -1000000000000000000
+
+function max3(a: i64, b: i64, c: i64) -> i64 {
+    let mut m: i64 = a
+    if b > m { m = b }
+    if c > m { m = c }
+    return m
+}
+
+function max2(a: i64, b: i64) -> i64 {
+    if a >= b { return a }
+    return b
+}
+
+function main() -> i32 {
+    let n: i64 = 10000003
+    let start_step: i64 = 10000000
+    let end_step: i64 = 10200000
+    let B: i64 = 256
+
+    # Allocate array A
+    let A: ptr<i64> = calloc(n, 8)
+    if A == null { return 1 }
+
+    # Segment tree arrays
+    let m: i64 = (n + B - 1) / B
+    let mut size: i64 = 1
+    while size < m { size = size * 2 }
+
+    let tree_total: ptr<i64> = calloc(2 * size, 8)
+    let tree_pref: ptr<i64> = calloc(2 * size, 8)
+    let tree_suff: ptr<i64> = calloc(2 * size, 8)
+    let tree_best: ptr<i64> = calloc(2 * size, 8)
+
+    # Initialize tree_pref and tree_best to NEG_INF
+    for i in 0..(2 * size) {
+        tree_pref[i] = NEG_INF
+        tree_suff[i] = NEG_INF
+        tree_best[i] = NEG_INF
+    }
+
+    # Tribonacci mod n window: u0, u1, u2 for k=2i-2, 2i-1, 2i
+    let mut u0: i64 = 0
+    let mut u1: i64 = 0
+    let mut u2: i64 = 1 % n
+
+    let mut ans: i64 = 0
+    let mut tree_built: i64 = 0
+
+    for i in 1..(end_step + 1) {
+        let idx: i64 = u0
+        let delta: i64 = (u1 << 1) - n + 1
+        A[idx] = A[idx] + delta
+
+        if i == start_step {
+            # Build segment tree
+            # Compute block summaries for leaves
+            for b in 0..m {
+                let s: i64 = b * B
+                let e: i64 = n
+                if s + B < e { e = s + B }
+                if s >= n { e = s }
+
+                # block_summary(A, s, e)
+                let mut r: i64 = 0
+                let mut max_pref: i64 = NEG_INF
+                let mut min_pref_best: i64 = 0
+                let mut best: i64 = NEG_INF
+                let mut min_pref_suff: i64 = 0
+                let last: i64 = e - 1
+
+                for k in s..e {
+                    r = r + A[k]
+                    if r > max_pref { max_pref = r }
+                    let cand: i64 = r - min_pref_best
+                    if cand > best { best = cand }
+                    if r < min_pref_best { min_pref_best = r }
+                    if k != last {
+                        if r < min_pref_suff { min_pref_suff = r }
+                    }
+                }
+
+                let total_val: i64 = r
+                let max_suff: i64 = total_val - min_pref_suff
+
+                let pos: i64 = size + b
+                tree_total[pos] = total_val
+                tree_pref[pos] = max_pref
+                tree_suff[pos] = max_suff
+                tree_best[pos] = best
+            }
+
+            # Build internal nodes
+            for pos in 1..size {
+                let rev_pos: i64 = size - pos
+                let l: i64 = rev_pos * 2
+                let r_child: i64 = l + 1
+
+                tree_total[rev_pos] = tree_total[l] + tree_total[r_child]
+
+                let v1p: i64 = tree_pref[l]
+                let v2p: i64 = tree_total[l] + tree_pref[r_child]
+                tree_pref[rev_pos] = max2(v1p, v2p)
+
+                let v1s: i64 = tree_suff[r_child]
+                let v2s: i64 = tree_total[r_child] + tree_suff[l]
+                tree_suff[rev_pos] = max2(v1s, v2s)
+
+                tree_best[rev_pos] = max3(tree_best[l], tree_best[r_child], tree_suff[l] + tree_pref[r_child])
+            }
+
+            tree_built = 1
+        } else {
+            if i > start_step && tree_built == 1 {
+                # Update block containing idx
+                let b: i64 = idx / B
+                let s: i64 = b * B
+                let e: i64 = n
+                if s + B < e { e = s + B }
+                if s >= n { e = s }
+
+                # Recompute block summary
+                let mut r: i64 = 0
+                let mut max_pref: i64 = NEG_INF
+                let mut min_pref_best: i64 = 0
+                let mut best: i64 = NEG_INF
+                let mut min_pref_suff: i64 = 0
+                let last: i64 = e - 1
+
+                for k in s..e {
+                    r = r + A[k]
+                    if r > max_pref { max_pref = r }
+                    let cand: i64 = r - min_pref_best
+                    if cand > best { best = cand }
+                    if r < min_pref_best { min_pref_best = r }
+                    if k != last {
+                        if r < min_pref_suff { min_pref_suff = r }
+                    }
+                }
+
+                let total_val: i64 = r
+                let max_suff: i64 = total_val - min_pref_suff
+
+                let pos: i64 = size + b
+                tree_total[pos] = total_val
+                tree_pref[pos] = max_pref
+                tree_suff[pos] = max_suff
+                tree_best[pos] = best
+
+                # Update path to root
+                let mut p: i64 = pos / 2
+                while p >= 1 {
+                    let l: i64 = p * 2
+                    let r_child: i64 = l + 1
+
+                    tree_total[p] = tree_total[l] + tree_total[r_child]
+
+                    let v1p: i64 = tree_pref[l]
+                    let v2p: i64 = tree_total[l] + tree_pref[r_child]
+                    tree_pref[p] = max2(v1p, v2p)
+
+                    let v1s: i64 = tree_suff[r_child]
+                    let v2s: i64 = tree_total[r_child] + tree_suff[l]
+                    tree_suff[p] = max2(v1s, v2s)
+
+                    tree_best[p] = max3(tree_best[l], tree_best[r_child], tree_suff[l] + tree_pref[r_child])
+
+                    p = p / 2
+                }
+
+                # Root best is at index 1
+                ans = ans + tree_best[1]
+            }
+        }
+
+        # Advance tribonacci by two steps (mod n)
+        let mut t3: i64 = u0 + u1 + u2
+        if t3 >= n { t3 = t3 - n }
+        if t3 >= n { t3 = t3 - n }
+        let mut t4: i64 = u1 + u2 + t3
+        if t4 >= n { t4 = t4 - n }
+        if t4 >= n { t4 = t4 - n }
+        u0 = u2
+        u1 = t3
+        u2 = t4
+    }
+
+    printf("%lld\n", ans)
+
+    free(tree_best)
+    free(tree_suff)
+    free(tree_pref)
+    free(tree_total)
+    free(A)
+    return 0
+}

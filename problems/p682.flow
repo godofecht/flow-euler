@@ -1,0 +1,244 @@
+# Project Euler 682
+# 5-Smooth Pairs: f(10^7) mod 1e9+7.
+# Uses generating function + Bostan-Mori coefficient extraction.
+
+import euler.nt { mod_pow }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> void
+}
+
+const MOD: i64 = 1000000007
+
+# Max polynomial degree
+const MAXDEG: i64 = 200
+
+# Poly multiply: res = a * b mod MOD, degrees da, db -> result degree da+db
+function poly_mul(a: ptr<i64>, da: i64, b: ptr<i64>, db: i64, res: ptr<i64>) -> i64 {
+    let dr: i64 = da + db
+    for i in 0..(dr + 1) { res[i] = 0 }
+    for i in 0..(da + 1) {
+        if a[i] == 0 { continue }
+        for j in 0..(db + 1) {
+            if b[j] == 0 { continue }
+            let t: i128 = (res[i + j] as i128) + (a[i] as i128) * (b[j] as i128)
+            res[i + j] = (t % (MOD as i128)) as i64
+        }
+    }
+    return dr
+}
+
+# Negate odd coefficients: q[i] = p[i] for even i, MOD - p[i] for odd i
+function negate_odd(p: ptr<i64>, dp: i64, q: ptr<i64>) -> i64 {
+    for i in 0..(dp + 1) {
+        if i % 2 == 0 { q[i] = p[i] }
+        else { q[i] = (MOD - p[i]) % MOD }
+    }
+    return dp
+}
+
+# Even part: q[i] = p[2i]
+function even_part(p: ptr<i64>, dp: i64, q: ptr<i64>) -> i64 {
+    let mut dq: i64 = 0
+    let mut i: i64 = 0
+    while 2 * i <= dp {
+        q[i] = p[2 * i]
+        dq = i
+        i = i + 1
+    }
+    return dq
+}
+
+# Odd part: q[i] = p[2i+1]
+function odd_part(p: ptr<i64>, dp: i64, q: ptr<i64>) -> i64 {
+    if dp < 1 {
+        q[0] = 0
+        return 0
+    }
+    let mut dq: i64 = 0
+    let mut i: i64 = 0
+    while 2 * i + 1 <= dp {
+        q[i] = p[2 * i + 1]
+        dq = i
+        i = i + 1
+    }
+    return dq
+}
+
+function main() -> i32 {
+    # Build generating function P/Q
+    # D1 = (1-x)(1-x^3)(1-x^4)(1-x^5)(1-x^7)
+    # D2 = (1-x)^2(1+x)(1-x^5)(1-x^6)(1-x^8)
+    # D3 = (1-x)^2(1+x)(x^2+x+1)(1-x^7)(1-x^8)(1-x^10)
+    # Q = D1*D2*D3
+    # P = Q/D1 - x*Q/D2 + x^5*Q/D3
+
+    let tmp1: ptr<i64> = calloc(MAXDEG, 8)
+    let tmp2: ptr<i64> = calloc(MAXDEG, 8)
+    let tmp3: ptr<i64> = calloc(MAXDEG, 8)
+    let D1: ptr<i64> = calloc(MAXDEG, 8)
+    let D2: ptr<i64> = calloc(MAXDEG, 8)
+    let D3: ptr<i64> = calloc(MAXDEG, 8)
+    let Q: ptr<i64> = calloc(MAXDEG, 8)
+    let P: ptr<i64> = calloc(MAXDEG, 8)
+    let Qneg: ptr<i64> = calloc(MAXDEG, 8)
+    let Pnew: ptr<i64> = calloc(MAXDEG, 8)
+    let Qnew: ptr<i64> = calloc(MAXDEG, 8)
+    let factor: ptr<i64> = calloc(MAXDEG, 8)
+
+    if D1 == null || Q == null { return 1 }
+
+    # Helper: multiply accumulator by (1 - x^k)
+    # D1 = product of (1-x^k) for k in {1,3,4,5,7}
+    D1[0] = 1
+    let mut d1_deg: i64 = 0
+    for ki in 0..5 {
+        let k: i64 = 7
+        if ki == 0 { k = 1 }
+        if ki == 1 { k = 3 }
+        if ki == 2 { k = 4 }
+        if ki == 3 { k = 5 }
+
+        for i in 0..MAXDEG { factor[i] = 0 }
+        factor[0] = 1
+        factor[k] = MOD - 1
+        d1_deg = poly_mul(D1, d1_deg, factor, k, tmp1)
+        for i in 0..(d1_deg + 1) { D1[i] = tmp1[i] }
+    }
+
+    # D2 = (1-x)^2 * (1+x) * (1-x^5) * (1-x^6) * (1-x^8)
+    D2[0] = 1
+    let mut d2_deg: i64 = 0
+    # (1-x)
+    for i in 0..MAXDEG { factor[i] = 0 }
+    factor[0] = 1; factor[1] = MOD - 1
+    d2_deg = poly_mul(D2, d2_deg, factor, 1, tmp1)
+    for i in 0..(d2_deg + 1) { D2[i] = tmp1[i] }
+    # (1-x) again
+    d2_deg = poly_mul(D2, d2_deg, factor, 1, tmp1)
+    for i in 0..(d2_deg + 1) { D2[i] = tmp1[i] }
+    # (1+x)
+    factor[1] = 1
+    d2_deg = poly_mul(D2, d2_deg, factor, 1, tmp1)
+    for i in 0..(d2_deg + 1) { D2[i] = tmp1[i] }
+    # (1-x^5)
+    for i in 0..MAXDEG { factor[i] = 0 }
+    factor[0] = 1; factor[5] = MOD - 1
+    d2_deg = poly_mul(D2, d2_deg, factor, 5, tmp1)
+    for i in 0..(d2_deg + 1) { D2[i] = tmp1[i] }
+    # (1-x^6)
+    factor[6] = MOD - 1; factor[5] = 0
+    d2_deg = poly_mul(D2, d2_deg, factor, 6, tmp1)
+    for i in 0..(d2_deg + 1) { D2[i] = tmp1[i] }
+    # (1-x^8)
+    for i in 0..MAXDEG { factor[i] = 0 }
+    factor[0] = 1; factor[8] = MOD - 1
+    d2_deg = poly_mul(D2, d2_deg, factor, 8, tmp1)
+    for i in 0..(d2_deg + 1) { D2[i] = tmp1[i] }
+
+    # D3 = (1-x)^2 * (1+x) * (1+x+x^2) * (1-x^7) * (1-x^8) * (1-x^10)
+    D3[0] = 1
+    let mut d3_deg: i64 = 0
+    # (1-x)
+    for i in 0..MAXDEG { factor[i] = 0 }
+    factor[0] = 1; factor[1] = MOD - 1
+    d3_deg = poly_mul(D3, d3_deg, factor, 1, tmp1)
+    for i in 0..(d3_deg + 1) { D3[i] = tmp1[i] }
+    # (1-x) again
+    d3_deg = poly_mul(D3, d3_deg, factor, 1, tmp1)
+    for i in 0..(d3_deg + 1) { D3[i] = tmp1[i] }
+    # (1+x)
+    factor[1] = 1
+    d3_deg = poly_mul(D3, d3_deg, factor, 1, tmp1)
+    for i in 0..(d3_deg + 1) { D3[i] = tmp1[i] }
+    # (1+x+x^2)
+    factor[2] = 1
+    d3_deg = poly_mul(D3, d3_deg, factor, 2, tmp1)
+    for i in 0..(d3_deg + 1) { D3[i] = tmp1[i] }
+    # (1-x^7)
+    for i in 0..MAXDEG { factor[i] = 0 }
+    factor[0] = 1; factor[7] = MOD - 1
+    d3_deg = poly_mul(D3, d3_deg, factor, 7, tmp1)
+    for i in 0..(d3_deg + 1) { D3[i] = tmp1[i] }
+    # (1-x^8)
+    factor[8] = MOD - 1; factor[7] = 0
+    d3_deg = poly_mul(D3, d3_deg, factor, 8, tmp1)
+    for i in 0..(d3_deg + 1) { D3[i] = tmp1[i] }
+    # (1-x^10)
+    for i in 0..MAXDEG { factor[i] = 0 }
+    factor[0] = 1; factor[10] = MOD - 1
+    d3_deg = poly_mul(D3, d3_deg, factor, 10, tmp1)
+    for i in 0..(d3_deg + 1) { D3[i] = tmp1[i] }
+
+    # Q = D1 * D2 * D3
+    let q_deg1: i64 = poly_mul(D1, d1_deg, D2, d2_deg, tmp1)
+    let q_deg: i64 = poly_mul(tmp1, q_deg1, D3, d3_deg, Q)
+
+    # Q_over_D1 = D2 * D3
+    let qd1_deg: i64 = poly_mul(D2, d2_deg, D3, d3_deg, tmp1)
+    # Q_over_D2 = D1 * D3
+    let qd2_deg: i64 = poly_mul(D1, d1_deg, D3, d3_deg, tmp2)
+    # Q_over_D3 = D1 * D2
+    let qd3_deg: i64 = poly_mul(D1, d1_deg, D2, d2_deg, tmp3)
+
+    # P = Q_over_D1 - x*Q_over_D2 + x^5*Q_over_D3
+    let max_len: i64 = qd1_deg
+    if qd2_deg + 1 > max_len { max_len = qd2_deg + 1 }
+    if qd3_deg + 5 > max_len { max_len = qd3_deg + 5 }
+
+    for i in 0..(max_len + 1) { P[i] = 0 }
+    for i in 0..(qd1_deg + 1) { P[i] = tmp1[i] }
+    for i in 0..(qd2_deg + 1) {
+        P[i + 1] = (P[i + 1] - tmp2[i] + MOD) % MOD
+    }
+    for i in 0..(qd3_deg + 1) {
+        P[i + 5] = (P[i + 5] + tmp3[i]) % MOD
+    }
+
+    let mut p_deg: i64 = max_len
+    let mut q_deg_cur: i64 = q_deg
+
+    # Bostan-Mori: extract [x^n] P/Q
+    let mut n: i64 = 10000000
+
+    while n > 0 {
+        # Qneg = Q(-x)
+        let qn_deg: i64 = negate_odd(Q, q_deg_cur, Qneg)
+
+        # P = P * Qneg
+        let p_deg2: i64 = poly_mul(P, p_deg, Qneg, qn_deg, Pnew)
+        for i in 0..(p_deg2 + 1) { P[i] = Pnew[i] }
+        p_deg = p_deg2
+
+        # Q = Q * Qneg
+        let q_deg2: i64 = poly_mul(Q, q_deg_cur, Qneg, qn_deg, Qnew)
+        for i in 0..(q_deg2 + 1) { Q[i] = Qnew[i] }
+        q_deg_cur = q_deg2
+
+        # Extract even or odd part of P
+        if n % 2 == 1 {
+            p_deg = odd_part(P, p_deg, Pnew)
+        } else {
+            p_deg = even_part(P, p_deg, Pnew)
+        }
+        for i in 0..(p_deg + 1) { P[i] = Pnew[i] }
+
+        # Q = even_part(Q)
+        q_deg_cur = even_part(Q, q_deg_cur, Qnew)
+        for i in 0..(q_deg_cur + 1) { Q[i] = Qnew[i] }
+
+        n = n / 2
+    }
+
+    # Answer = P[0] * Q[0]^(-1) mod MOD
+    let qinv: i64 = mod_pow(Q[0], MOD - 2, MOD)
+    let ans: i128 = (P[0] as i128) * (qinv as i128) % (MOD as i128)
+    printf("%lld\n", ans as i64)
+
+    free(factor); free(Qnew); free(Pnew); free(Qneg)
+    free(P); free(Q); free(D3); free(D2); free(D1)
+    free(tmp3); free(tmp2); free(tmp1)
+    return 0
+}

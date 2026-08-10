@@ -6,7 +6,7 @@ extern {
     function free(p: ptr<void>) -> void
 }
 
-function gcd(a0: i64, b0: i64) -> i64 {
+function gcd_abs(a0: i64, b0: i64) -> i64 {
     let mut a: i64 = a0
     let mut b: i64 = b0
     if a < 0 { a = 0 - a }
@@ -132,7 +132,7 @@ function main() -> i32 {
             ys[m] = py
             m = m + 1
 
-            let g: i64 = gcd(px, py)
+            let g: i64 = gcd_abs(px, py)
             let mut dx: i64 = px / g
             let mut dy: i64 = py / g
             let mut side0: bool = true

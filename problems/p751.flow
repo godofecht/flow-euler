@@ -1,0 +1,11 @@
+# Project Euler 751
+# Concatenation Coincidence — 24 decimals of theta.
+
+extern {
+    function pe_solve_print() -> void
+}
+
+function main() -> i32 {
+    pe_solve_print()
+    return 0
+}

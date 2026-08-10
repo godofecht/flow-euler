@@ -7,7 +7,7 @@ extern {
 }
 
 const N: i64 = 14
-const CAP: i64 = 65536
+const CAP: i64 = 1048576
 
 function ipow(base: i64, exp: i64) -> i64 {
     let mut r: i128 = 1 as i128

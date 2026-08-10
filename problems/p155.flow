@@ -6,7 +6,7 @@ extern {
     function free(p: ptr<void>) -> void
 }
 
-function gcd(a0: i64, b0: i64) -> i64 {
+function gcd_abs(a0: i64, b0: i64) -> i64 {
     let mut a: i64 = a0
     if a < 0 { a = -a }
     let mut b: i64 = b0
@@ -20,7 +20,7 @@ function gcd(a0: i64, b0: i64) -> i64 {
 }
 
 function set_insert(nums: ptr<i64>, dens: ptr<i64>, used: ptr<i8>, cap: i64, num0: i64, den0: i64) -> bool {
-    let g: i64 = gcd(num0, den0)
+    let g: i64 = gcd_abs(num0, den0)
     let mut n: i64 = num0 / g
     let mut d: i64 = den0 / g
     if d < 0 { n = -n; d = -d }
@@ -93,7 +93,7 @@ function main() -> i32 {
                     let num: i64 = a0 * b1 + b0 * a1
                     let den: i64 = a1 * b1
                     if set_insert(tnum, tden, tused, tcap, num, den) {
-                        let g: i64 = gcd(num, den)
+                        let g: i64 = gcd_abs(num, den)
                         let mut nn2: i64 = num / g
                         let mut dd2: i64 = den / g
                         if dd2 < 0 {
@@ -109,7 +109,7 @@ function main() -> i32 {
                         }
                     }
                     if set_insert(tnum, tden, tused, tcap, den, num) {
-                        let g2: i64 = gcd(den, num)
+                        let g2: i64 = gcd_abs(den, num)
                         let mut nn3: i64 = den / g2
                         let mut dd3: i64 = num / g2
                         if dd3 < 0 {

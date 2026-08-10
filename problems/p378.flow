@@ -1,21 +1,12 @@
 # Project Euler 378
 # Tr(6e7) last 18 digits: decreasing dT triples via Fenwick trees.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
     function realloc(p: ptr<void>, size: i64) -> ptr<void>
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function fenwick_sum(bit: ptr<i64>, idx0: i64) -> i64 {

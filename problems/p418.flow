@@ -1,6 +1,6 @@
 # Project Euler 418
 # f(43!)=a+b+c minimising c/a among a<=b<=c with abc=43!.
-# Meet-in-the-middle near cube root; candidates fit in i64.
+# Meet-in-the-middle near cube root; verify via prime-exponent vectors.
 
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
@@ -18,37 +18,39 @@ function mul_fit(a: i64, b: i64) -> i64 {
 
 function sort_i64(a: ptr<i64>, n: i64) -> void {
     if n <= 1 { return }
-    let lo: ptr<i64> = calloc(64, 8)
-    let hi: ptr<i64> = calloc(64, 8)
-    if lo == null || hi == null { return }
-    let mut sp: i32 = 0
-    lo[0] = 0
-    hi[0] = n - 1
-    sp = 1
-    while sp > 0 {
-        sp = sp - 1
-        let l: i64 = lo[sp]
-        let h: i64 = hi[sp]
-        if l >= h { continue }
-        let pivot: i64 = a[(l + h) / 2]
-        let mut i: i64 = l
-        let mut j: i64 = h
-        while i <= j {
-            while a[i] < pivot { i = i + 1 }
-            while a[j] > pivot { j = j - 1 }
-            if i <= j {
-                let t: i64 = a[i]
-                a[i] = a[j]
-                a[j] = t
-                i = i + 1
-                j = j - 1
-            }
+    let mut i: i64 = n / 2
+    while i >= 0 {
+        let mut root: i64 = i
+        while true {
+            let mut child: i64 = 2 * root + 1
+            if child >= n { break }
+            if child + 1 < n && a[child] < a[child + 1] { child = child + 1 }
+            if a[root] >= a[child] { break }
+            let t: i64 = a[root]
+            a[root] = a[child]
+            a[child] = t
+            root = child
         }
-        if l < j { lo[sp] = l; hi[sp] = j; sp = sp + 1 }
-        if i < h { lo[sp] = i; hi[sp] = h; sp = sp + 1 }
+        i = i - 1
     }
-    free(lo)
-    free(hi)
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let t: i64 = a[0]
+        a[0] = a[end]
+        a[end] = t
+        let mut root: i64 = 0
+        while true {
+            let mut child: i64 = 2 * root + 1
+            if child >= end { break }
+            if child + 1 < end && a[child] < a[child + 1] { child = child + 1 }
+            if a[root] >= a[child] { break }
+            let t2: i64 = a[root]
+            a[root] = a[child]
+            a[child] = t2
+            root = child
+        }
+        end = end - 1
+    }
 }
 
 function lower_bound(a: ptr<i64>, n: i64, x: i64) -> i64 {
@@ -71,37 +73,25 @@ function upper_bound(a: ptr<i64>, n: i64, x: i64) -> i64 {
     return lo
 }
 
-function div_exact(num: ptr<i32>, nlimbs: i64, d: i64, out: ptr<i32>, BASE: i64) -> i64 {
-    if d <= 0 { return -1 }
-    let mut rem: i64 = 0
-    let mut j: i64 = nlimbs - 1
-    while j >= 0 {
-        let cur: i64 = rem * BASE + (num[j] as i64)
-        out[j] = (cur / d) as i32
-        rem = cur % d
-        j = j - 1
+function factor_exps(v0: i64, P: ptr<i64>, np: i64, out: ptr<i32>) -> bool {
+    let mut v: i64 = v0
+    let mut i: i64 = 0
+    while i < np {
+        out[i] = 0
+        let p: i64 = P[i]
+        while v % p == 0 {
+            out[i] = out[i] + 1
+            v = v / p
+        }
+        i = i + 1
     }
-    if rem != 0 { return -1 }
-    let mut nl: i64 = nlimbs
-    while nl > 1 && out[nl - 1] == 0 { nl = nl - 1 }
-    return nl
-}
-
-function limbs_to_i64(num: ptr<i32>, nlimbs: i64, BASE: i64) -> i64 {
-    let mut v: i64 = 0
-    let mut j: i64 = nlimbs - 1
-    while j >= 0 {
-        if v > (9223372036854775807 - (num[j] as i64)) / BASE { return -1 }
-        v = v * BASE + (num[j] as i64)
-        j = j - 1
-    }
-    return v
+    return v == 1
 }
 
 function main() -> i32 {
     let K: i64 = 43
     let P: array<i64, 14> = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43]
-    let E: array<i64, 14> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let Eneed: array<i64, 14> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     let mut i: i64 = 0
     while i < 14 {
         let p: i64 = P[i]
@@ -111,7 +101,7 @@ function main() -> i32 {
             n = n / p
             s = s + n
         }
-        E[i] = s
+        Eneed[i] = s
         i = i + 1
     }
 
@@ -119,8 +109,8 @@ function main() -> i32 {
     let mut split: i64 = 0
     i = 0
     while i < 14 {
-        if i > 0 && dcount * (E[i] + 1) > 1000000 { break }
-        dcount = dcount * (E[i] + 1)
+        if i > 0 && dcount * (Eneed[i] + 1) > 1000000 { break }
+        dcount = dcount * (Eneed[i] + 1)
         split = i + 1
         i = i + 1
     }
@@ -134,7 +124,7 @@ function main() -> i32 {
     i = 0
     while i < split {
         let p: i64 = P[i]
-        let e: i64 = E[i]
+        let e: i64 = Eneed[i]
         let mut pe: i64 = 1
         let mut nnew: i64 = 0
         let mut t: i64 = 0
@@ -166,7 +156,7 @@ function main() -> i32 {
     let mut dcount2: i64 = 1
     i = split
     while i < 14 {
-        dcount2 = dcount2 * (E[i] + 1)
+        dcount2 = dcount2 * (Eneed[i] + 1)
         i = i + 1
     }
     let divs2: ptr<i64> = calloc(dcount2 + 10, 8)
@@ -176,7 +166,7 @@ function main() -> i32 {
     i = split
     while i < 14 {
         let p: i64 = P[i]
-        let e: i64 = E[i]
+        let e: i64 = Eneed[i]
         let mut pe: i64 = 1
         let mut nnew: i64 = 0
         let mut t: i64 = 0
@@ -207,43 +197,25 @@ function main() -> i32 {
     let mut logn: f64 = 0.0
     i = 0
     while i < 14 {
-        logn = logn + (E[i] as f64) * log(P[i] as f64)
+        logn = logn + (Eneed[i] as f64) * log(P[i] as f64)
         i = i + 1
     }
     let cbrt: f64 = exp(logn / 3.0)
 
-    let BASE: i64 = 1000000000
-    let limbs: ptr<i32> = calloc(20, 4)
-    if limbs == null { return 1 }
-    limbs[0] = 1
-    let mut L: i64 = 1
-    let mut x: i64 = 2
-    while x <= K {
-        let mut carry: i64 = 0
-        let mut j: i64 = 0
-        while j < L {
-            let v: i64 = (limbs[j] as i64) * x + carry
-            limbs[j] = (v % BASE) as i32
-            carry = v / BASE
-            j = j + 1
-        }
-        while carry > 0 {
-            limbs[L] = (carry % BASE) as i32
-            carry = carry / BASE
-            L = L + 1
-        }
-        x = x + 1
+    let ea: ptr<i32> = calloc(14, 4)
+    let ec: ptr<i32> = calloc(14, 4)
+    let Pp: ptr<i64> = calloc(14, 8)
+    i = 0
+    while i < 14 {
+        Pp[i] = P[i]
+        i = i + 1
     }
-
-    let buf1: ptr<i32> = calloc(20, 4)
-    let buf2: ptr<i32> = calloc(20, 4)
-    if buf1 == null || buf2 == null { return 1 }
 
     let mut best_a: i64 = 0
     let mut best_c: i64 = 0
     let mut best_sum: i64 = 0
     let mut found: i32 = 0
-    let mut delta: f64 = 0.000001
+    let mut delta: f64 = 0.00001
 
     while delta <= 0.05 {
         let mut aL: i64 = (cbrt / (1.0 + delta)) as i64 - 2
@@ -263,67 +235,101 @@ function main() -> i32 {
         let mut j2: i64 = 0
         while j2 < n2 {
             let d2: i64 = divs2[j2]
-            let mut lo: i64 = (aL + d2 - 1) / d2
-            let mut hi: i64 = aH / d2
-            if lo <= hi {
-                let i0: i64 = lower_bound(divs1, n1, lo)
-                let i1: i64 = upper_bound(divs1, n1, hi)
-                let mut t: i64 = i0
-                while t < i1 {
-                    let v: i64 = mul_fit(divs1[t], d2)
-                    if v >= aL && v <= aH && na < acap {
-                        alist[na] = v
-                        na = na + 1
+            if d2 > 0 {
+                let mut lo: i64 = aL / d2
+                if aL % d2 != 0 { lo = lo + 1 }
+                let mut hi: i64 = aH / d2
+                if lo <= hi {
+                    let i0: i64 = lower_bound(divs1, n1, lo)
+                    let i1: i64 = upper_bound(divs1, n1, hi)
+                    let mut t: i64 = i0
+                    while t < i1 {
+                        let v: i64 = mul_fit(divs1[t], d2)
+                        if v >= aL && v <= aH && na < acap {
+                            alist[na] = v
+                            na = na + 1
+                        }
+                        t = t + 1
                     }
-                    t = t + 1
                 }
-            }
-            lo = (cL + d2 - 1) / d2
-            hi = cH / d2
-            if lo <= hi {
-                let i0: i64 = lower_bound(divs1, n1, lo)
-                let i1: i64 = upper_bound(divs1, n1, hi)
-                let mut t: i64 = i0
-                while t < i1 {
-                    let v: i64 = mul_fit(divs1[t], d2)
-                    if v >= cL && v <= cH && nc < acap {
-                        clist[nc] = v
-                        nc = nc + 1
+                lo = cL / d2
+                if cL % d2 != 0 { lo = lo + 1 }
+                hi = cH / d2
+                if lo <= hi {
+                    let i0: i64 = lower_bound(divs1, n1, lo)
+                    let i1: i64 = upper_bound(divs1, n1, hi)
+                    let mut t: i64 = i0
+                    while t < i1 {
+                        let v: i64 = mul_fit(divs1[t], d2)
+                        if v >= cL && v <= cH && nc < acap {
+                            clist[nc] = v
+                            nc = nc + 1
+                        }
+                        t = t + 1
                     }
-                    t = t + 1
                 }
             }
             j2 = j2 + 1
         }
 
-        if na > 0 && nc > 0 && na * nc <= 50000000 {
-            sort_i64(clist, nc)
-            let mut ia: i64 = 0
-            while ia < na {
-                let a: i64 = alist[ia]
-                let mut ic: i64 = 0
-                while ic < nc {
-                    let c: i64 = clist[ic]
-                    if c >= a {
-                        let l1: i64 = div_exact(limbs, L, a, buf1, BASE)
-                        if l1 >= 0 {
-                            let l2: i64 = div_exact(buf1, l1, c, buf2, BASE)
-                            if l2 >= 0 {
-                                let b: i64 = limbs_to_i64(buf2, l2, BASE)
-                                if b >= a && b <= c {
-                                    if found == 0 || c * best_a < best_c * a {
-                                        best_a = a
-                                        best_c = c
-                                        best_sum = a + b + c
-                                        found = 1
+        if na > 0 && nc > 0 {
+            let prod: i128 = (na as i128) * (nc as i128)
+            if prod <= (50000000 as i128) {
+                sort_i64(clist, nc)
+                let mut ia: i64 = 0
+                while ia < na {
+                    let a: i64 = alist[ia]
+                    if factor_exps(a, Pp, 14, ea) {
+                        let mut ic: i64 = 0
+                        while ic < nc {
+                            let c: i64 = clist[ic]
+                            if c >= a && factor_exps(c, Pp, 14, ec) {
+                                let mut ok: bool = true
+                                let mut bi: i64 = 0
+                                while bi < 14 {
+                                    if (ea[bi] as i64) + (ec[bi] as i64) > Eneed[bi] {
+                                        ok = false
+                                        break
+                                    }
+                                    bi = bi + 1
+                                }
+                                if ok {
+                                    # build b from remaining exponents
+                                    let mut b: i64 = 1
+                                    bi = 0
+                                    while bi < 14 {
+                                        let rem: i64 = Eneed[bi] - (ea[bi] as i64) - (ec[bi] as i64)
+                                        let mut t: i64 = 0
+                                        while t < rem {
+                                            let nb: i64 = mul_fit(b, P[bi])
+                                            if nb < 0 { ok = false; break }
+                                            b = nb
+                                            t = t + 1
+                                        }
+                                        if !ok { break }
+                                        bi = bi + 1
+                                    }
+                                    if ok && a <= b && b <= c {
+                                        let better: bool = found == 0
+                                        if !better {
+                                            if (c as i128) * (best_a as i128) < (best_c as i128) * (a as i128) {
+                                                better = true
+                                            }
+                                        }
+                                        if better {
+                                            best_a = a
+                                            best_c = c
+                                            best_sum = a + b + c
+                                            found = 1
+                                        }
                                     }
                                 }
                             }
+                            ic = ic + 1
                         }
                     }
-                    ic = ic + 1
+                    ia = ia + 1
                 }
-                ia = ia + 1
             }
         }
 
@@ -334,9 +340,9 @@ function main() -> i32 {
     }
 
     printf("%lld\n", best_sum)
-    free(buf2)
-    free(buf1)
-    free(limbs)
+    free(Pp)
+    free(ec)
+    free(ea)
     free(divs2)
     free(tmp)
     free(divs1)

@@ -1,0 +1,69 @@
+# Project Euler 609
+# π sequences: P(10^8) mod 10^9+7.
+# A π-sequence u=(u_0,...,u_m) has u_{n+1}=π(u_n), u_n≥1, m≥1.
+# c(u) = count of non-prime elements. P(n) = product of all p(n,k)>0.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let LIMIT: i64 = 100000000
+    let MOD: i64 = 1000000007
+
+    # Sieve of Eratosthenes
+    let is_prime: ptr<i8> = calloc(LIMIT + 2, 1)
+    if is_prime == null { return 1 }
+    for i in 0..(LIMIT + 2) { is_prime[i] = 1 }
+    is_prime[0] = 0
+    is_prime[1] = 0
+    let mut p: i64 = 2
+    while p * p <= LIMIT {
+        if is_prime[p] == 1 {
+            for m in (p * p)..(LIMIT + 1) step p { is_prime[m] = 0 }
+        }
+        p = p + 1
+    }
+
+    # Build pi(x) array: pi_arr[x] = number of primes ≤ x
+    let pi_arr: ptr<i32> = calloc(LIMIT + 1, 4)
+    if pi_arr == null { return 1 }
+    let mut count: i64 = 0
+    for i in 1..(LIMIT + 1) {
+        if is_prime[i] == 1 { count = count + 1 }
+        pi_arr[i] = count as i32
+    }
+
+    # For each u_0, follow pi-sequence and count non-primes.
+    let MAXK: i64 = 40
+    let arr2: ptr<i64> = calloc(MAXK, 8)
+    if arr2 == null { return 1 }
+
+    for x in 1..(LIMIT + 1) {
+        let mut npc: i64 = 0
+        if is_prime[x] == 0 { npc = 1 }
+        let mut curr: i64 = x
+        while true {
+            let temp: i64 = pi_arr[curr] as i64
+            if temp == 0 { break }
+            if is_prime[temp] == 0 { npc = npc + 1 }
+            if npc < MAXK { arr2[npc] = arr2[npc] + 1 }
+            curr = temp
+        }
+    }
+
+    # P(n) = product of all arr2[k] > 0, mod MOD
+    let mut total: i64 = 1
+    for i in 0..MAXK {
+        if arr2[i] > 0 {
+            total = ((total as i128) * (arr2[i] as i128) % (MOD as i128)) as i64
+        }
+    }
+
+    printf("%lld\n", total)
+    free(arr2)
+    free(pi_arr)
+    free(is_prime)
+    return 0
+}

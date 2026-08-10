@@ -1,0 +1,177 @@
+# Project Euler 625
+# G(N) = sum_{j=1..N} sum_{i=1..j} gcd(i,j), G(10^11) mod 998244353.
+# Dirichlet hyperbola: G(N) = sum_{k≤s} k·Φ(N/k) + sum_{k≤s} φ(k)·T(N/k) - T(s)·Φ(s)
+# Φ(x) via memoized bottom-up: Φ(n) = T(n) - sum_{i=2..n} Φ(n/i)
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function tri(n: i64, MOD: i64, INV2: i64) -> i64 {
+    let nm: i64 = n % MOD
+    return ((nm * ((nm + 1) % MOD) % MOD) * INV2) % MOD
+}
+
+# Hash lookup for memoized Phi values
+function phi_lookup(q: i64, HCAP: i64, hkeys: ptr<i64>, hvals: ptr<i64>, hused: ptr<i8>) -> i64 {
+    let mut h: i64 = q % HCAP
+    while hused[h] != 0 {
+        if hkeys[h] == q { return hvals[h] }
+        h = h + 1
+        if h >= HCAP { h = 0 }
+    }
+    return 0
+}
+
+function phi_store(n: i64, val: i64, HCAP: i64, hkeys: ptr<i64>, hvals: ptr<i64>, hused: ptr<i8>) -> void {
+    let mut h: i64 = n % HCAP
+    while hused[h] != 0 {
+        if hkeys[h] == n { return }
+        h = h + 1
+        if h >= HCAP { h = 0 }
+    }
+    hused[h] = 1
+    hkeys[h] = n
+    hvals[h] = val
+}
+
+function main() -> i32 {
+    let N: i64 = 100000000000
+    let MOD: i64 = 998244353
+    let INV2: i64 = (MOD + 1) / 2
+    let PRECOMP: i64 = 10000000
+
+    # Linear sieve for phi
+    let phi: ptr<i64> = calloc(PRECOMP + 1, 8)
+    let is_comp: ptr<i8> = calloc(PRECOMP + 1, 1)
+    let primes: ptr<i32> = calloc(PRECOMP / 5 + 10, 4)
+    if phi == null || is_comp == null || primes == null { return 1 }
+
+    phi[1] = 1
+    let mut pc: i64 = 0
+    for i in 2..(PRECOMP + 1) {
+        if is_comp[i] == 0 {
+            primes[pc] = i as i32
+            pc = pc + 1
+            phi[i] = i - 1
+        }
+        for j in 0..pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > PRECOMP { break }
+            is_comp[ip] = 1
+            if i % p == 0 { phi[ip] = phi[i] * p; break }
+            elif i % p != 0 { phi[ip] = phi[i] * (p - 1) }
+        }
+    }
+
+    # Prefix sums and phi_small
+    let s: i64 = isqrt(N)
+    let phi_small: ptr<i64> = calloc(s + 1, 8)
+    if phi_small == null { return 1 }
+    for i in 0..(s + 1) { phi_small[i] = phi[i] }
+
+    let pref: ptr<i64> = calloc(PRECOMP + 1, 8)
+    let mut acc: i64 = 0
+    for i in 1..(PRECOMP + 1) {
+        acc = (acc + phi[i]) % MOD
+        pref[i] = acc
+    }
+
+    # Hash table for memoized Phi(n)
+    let HCAP: i64 = 1 << 20
+    let hkeys: ptr<i64> = calloc(HCAP, 8)
+    let hvals: ptr<i64> = calloc(HCAP, 8)
+    let hused: ptr<i8> = calloc(HCAP, 1)
+    if hkeys == null || hvals == null || hused == null { return 1 }
+
+    # Collect large values of N/k (descending), reverse to ascending
+    let large_vals: ptr<i64> = calloc(s + 1, 8)
+    let mut nlarge: i64 = 0
+    for k in 1..(s + 1) {
+        let q: i64 = N / k
+        if q > PRECOMP { large_vals[nlarge] = q; nlarge = nlarge + 1 }
+    }
+    for a in 0..(nlarge / 2) {
+        let tmp: i64 = large_vals[a]
+        large_vals[a] = large_vals[nlarge - 1 - a]
+        large_vals[nlarge - 1 - a] = tmp
+    }
+
+    # Compute Phi for each large value bottom-up (ascending)
+    for idx in 0..nlarge {
+        let n: i64 = large_vals[idx]
+        let sn: i64 = isqrt(n)
+        let mut ans: i64 = tri(n, MOD, INV2)
+
+        # Small quotients: use prefix sums
+        let m_max: i64 = n / sn
+        for m in 1..m_max {
+            let coef: i64 = n / m - n / (m + 1)
+            if coef > 0 { ans = (ans - (coef % MOD) * pref[m]) % MOD }
+        }
+
+        # Large quotients: need Phi(n/i) from hash
+        let mut ii: i64 = 2
+        while ii <= sn {
+            let q: i64 = n / ii
+            let mut jj: i64 = ii
+            while jj + 1 <= sn && n / (jj + 1) == q { jj = jj + 1 }
+            let cnt: i64 = jj - ii + 1
+            let phi_q: i64 = 0
+            if q <= PRECOMP { phi_q = pref[q] }
+            elif q > PRECOMP { phi_q = phi_lookup(q, HCAP, hkeys, hvals, hused) }
+            ans = (ans - cnt * phi_q) % MOD
+            ii = jj + 1
+        }
+
+        ans = ans % MOD
+        if ans < 0 { ans = ans + MOD }
+        phi_store(n, ans, HCAP, hkeys, hvals, hused)
+    }
+
+    # G(N) via hyperbola split
+    let mut total: i64 = 0
+
+    # sum_{k≤s} k·Φ(N/k) with quotient grouping
+    let mut k: i64 = 1
+    while k <= s {
+        let q: i64 = N / k
+        let mut j: i64 = k
+        while j + 1 <= s && N / (j + 1) == q { j = j + 1 }
+        let sum_k: i64 = (k + j) * (j - k + 1) / 2
+        let phi_q: i64 = 0
+        if q <= PRECOMP { phi_q = pref[q] }
+        elif q > PRECOMP { phi_q = phi_lookup(q, HCAP, hkeys, hvals, hused) }
+        total = (total + (sum_k % MOD) * phi_q) % MOD
+        k = j + 1
+    }
+
+    # sum_{k≤s} φ(k)·T(N/k)
+    for k in 1..(s + 1) {
+        total = (total + phi_small[k] * tri(N / k, MOD, INV2)) % MOD
+    }
+
+    # subtract T(s)·Φ(s)
+    let phi_s: i64 = 0
+    if s <= PRECOMP { phi_s = pref[s] }
+    elif s > PRECOMP { phi_s = phi_lookup(s, HCAP, hkeys, hvals, hused) }
+    total = (total - tri(s, MOD, INV2) * phi_s) % MOD
+    if total < 0 { total = total + MOD }
+
+    printf("%lld\n", total)
+
+    free(large_vals)
+    free(hused)
+    free(hvals)
+    free(hkeys)
+    free(pref)
+    free(phi_small)
+    free(primes)
+    free(is_comp)
+    free(phi)
+    return 0
+}

@@ -1,0 +1,123 @@
+# Project Euler 622
+# Riffle shuffles: sum of deck sizes with order dividing 60 exactly.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let target: i64 = (1 as i64 << 60) - 1
+    # factor target and enumerate divisors
+    let pf: ptr<i64> = calloc(64, 8)
+    let pe: ptr<i64> = calloc(64, 8)
+    let mut pn: i64 = 0
+    let mut n: i64 = target
+    let mut p: i64 = 2
+    while p * p <= n {
+        if n % p == 0 {
+            let mut e: i64 = 0
+            while n % p == 0 {
+                n = n / p
+                e = e + 1
+            }
+            pf[pn] = p
+            pe[pn] = e
+            pn = pn + 1
+        }
+        if p == 2 { p = 3 } else { p = p + 2 }
+    }
+    if n > 1 {
+        pf[pn] = n
+        pe[pn] = 1
+        pn = pn + 1
+    }
+    # generate all divisors
+    let mut dcount: i64 = 1
+    let mut i: i64 = 0
+    while i < pn {
+        dcount = dcount * (pe[i] + 1)
+        i = i + 1
+    }
+    let divs: ptr<i64> = calloc(dcount, 8)
+    let mut nd: i64 = 1
+    divs[0] = 1
+    i = 0
+    while i < pn {
+        let prime: i64 = pf[i]
+        let exp: i64 = pe[i]
+        let prev: i64 = nd
+        let mut e: i64 = 1
+        let mut pp: i64 = prime
+        while e <= exp {
+            let mut j: i64 = 0
+            while j < prev {
+                divs[nd] = divs[j] * pp
+                nd = nd + 1
+                j = j + 1
+            }
+            pp = pp * prime
+            e = e + 1
+        }
+        i = i + 1
+    }
+    # order primes of 60
+    let op: ptr<i64> = calloc(8, 8)
+    let mut on: i64 = 0
+    let mut oo: i64 = 60
+    p = 2
+    while p * p <= oo {
+        if oo % p == 0 {
+            op[on] = p
+            on = on + 1
+            while oo % p == 0 { oo = oo / p }
+        }
+        if p == 2 { p = 3 } else { p = p + 2 }
+    }
+    if oo > 1 {
+        op[on] = oo
+        on = on + 1
+    }
+    let mut total: i64 = 0
+    i = 0
+    while i < nd {
+        let d: i64 = divs[i]
+        if d > 1 {
+            let mut ok: i32 = 1
+            let mut t: i64 = 0
+            while t < on {
+                if modpow(2, 60 / op[t], d) == 1 {
+                    ok = 0
+                    break
+                }
+                t = t + 1
+            }
+            if ok == 1 {
+                total = total + d + 1
+            }
+        }
+        i = i + 1
+    }
+    free(pf)
+    free(pe)
+    free(divs)
+    free(op)
+    printf("%lld\n", total)
+    return 0
+}

@@ -1,0 +1,21 @@
+# Project Euler 628
+# Open chess positions: f(n)=(n-3)*(!n)+2 mod 1008691207, n=10^8.
+
+const MOD: i64 = 1008691207
+
+function main() -> i32 {
+    let n: i64 = 100000000
+    let mut fact: i64 = 1
+    let mut s: i64 = 1
+    let mut k: i64 = 1
+    while k < n {
+        fact = (fact * k) % MOD
+        s = s + fact
+        k = k + 1
+    }
+    s = s % MOD
+    let ans: i64 = ((n - 3) % MOD) * s % MOD + 2
+    ans = ans % MOD
+    printf("%lld\n", ans)
+    return 0
+}

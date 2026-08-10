@@ -31,12 +31,10 @@ function sum_primes_below(limit: i64) -> i64 {
     }
 
     let mut total: i64 = 0
-    let mut i: i64 = 2
-    while i < limit {
+    for i in 2..limit {
         if sieve[i] == 0 {
             total = total + i
         }
-        i = i + 1
     }
 
     free(sieve)

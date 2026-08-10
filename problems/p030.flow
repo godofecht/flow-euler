@@ -18,12 +18,10 @@ function digit_fifth_sum(n0: i64) -> i64 {
 function main() -> i32 {
     # Upper bound: 6*9^5 = 354294; 7 digits can't reach themselves
     let mut total: i64 = 0
-    let mut n: i64 = 2
-    while n <= 354294 {
+    for n in 2..354295 {
         if digit_fifth_sum(n) == n {
             total = total + n
         }
-        n = n + 1
     }
     printf("%lld\n", total)
     return 0

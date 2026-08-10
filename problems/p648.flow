@@ -1,0 +1,125 @@
+# Project Euler 648: Skipping Squares
+# F(1000) mod 10^9 using polynomial recurrence.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+const N: i64 = 1000
+
+# Multiply two polynomials (little-endian), truncate to out_len coefficients, mod MOD
+function mul_trunc(a: ptr<i64>, b: ptr<i64>, out_len: i64) -> ptr<i64> {
+    let out: ptr<i64> = calloc(out_len, 8)
+    for i in 0..out_len {
+        let mut s: i64 = 0
+        for j in 0..(i + 1) {
+            if j < out_len && (i - j) < out_len {
+                s = (s + a[j] * b[i - j]) % MOD
+            }
+        }
+        out[i] = s
+    }
+    return out
+}
+
+function main() -> i32 {
+    # a[k] = coefficients of f(rho) = sum S_m
+    let a: ptr<i64> = calloc(N + 1, 8)
+
+    # S_1 = 1 - rho
+    let S: ptr<i64> = calloc(N + 1, 8)
+    S[0] = 1
+    S[1] = MOD - 1
+    let mut S_offset: i64 = 0
+
+    # Add S_1 into f
+    for i in 0..(N + 1) {
+        a[i] = (a[i] + S[i]) % MOD
+    }
+
+    # v_prev2 = v_0 = [0, 0, ...]
+    let v_prev2: ptr<i64> = calloc(N + 1, 8)
+    # v_prev1 = v_1 = S = 1 - rho
+    let v_prev1: ptr<i64> = calloc(N + 1, 8)
+    for i in 0..(N + 1) { v_prev1[i] = S[i] }
+
+    let vk: ptr<i64> = calloc(N + 1, 8)
+
+    for k in 2..(2 * N + 1) {
+        # Compute v_k = v_{k-2} + rho*(v_{k-1} - v_{k-2})
+        # v[0] = v_prev2[0]
+        # v[i+1] = v_prev2[i+1] + v_prev1[i] - v_prev2[i]
+        vk[0] = v_prev2[0]
+        for i in 0..N {
+            let mut val: i64 = v_prev2[i + 1] + v_prev1[i] - v_prev2[i]
+            val = val % MOD
+            if val < 0 { val = val + MOD }
+            vk[i + 1] = val
+        }
+
+        # Shift: v_prev2 = v_prev1, v_prev1 = vk
+        for i in 0..(N + 1) { v_prev2[i] = v_prev1[i] }
+        for i in 0..(N + 1) { v_prev1[i] = vk[i] }
+
+        if k % 2 != 0 { continue }
+
+        # n = k/2, b_n = v_k
+        # S_new = S * b_n (truncated)
+        # b_n has no constant term, so factor = b[1..maxdeg]
+        let maxdeg_factor: i64 = N - S_offset
+        let out_len: i64 = N - S_offset  # degrees S_offset+1 .. N
+
+        if out_len <= 0 { continue }
+
+        # left = S[S_offset .. S_offset + out_len]
+        # right = b[1 .. 1 + out_len]  (but need to be careful with lengths)
+        let left: ptr<i64> = calloc(out_len, 8)
+        let right: ptr<i64> = calloc(out_len, 8)
+        for i in 0..out_len {
+            left[i] = S[S_offset + i]
+        }
+        for i in 0..out_len {
+            if i + 1 <= N {
+                right[i] = vk[i + 1]
+            }
+        }
+
+        let prod: ptr<i64> = mul_trunc(left, right, out_len)
+
+        S_offset = S_offset + 1
+
+        # Rebuild S
+        let new_S: ptr<i64> = calloc(N + 1, 8)
+        for i in 0..out_len {
+            new_S[S_offset + i] = prod[i]
+        }
+        for i in 0..(N + 1) { S[i] = new_S[i] }
+
+        # Add S_{n+1} into f
+        for i in 0..out_len {
+            a[S_offset + i] = (a[S_offset + i] + prod[i]) % MOD
+        }
+
+        free(prod)
+        free(right)
+        free(left)
+        free(new_S)
+    }
+
+    # F(N) = sum a[0..N]
+    let mut ans: i64 = 0
+    for i in 0..(N + 1) {
+        ans = (ans + a[i]) % MOD
+    }
+
+    printf("%lld\n", ans)
+
+    free(vk)
+    free(v_prev1)
+    free(v_prev2)
+    free(S)
+    free(a)
+    return 0
+}

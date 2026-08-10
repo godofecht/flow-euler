@@ -1,0 +1,36 @@
+# Project Euler 664
+# Infinite game: F(n) = 3 + ceil(log_phi(A_n)) via lgamma asymptotic.
+
+extern {
+    function sqrt(x: f64) -> f64
+    function log(x: f64) -> f64
+    function lgamma(x: f64) -> f64
+    function floor(x: f64) -> f64
+    function round(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+function ceil_guard(x: f64) -> i64 {
+    let k: f64 = round(x)
+    if fabs(x - k) < 0.0000000001 {
+        return k as i64
+    }
+    return (floor(x) + 1.0) as i64
+}
+
+function F(n: i64) -> i64 {
+    if n == 0 { return 4 }
+    if n == 1 { return 6 }
+    if n == 2 { return 9 }
+    let phi: f64 = (1.0 + sqrt(5.0)) / 2.0
+    let ln_phi: f64 = log(phi)
+    let ln_ln_phi: f64 = log(ln_phi)
+    let lnA: f64 = lgamma((n + 1) as f64) - ((n + 1) as f64) * ln_ln_phi
+    let log_phi_A: f64 = lnA / ln_phi
+    return 3 + ceil_guard(log_phi_A)
+}
+
+function main() -> i32 {
+    printf("%lld\n", F(1234567))
+    return 0
+}

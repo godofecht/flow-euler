@@ -1,0 +1,11 @@
+# Project Euler 755
+# Not Zeckendorf — S(10^13).
+
+extern {
+    function pe_solve() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe_solve())
+    return 0
+}

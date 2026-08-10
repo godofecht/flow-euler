@@ -1,0 +1,201 @@
+# Project Euler 668
+# Square root smooth numbers ≤ 10^10.
+# non_smooth(N) = sum_{p≤r} p + sum_{p>r} floor(N/p), r=isqrt(N)
+# smooth(N) = N - non_smooth(N)
+# Uses sieve for primes up to r, and quotient grouping for large primes.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function isqrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x { x = y; y = (x + n / x) / 2 }
+    return x
+}
+
+function main() -> i32 {
+    let N: i64 = 10000000000
+    let r: i64 = isqrt(N)
+
+    # Sieve primes up to r
+    let sieve: ptr<i8> = calloc(r + 1, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p <= r {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m <= r { sieve[m] = 1; m = m + p }
+        }
+        p = p + 1
+    }
+
+    # Build pi(x) table for x up to r (prefix sum)
+    let pi_table: ptr<i64> = calloc(r + 1, 8)
+    if pi_table == null { return 1 }
+    let mut cnt: i64 = 0
+    let mut i: i64 = 2
+    while i <= r {
+        if sieve[i] == 0 { cnt = cnt + 1 }
+        pi_table[i] = cnt
+        i = i + 1
+    }
+
+    # sum of primes up to r
+    let mut sum_small_primes: i64 = 0
+    i = 2
+    while i <= r {
+        if sieve[i] == 0 { sum_small_primes = sum_small_primes + i }
+        i = i + 1
+    }
+
+    # For p > r: sum floor(N/p) grouped by quotient q = floor(N/p)
+    # q ranges from 1 to N/(r+1)
+    let qmax: i64 = N / (r + 1)
+    let mut sum_large: i64 = 0
+    let mut q: i64 = 1
+    while q <= qmax {
+        let hi: i64 = N / q
+        let lo: i64 = N / (q + 1)
+        # Count primes in (lo, hi]
+        # pi(hi) - pi(lo)
+        let mut pi_hi: i64 = 0
+        let mut pi_lo: i64 = 0
+        if hi <= r {
+            pi_hi = pi_table[hi]
+        }
+        if lo <= r {
+            pi_lo = pi_table[lo]
+        }
+        # For hi > r, we need pi(hi). But hi = N/q and q >= 1, so hi can be up to N.
+        # However, for q=1, hi=N which is huge. We need a different approach.
+        # Actually for q=1: primes in (N/2, N], which is all primes > N/2.
+        # pi(N) - pi(N/2). We don't have pi for values > r.
+        # We need a prime counting function for large values.
+        # Let's use a segmented approach or Meissel-Lehmer.
+        # Actually, for this problem N=10^10, r=10^5. qmax = N/(r+1) ≈ 10^5.
+        # For q=1, hi=N=10^10, lo=N/2=5*10^9. We need pi(10^10) - pi(5*10^9).
+        # This requires a proper prime counting function.
+        # Let me use a different approach: iterate over primes p > r directly.
+        # There are about N/ln(N) - r/ln(r) ≈ 5*10^8 primes up to 10^10.
+        # That's too many to enumerate.
+        # We need Meissel-Lehmer or a sieve up to N.
+        # N = 10^10 is too large for a full sieve.
+        # Let's use the Lucy_Hedgehog method for pi(x).
+        break
+        q = q + 1
+    }
+
+    # Actually, let me use a different approach entirely.
+    # Use the Lucy_Hedgehog sieve to compute pi(x) for all needed values.
+    # This method computes pi(n) in O(n^{2/3}) time and space.
+    # For N=10^10, n^{2/3} = 10^{20/3} ≈ 4.6*10^6, which is feasible.
+
+    # Lucy_Hedgehog method:
+    # We need pi(v) for v = N/k for k=1..r, and v = 1..r.
+    # The method maintains S(v, p) = count of integers 2..v that are not
+    # crossed off by primes <= p.
+
+    # Collect all needed values
+    let MAXV: i64 = r  # number of distinct values
+    # Values: N/1, N/2, ..., N/r, and 1, 2, ..., r
+    # Large values (N/k for k=1..r where N/k > r): about r values
+    # Small values (1..r): r values
+
+    # Use two arrays: small[v] for v=1..r, large[k] for k=1..r (representing N/k)
+    let small_s: ptr<i64> = calloc(r + 1, 8)
+    let large_s: ptr<i64> = calloc(r + 1, 8)
+    if small_s == null || large_s == null { return 1 }
+
+    # Initialize: S(v) = v - 1 (count of 2..v)
+    i = 1
+    while i <= r {
+        small_s[i] = i - 1
+        i = i + 1
+    }
+    i = 1
+    while i <= r {
+        large_s[i] = N / i - 1
+        i = i + 1
+    }
+
+    # Sieve: for each prime p, update S values
+    p = 2
+    while p * p <= N {
+        # If p is prime (small_s[p] > small_s[p-1])
+        if p <= r {
+            if sieve[p] == 0 {
+                let sp: i64 = small_s[p - 1]  # S(p-1, p-1) = pi(p-1)
+                # Update large values
+                i = 1
+                while i <= r {
+                    let v: i64 = N / i
+                    if v < p * p { break }
+                    let d: i64 = v / p
+                    let val: i64 = 0
+                    if d <= r {
+                        val = small_s[d]
+                    } else {
+                        val = large_s[N / d]
+                    }
+                    large_s[i] = large_s[i] - (val - sp)
+                    i = i + 1
+                }
+                # Update small values
+                let mut v: i64 = r
+                while v >= p * p {
+                    small_s[v] = small_s[v] - (small_s[v / p] - sp)
+                    v = v - 1
+                }
+            }
+        }
+        p = p + 1
+    }
+
+    # Now pi(N/k) = large_s[k] for k=1..r
+    # pi(v) = small_s[v] for v=1..r
+
+    # Compute sum_large = sum_{q=1..qmax} q * (pi(N/q) - pi(N/(q+1)))
+    # = sum_{q=1..qmax} q * pi(N/q) - sum_{q=1..qmax} q * pi(N/(q+1))
+    # = sum_{q=1..qmax} q * pi(N/q) - sum_{q=2..qmax+1} (q-1) * pi(N/q)
+    # = pi(N/1) + sum_{q=2..qmax} pi(N/q) - qmax * pi(N/(qmax+1))
+    # But this telescoping isn't right. Let me just compute directly.
+
+    sum_large = 0
+    q = 1
+    while q <= qmax {
+        let hi: i64 = N / q
+        let lo: i64 = N / (q + 1)
+        let pi_hi: i64 = 0
+        let pi_lo: i64 = 0
+        if hi <= r {
+            pi_hi = small_s[hi]
+        } else {
+            pi_hi = large_s[N / hi]
+        }
+        if lo <= r {
+            pi_lo = small_s[lo]
+        } else {
+            if lo > 0 {
+                pi_lo = large_s[N / lo]
+            }
+        }
+        sum_large = sum_large + q * (pi_hi - pi_lo)
+        q = q + 1
+    }
+
+    let non_smooth: i64 = sum_small_primes + sum_large
+    let ans: i64 = N - non_smooth
+    printf("%lld\n", ans)
+
+    free(large_s)
+    free(small_s)
+    free(pi_table)
+    free(sieve)
+    return 0
+}

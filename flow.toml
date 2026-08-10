@@ -1,0 +1,11 @@
+[package]
+name = "flow-euler"
+version = "0.1.0"
+description = "Project Euler solutions in Flow"
+entry = "problems/p001.flow"
+
+[paths]
+# import euler.nt → lib/nt.flow
+euler = "lib"
+
+[dependencies]

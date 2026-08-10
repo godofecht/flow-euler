@@ -1,0 +1,135 @@
+# Project Euler 926
+# Total Roundness — R(10^7!) mod 10^9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+const MOD: i64 = 1000000007
+
+function primes_upto(n: i64, out_count: ptr<i64>) -> ptr<i64> {
+    if n < 2 {
+        out_count[0] = 0
+        return null
+    }
+    let size: i64 = n / 2 + 1
+    let mut sieve: ptr<i8> = calloc(size, 1)
+    let mut i: i64 = 0
+    while i < size {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    let limit: i64 = (sqrt(n as f64)) as i64
+    i = 1
+    while i <= limit / 2 {
+        if sieve[i] != 0 {
+            let p: i64 = 2 * i + 1
+            let mut j: i64 = (p * p) / 2
+            while j < size {
+                sieve[j] = 0
+                j = j + p
+            }
+        }
+        i = i + 1
+    }
+    let mut cnt: i64 = 1
+    i = 1
+    while i < size {
+        if sieve[i] != 0 { cnt = cnt + 1 }
+        i = i + 1
+    }
+    let mut primes: ptr<i64> = calloc(cnt, 8)
+    primes[0] = 2
+    let mut k: i64 = 1
+    i = 1
+    while i < size {
+        if sieve[i] != 0 {
+            primes[k] = 2 * i + 1
+            k = k + 1
+        }
+        i = i + 1
+    }
+    if primes[k - 1] > n { k = k - 1 }
+    free(sieve)
+    out_count[0] = k
+    return primes
+}
+
+function v_p_factorial(n: i64, p: i64) -> i64 {
+    let mut e: i64 = 0
+    let mut pp: i64 = p
+    while pp <= n {
+        e = e + n / pp
+        if pp > n / p { break }
+        pp = pp * p
+    }
+    return e
+}
+
+function apply_exp(D: ptr<i64>, e: i64, c: i64) -> void {
+    let mut k: i64 = 1
+    while k <= e {
+        let mult: i64 = (e / k) + 1
+        let mut m: i64 = 1
+        let mut i: i64 = 0
+        while i < c {
+            m = ((m as i128) * (mult as i128) % (MOD as i128)) as i64
+            i = i + 1
+        }
+        D[k] = ((D[k] as i128) * (m as i128) % (MOD as i128)) as i64
+        k = k + 1
+    }
+}
+
+function total_roundness_factorial(n: i64) -> i64 {
+    if n <= 1 { return 0 }
+    let emax: i64 = v_p_factorial(n, 2)
+    let mut D: ptr<i64> = calloc(emax + 1, 8)
+    let mut i: i64 = 0
+    while i <= emax {
+        D[i] = 1
+        i = i + 1
+    }
+    let mut pc: i64 = 0
+    let mut primes: ptr<i64> = primes_upto(n, &pc)
+    let mut sq: i64 = (sqrt(n as f64)) as i64
+    while (sq + 1) * (sq + 1) <= n { sq = sq + 1 }
+    while sq * sq > n { sq = sq - 1 }
+    let mut split: i64 = 0
+    while split < pc && primes[split] <= sq { split = split + 1 }
+    i = 0
+    while i < split {
+        let e: i64 = v_p_factorial(n, primes[i])
+        apply_exp(D, e, 1)
+        i = i + 1
+    }
+    let mut counts: ptr<i64> = calloc(sq + 1, 8)
+    i = split
+    while i < pc {
+        counts[n / primes[i]] = counts[n / primes[i]] + 1
+        i = i + 1
+    }
+    let mut e: i64 = 1
+    while e <= sq {
+        if counts[e] != 0 { apply_exp(D, e, counts[e]) }
+        e = e + 1
+    }
+    let mut total: i64 = 0
+    let mut k: i64 = 1
+    while k <= emax {
+        total = (total + D[k]) % MOD
+        k = k + 1
+    }
+    free(D)
+    free(primes)
+    free(counts)
+    return (total - emax % MOD + MOD) % MOD
+}
+
+function main() -> i32 {
+    printf("%lld\n", total_roundness_factorial(10000000))
+    return 0
+}

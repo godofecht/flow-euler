@@ -1,0 +1,159 @@
+# Project Euler 672: One More One
+# H(K) = S((7^K - 1)/11) mod 1117117717, K=10^9.
+# Uses 4x4 matrix exponentiation over base-7 digits of 1/11.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1117117717
+
+# 4x4 matrix multiply: R = A * B (mod MOD)
+function mat_mul(a: ptr<i64>, b: ptr<i64>, r: ptr<i64>) -> void {
+    for i in 0..4 {
+        for j in 0..4 {
+            let mut s: i64 = 0
+            for k in 0..4 {
+                s = (s + a[i * 4 + k] * b[k * 4 + j]) % MOD
+            }
+            r[i * 4 + j] = s
+        }
+    }
+}
+
+# 4x4 matrix power: R = M^e (mod MOD)
+function mat_pow(m: ptr<i64>, e: i64, r: ptr<i64>) -> void {
+    # Initialize r = identity
+    for i in 0..4 {
+        for j in 0..4 {
+            if i == j { r[i * 4 + j] = 1 } else { r[i * 4 + j] = 0 }
+        }
+    }
+    # Copy m to base
+    let base: ptr<i64> = calloc(16, 8)
+    for i in 0..16 { base[i] = m[i] }
+    let mut e_local: i64 = e
+    while e_local > 0 {
+        if e_local & 1 == 1 {
+            let tmp: ptr<i64> = calloc(16, 8)
+            mat_mul(r, base, tmp)
+            for i in 0..16 { r[i] = tmp[i] }
+            free(tmp)
+        }
+        let tmp2: ptr<i64> = calloc(16, 8)
+        mat_mul(base, base, tmp2)
+        for i in 0..16 { base[i] = tmp2[i] }
+        free(tmp2)
+        e_local = e_local >> 1
+    }
+    free(base)
+}
+
+# Matrix-vector multiply: v = M * v (mod MOD), v is length 4
+function mat_vec(m: ptr<i64>, v: ptr<i64>, out: ptr<i64>) -> void {
+    for i in 0..4 {
+        let mut s: i64 = 0
+        for k in 0..4 {
+            s = (s + m[i * 4 + k] * v[k]) % MOD
+        }
+        out[i] = s
+    }
+}
+
+# Build digit matrix for appending base-7 digit r
+function digit_matrix(r: i64, out: ptr<i64>) -> void {
+    let c1: i64 = (-6 + 7 * r - (r * (r + 1)) / 2) % MOD
+    if c1 < 0 { c1 = c1 + MOD }
+    let c2: i64
+    if r == 6 { c2 = 0 } else { c2 = (6 - r) % MOD }
+    if c2 < 0 { c2 = c2 + MOD }
+
+    # Row 0: [7, r, 21, c1]
+    out[0] = 7 % MOD
+    out[1] = r % MOD
+    out[2] = 21 % MOD
+    out[3] = c1
+    # Row 1: [0, 1, 0, c2]
+    out[4] = 0
+    out[5] = 1
+    out[6] = 0
+    out[7] = c2
+    # Row 2: [0, 0, 7, r]
+    out[8] = 0
+    out[9] = 0
+    out[10] = 7 % MOD
+    out[11] = r % MOD
+    # Row 3: [0, 0, 0, 1]
+    out[12] = 0
+    out[13] = 0
+    out[14] = 0
+    out[15] = 1
+}
+
+function main() -> i32 {
+    # Base-7 digits of 1/11 with period 10
+    # A = [0,4,3,1,1,6,2,3,5,5]
+    # B = A[1:] + A[:1] = [4,3,1,1,6,2,3,5,5,0]
+    let B: ptr<i64> = calloc(10, 8)
+    B[0] = 4; B[1] = 3; B[2] = 1; B[3] = 1; B[4] = 6
+    B[5] = 2; B[6] = 3; B[7] = 5; B[8] = 5; B[9] = 0
+
+    let K: i64 = 1000000000  # 10^9
+    let total_digits: i64 = K - 1
+    let full_blocks: i64 = total_digits / 10
+    let rem: i64 = total_digits % 10
+
+    # Build block matrix M_block = product of digit_matrix(B[i]) for i=0..9
+    let M_block: ptr<i64> = calloc(16, 8)
+    # Initialize as identity
+    for i in 0..4 {
+        for j in 0..4 {
+            if i == j { M_block[i * 4 + j] = 1 } else { M_block[i * 4 + j] = 0 }
+        }
+    }
+    let dm: ptr<i64> = calloc(16, 8)
+    let tmp: ptr<i64> = calloc(16, 8)
+    for i in 0..10 {
+        digit_matrix(B[i], dm)
+        mat_mul(dm, M_block, tmp)
+        for j in 0..16 { M_block[j] = tmp[j] }
+    }
+    free(dm)
+    free(tmp)
+
+    # v = [0, 0, 0, 1]
+    let v: ptr<i64> = calloc(4, 8)
+    v[0] = 0; v[1] = 0; v[2] = 0; v[3] = 1
+
+    # Apply M_block^full_blocks
+    if full_blocks > 0 {
+        let mp: ptr<i64> = calloc(16, 8)
+        mat_pow(M_block, full_blocks, mp)
+        let vv: ptr<i64> = calloc(4, 8)
+        mat_vec(mp, v, vv)
+        for i in 0..4 { v[i] = vv[i] }
+        free(vv)
+        free(mp)
+    }
+
+    # Apply remaining digits
+    let dm2: ptr<i64> = calloc(16, 8)
+    let vv2: ptr<i64> = calloc(4, 8)
+    for i in 0..rem {
+        digit_matrix(B[i], dm2)
+        mat_vec(dm2, v, vv2)
+        for j in 0..4 { v[j] = vv2[j] }
+    }
+    free(dm2)
+    free(vv2)
+
+    let ans: i64 = v[0] % MOD
+    if ans < 0 { ans = ans + MOD }
+    printf("%lld\n", ans)
+
+    free(v)
+    free(M_block)
+    free(B)
+    return 0
+}

@@ -1,0 +1,56 @@
+# Project Euler 832
+# Mex Sequences — M(10^18) mod 1e9+7 via recursive blocks (mod mul for sums).
+
+const MOD: i64 = 1000000007
+
+function modmul(a: i64, b: i64) -> i64 {
+    let x: i64 = a % MOD
+    let y: i64 = b % MOD
+    let mut r: i64 = ((x as i128) * (y as i128) % (MOD as i128)) as i64
+    if r < 0 { r = r + MOD }
+    return r
+}
+
+function block_sum(start: i64, power: i64) -> i64 {
+    # sum_{t=0..power-1} (start+t) = power*(2*start + power - 1)/2
+    let two: i64 = modmul(2, start) 
+    let inner: i64 = (two + (power % MOD) - 1) % MOD
+    if inner < 0 { inner = inner + MOD }
+    # /2 mod MOD
+    return modmul(modmul(power, inner), (MOD + 1) / 2)
+}
+
+function M(n: i64, a: i64, b: i64, c: i64, i: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut power: i64 = 1
+    let mut e: i64 = 0
+    while e < i {
+        power = power * 4
+        e = e + 1
+    }
+    if power < n {
+        return (M(power, a, b, c, i) + M(n - power, 4 * a, 4 * b, 4 * c, i + 1)) % MOD
+    } elif power == n {
+        return (block_sum(a, power) + block_sum(b, power) + block_sum(c, power)) % MOD
+    } else {
+        let s_power: i64 = power / 4
+        let mut n1: i64 = n
+        if n1 > s_power { n1 = s_power }
+        let sum_1: i64 = M(n1, a, b, c, i - 1) % MOD
+        let mut n2: i64 = n - s_power
+        if n2 > s_power { n2 = s_power }
+        let sum_2: i64 = M(n2, a + s_power, b + 2 * s_power, c + 3 * s_power, i - 1) % MOD
+        let mut n3: i64 = n - 2 * s_power
+        if n3 > s_power { n3 = s_power }
+        let sum_3: i64 = M(n3, a + 2 * s_power, b + 3 * s_power, c + s_power, i - 1) % MOD
+        let mut n4: i64 = n - 3 * s_power
+        if n4 > s_power { n4 = s_power }
+        let sum_4: i64 = M(n4, a + 3 * s_power, b + s_power, c + 2 * s_power, i - 1) % MOD
+        return (sum_1 + sum_2 + sum_3 + sum_4) % MOD
+    }
+}
+
+function main() -> i32 {
+    printf("%lld\n", M(1000000000000000000, 1, 2, 3, 0))
+    return 0
+}

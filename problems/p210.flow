@@ -1,16 +1,7 @@
 # Project Euler 210
 # Obtuse angled triangles N(10^9).
 
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
-}
+import euler.nt { isqrt }
 
 function strip_points(n: i64, start: i64, stop: i64) -> i64 {
     let mut total: i64 = 0

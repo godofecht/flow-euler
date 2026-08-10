@@ -1,16 +1,7 @@
 # Project Euler 182
 # Sum of encryption exponents e with minimal unconcealed messages.
 
-function gcd(a: i64, b: i64) -> i64 {
-    let mut x: i64 = a
-    let mut y: i64 = b
-    while y != 0 {
-        let t: i64 = x % y
-        x = y
-        y = t
-    }
-    return x
-}
+import euler.nt { gcd }
 
 function main() -> i32 {
     let p: i64 = 1009

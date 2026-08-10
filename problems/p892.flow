@@ -1,0 +1,50 @@
+# Project Euler 892
+# Zebra Circles — sum D(n) for n<=1e7 mod 1234567891.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1234567891
+const N_MAX: i64 = 10000000
+
+function solve() -> i64 {
+    let r_max: i64 = N_MAX / 2
+    let inv: ptr<i64> = calloc(r_max + 2, 8)
+    inv[1] = 1
+    let mut i: i64 = 2
+    while i <= r_max + 1 {
+        inv[i] = (MOD - ((MOD / i) * inv[MOD % i]) % MOD) % MOD
+        i = i + 1
+    }
+    let inv2: i64 = (MOD + 1) / 2
+    let mut b: i64 = 1
+    let mut ans: i64 = 0
+    let mut r: i64 = 0
+    while r <= r_max {
+        let bb: i64 = ((b as i128) * (b as i128) % (MOD as i128)) as i64
+        if r > 0 {
+            ans = (ans + ((bb as i128) * (inv2 as i128) % (MOD as i128)) as i64) % MOD
+        }
+        if r > 0 && (2 * r + 1) <= N_MAX {
+            let term: i64 = (((bb as i128) * ((2 * r) as i128) % (MOD as i128)) * (inv[r + 1] as i128) % (MOD as i128)) as i64
+            ans = (ans + term) % MOD
+        }
+        if r < r_max {
+            let inv_rp1: i64 = inv[r + 1]
+            b = ((b as i128) * ((2 * r + 1) as i128) % (MOD as i128)) as i64
+            b = ((b as i128) * ((2 * r + 2) as i128) % (MOD as i128)) as i64
+            b = ((b as i128) * (inv_rp1 as i128) % (MOD as i128)) as i64
+            b = ((b as i128) * (inv_rp1 as i128) % (MOD as i128)) as i64
+        }
+        r = r + 1
+    }
+    free(inv)
+    return ans % MOD
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve())
+    return 0
+}

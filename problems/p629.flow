@@ -1,0 +1,121 @@
+# Project Euler 629: Scatterstone Nim
+# g(n) = f(n,2) + f(n,3) + (n-3)*f(n,4) for n=200, mod 1e9+7.
+# f(n,k) = P(n) - L(n,k) where P(n) = partition count, L(n,k) = losing positions.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const N: i64 = 200
+const WIDTH: i64 = 128
+
+function count_losing(grundy: ptr<i64>) -> i64 {
+    let dp: ptr<i64> = calloc((N + 1) * WIDTH, 8)
+    if dp == null { return -1 }
+    dp[0] = 1
+
+    for size in 1..(N + 1) {
+        let g: i64 = grundy[size]
+        let pair: i64 = 2 * size
+
+        # Step 1: unlimited pairs (coin size 2*size, XOR unchanged)
+        if pair <= N {
+            for s in pair..(N + 1) {
+                for x in 0..WIDTH {
+                    if dp[(s - pair) * WIDTH + x] != 0 {
+                        dp[s * WIDTH + x] = (dp[s * WIDTH + x] + dp[(s - pair) * WIDTH + x]) % MOD
+                    }
+                }
+            }
+        }
+
+        # Step 2: optional single (0/1 coin size, XOR with g)
+        let mut s_rev: i64 = N
+        while s_rev >= size {
+            for x in 0..WIDTH {
+                if dp[(s_rev - size) * WIDTH + x] != 0 {
+                    let j: i64 = x ^ g
+                    if j < WIDTH {
+                        dp[s_rev * WIDTH + j] = (dp[s_rev * WIDTH + j] + dp[(s_rev - size) * WIDTH + x]) % MOD
+                    }
+                }
+            }
+            s_rev = s_rev - 1
+        }
+    }
+
+    let result: i64 = dp[N * WIDTH]
+    free(dp)
+    return result
+}
+
+function main() -> i32 {
+    # Step 1: Partition numbers up to N
+    let partitions: ptr<i64> = calloc(N + 1, 8)
+    if partitions == null { return 1 }
+    partitions[0] = 1
+    for part in 1..(N + 1) {
+        for s in part..(N + 1) {
+            partitions[s] = (partitions[s] + partitions[s - part]) % MOD
+        }
+    }
+
+    # Step 2: Grundy numbers
+    let g2: ptr<i64> = calloc(N + 1, 8)
+    for s in 2..(N + 1) {
+        if s % 2 == 0 { g2[s] = 1 } else { g2[s] = 0 }
+    }
+
+    let g3: ptr<i64> = calloc(N + 1, 8)
+    let seen: ptr<i8> = calloc(256, 1)
+    for n in 2..(N + 1) {
+        for i in 0..256 { seen[i] = 0 }
+
+        for a in 1..(n / 2 + 1) {
+            let xor_val: i64 = g3[a] ^ g3[n - a]
+            if xor_val < 256 { seen[xor_val] = 1 }
+        }
+
+        for a in 1..(n / 3 + 1) {
+            let max_b: i64 = (n - a) / 2
+            for b in a..(max_b + 1) {
+                let c: i64 = n - a - b
+                if b <= c {
+                    let xor_val: i64 = g3[a] ^ g3[b] ^ g3[c]
+                    if xor_val < 256 { seen[xor_val] = 1 }
+                }
+            }
+        }
+
+        let mut mex: i64 = 0
+        while mex < 256 && seen[mex] == 1 { mex = mex + 1 }
+        g3[n] = mex
+    }
+    free(seen)
+
+    let g4: ptr<i64> = calloc(N + 1, 8)
+    for s in 1..(N + 1) {
+        g4[s] = s - 1
+    }
+
+    # Step 3: Compute f values
+    let pn: i64 = partitions[N]
+    let l2: i64 = count_losing(g2)
+    let l3: i64 = count_losing(g3)
+    let l4: i64 = count_losing(g4)
+
+    let f2: i64 = (pn - l2 + MOD) % MOD
+    let f3: i64 = (pn - l3 + MOD) % MOD
+    let f4: i64 = (pn - l4 + MOD) % MOD
+
+    let ans: i64 = (f2 + f3 + (N - 3) * f4 % MOD) % MOD
+    printf("%lld\n", ans)
+
+    free(g4)
+    free(g3)
+    free(g2)
+    free(partitions)
+    return 0
+}

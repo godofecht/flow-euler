@@ -1,0 +1,206 @@
+# Project Euler 691: Long substring with many repetitions
+# Uses suffix automaton (SAM) on binary string c = a XOR b
+# where a is Thue-Morse and b is Beatty sequence.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function popcount(x: i64) -> i64 {
+    let mut v: i64 = x
+    let mut c: i64 = 0
+    while v > 0 {
+        c = c + 1
+        v = v & (v - 1)
+    }
+    return c
+}
+
+function main() -> i32 {
+    let n: i64 = 5000000
+
+    # Fixed-point inverse phi
+    # Use shift=40 with i128 intermediate for isqrt
+    let shift: i64 = 50
+    let scale: i64 = 1
+    for _ in 0..shift { scale = scale * 2 }
+    # sqrt5_scaled = isqrt(5 * scale^2) using i128
+    # 5 * 2^80 = 6656196820966400 * 10^6 ~ 6.6*10^18, fits in i64
+    # Actually 5 * 2^80 = 5 * 1208925819614629174706176, way too big
+    # Use i128: 5 * (2^40)^2 = 5 * 2^80
+    let scale_sq: i128 = (scale as i128) * (scale as i128)
+    let val5: i128 = 5 * scale_sq
+    # Integer sqrt of i128 with proper upper bound
+    # sqrt(val5) where val5 = 5 * 2^80, so sqrt ~ 2.24 * 2^40 ~ 2.46e12
+    let mut lo: i128 = 0
+    let mut hi: i128 = (scale as i128) * 3  # upper bound: sqrt(5)*scale < 3*scale
+    while lo + 1 < hi {
+        let mid: i128 = (lo + hi) / 2
+        if mid * mid <= val5 { lo = mid } else { hi = mid }
+    }
+    let sqrt5_scaled: i64 = lo as i64
+    let inv_phi_scaled: i64 = ((sqrt5_scaled - scale) / 2) as i64
+
+    # SAM arrays: max 2*n + 10 states
+    let max_states: i64 = 2 * n + 10
+    let nxt0: ptr<i64> = calloc(max_states, 8)
+    let nxt1: ptr<i64> = calloc(max_states, 8)
+    let link: ptr<i64> = calloc(max_states, 8)
+    let maxlen: ptr<i64> = calloc(max_states, 8)
+    let occ: ptr<i64> = calloc(max_states, 8)
+
+    # State 0 = dummy, state 1 = root
+    let mut last: i64 = 1
+    let mut size: i64 = 2
+
+    let mut acc: i128 = 0
+    let mut prev_floor: i64 = 0
+
+    for i in 0..n {
+        # b_i = floor((i+1)/phi) - floor(i/phi)
+        acc = acc + (inv_phi_scaled as i128)
+        let cur_floor: i64 = (acc >> shift) as i64
+        let b: i64 = cur_floor - prev_floor
+        prev_floor = cur_floor
+
+        # a_i = parity of popcount(i)
+        let a: i64 = popcount(i) & 1
+        let ch: i64 = a ^ b  # c_i
+
+        let cur: i64 = size
+        size = size + 1
+
+        maxlen[cur] = maxlen[last] + 1
+        occ[cur] = 1
+
+        let mut p: i64 = last
+
+        if ch == 0 {
+            while p != 0 && nxt0[p] == 0 {
+                nxt0[p] = cur
+                p = link[p]
+            }
+            if p == 0 {
+                link[cur] = 1
+            } else {
+                let q: i64 = nxt0[p]
+                if maxlen[p] + 1 == maxlen[q] {
+                    link[cur] = q
+                } else {
+                    let clone: i64 = size
+                    size = size + 1
+                    nxt0[clone] = nxt0[q]
+                    nxt1[clone] = nxt1[q]
+                    link[clone] = link[q]
+                    maxlen[clone] = maxlen[p] + 1
+                    occ[clone] = 0
+
+                    while p != 0 && nxt0[p] == q {
+                        nxt0[p] = clone
+                        p = link[p]
+                    }
+                    link[q] = clone
+                    link[cur] = clone
+                }
+            }
+        } else {
+            while p != 0 && nxt1[p] == 0 {
+                nxt1[p] = cur
+                p = link[p]
+            }
+            if p == 0 {
+                link[cur] = 1
+            } else {
+                let q: i64 = nxt1[p]
+                if maxlen[p] + 1 == maxlen[q] {
+                    link[cur] = q
+                } else {
+                    let clone: i64 = size
+                    size = size + 1
+                    nxt0[clone] = nxt0[q]
+                    nxt1[clone] = nxt1[q]
+                    link[clone] = link[q]
+                    maxlen[clone] = maxlen[p] + 1
+                    occ[clone] = 0
+
+                    while p != 0 && nxt1[p] == q {
+                        nxt1[p] = clone
+                        p = link[p]
+                    }
+                    link[q] = clone
+                    link[cur] = clone
+                }
+            }
+        }
+
+        last = cur
+    }
+
+    # Counting sort states by maxlen
+    let cnt: ptr<i64> = calloc(n + 1, 8)
+    for v in 1..size {
+        cnt[maxlen[v]] = cnt[maxlen[v]] + 1
+    }
+    for L in 1..(n + 1) {
+        cnt[L] = cnt[L] + cnt[L - 1]
+    }
+
+    let order: ptr<i64> = calloc(size, 8)
+    let mut v: i64 = size - 1
+    while v >= 1 {
+        let L: i64 = maxlen[v]
+        cnt[L] = cnt[L] - 1
+        order[cnt[L]] = v
+        v = v - 1
+    }
+
+    # Propagate occurrences
+    let mut idx: i64 = size - 2
+    while idx >= 1 {
+        let st: i64 = order[idx]
+        occ[link[st]] = occ[link[st]] + occ[st]
+        idx = idx - 1
+    }
+
+    # best[k] = max maxlen among states with occ == k
+    let best: ptr<i64> = calloc(n + 1, 8)
+    for v in 1..size {
+        let k: i64 = occ[v]
+        let L: i64 = maxlen[v]
+        if L > best[k] {
+            best[k] = L
+        }
+    }
+
+    # Suffix maximum: best[k] = max(best[k], best[k+1])
+    let mut k: i64 = n - 1
+    while k >= 1 {
+        if best[k] < best[k + 1] {
+            best[k] = best[k + 1]
+        }
+        k = k - 1
+    }
+
+    # Sum non-zero best[k]
+    let mut total: i64 = 0
+    for k in 1..(n + 1) {
+        let val: i64 = best[k]
+        if val == 0 { break }
+        total = total + val
+    }
+
+    printf("%lld\n", total)
+
+    free(best)
+    free(order)
+    free(cnt)
+    free(occ)
+    free(maxlen)
+    free(link)
+    free(nxt1)
+    free(nxt0)
+    return 0
+}

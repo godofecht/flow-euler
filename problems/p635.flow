@@ -1,0 +1,185 @@
+# Project Euler 635: Subset Sums
+# Compute (S_2(10^8) + S_3(10^8)) mod 10^9+9.
+# Uses sieve, batch inversion, and recurrences for binomial coefficients.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000009
+
+function pow_mod(a: i64, e: i64, m: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = a % m
+    let mut ee: i64 = e
+    while ee > 0 {
+        if ee & 1 == 1 { r = (r * b) % m }
+        b = (b * b) % m
+        ee = ee >> 1
+    }
+    return r
+}
+
+function main() -> i32 {
+    let L: i64 = 100000000
+
+    # Odd-only sieve: is_prime[i] = 1 if 2*i+1 is prime
+    let sieve_size: i64 = L / 2 + 1
+    let is_prime: ptr<i64> = calloc(sieve_size, 8)
+    for i in 0..sieve_size { is_prime[i] = 1 }
+    is_prime[0] = 0  # 1 is not prime
+
+    let r: i64 = isqrt(L)
+    let mut p: i64 = 3
+    while p <= r {
+        if is_prime[p / 2] == 1 {
+            let mut j: i64 = (p * p) / 2
+            while j < sieve_size {
+                is_prime[j] = 0
+                j = j + p
+            }
+        }
+        p = p + 2
+    }
+
+    # Batch inversion: inv_half[x] = x^{-1} mod MOD for x=1..max_half
+    let max_half: i64 = (L + 1) / 2
+    let inv_half: ptr<i64> = calloc(max_half + 1, 8)
+
+    let block: i64 = 1000000
+    let pref: ptr<i64> = calloc(block + 1, 8)
+
+    let mut s: i64 = 1
+    while s <= max_half {
+        let cnt: i64 = block
+        if max_half - s + 1 < cnt { cnt = max_half - s + 1 }
+
+        pref[0] = 1
+        let mut x: i64 = s
+        for i in 0..cnt {
+            pref[i + 1] = (pref[i] * x) % MOD
+            x = x + 1
+        }
+
+        let mut inv_total: i64 = pow_mod(pref[cnt], MOD - 2, MOD)
+
+        x = s + cnt - 1
+        for i in 0..cnt {
+            inv_half[x] = (pref[cnt - 1 - i] * inv_total) % MOD
+            inv_total = (inv_total * x) % MOD
+            x = x - 1
+        }
+
+        s = s + cnt
+    }
+    free(pref)
+
+    # Batch inversion for odd numbers: inv_odd[i] = (2*i+1)^{-1} mod MOD
+    let max_odd: i64 = 2 * L + 3
+    let odd_count: i64 = max_odd / 2 + 1
+    let inv_odd: ptr<i64> = calloc(odd_count, 8)
+
+    let pref2: ptr<i64> = calloc(block + 1, 8)
+
+    let mut idx: i64 = 0
+    while idx < odd_count {
+        let cnt: i64 = block
+        if odd_count - idx < cnt { cnt = odd_count - idx }
+
+        pref2[0] = 1
+        let mut x: i64 = 2 * idx + 1
+        for i in 0..cnt {
+            pref2[i + 1] = (pref2[i] * x) % MOD
+            x = x + 2
+        }
+
+        let mut inv_total2: i64 = pow_mod(pref2[cnt], MOD - 2, MOD)
+
+        x = 2 * (idx + cnt - 1) + 1
+        for i in 0..cnt {
+            inv_odd[idx + cnt - 1 - i] = (pref2[cnt - 1 - i] * inv_total2) % MOD
+            inv_total2 = (inv_total2 * x) % MOD
+            x = x - 2
+        }
+
+        idx = idx + cnt
+    }
+    free(pref2)
+
+    # Compute S2 and S3
+    let INV2: i64 = (MOD + 1) / 2
+    let K9: i64 = (9 * INV2) % MOD
+
+    let mut S2: i64 = 2  # A_2(2) = 2
+    let mut S3: i64 = 6  # A_3(2) = 6
+
+    let max_i: i64 = (L - 1) / 2
+
+    # n=1 (i=0): C(2,1)=2, C(3,1)=3
+    let mut C: i64 = 2
+    let mut D: i64 = 3
+
+    # State variables
+    let mut a1: i64 = 3   # 2n+1 = 4*i+3
+    let mut a3: i64 = 5   # 2n+3 = 4*i+5
+    let mut idx_a1: i64 = 1  # (2n+1)//2 = 2*i+1
+    let mut idx_a3: i64 = 2  # (2n+3)//2 = 2*i+2
+
+    let mut t1: i64 = 2   # (3n+1)//2 = 3*i+2
+    let mut t2: i64 = 5   # 3n+2 = 6*i+5
+    let mut t3: i64 = 7   # 3n+4 = 6*i+7
+    let mut t4: i64 = 4   # (3n+5)//2 = 3*i+4
+
+    let mut i: i64 = 0
+    while i <= max_i {
+        if i >= 1 && is_prime[i] == 1 {
+            let invp: i64 = inv_odd[i]
+            # n-1 = 2*i
+            S2 = (S2 + (C + 4 * i) * invp) % MOD
+            S3 = (S3 + (D + 6 * i) * invp) % MOD
+        }
+
+        # Update to next odd n (i -> i+1)
+        let invh: i64 = inv_half[i + 1]
+        let invn2: i64 = inv_odd[i + 1]
+
+        # C update
+        C = (C * a1) % MOD
+        C = (C * a3) % MOD
+        C = (C * invh) % MOD
+        C = (C * invn2) % MOD
+        C = (C * 2) % MOD
+
+        # D update
+        D = (D * K9) % MOD
+        D = (D * t1) % MOD
+        D = (D * t2) % MOD
+        D = (D * t3) % MOD
+        D = (D * t4) % MOD
+        D = (D * invh) % MOD
+        D = (D * invn2) % MOD
+        D = (D * inv_odd[idx_a1]) % MOD
+        D = (D * inv_odd[idx_a3]) % MOD
+
+        i = i + 1
+        a1 = a1 + 4
+        a3 = a3 + 4
+        idx_a1 = idx_a1 + 2
+        idx_a3 = idx_a3 + 2
+        t1 = t1 + 3
+        t2 = t2 + 6
+        t3 = t3 + 6
+        t4 = t4 + 3
+    }
+
+    let ans: i64 = (S2 + S3) % MOD
+    printf("%lld\n", ans)
+
+    free(inv_odd)
+    free(inv_half)
+    free(is_prime)
+    return 0
+}

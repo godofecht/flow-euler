@@ -1,6 +1,8 @@
 # Project Euler 535
 # Fractal Sequence — last 9 digits of T(10^18).
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
@@ -8,17 +10,6 @@ extern {
 
 const MOD: i64 = 1000000000
 const CAP: i64 = 1048576
-
-function isqrt(n: i64) -> i64 {
-    if n < 2 { return n }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
-}
 
 function sum_1_to_m(m: i64) -> i64 {
     if m <= 0 { return 0 }

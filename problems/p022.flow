@@ -1,6 +1,8 @@
 # Project Euler 022
 # Total of all name scores in data/p022.txt.
-# Fixed-width name rows in one buffer — simple, fast, no nested pointers.
+#
+# Parse into NameEntry { packed strcmp keys, letter-score }, then
+# declarative `|> sortBy` (fixed-size array — required by the sort lowering).
 
 extern {
     function fopen(path: string, mode: string) -> ptr<void>
@@ -10,10 +12,29 @@ extern {
     function free(p: ptr<void>) -> void
 }
 
-function name_value(names: ptr<i8>, row: i32, width: i32) -> i64 {
+struct NameEntry {
+    key0: i64
+    key1: i64
+    score: i64
+}
+
+# Pack 8 bytes of a fixed-width name row into one i64 (MSB-first)
+# so ascending key order matches C strcmp on the null-padded row.
+function pack8(names: ptr<i8>, row: i32, width: i32, start: i32) -> i64 {
+    let mut k: i64 = 0
+    for i in 0..8 {
+        let mut c: i64 = (names[row * width + start + i] as i32) as i64
+        if c < 0 {
+            c = c + 256
+        }
+        k = (k << 8) | c
+    }
+    return k
+}
+
+function name_score(names: ptr<i8>, row: i32, width: i32) -> i64 {
     let mut total: i64 = 0
-    let mut i: i32 = 0
-    while i < width {
+    for i in 0..width {
         let c: i32 = names[row * width + i] as i32
         if c == 0 {
             break
@@ -21,35 +42,8 @@ function name_value(names: ptr<i8>, row: i32, width: i32) -> i64 {
         if c >= 65 && c <= 90 {
             total = total + ((c - 64) as i64)
         }
-        i = i + 1
     }
     return total
-}
-
-function name_less(names: ptr<i8>, a: i32, b: i32, width: i32) -> bool {
-    let mut i: i32 = 0
-    while i < width {
-        let ca: i32 = names[a * width + i] as i32
-        let cb: i32 = names[b * width + i] as i32
-        if ca != cb {
-            return ca < cb
-        }
-        if ca == 0 {
-            return false
-        }
-        i = i + 1
-    }
-    return false
-}
-
-function swap_rows(names: ptr<i8>, a: i32, b: i32, width: i32) -> void {
-    let mut i: i32 = 0
-    while i < width {
-        let tmp: i8 = names[a * width + i]
-        names[a * width + i] = names[b * width + i]
-        names[b * width + i] = tmp
-        i = i + 1
-    }
 }
 
 function main() -> i32 {
@@ -92,26 +86,27 @@ function main() -> i32 {
     }
     fclose(f)
 
-    # shell sort over fixed-width rows
-    let mut gap: i32 = count / 2
-    while gap > 0 {
-        let mut i: i32 = gap
-        while i < count {
-            let mut j: i32 = i
-            while j >= gap && name_less(names, j, j - gap, width) {
-                swap_rows(names, j, j - gap, width)
-                j = j - gap
+    # Fixed capacity required by `|> sortBy`; unused slots get max keys
+    # so they sort after every real name.
+    let mut entries: array<NameEntry, 6000>
+    let hi: i64 = 9223372036854775807
+    for i in 0..max_names {
+        if i < count {
+            entries[i] = NameEntry {
+                key0: pack8(names, i, width, 0),
+                key1: pack8(names, i, width, 8),
+                score: name_score(names, i, width)
             }
-            i = i + 1
+        } else {
+            entries[i] = NameEntry { key0: hi, key1: hi, score: 0 }
         }
-        gap = gap / 2
     }
 
+    entries |> sortBy [asc .key0, asc .key1]
+
     let mut total: i64 = 0
-    let mut i: i32 = 0
-    while i < count {
-        total = total + ((i + 1) as i64) * name_value(names, i, width)
-        i = i + 1
+    for i in 0..count {
+        total = total + ((i + 1) as i64) * entries[i].score
     }
     printf("%lld\n", total)
     free(names)

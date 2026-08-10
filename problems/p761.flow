@@ -1,0 +1,36 @@
+# Project Euler 761
+# Runner and spider geometry for n=6? Problem asks specific n — check answer format 5.05505046
+
+extern {
+    function acos(x: f64) -> f64
+    function cos(x: f64) -> f64
+    function sin(x: f64) -> f64
+    function tan(x: f64) -> f64
+}
+
+const PI: f64 = 3.14159265358979323846
+
+function compute(n: i64) -> f64 {
+    let theta: f64 = PI / (n as f64)
+    let tangent: f64 = tan(theta)
+    let mut branch: i64 = 0
+    let mut k: i64 = 0
+    while k <= n {
+        let value: f64 = sin((k as f64) * theta) - ((k + n) as f64) * tangent * cos((k as f64) * theta)
+        if value >= 0.0 {
+            branch = k - 1
+            break
+        }
+        k = k + 1
+    }
+    let mut argument: f64 = 2.0 * sin((branch as f64) * theta) / (((branch + n) as f64) * tangent) - cos((branch as f64) * theta)
+    if argument > 1.0 { argument = 1.0 }
+    if argument < -1.0 { argument = -1.0 }
+    let alpha: f64 = ((branch as f64) * theta + acos(argument)) / 2.0
+    return 1.0 / cos(alpha)
+}
+
+function main() -> i32 {
+    printf("%.8f\n", compute(6))
+    return 0
+}

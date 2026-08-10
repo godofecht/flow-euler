@@ -1,0 +1,11 @@
+# Project Euler 413
+# One-child numbers: digit DP with 2/5-adic and coprime moduli.
+
+extern {
+    function pe413_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe413_answer())
+    return 0
+}

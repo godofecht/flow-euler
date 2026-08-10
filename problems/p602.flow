@@ -1,0 +1,70 @@
+# Project Euler 602
+# Product of Head Counts — Eulerian number A(n, k-1) mod 1e9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    if b < 0 { b = b + mod }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function eulerian(n: i64, m: i64) -> i64 {
+    if n <= 0 { return 0 }
+    if m < 0 || m >= n { return 0 }
+    let M: i64 = m + 1
+    let inv: ptr<i32> = calloc(M + 2, 4)
+    if inv == null { return -1 }
+    inv[1] = 1
+    let mut i: i64 = 2
+    while i <= M + 1 {
+        let t: i64 = (MOD - (MOD / i) * (inv[MOD % i] as i64) % MOD) % MOD
+        inv[i] = t as i32
+        i = i + 1
+    }
+    let mut comb: i64 = 1
+    let mut res: i64 = 0
+    let n1: i64 = n + 1
+    let mut j: i64 = 0
+    while j <= M {
+        let base: i64 = M - j
+        if base != 0 {
+            let term: i64 = (comb * modpow(base, n, MOD)) % MOD
+            if (j & 1) == 1 {
+                res = res - term
+                if res < 0 { res = res + MOD }
+            } else {
+                res = res + term
+                if res >= MOD { res = res - MOD }
+            }
+        }
+        if j < M {
+            comb = (comb * (n1 - j)) % MOD
+            comb = (comb * (inv[j + 1] as i64)) % MOD
+        }
+        j = j + 1
+    }
+    free(inv)
+    return res
+}
+
+function main() -> i32 {
+    printf("%lld\n", eulerian(10000000, 3999999))
+    return 0
+}

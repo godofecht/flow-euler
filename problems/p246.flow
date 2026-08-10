@@ -1,16 +1,7 @@
 # Project Euler 246
 # Lattice points with tangent angle > 45° to ellipse.
 
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
-}
+import euler.nt { isqrt }
 
 function angle_gt(u: i64, v: i64, a2: i64, b2: i64, ab: i64, A: i64) -> bool {
     let left: i64 = 4 * (b2 * u + a2 * v - ab)

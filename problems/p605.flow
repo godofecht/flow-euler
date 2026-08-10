@@ -1,0 +1,34 @@
+# Project Euler 605
+# Pairwise coin-tossing: last 8 digits of M_n(k) for n=10^8+7, k=10^4+7.
+
+const MOD: i64 = 100000000
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    if b < 0 { b = b + mod }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function main() -> i32 {
+    let n: i64 = 100000007
+    let k: i64 = 10007
+    let two_n: i64 = modpow(2, n, MOD)
+    let A_mod: i64 = (two_n - 1) % MOD
+    let N0_mod: i64 = ((k - 1) * A_mod + (n % MOD)) % MOD
+    let part1: i64 = modpow(2, n - k, MOD)
+    let part2: i64 = (A_mod * A_mod) % MOD
+    let ans: i64 = (part1 * N0_mod % MOD) * part2 % MOD
+    printf("%08lld\n", ans)
+    return 0
+}

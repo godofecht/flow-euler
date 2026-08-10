@@ -1,6 +1,8 @@
 # Project Euler 273
 # Sum of a for squarefree n<=150 = product of distinct 4k+1 primes.
 
+import euler.nt { is_prime }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
@@ -9,17 +11,6 @@ extern {
 function abs64(a: i64) -> i64 {
     if a < 0 { return -a }
     return a
-}
-
-function is_prime(p: i64) -> bool {
-    if p < 2 { return false }
-    if p % 2 == 0 { return p == 2 }
-    let mut i: i64 = 3
-    while i * i <= p {
-        if p % i == 0 { return false }
-        i = i + 2
-    }
-    return true
 }
 
 function find_ab(prime: i64, a_out: ptr<i64>, b_out: ptr<i64>) -> void {

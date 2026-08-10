@@ -1,0 +1,78 @@
+# Project Euler 607
+# Marsh crossing: local search minimizing travel time (Snell).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+function duration(xs: ptr<f64>, ys: ptr<f64>) -> f64 {
+    let mut result: f64 = 0.0
+    let mut i: i64 = 0
+    while i < 7 {
+        let dx: f64 = xs[i] - xs[i + 1]
+        let dy: f64 = ys[i] - ys[i + 1]
+        let way: f64 = sqrt(dx * dx + dy * dy)
+        let mut sp: f64 = 10.0
+        if i == 1 { sp = 9.0 }
+        elif i == 2 { sp = 8.0 }
+        elif i == 3 { sp = 7.0 }
+        elif i == 4 { sp = 6.0 }
+        elif i == 5 { sp = 5.0 }
+        elif i == 6 { sp = 10.0 }
+        result = result + way / sp
+        i = i + 1
+    }
+    return result
+}
+
+function main() -> i32 {
+    let xs: ptr<f64> = calloc(8, 8)
+    let ys: ptr<f64> = calloc(8, 8)
+    if xs == null || ys == null { return 1 }
+    let scaling: f64 = sqrt(2.0)
+    let direct: f64 = 50.0 * scaling
+    let current: f64 = ((100.0 - direct) / 2.0) / scaling
+    xs[0] = 0.0
+    ys[0] = 0.0
+    xs[1] = current
+    ys[1] = current
+    let mut i: i64 = 1
+    while i <= 5 {
+        xs[i + 1] = current + (i as f64) * 10.0
+        ys[i + 1] = current + (i as f64) * 10.0
+        i = i + 1
+    }
+    xs[7] = 100.0 / scaling
+    ys[7] = 100.0 / scaling
+
+    let mut seed: i64 = 0
+    let MASK64: i128 = 18446744073709551615
+    let mut delta: f64 = 0.01
+    while delta >= 0.00001 {
+        let mut it: i64 = 0
+        while it < 10000 {
+            let t1: i128 = ((6364136223846793005 as i128) * ((seed as i64) as i128) + 1) & MASK64
+            seed = t1 as i64
+            let r1: i64 = ((t1 >> 30) & MASK64) as i64
+            let t2: i128 = ((6364136223846793005 as i128) * ((seed as i64) as i128) + 1) & MASK64
+            seed = t2 as i64
+            let r2: i64 = ((t2 >> 30) & MASK64) as i64
+            let mut dlt: f64 = delta
+            if (r1 & 1) == 1 { dlt = 0.0 - delta }
+            let point_id: i64 = ((r2 % 6 + 6) % 6) + 1
+            let old: f64 = duration(xs, ys)
+            ys[point_id] = ys[point_id] + dlt
+            if duration(xs, ys) >= old {
+                ys[point_id] = ys[point_id] - dlt
+            }
+            it = it + 1
+        }
+        delta = delta / 10.0
+    }
+    printf("%.10f\n", duration(xs, ys))
+    free(xs)
+    free(ys)
+    return 0
+}

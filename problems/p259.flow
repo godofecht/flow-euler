@@ -6,7 +6,7 @@ extern {
     function free(p: ptr<void>) -> void
 }
 
-function gcd(a0: i64, b0: i64) -> i64 {
+function gcd_abs(a0: i64, b0: i64) -> i64 {
     let mut a: i64 = a0
     let mut b: i64 = b0
     if a < 0 { a = -a }
@@ -130,7 +130,7 @@ function main() -> i32 {
                                         den = 0 - den
                                     }
                                     if den != 0 {
-                                        let g: i64 = gcd(num, den)
+                                        let g: i64 = gcd_abs(num, den)
                                         num = num / g
                                         den = den / g
                                         hn = (num * 1000003 + den) % HCAP

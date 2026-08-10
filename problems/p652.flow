@@ -1,0 +1,159 @@
+# Project Euler 652
+# Distinct Values of a Proto-logarithmic Function: D(10^18) last 9 digits.
+# Uses Mobius inversion, totient prefix sums, and primitive base counting.
+
+import euler.nt { gcd, isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+
+# Integer k-th root: floor(n^(1/k))
+function kth_root(n: i64, k: i64) -> i64 {
+    if k <= 1 { return n }
+    if n < 2 { return n }
+    # Upper bound: 2^(ceil(bitlen/k))
+    let mut bits: i64 = 0
+    let mut tmp: i64 = n
+    while tmp > 0 { bits = bits + 1; tmp = tmp / 2 }
+    let mut high: i64 = 1
+    let mut bh: i64 = (bits + k - 1) / k
+    while bh > 0 { high = high * 2; bh = bh - 1 }
+    let mut low: i64 = 1
+    while low + 1 < high {
+        let mid: i64 = (low + high) / 2
+        # Compute mid^k with overflow check using i128
+        let mut p: i128 = 1
+        let mut kk: i64 = k
+        while kk > 0 {
+            p = p * (mid as i128)
+            kk = kk - 1
+        }
+        if p <= (n as i128) { low = mid }
+        else { high = mid }
+    }
+    return low
+}
+
+# Count integers u with 2 <= u <= x that are NOT perfect powers.
+function primitive_count(x: i64, mu: ptr<i64>) -> i64 {
+    if x < 2 { return 0 }
+    let mut K: i64 = 0
+    let mut tmp: i64 = x
+    while tmp > 1 { K = K + 1; tmp = tmp / 2 }
+    let mut s: i64 = 0
+    for d in 1..(K + 1) {
+        let md: i64 = mu[d]
+        if md == 0 { continue }
+        s = s + md * (kth_root(x, d) - 1)
+    }
+    return s
+}
+
+function main() -> i32 {
+    let N: i64 = 1000000000000000000
+
+    # L = floor(log2(N))
+    let mut L: i64 = 0
+    let mut tmp: i64 = N
+    while tmp > 1 { L = L + 1; tmp = tmp / 2 }
+
+    # Mobius sieve up to L
+    let mu: ptr<i64> = calloc(L + 2, 8)
+    let primes: ptr<i64> = calloc(L + 10, 8)
+    let is_comp: ptr<i8> = calloc(L + 2, 1)
+    let mut npc: i64 = 0
+    mu[1] = 1
+    for i in 2..(L + 2) {
+        if is_comp[i] == 0 {
+            primes[npc] = i
+            npc = npc + 1
+            mu[i] = -1
+        }
+        for j in 0..npc {
+            let p: i64 = primes[j]
+            let v: i64 = i * p
+            if v > L + 1 { break }
+            is_comp[v] = 1
+            if i % p == 0 { mu[v] = 0; break }
+            mu[v] = -mu[i]
+        }
+    }
+
+    # Totient prefix sums up to L
+    let phi: ptr<i64> = calloc(L + 2, 8)
+    for i in 0..(L + 2) { phi[i] = i }
+    for i in 2..(L + 2) {
+        if phi[i] == i {
+            let mut j: i64 = i
+            while j <= L + 1 {
+                phi[j] = phi[j] - phi[j] / i
+                j = j + i
+            }
+        }
+    }
+    let mut phisum: i64 = 0
+    for i in 1..(L + 2) {
+        phisum = phisum + phi[i]
+    }
+
+    # Distinct rational values: 2 * phisum[L] - 1
+    let rational: i64 = 2 * phisum - 1
+
+    # Precompute floor(N^(1/e)) for e=1..L+1
+    let rootN: ptr<i64> = calloc(L + 2, 8)
+    for e in 1..(L + 2) {
+        rootN[e] = kth_root(N, e)
+    }
+
+    # P[e] = primitive_count(rootN[e])
+    let P: ptr<i64> = calloc(L + 2, 8)
+    for e in 1..(L + 2) {
+        P[e] = primitive_count(rootN[e], mu)
+    }
+
+    # count[e] = P[e] for e=1..L
+    let count: ptr<i64> = calloc(L + 1, 8)
+    for e in 1..(L + 1) {
+        count[e] = P[e]
+    }
+
+    # T = total ordered primitive pairs with gcd(exp(m),exp(n)) = 1
+    let mut T: i64 = 0
+    for e in 1..(L + 1) {
+        let ce: i64 = count[e]
+        if ce == 0 { continue }
+        for f in 1..(L + 1) {
+            if gcd(e, f) == 1 {
+                T = T + ce * count[f]
+            }
+        }
+    }
+
+    # S = pairs where m,n share same primitive root, gcd(exponents)=1
+    let mut S: i64 = 0
+    for k in 1..(L + 1) {
+        let num_roots: i64 = P[k] - P[k + 1]
+        # coprime_pairs_upto_k = 2 * phisum[k] - 1
+        let mut ps: i64 = 0
+        for i in 1..(k + 1) { ps = ps + phi[i] }
+        let coprime_pairs: i64 = 2 * ps - 1
+        S = S + num_roots * coprime_pairs
+    }
+
+    let irrational: i64 = T - S
+    let ans: i64 = ((rational + irrational) % MOD + MOD) % MOD
+    printf("%09lld\n", ans)
+
+    free(count)
+    free(P)
+    free(rootN)
+    free(phi)
+    free(is_comp)
+    free(primes)
+    free(mu)
+    return 0
+}

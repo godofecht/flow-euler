@@ -1,29 +1,11 @@
 # Project Euler 171
 # Last 9 digits of sum of all n < 10^20 whose digit-square-sum is a square.
 
+import euler.nt { isqrt, mod_pow }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-function isqrt(n: i64) -> i64 {
-    let mut x: i64 = 1
-    while x * x <= n {
-        x = x + 1
-    }
-    return x - 1
-}
-
-function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
-    let mut base: i64 = base0 % mod
-    let mut exp: i64 = exp0
-    let mut r: i64 = 1
-    while exp > 0 {
-        if (exp & 1) == 1 { r = (r * base) % mod }
-        base = (base * base) % mod
-        exp = exp >> 1
-    }
-    return r
 }
 
 function main() -> i32 {
@@ -47,7 +29,7 @@ function main() -> i32 {
             while k + j2 <= max_s {
                 let idx: i64 = (i as i64) * ((max_s + 1) as i64) + ((k + j2) as i64)
                 let prev: i64 = ((i - 1) as i64) * ((max_s + 1) as i64) + (k as i64)
-                let add: i64 = (sqsum[prev] + modpow(10, (i - 1) as i64, mod) * (j as i64) % mod * count[prev] % mod) % mod
+                let add: i64 = (sqsum[prev] + mod_pow(10, (i - 1) as i64, mod) * (j as i64) % mod * count[prev] % mod) % mod
                 sqsum[idx] = (sqsum[idx] + add) % mod
                 count[idx] = (count[idx] + count[prev]) % mod
                 k = k + 1

@@ -1,0 +1,69 @@
+# Project Euler 942
+# Mersenne's Square Root — Gauss sum mod 10^9+7 for R(q), q=1122659.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function gauss_sum_mod(q: i64) -> i64 {
+    let qr: ptr<i8> = calloc(q, 1)
+    let half: i64 = (q - 1) / 2
+    let mut sq: i64 = 1
+    let mut delta: i64 = 3
+    let mut i: i64 = 0
+    while i < half {
+        qr[sq] = 1
+        sq = sq + delta
+        if sq >= q { sq = sq - q }
+        delta = delta + 2
+        i = i + 1
+    }
+    let mut s: i64 = 0
+    let mut pow2: i64 = 2
+    let mut a: i64 = 1
+    while a < q {
+        if qr[a] != 0 {
+            s = s + pow2
+            if s >= MOD { s = s - MOD }
+        } else {
+            s = s - pow2
+            if s < 0 { s = s + MOD }
+        }
+        pow2 = pow2 * 2
+        if pow2 >= MOD { pow2 = pow2 - MOD }
+        a = a + 1
+    }
+    free(qr)
+    return s
+}
+
+function modpow2(q: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = 2
+    let mut e: i64 = q
+    while e > 0 {
+        if (e & 1) == 1 { r = (r * b) % MOD }
+        b = (b * b) % MOD
+        e = e / 2
+    }
+    return r
+}
+
+function r_mod(q: i64) -> i64 {
+    let g: i64 = gauss_sum_mod(q)
+    let p_mod: i64 = (modpow2(q) - 1 + MOD) % MOD
+    let r: i64 = q & 7
+    if r == 1 || r == 3 {
+        return (p_mod - g + MOD) % MOD
+    }
+    return g
+}
+
+function main() -> i32 {
+    # q from problem statement (Mersenne prime exponent)
+    printf("%lld\n", r_mod(74207281))
+    return 0
+}

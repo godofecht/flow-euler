@@ -1,27 +1,7 @@
 # Project Euler 195
 # Count 60-degree integer triangles with inradius r <= 1053779.
 
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
-}
-
-function gcd(a: i64, b: i64) -> i64 {
-    let mut x: i64 = a
-    let mut y: i64 = b
-    while y != 0 {
-        let t: i64 = x % y
-        x = y
-        y = t
-    }
-    return x
-}
+import euler.nt { isqrt, gcd }
 
 function T(N: i64) -> i64 {
     let N2: i64 = N * N

@@ -3,6 +3,8 @@
 # (unitary divisor sum). Uses Möbius inversion:
 # sum_{n<=N} sigma*(n) = sum_e μ(e)*e * sum_{k<=N/e^2} k*floor((N/e^2)/k).
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
@@ -26,17 +28,6 @@ function sum_k_floor(M: i64, MOD: i64, INV2: i64) -> i64 {
         k = maxk + 1
     }
     return s
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function main() -> i32 {

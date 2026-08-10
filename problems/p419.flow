@@ -1,0 +1,11 @@
+# Project Euler 419
+# Look-and-say A(n),B(n),C(n) mod 2^30 for n=10^12 via Conway decay matrices.
+
+extern {
+    function pe419_answer_print() -> void
+}
+
+function main() -> i32 {
+    pe419_answer_print()
+    return 0
+}

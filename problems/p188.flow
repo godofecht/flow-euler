@@ -1,16 +1,7 @@
 # Project Euler 188
 # Last 8 digits of 1777↑↑1855.
 
-function gcd(a: i64, b: i64) -> i64 {
-    let mut x: i64 = a
-    let mut y: i64 = b
-    while y != 0 {
-        let t: i64 = x % y
-        x = y
-        y = t
-    }
-    return x
-}
+import euler.nt { gcd }
 
 function modpow(base: i64, exp: i64, mod: i64) -> i64 {
     let mut r: i64 = 1

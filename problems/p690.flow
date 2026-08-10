@@ -1,0 +1,217 @@
+# Project Euler 690
+# Tom and Jerry: T(2019) mod 1e9+7.
+# Tom graphs = forests of lobster trees. Uses generating functions and Euler transform.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
+            r = t as i64
+        }
+        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
+        b = t2 as i64
+        e = e / 2
+    }
+    return r
+}
+
+function mod_inv(a: i64, mod: i64) -> i64 {
+    return mod_pow(a, mod - 2, mod)
+}
+
+# Multiply two series a,b mod MOD, truncated to degree n.
+function poly_mul(a: ptr<i64>, b: ptr<i64>, res: ptr<i64>, n: i64) -> void {
+    for i in 0..(n + 1) { res[i] = 0 }
+    for i in 0..(n + 1) {
+        let ai: i64 = a[i]
+        if ai == 0 { continue }
+        let maxj: i64 = n - i
+        for j in 0..(maxj + 1) {
+            let v: i128 = (res[i + j] as i128) + (ai as i128) * (b[j] as i128)
+            res[i + j] = (v % (MOD as i128)) as i64
+        }
+    }
+}
+
+# Series inverse g = 1/f mod x^(n+1), assuming f[0] != 0.
+function inv_series(f: ptr<i64>, g: ptr<i64>, n: i64) -> void {
+    let g0: i64 = mod_inv(f[0], MOD)
+    g[0] = g0
+    for i in 1..(n + 1) {
+        let mut s: i128 = 0
+        for k in 1..(i + 1) {
+            s = s + (f[k] as i128) * (g[i - k] as i128)
+            s = s % (MOD as i128)
+        }
+        g[i] = ((MOD - (s as i64)) * g0 % MOD) % MOD
+    }
+}
+
+function main() -> i32 {
+    let N: i64 = 2019
+
+    # Allocate working arrays
+    let P: ptr<i64> = calloc(N + 1, 8)
+    let Q: ptr<i64> = calloc(N + 1, 8)
+    let num: ptr<i64> = calloc(N + 1, 8)
+    let den: ptr<i64> = calloc(N + 1, 8)
+    let inv_den: ptr<i64> = calloc(N + 1, 8)
+    let term: ptr<i64> = calloc(N + 1, 8)
+    let term2: ptr<i64> = calloc(N + 1, 8)
+    let P2: ptr<i64> = calloc(N + 1, 8)
+    let Q2: ptr<i64> = calloc(N + 1, 8)
+    let one_plus: ptr<i64> = calloc(N + 1, 8)
+    let s_arr: ptr<i64> = calloc(N + 1, 8)
+    let main_arr: ptr<i64> = calloc(N + 1, 8)
+    let xP: ptr<i64> = calloc(N + 1, 8)
+    let A1: ptr<i64> = calloc(N + 1, 8)
+    let A2: ptr<i64> = calloc(N + 1, 8)
+    let temp: ptr<i64> = calloc(N + 1, 8)
+    let last: ptr<i64> = calloc(N + 1, 8)
+    let A: ptr<i64> = calloc(N + 1, 8)
+    let c: ptr<i64> = calloc(N + 1, 8)
+    let inv: ptr<i64> = calloc(N + 1, 8)
+    let a: ptr<i64> = calloc(N + 1, 8)
+    let tmp: ptr<i64> = calloc(N + 1, 8)
+
+    if P == null || A == null || a == null { return 1 }
+
+    let inv2: i64 = (MOD + 1) / 2
+
+    # partitions_upto: p[0..N] mod MOD
+    P[0] = 1
+    for k in 1..(N + 1) {
+        for i in k..(N + 1) {
+            P[i] = P[i] + P[i - k]
+            if P[i] >= MOD { P[i] = P[i] - MOD }
+        }
+    }
+
+    # Q = P - 1/(1-x) = P - 1 (since 1/(1-x) = 1 + x + x^2 + ...)
+    for i in 0..(N + 1) {
+        Q[i] = (P[i] - 1 + MOD) % MOD
+    }
+
+    # term1 = Q^2 / (1 - x*P)
+    poly_mul(Q, Q, num, N)
+    den[0] = 1
+    for i in 1..(N + 1) {
+        den[i] = (MOD - P[i - 1]) % MOD
+    }
+    inv_series(den, inv_den, N)
+    poly_mul(num, inv_den, term, N)
+
+    # P2 = P(x^2), Q2 = P(x^2) - 1
+    for i in 0..(N + 1) { P2[i] = 0 }
+    for i in 0..(N / 2 + 1) {
+        P2[2 * i] = P[i]
+        Q2[2 * i] = (P[i] - 1 + MOD) % MOD
+    }
+    for i in 0..(N + 1) {
+        if i % 2 == 1 { Q2[i] = 0 }
+    }
+
+    # one_plus = 1 + x*P
+    one_plus[0] = 1
+    for i in 1..(N + 1) {
+        one_plus[i] = P[i - 1]
+    }
+
+    # term2 = Q2*(1 + x*P) / (1 - x^2*P(x^2))
+    poly_mul(Q2, one_plus, num, N)
+    for i in 0..(N + 1) { den[i] = 0 }
+    den[0] = 1
+    for i in 2..(N + 1) {
+        den[i] = (MOD - P2[i - 2]) % MOD
+    }
+    inv_series(den, inv_den, N)
+    poly_mul(num, inv_den, term2, N)
+
+    # s = (term1 + term2) / 2
+    for i in 0..(N + 1) {
+        s_arr[i] = (term[i] + term2[i]) % MOD * inv2 % MOD
+    }
+
+    # main = x^2 * s
+    for i in 0..(N + 1) { main_arr[i] = 0 }
+    for i in 0..(N - 1) {
+        main_arr[i + 2] = s_arr[i]
+    }
+
+    # xP = x * P
+    for i in 0..(N + 1) { xP[i] = 0 }
+    for i in 1..(N + 1) {
+        xP[i] = P[i - 1]
+    }
+
+    # last = x^3 / ((1-x)^2 * (1+x))
+    # (1-x)^-2 = sum (m+1) x^m
+    for i in 0..(N + 1) {
+        A1[i] = (i + 1) % MOD
+    }
+    # (1+x)^-1 = sum (-1)^m x^m
+    for i in 0..(N + 1) {
+        if i % 2 == 0 { A2[i] = 1 }
+        else { A2[i] = MOD - 1 }
+    }
+    poly_mul(A1, A2, temp, N)
+    for i in 0..(N + 1) { last[i] = 0 }
+    for i in 0..(N - 2) {
+        last[i + 3] = temp[i]
+    }
+
+    # A = main + xP - last  (lobster counts)
+    for i in 0..(N + 1) {
+        A[i] = (main_arr[i] + xP[i] - last[i] % MOD + MOD) % MOD
+    }
+
+    # Euler transform: a(x) = prod_{k>=1} (1 - x^k)^(-b[k])
+    # c[k] = sum_{d|k} d * b[d]
+    for i in 0..(N + 1) { c[i] = 0 }
+    for d in 1..(N + 1) {
+        let bd: i64 = A[d]
+        if bd == 0 { continue }
+        let addv: i64 = (d % MOD) * bd % MOD
+        let mut k: i64 = d
+        while k <= N {
+            c[k] = c[k] + addv
+            if c[k] >= MOD { c[k] = c[k] - MOD }
+            k = k + d
+        }
+    }
+
+    # inv[i] = i^(-1) mod MOD
+    inv[0] = 0
+    for i in 1..(N + 1) {
+        inv[i] = mod_inv(i, MOD)
+    }
+
+    # a[0] = 1, a[m] = (sum_{k=1..m} c[k]*a[m-k]) * inv[m] mod MOD
+    a[0] = 1
+    for m in 1..(N + 1) {
+        let mut s: i128 = 0
+        for k in 1..(m + 1) {
+            s = s + (c[k] as i128) * (a[m - k] as i128)
+            s = s % (MOD as i128)
+        }
+        a[m] = ((s % (MOD as i128)) as i64) * inv[m] % MOD
+    }
+
+    printf("%lld\n", a[N])
+
+    free(tmp); free(a); free(inv); free(c); free(A); free(last); free(temp)
+    free(A2); free(A1); free(xP); free(main_arr); free(s_arr); free(one_plus)
+    free(Q2); free(P2); free(term2); free(term); free(inv_den); free(den)
+    free(num); free(Q); free(P)
+    return 0
+}

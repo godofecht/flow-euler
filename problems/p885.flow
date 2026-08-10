@@ -1,0 +1,68 @@
+# Project Euler 885
+# Sorted Digits — S(n)=(1/9)*sum_k (10+9k)^n - 10^n, mod 1123455689.
+
+const MOD: i64 = 1123455689
+
+function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base0 % mod
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (b as i128) % (mod as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function egcd(a0: i64, b0: i64, x_out: ptr<i64>, y_out: ptr<i64>) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    let mut x0: i64 = 1
+    let mut y0: i64 = 0
+    let mut x1: i64 = 0
+    let mut y1: i64 = 1
+    while b != 0 {
+        let q: i64 = a / b
+        let nb: i64 = a - q * b
+        a = b
+        b = nb
+        let nx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = nx
+        let ny: i64 = y0 - q * y1
+        y0 = y1
+        y1 = ny
+    }
+    x_out[0] = x0
+    y_out[0] = y0
+    return a
+}
+
+function modinv(a: i64, m: i64) -> i64 {
+    let mut x: i64 = 0
+    let mut y: i64 = 0
+    egcd(a % m, m, &x, &y)
+    let r: i64 = x % m
+    if r < 0 { return r + m }
+    return r
+}
+
+function S(n: i64) -> i64 {
+    let inv9: i64 = modinv(9, MOD)
+    let mut total: i64 = 0
+    let mut k: i64 = 1
+    while k <= 9 {
+        total = (total + modpow(10 + 9 * k, n, MOD)) % MOD
+        k = k + 1
+    }
+    total = (total - (9 * modpow(10, n, MOD)) % MOD + MOD) % MOD
+    return ((total as i128) * (inv9 as i128) % (MOD as i128)) as i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", S(18))
+    return 0
+}

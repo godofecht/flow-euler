@@ -1,0 +1,324 @@
+# Project Euler 670: Colouring a Strip
+# Tile a 2xn rectangle with 1x1, 1x2, 1x3 horizontal and 2x1 vertical domino tiles.
+# 4 colours, no 4 corners meeting, adjacent tiles different colours.
+# F(10^16) mod 1000004321.
+# Uses BFS state enumeration + matrix exponentiation.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000004321
+const COLORS: i64 = 4
+const NONE: i64 = 4
+
+# State: (v_prev, inT, contT, valT, inB, contB, valB)
+# Packed as: v_prev*1000000 + inT*100000 + contT*10000 + valT*1000 + inB*100 + contB*10 + valB
+function pack_state(v_prev: i64, inT: i64, contT: i64, valT: i64, inB: i64, contB: i64, valB: i64) -> i64 {
+    return v_prev * 1000000 + inT * 100000 + contT * 10000 + valT * 1000 + inB * 100 + contB * 10 + valB
+}
+
+function unpack_v_prev(s: i64) -> i64 { return s / 1000000 }
+function unpack_inT(s: i64) -> i64 { return (s / 100000) % 10 }
+function unpack_contT(s: i64) -> i64 { return (s / 10000) % 10 }
+function unpack_valT(s: i64) -> i64 { return (s / 1000) % 10 }
+function unpack_inB(s: i64) -> i64 { return (s / 100) % 10 }
+function unpack_contB(s: i64) -> i64 { return (s / 10) % 10 }
+function unpack_valB(s: i64) -> i64 { return s % 10 }
+
+# BFS state enumeration
+const MAX_STATES: i64 = 2000
+
+function build_automaton(state_arr: ptr<i64>, adj_idx: ptr<i64>, adj_val: ptr<i64>, adj_w: ptr<i64>) -> i64 {
+    # Returns number of states, fills adjacency as CSR-like structure
+    let init: i64 = pack_state(1, 0, 0, NONE, 0, 0, NONE)
+    state_arr[0] = init
+    let mut n_states: i64 = 1
+    let mut head: i64 = 0
+    let mut n_edges: i64 = 0
+
+    # Temporary transition buffer per state
+    let trans_states: ptr<i64> = calloc(200, 8)
+    let trans_weights: ptr<i64> = calloc(200, 8)
+
+    while head < n_states {
+        let s: i64 = state_arr[head]
+        let v_prev: i64 = unpack_v_prev(s)
+        let inT: i64 = unpack_inT(s)
+        let contT: i64 = unpack_contT(s)
+        let valT: i64 = unpack_valT(s)
+        let inB: i64 = unpack_inB(s)
+        let contB: i64 = unpack_contB(s)
+        let valB: i64 = unpack_valB(s)
+
+        # Compute transitions
+        let mut n_trans: i64 = 0
+
+        let cT: i64 = valT  # meaningful only if inT
+        let cB: i64 = valB  # meaningful only if inB
+
+        # nextT = (in, cont, val) for top row
+        let nextT_in: i64
+        let nextT_cont: i64
+        let nextT_val: i64
+        if inT != 0 {
+            if contT != 0 { nextT_in = 1; nextT_cont = 0; nextT_val = valT }
+            else { nextT_in = 0; nextT_cont = 0; nextT_val = valT }
+        } else {
+            nextT_in = -1; nextT_cont = -1; nextT_val = -1  # unused
+        }
+
+        let nextB_in: i64
+        let nextB_cont: i64
+        let nextB_val: i64
+        if inB != 0 {
+            if contB != 0 { nextB_in = 1; nextB_cont = 0; nextB_val = valB }
+            else { nextB_in = 0; nextB_cont = 0; nextB_val = valB }
+        } else {
+            nextB_in = -1; nextB_cont = -1; nextB_val = -1
+        }
+
+        let leftT: i64 = valT  # meaningful only if inT==0
+        let leftB: i64 = valB  # meaningful only if inB==0
+
+        # Helper: add transition
+        # add(v_cur, nt_in, nt_cont, nt_val, nb_in, nb_cont, nb_val, ways)
+
+        # Case 1: both cells occupied
+        if inT != 0 && inB != 0 {
+            if cT != cB {
+                let ns: i64 = pack_state(0, nextT_in, nextT_cont, nextT_val, nextB_in, nextB_cont, nextB_val)
+                trans_states[n_trans] = ns
+                trans_weights[n_trans] = 1
+                n_trans = n_trans + 1
+            }
+        }
+        else {
+        # Case 2: top occupied, bottom free
+        if inT != 0 && inB == 0 {
+            for L in 1..4 {
+                for col in 0..COLORS {
+                    if leftB != NONE && col == leftB { continue }
+                    if col == cT { continue }
+                    let bs_in: i64
+                    let bs_cont: i64
+                    if L == 1 { bs_in = 0; bs_cont = 0 }
+                    else { if L == 2 { bs_in = 1; bs_cont = 0 }
+                    else { bs_in = 1; bs_cont = 1 } }
+
+                    # No-4-corners check: v_prev==0 and v_cur==0 and inT==0 and inB==0
+                    # In Case 2, inT!=0 so check always passes
+                    let ns: i64 = pack_state(0, nextT_in, nextT_cont, nextT_val, bs_in, bs_cont, col)
+                    trans_states[n_trans] = ns
+                    trans_weights[n_trans] = 1
+                    n_trans = n_trans + 1
+                }
+            }
+        }
+        else {
+        # Case 3: bottom occupied, top free
+        if inT == 0 && inB != 0 {
+            for L in 1..4 {
+                for col in 0..COLORS {
+                    if leftT != NONE && col == leftT { continue }
+                    if col == cB { continue }
+                    let ts_in: i64
+                    let ts_cont: i64
+                    if L == 1 { ts_in = 0; ts_cont = 0 }
+                    else { if L == 2 { ts_in = 1; ts_cont = 0 }
+                    else { ts_in = 1; ts_cont = 1 } }
+
+                    # No-4-corners check: v_prev==0 and v_cur==0 and inT==0 and inB==0
+                    # In Case 3, inB!=0 so check always passes
+                    let ns: i64 = pack_state(0, ts_in, ts_cont, col, nextB_in, nextB_cont, nextB_val)
+                    trans_states[n_trans] = ns
+                    trans_weights[n_trans] = 1
+                    n_trans = n_trans + 1
+                }
+            }
+        }
+        else {
+            # Case 4: both cells free
+            # Option A: vertical domino
+            for col in 0..COLORS {
+                if leftT != NONE && col == leftT { continue }
+                if leftB != NONE && col == leftB { continue }
+                let ns: i64 = pack_state(1, 0, 0, col, 0, 0, col)
+                trans_states[n_trans] = ns
+                trans_weights[n_trans] = 1
+                n_trans = n_trans + 1
+            }
+
+            # Option B: two horizontal tiles
+            for Lt in 1..4 {
+                for Lb in 1..4 {
+                    for ct in 0..COLORS {
+                        if leftT != NONE && ct == leftT { continue }
+                        for cb in 0..COLORS {
+                            if leftB != NONE && cb == leftB { continue }
+                            if ct == cb { continue }
+
+                            let ts_in: i64
+                            let ts_cont: i64
+                            if Lt == 1 { ts_in = 0; ts_cont = 0 }
+                            else { if Lt == 2 { ts_in = 1; ts_cont = 0 }
+                            else { ts_in = 1; ts_cont = 1 } }
+
+                            let bs_in: i64
+                            let bs_cont: i64
+                            if Lb == 1 { bs_in = 0; bs_cont = 0 }
+                            else { if Lb == 2 { bs_in = 1; bs_cont = 0 }
+                            else { bs_in = 1; bs_cont = 1 } }
+
+                            # Check no-4-corners: v_prev==0 and v_cur==0 and inT==0 and inB==0
+                            # In Case 4, inT==0 and inB==0 and v_cur=0, so check v_prev only
+                            if v_prev == 0 { continue }
+
+                            let ns: i64 = pack_state(0, ts_in, ts_cont, ct, bs_in, bs_cont, cb)
+                            trans_states[n_trans] = ns
+                            trans_weights[n_trans] = 1
+                            n_trans = n_trans + 1
+                        }
+                    }
+                }
+            }
+        }
+        }
+        }
+
+        # Merge duplicate transitions
+        let mut merged_n: i64 = 0
+        for ti in 0..n_trans {
+            let found: i64 = -1
+            for mi in 0..merged_n {
+                if trans_states[mi] == trans_states[ti] {
+                    trans_weights[mi] = (trans_weights[mi] + trans_weights[ti]) % MOD
+                    found = 1
+                }
+            }
+            if found == -1 {
+                trans_states[merged_n] = trans_states[ti]
+                trans_weights[merged_n] = trans_weights[ti]
+                merged_n = merged_n + 1
+            }
+        }
+
+        adj_idx[head] = n_edges
+        for ti in 0..merged_n {
+            # Find or add state
+            let ns: i64 = trans_states[ti]
+            let mut found: i64 = -1
+            for si in 0..n_states {
+                if state_arr[si] == ns { found = si }
+            }
+            if found == -1 {
+                state_arr[n_states] = ns
+                found = n_states
+                n_states = n_states + 1
+            }
+            adj_val[n_edges] = found
+            adj_w[n_edges] = trans_weights[ti]
+            n_edges = n_edges + 1
+        }
+
+        head = head + 1
+    }
+
+    adj_idx[n_states] = n_edges  # sentinel
+
+    free(trans_weights)
+    free(trans_states)
+    return n_states
+}
+
+function main() -> i32 {
+    # Build automaton
+    let state_arr: ptr<i64> = calloc(MAX_STATES, 8)
+    let adj_idx: ptr<i64> = calloc(MAX_STATES + 1, 8)
+    let adj_val: ptr<i64> = calloc(MAX_STATES * 200, 8)
+    let adj_w: ptr<i64> = calloc(MAX_STATES * 200, 8)
+
+    let S: i64 = build_automaton(state_arr, adj_idx, adj_val, adj_w)
+
+    # Build dense matrix
+    let T: ptr<i64> = calloc(S * S, 8)
+    for i in 0..S {
+        for ei in adj_idx[i]..adj_idx[i + 1] {
+            let j: i64 = adj_val[ei]
+            T[i * S + j] = adj_w[ei]
+        }
+    }
+
+    # Initial vector: state 0 (init state)
+    let v0: ptr<i64> = calloc(S, 8)
+    v0[0] = 1
+
+    # Matrix exponentiation: v = v0 * T^n
+    let n: i64 = 10000000000000000  # 10^16
+
+    let vcur: ptr<i64> = calloc(S, 8)
+    for i in 0..S { vcur[i] = v0[i] }
+
+    let power: ptr<i64> = calloc(S * S, 8)
+    for i in 0..(S * S) { power[i] = T[i] }
+
+    let tmp_vcur: ptr<i64> = calloc(S, 8)
+    let tmp_mat: ptr<i64> = calloc(S * S, 8)
+
+    let mut e: i64 = n
+    while e > 0 {
+        if e & 1 == 1 {
+            # vcur = vcur * power
+            for i in 0..S { tmp_vcur[i] = 0 }
+            for i in 0..S {
+                if vcur[i] == 0 { continue }
+                for j in 0..S {
+                    tmp_vcur[j] = (tmp_vcur[j] + vcur[i] * power[i * S + j]) % MOD
+                }
+            }
+            for i in 0..S { vcur[i] = tmp_vcur[i] }
+        }
+        e = e >> 1
+        if e > 0 {
+            # power = power * power
+            for i in 0..(S * S) { tmp_mat[i] = 0 }
+            for i in 0..S {
+                for k in 0..S {
+                    if power[i * S + k] == 0 { continue }
+                    for j in 0..S {
+                        tmp_mat[i * S + j] = (tmp_mat[i * S + j] + power[i * S + k] * power[k * S + j]) % MOD
+                    }
+                }
+            }
+            for i in 0..(S * S) { power[i] = tmp_mat[i] }
+        }
+    }
+
+    # Sum over accepting states (inT==0 and inB==0)
+    let mut ans: i64 = 0
+    for i in 0..S {
+        let inT: i64 = unpack_inT(state_arr[i])
+        let inB: i64 = unpack_inB(state_arr[i])
+        if inT == 0 && inB == 0 {
+            ans = (ans + vcur[i]) % MOD
+        }
+    }
+
+    printf("%lld\n", ans)
+
+    free(tmp_mat)
+    free(tmp_vcur)
+    free(power)
+    free(vcur)
+    free(v0)
+    free(T)
+    free(adj_w)
+    free(adj_val)
+    free(adj_idx)
+    free(state_arr)
+    return 0
+}

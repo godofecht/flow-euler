@@ -1,0 +1,282 @@
+# Project Euler 637: Flexible Digit Sum
+# g(10^7, 10, 3) = sum of n where f(n,10) == f(n,3).
+# f(n,B) = minimum steps to reduce n to single digit by partitioning digits.
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MAX_LEN10: i64 = 8
+const MAX_LEN3: i64 = 15
+
+# Digit sum tables
+let mut g_ds10: ptr<i32> = null
+let mut g_ds3: ptr<i32> = null
+
+# Powers
+let mut g_pow10: ptr<i64> = null
+let mut g_pow3: ptr<i64> = null
+
+# Blocks: for each length, list of partitions (start, len, start, len, ...)
+# Stored as flat arrays: blocks10_start[len][idx], blocks10_len[len][idx], blocks10_count[len]
+let mut g_blocks10_start: ptr<i64> = null
+let mut g_blocks10_len: ptr<i64> = null
+let mut g_blocks10_count: ptr<i64> = null
+let mut g_blocks3_start: ptr<i64> = null
+let mut g_blocks3_len: ptr<i64> = null
+let mut g_blocks3_count: ptr<i64> = null
+
+# Precomputed blocks for each length: blocks[len] = list of (start, len) pairs
+# Max partitions for length L = 2^(L-1). For L=8, that's 128 partitions.
+# Each partition has up to L pairs. Total storage: 128 * 8 * 2 = 2048 entries per length.
+# For 8 lengths: 16384 entries. For base 3: 15 lengths, 2^14=16384 partitions * 15 * 2 = 491520 entries.
+
+# Let's use a simpler approach: store blocks as bitmasks and compute partitions on the fly.
+# For each length L, iterate over all 2^(L-1) masks in order of decreasing popcount.
+
+function popcount(x: i64) -> i64 {
+    let mut v: i64 = x
+    let mut c: i64 = 0
+    while v > 0 {
+        c = c + 1
+        v = v & (v - 1)
+    }
+    return c
+}
+
+# For a given mask and length, compute the partition sum using prefix values
+function partition_sum(prefix: ptr<i64>, mask: i64, length: i64, base_pow: ptr<i64>) -> i64 {
+    let mut s: i64 = 0
+    let mut start: i64 = 0
+    let mut i: i64 = 0
+    while i < length - 1 {
+        if ((mask >> (length - 2 - i)) & 1) == 1 {
+            let ln: i64 = i - start + 1
+            s = s + prefix[start + ln] - prefix[start] * base_pow[ln]
+            start = i + 1
+        }
+        i = i + 1
+    }
+    let ln: i64 = length - start
+    s = s + prefix[start + ln] - prefix[start] * base_pow[ln]
+    return s
+}
+
+# Sort masks by popcount descending using simple counting sort
+function sort_masks_by_popcount(masks: ptr<i64>, count: i64) -> void {
+    # Counting sort by popcount, descending order
+    let buckets: ptr<i64> = calloc(64, 8)
+    for i in 0..count {
+        let pc: i64 = popcount(masks[i])
+        buckets[pc] = buckets[pc] + 1
+    }
+    # Compute offsets in descending popcount order
+    let offsets: ptr<i64> = calloc(64, 8)
+    let mut pos: i64 = 0
+    let mut pc: i64 = 63
+    while pc >= 0 {
+        offsets[pc] = pos
+        pos = pos + buckets[pc]
+        pc = pc - 1
+    }
+    let output: ptr<i64> = calloc(count, 8)
+    for i in 0..count {
+        let pc: i64 = popcount(masks[i])
+        output[offsets[pc]] = masks[i]
+        offsets[pc] = offsets[pc] + 1
+    }
+    for i in 0..count { masks[i] = output[i] }
+    free(output)
+    free(offsets)
+    free(buckets)
+}
+
+# Precompute sorted masks for each length
+let mut g_sorted_masks10: ptr<i64> = null  # [len * 128]
+let mut g_mask_count10: ptr<i64> = null    # [len]
+let mut g_sorted_masks3: ptr<i64> = null   # [len * 16384]
+let mut g_mask_count3: ptr<i64> = null     # [len]
+
+function precompute_masks() -> void {
+    # Base 10: lengths 2..8
+    g_sorted_masks10 = calloc(9 * 128, 8)
+    g_mask_count10 = calloc(9, 8)
+    for length in 2..9 {
+        let count: i64 = 1 << (length - 1)
+        let base: i64 = length * 128
+        for m in 0..count {
+            g_sorted_masks10[base + m] = m
+        }
+        sort_masks_by_popcount(g_sorted_masks10 + base, count)
+        g_mask_count10[length] = count
+    }
+
+    # Base 3: lengths 2..15
+    g_sorted_masks3 = calloc(16 * 16384, 8)
+    g_mask_count3 = calloc(16, 8)
+    for length in 2..16 {
+        let count: i64 = 1 << (length - 1)
+        let base: i64 = length * 16384
+        for m in 0..count {
+            g_sorted_masks3[base + m] = m
+        }
+        sort_masks_by_popcount(g_sorted_masks3 + base, count)
+        g_mask_count3[length] = count
+    }
+}
+
+function main() -> i32 {
+    let limit: i64 = 10000000
+
+    # Digit sum tables
+    g_ds10 = calloc(limit + 1, 4)
+    g_ds3 = calloc(limit + 1, 4)
+    for i in 1..(limit + 1) {
+        g_ds10[i] = g_ds10[i / 10] + (i % 10) as i32
+        g_ds3[i] = g_ds3[i / 3] + (i % 3) as i32
+    }
+
+    # Powers
+    g_pow10 = calloc(9, 8)
+    g_pow3 = calloc(16, 8)
+    g_pow10[0] = 1
+    for i in 0..8 { g_pow10[i + 1] = g_pow10[i] * 10 }
+    g_pow3[0] = 1
+    for i in 0..15 { g_pow3[i + 1] = g_pow3[i] * 3 }
+
+    # Precompute sorted masks
+    precompute_masks()
+
+    # Iterate over all n from 1 to limit
+    let digits10: ptr<i64> = calloc(8, 8)
+    let digits3: ptr<i64> = calloc(15, 8)
+    let prefix10: ptr<i64> = calloc(9, 8)
+    let prefix3: ptr<i64> = calloc(16, 8)
+
+    let mut len10: i64 = 1
+    let mut len3: i64 = 1
+    let mut sum10: i64 = 0
+    let mut sum3: i64 = 0
+
+    let mut total: i64 = 0
+
+    for n in 1..(limit + 1) {
+        # Increment base-10 digits
+        let mut i: i64 = 0
+        while i < len10 && digits10[i] == 9 {
+            sum10 = sum10 - 9
+            digits10[i] = 0
+            i = i + 1
+        }
+        if i == len10 {
+            digits10[i] = 1
+            len10 = len10 + 1
+            sum10 = sum10 + 1
+        } else {
+            digits10[i] = digits10[i] + 1
+            sum10 = sum10 + 1
+        }
+
+        # Increment base-3 digits
+        i = 0
+        while i < len3 && digits3[i] == 2 {
+            sum3 = sum3 - 2
+            digits3[i] = 0
+            i = i + 1
+        }
+        if i == len3 {
+            digits3[i] = 1
+            len3 = len3 + 1
+            sum3 = sum3 + 1
+        } else {
+            digits3[i] = digits3[i] + 1
+            sum3 = sum3 + 1
+        }
+
+        # Compute f10
+        let f10: i64
+        if len10 == 1 {
+            f10 = 0
+        } else { if sum10 < 10 {
+            f10 = 1
+        } else {
+            # Build prefix values (MSD first)
+            let mut p: i64 = 0
+            prefix10[0] = 0
+            let mut pos: i64 = 0
+            let mut idx: i64 = len10 - 1
+            while idx >= 0 {
+                p = p * 10 + digits10[idx]
+                pos = pos + 1
+                prefix10[pos] = p
+                idx = idx - 1
+            }
+
+            let mut good: i64 = 0
+            let base: i64 = len10 * 128
+            for mi in 0..g_mask_count10[len10] {
+                let mask: i64 = g_sorted_masks10[base + mi]
+                let s: i64 = partition_sum(prefix10, mask, len10, g_pow10)
+                if (g_ds10[s] as i64) < 10 {
+                    good = 1
+                    break
+                }
+            }
+            if good == 1 { f10 = 2 } else { f10 = 3 }
+        } }
+
+        # Compute f3
+        let f3: i64
+        if len3 == 1 {
+            f3 = 0
+        } else { if sum3 < 3 {
+            f3 = 1
+        } else {
+            let mut p: i64 = 0
+            prefix3[0] = 0
+            let mut pos: i64 = 0
+            let mut idx: i64 = len3 - 1
+            while idx >= 0 {
+                p = p * 3 + digits3[idx]
+                pos = pos + 1
+                prefix3[pos] = p
+                idx = idx - 1
+            }
+
+            let mut good: i64 = 0
+            let base: i64 = len3 * 16384
+            for mi in 0..g_mask_count3[len3] {
+                let mask: i64 = g_sorted_masks3[base + mi]
+                let s: i64 = partition_sum(prefix3, mask, len3, g_pow3)
+                if (g_ds3[s] as i64) < 3 {
+                    good = 1
+                    break
+                }
+            }
+            if good == 1 { f3 = 2 } else { f3 = 3 }
+        } }
+
+        if f10 == f3 {
+            total = total + n
+        }
+    }
+
+    printf("%lld\n", total)
+
+    free(prefix3)
+    free(prefix10)
+    free(digits3)
+    free(digits10)
+    free(g_mask_count3)
+    free(g_sorted_masks3)
+    free(g_mask_count10)
+    free(g_sorted_masks10)
+    free(g_pow3)
+    free(g_pow10)
+    free(g_ds3)
+    free(g_ds10)
+    return 0
+}

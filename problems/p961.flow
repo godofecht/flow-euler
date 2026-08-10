@@ -1,0 +1,119 @@
+# Project Euler 961
+# Removing Digits — impartial game W(10^18).
+# Only nonzero digit positions matter; count first-player wins among n < 10^18.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut win_memo: ptr<i8> = null
+let mut win_ready: ptr<i8> = null
+
+function idx(d: i64, mask: i64) -> i64 {
+    return d * (1 << 18) + mask
+}
+
+function first_wins(d: i64, mask: i64) -> i64 {
+    let i: i64 = idx(d, mask)
+    if win_ready[i] != 0 {
+        return win_memo[i] as i64
+    }
+    if mask == 0 {
+        win_ready[i] = 1
+        win_memo[i] = 0
+        return 0
+    }
+    let mut pos: i64 = 0
+    while pos < d {
+        let mut bits: [i64; 18]
+        let mut n: i64 = 0
+        let mut j: i64 = 0
+        while j < d {
+            if j != pos {
+                bits[n] = (mask >> (d - 1 - j)) & 1
+                n = n + 1
+            }
+            j = j + 1
+        }
+        let mut any: i64 = 0
+        j = 0
+        while j < n {
+            if bits[j] != 0 { any = 1 }
+            j = j + 1
+        }
+        if any == 0 {
+            win_ready[i] = 1
+            win_memo[i] = 1
+            return 1
+        }
+        let mut start: i64 = 0
+        while start < n && bits[start] == 0 {
+            start = start + 1
+        }
+        let nd: i64 = n - start
+        let mut nm: i64 = 0
+        j = start
+        while j < n {
+            nm = (nm << 1) | bits[j]
+            j = j + 1
+        }
+        if first_wins(nd, nm) == 0 {
+            win_ready[i] = 1
+            win_memo[i] = 1
+            return 1
+        }
+        pos = pos + 1
+    }
+    win_ready[i] = 1
+    win_memo[i] = 0
+    return 0
+}
+
+function ipow9(k: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut i: i64 = 0
+    while i < k {
+        r = r * 9
+        i = i + 1
+    }
+    return r
+}
+
+function W_digits(d: i64) -> i64 {
+    let mut total: i64 = 0
+    let lim: i64 = 1 << d
+    let mut mask: i64 = 0
+    while mask < lim {
+        if ((mask >> (d - 1)) & 1) != 0 {
+            if first_wins(d, mask) != 0 {
+                let mut k: i64 = 0
+                let mut b: i64 = 0
+                while b < d {
+                    if (mask & (1 << b)) != 0 { k = k + 1 }
+                    b = b + 1
+                }
+                total = total + ipow9(k)
+            }
+        }
+        mask = mask + 1
+    }
+    return total
+}
+
+function main() -> i32 {
+    let cells: i64 = 19 * (1 << 18)
+    win_memo = calloc(cells, 1)
+    win_ready = calloc(cells, 1)
+    if win_memo == null || win_ready == null { return 1 }
+    let mut total: i64 = 0
+    let mut d: i64 = 1
+    while d <= 18 {
+        total = total + W_digits(d)
+        d = d + 1
+    }
+    printf("%lld\n", total)
+    free(win_memo)
+    free(win_ready)
+    return 0
+}

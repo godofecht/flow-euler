@@ -1,0 +1,112 @@
+# Project Euler 603
+# S(C(10^6, 10^12)) mod 10^9+7.
+# Substring-sum monoid: merge is O(1), binary exponentiation repeats block 10^12 times.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log(x: f64) -> f64
+}
+
+import euler.nt { isqrt }
+
+struct Node {
+    len: i64
+    len_mod: i64
+    pow_len: i64   # 10^len mod MOD
+    pow_sum: i64   # sum_{i=1..len} 10^i mod MOD
+    val: i64       # numeric value mod MOD
+    pre: i64       # sum of prefix values
+    suf: i64       # sum of suffix values
+    subs: i64      # sum of all substring values
+}
+
+function identity() -> Node {
+    return Node { len: 0, len_mod: 0, pow_len: 1, pow_sum: 0, val: 0, pre: 0, suf: 0, subs: 0 }
+}
+
+function merge(a: Node, b: Node, MOD: i64) -> Node {
+    return Node {
+        len: a.len + b.len,
+        len_mod: (a.len_mod + b.len_mod) % MOD,
+        pow_len: (a.pow_len * b.pow_len) % MOD,
+        pow_sum: (a.pow_sum + a.pow_len * b.pow_sum) % MOD,
+        val: (a.val * b.pow_len + b.val) % MOD,
+        pre: (a.pre + a.val * b.pow_sum + b.pre) % MOD,
+        suf: (b.suf + a.suf * b.pow_len + a.len_mod * b.val) % MOD,
+        subs: (a.subs + b.subs + a.suf * b.pow_sum + a.len_mod * b.pre) % MOD,
+    }
+}
+
+function append_digit(n: Node, d: i64, MOD: i64) -> Node {
+    let new_suf: i64 = (n.suf * 10 + (n.len + 1) * d) % MOD
+    let new_val: i64 = (n.val * 10 + d) % MOD
+    let new_pow_len: i64 = (n.pow_len * 10) % MOD
+    return Node {
+        len: n.len + 1,
+        len_mod: (n.len_mod + 1) % MOD,
+        pow_len: new_pow_len,
+        pow_sum: (n.pow_sum + new_pow_len) % MOD,
+        val: new_val,
+        pre: (n.pre + new_val) % MOD,
+        suf: new_suf,
+        subs: (n.subs + new_suf) % MOD,
+    }
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000007
+    let N_PRIMES: i64 = 1000000
+    let K: i64 = 1000000000000
+
+    # Sieve primes up to estimated nth prime bound
+    let bound: f64 = (N_PRIMES as f64) * (log(N_PRIMES as f64) + log(log(N_PRIMES as f64) + 1.0)) + 100.0
+    let LIMIT: i64 = bound as i64 + 100
+
+    let sieve: ptr<i8> = calloc(LIMIT + 1, 1)
+    if sieve == null { return 1 }
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p <= LIMIT {
+        if sieve[p] == 0 {
+            for m in (p * p)..(LIMIT + 1) step p { sieve[m] = 1 }
+        }
+        p = p + 1
+    }
+
+    # Build monoid node for P(N_PRIMES) by streaming prime digits
+    let mut node: Node = identity()
+    let mut count: i64 = 0
+    let mut pp: i64 = 2
+    while count < N_PRIMES {
+        if sieve[pp] == 0 {
+            let digits: array<i64, 16> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            let mut ndig: i64 = 0
+            let mut tmp: i64 = pp
+            while tmp > 0 { digits[ndig] = tmp % 10; ndig = ndig + 1; tmp = tmp / 10 }
+            # Append digits MSB-first
+            let mut di: i64 = ndig - 1
+            while di >= 0 {
+                node = append_digit(node, digits[di], MOD)
+                di = di - 1
+            }
+            count = count + 1
+        }
+        pp = pp + 1
+    }
+    free(sieve)
+
+    # Binary exponentiation: node^K via repeated merging
+    let mut result: Node = identity()
+    let mut base: Node = node
+    let mut e: i64 = K
+    while e > 0 {
+        if e % 2 == 1 { result = merge(result, base, MOD) }
+        e = e / 2
+        if e > 0 { base = merge(base, base, MOD) }
+    }
+
+    printf("%lld\n", result.subs)
+    return 0
+}

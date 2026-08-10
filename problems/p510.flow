@@ -1,16 +1,7 @@
 # Project Euler 510
 # Tangent Circles — parameterized (m,n) families, N = 10^9.
 
-function gcd(a0: i64, b0: i64) -> i64 {
-    let mut a: i64 = a0
-    let mut b: i64 = b0
-    while b != 0 {
-        let t: i64 = a % b
-        a = b
-        b = t
-    }
-    return a
-}
+import euler.nt { gcd }
 
 function triangle(n: i64) -> i64 {
     return n * (n + 1) / 2

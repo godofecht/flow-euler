@@ -2,6 +2,8 @@
 # Coprime Nim
 # L(10^7,10^7) mod 10^9+7 via Grundy frequencies + FWHT XOR power.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
@@ -45,17 +47,6 @@ function fwht(a: ptr<i64>, n: i64) -> void {
         }
         h = step
     }
-}
-
-function isqrt(n: i64) -> i64 {
-    if n <= 0 { return 0 }
-    let mut x: i64 = n
-    let mut y: i64 = (x + 1) / 2
-    while y < x {
-        x = y
-        y = (x + n / x) / 2
-    }
-    return x
 }
 
 function compute_L(n: i64, k: i64) -> i64 {

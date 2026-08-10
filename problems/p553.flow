@@ -1,7 +1,12 @@
 # Project Euler 553
-# Power Sets of Power Sets
+# Power Sets of Power Sets — EGF log/exp via NTT (native).
+# Companion: problems/native/p553.c
+
+extern {
+    function pe553_answer() -> i64
+}
 
 function main() -> i32 {
-    printf("%lld\n", 57717170)
+    printf("%lld\n", pe553_answer())
     return 0
 }

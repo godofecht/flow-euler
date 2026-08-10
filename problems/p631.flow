@@ -1,0 +1,11 @@
+# Project Euler 631
+# Counting permutations with bounded left-to-right maxima gaps; f(10^18,40).
+
+extern {
+    function pe631_answer() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", pe631_answer())
+    return 0
+}

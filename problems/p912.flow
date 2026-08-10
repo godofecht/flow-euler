@@ -1,0 +1,218 @@
+# Project Euler 912
+# Where are the Odds — digit DP F(10^16) mod 10^9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function realloc(p: ptr<void>, size: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+
+# Row layout (5 i128 = 80 bytes): count[3], then pack oc/os/os2 as i64 in trailing space.
+# Simpler: parallel arrays.
+
+let mut count0: ptr<i128> = null
+let mut count1: ptr<i128> = null
+let mut count2: ptr<i128> = null
+let mut oc0: ptr<i64> = null
+let mut oc1: ptr<i64> = null
+let mut oc2: ptr<i64> = null
+let mut os0: ptr<i64> = null
+let mut os1: ptr<i64> = null
+let mut os2a: ptr<i64> = null
+let mut os20: ptr<i64> = null
+let mut os21: ptr<i64> = null
+let mut os22: ptr<i64> = null
+let mut nrows: i64 = 0
+
+function ensure(cap_needed: i64) -> void {
+    # grow handled in build
+}
+
+function get_count(rem: i64, cons: i64) -> i128 {
+    if cons == 0 { return count0[rem] }
+    if cons == 1 { return count1[rem] }
+    return count2[rem]
+}
+
+function get_oc(rem: i64, cons: i64) -> i64 {
+    if cons == 0 { return oc0[rem] }
+    if cons == 1 { return oc1[rem] }
+    return oc2[rem]
+}
+
+function get_os(rem: i64, cons: i64) -> i64 {
+    if cons == 0 { return os0[rem] }
+    if cons == 1 { return os1[rem] }
+    return os2a[rem]
+}
+
+function get_os2(rem: i64, cons: i64) -> i64 {
+    if cons == 0 { return os20[rem] }
+    if cons == 1 { return os21[rem] }
+    return os22[rem]
+}
+
+function set_row(rem: i64, cons: i64, cnt: i128, oc: i64, os: i64, os2v: i64) -> void {
+    if cons == 0 {
+        count0[rem] = cnt
+        oc0[rem] = oc
+        os0[rem] = os
+        os20[rem] = os2v
+    } elif cons == 1 {
+        count1[rem] = cnt
+        oc1[rem] = oc
+        os1[rem] = os
+        os21[rem] = os2v
+    } else {
+        count2[rem] = cnt
+        oc2[rem] = oc
+        os2a[rem] = os
+        os22[rem] = os2v
+    }
+}
+
+function prefix(rem: i64, cons: i64, t: i128, oc_out: ptr<i64>, os_out: ptr<i64>, os2_out: ptr<i64>) -> void {
+    if t <= (0 as i128) {
+        oc_out[0] = 0
+        os_out[0] = 0
+        os2_out[0] = 0
+        return
+    }
+    let total: i128 = get_count(rem, cons)
+    if t >= total {
+        oc_out[0] = get_oc(rem, cons)
+        os_out[0] = get_os(rem, cons)
+        os2_out[0] = get_os2(rem, cons)
+        return
+    }
+    if rem == 0 {
+        if cons > 0 {
+            oc_out[0] = 1
+            os_out[0] = 1
+            os2_out[0] = 1
+        } else {
+            oc_out[0] = 0
+            os_out[0] = 0
+            os2_out[0] = 0
+        }
+        return
+    }
+    let c0: i128 = get_count(rem - 1, 0)
+    if t <= c0 {
+        prefix(rem - 1, 0, t, oc_out, os_out, os2_out)
+        return
+    }
+    let oc0v: i64 = get_oc(rem - 1, 0)
+    let os0v: i64 = get_os(rem - 1, 0)
+    let os20v: i64 = get_os2(rem - 1, 0)
+    let mut oc1v: i64 = 0
+    let mut os1v: i64 = 0
+    let mut os21v: i64 = 0
+    prefix(rem - 1, cons + 1, t - c0, &oc1v, &os1v, &os21v)
+    let c0m: i64 = (c0 % (MOD as i128)) as i64
+    oc_out[0] = (oc0v + oc1v) % MOD
+    os_out[0] = (os0v + os1v + oc1v * c0m) % MOD
+    os2_out[0] = (os20v + os21v + (2 * c0m % MOD) * os1v + oc1v * ((c0m * c0m) % MOD)) % MOD
+}
+
+function build_until(need: i128) -> void {
+    let mut cap: i64 = 128
+    count0 = calloc(cap, 16)
+    count1 = calloc(cap, 16)
+    count2 = calloc(cap, 16)
+    oc0 = calloc(cap, 8)
+    oc1 = calloc(cap, 8)
+    oc2 = calloc(cap, 8)
+    os0 = calloc(cap, 8)
+    os1 = calloc(cap, 8)
+    os2a = calloc(cap, 8)
+    os20 = calloc(cap, 8)
+    os21 = calloc(cap, 8)
+    os22 = calloc(cap, 8)
+    set_row(0, 0, 1 as i128, 0, 0, 0)
+    set_row(0, 1, 1 as i128, 1, 1, 1)
+    set_row(0, 2, 1 as i128, 1, 1, 1)
+    nrows = 1
+    let mut cum: i128 = 1
+    while cum < need {
+        if nrows + 1 >= cap {
+            cap = cap * 2
+            count0 = realloc(count0, cap * 16)
+            count1 = realloc(count1, cap * 16)
+            count2 = realloc(count2, cap * 16)
+            oc0 = realloc(oc0, cap * 8)
+            oc1 = realloc(oc1, cap * 8)
+            oc2 = realloc(oc2, cap * 8)
+            os0 = realloc(os0, cap * 8)
+            os1 = realloc(os1, cap * 8)
+            os2a = realloc(os2a, cap * 8)
+            os20 = realloc(os20, cap * 8)
+            os21 = realloc(os21, cap * 8)
+            os22 = realloc(os22, cap * 8)
+        }
+        let prev: i64 = nrows - 1
+        let c0: i128 = get_count(prev, 0)
+        let c0m: i64 = (c0 % (MOD as i128)) as i64
+        let mut cons: i64 = 0
+        while cons < 3 {
+            let oc0v: i64 = get_oc(prev, 0)
+            let os0v: i64 = get_os(prev, 0)
+            let os20v: i64 = get_os2(prev, 0)
+            let mut count1v: i128 = 0
+            let mut oc1v: i64 = 0
+            let mut os1v: i64 = 0
+            let mut os21v: i64 = 0
+            if cons < 2 {
+                count1v = get_count(prev, cons + 1)
+                oc1v = get_oc(prev, cons + 1)
+                os1v = get_os(prev, cons + 1)
+                os21v = get_os2(prev, cons + 1)
+            }
+            let cnt: i128 = c0 + count1v
+            let oc: i64 = (oc0v + oc1v) % MOD
+            let os: i64 = (os0v + os1v + oc1v * c0m) % MOD
+            let os2v: i64 = (os20v + os21v + (2 * c0m % MOD) * os1v + oc1v * ((c0m * c0m) % MOD)) % MOD
+            set_row(nrows, cons, cnt, oc, os, os2v)
+            cons = cons + 1
+        }
+        cum = cum + get_count(nrows, 1)
+        nrows = nrows + 1
+    }
+}
+
+function compute_F(N: i128) -> i64 {
+    let mut ans: i64 = 0
+    let mut prev: i128 = 0
+    let mut remaining: i128 = N
+    let mut rem: i64 = 0
+    while rem < nrows && remaining > (0 as i128) {
+        let block: i128 = get_count(rem, 1)
+        let mut take: i128 = block
+        if block > remaining { take = remaining }
+        let mut oc: i64 = 0
+        let mut os: i64 = 0
+        let mut os2v: i64 = 0
+        if take == block {
+            oc = get_oc(rem, 1)
+            os = get_os(rem, 1)
+            os2v = get_os2(rem, 1)
+        } else {
+            prefix(rem, 1, take, &oc, &os, &os2v)
+        }
+        let prev_mod: i64 = (prev % (MOD as i128)) as i64
+        ans = (ans + oc * ((prev_mod * prev_mod) % MOD) + (2 * prev_mod % MOD) * os + os2v) % MOD
+        prev = prev + take
+        remaining = remaining - take
+        rem = rem + 1
+    }
+    return ans
+}
+
+function main() -> i32 {
+    let N: i128 = 10000000000000000 as i128
+    build_until(N)
+    printf("%lld\n", compute_F(N))
+    return 0
+}
