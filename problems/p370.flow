@@ -69,8 +69,10 @@ function main() -> i32 {
                     }
                 } else {
                     # squarefree divisors of n via distinct primes
-                    let divs: ptr<i64> = calloc(64, 8)
-                    let mus: ptr<i32> = calloc(64, 4)
+                    # n can have seven distinct prime factors (2·3·5·7·11·13·17),
+                    # hence up to 128 square-free divisors.
+                    let divs: ptr<i64> = calloc(128, 8)
+                    let mus: ptr<i32> = calloc(128, 4)
                     if divs == null || mus == null { return 1 }
                     divs[0] = 1
                     mus[0] = 1
