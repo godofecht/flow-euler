@@ -14,12 +14,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Checkout Flow compiler
         run: |
           git clone https://github.com/flooooooooooow/flow.git "$HOME/flow"
 
       - name: Install Python dependencies
-        run: python3 -m pip install --user numpy
+        run: python3 -m pip install numpy
 
       - name: Install native dependencies
         run: |
