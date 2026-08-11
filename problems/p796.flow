@@ -1,0 +1,11 @@
+# Project Euler 796
+# Real solver in problems/native/p796.c (linked by scripts/run.sh).
+
+extern {
+    function p796_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.8f\n", p796_native())
+    return 0
+}

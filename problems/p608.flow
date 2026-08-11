@@ -1,0 +1,160 @@
+# Project Euler 608
+# Divisor Sums: D(200!, 10^12) mod 1e9+7.
+#
+# With tau(kd) = sum over a|k, b|d, gcd(a,b)=1, swapping orders gives
+#   D(m, n) = sum_{b|m} tau(m/b) * sum_{a<=n, gcd(a,b)=1} floor(n/a)
+#           = sum_{u squarefree, u | m, u <= n} mu(u) V(u) U(n/u),
+# where U(x) = sum_{a<=x} floor(x/a) and
+#   V(u) = prod_{p|u} e_p(e_p+1)/2 * prod_{p !| u} (e_p+1)(e_p+2)/2
+# from the exponents e_p of m = 200!.  The 4.45*10^7 squarefree 200-smooth
+# u <= 10^12 are enumerated by DFS; U(n/u) is a prefix-sum table of
+# divisor counts when n/u <= 10^6 and a direct hyperbola sum otherwise.
+# Verified exactly against brute force for D(3!,100), D(4!,10^4),
+# D(5!,3000), D(6!,2000) and the given D(4!,10^6).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const FACT: i64 = 200
+const N: i64 = 1000000000000
+const K: i64 = 1000000          # isqrt(N)
+
+function powmod(base: i64, exp: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % MOD
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 {
+            result = result * b % MOD
+        }
+        b = b * b % MOD
+        e = e >> 1
+    }
+    return result
+}
+
+function isqrt64(n: i64) -> i64 {
+    if n <= 0 {
+        return 0
+    }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+# U(x) = sum_{a<=x} floor(x/a) mod MOD via the hyperbola identity
+function U_big(x: i64) -> i64 {
+    let s: i64 = isqrt64(x)
+    let mut acc: i64 = 0
+    let mut j: i64 = 1
+    while j <= s {
+        acc = acc + x / j
+        j = j + 1
+    }
+    return ((2 * (acc % MOD) - s % MOD * (s % MOD)) % MOD + MOD) % MOD
+}
+
+# DFS over squarefree 200-smooth u; adds mu(u) * gprod * U(n/u)
+function dfs(idx: i64, u: i64, sign: i64, gprod: i64,
+             primes: ptr<i64>, np: i64, g: ptr<i64>,
+             usmall: ptr<i64>, acc: ptr<i64>) -> void {
+    let w: i64 = N / u
+    let mut uv: i64 = 0
+    if w <= K {
+        uv = usmall[w]
+    } else {
+        uv = U_big(w)
+    }
+    let term: i64 = gprod * uv % MOD
+    if sign == 1 {
+        acc[0] = (acc[0] + term) % MOD
+    } else {
+        acc[0] = (acc[0] - term + MOD) % MOD
+    }
+    let mut j: i64 = idx
+    while j < np {
+        if u > N / primes[j] {
+            j = np
+        } else {
+            dfs(j + 1, u * primes[j], 0 - sign, gprod * g[j] % MOD,
+                primes, np, g, usmall, acc)
+            j = j + 1
+        }
+    }
+}
+
+function main() -> i32 {
+    # primes up to FACT and exponents in FACT!
+    let primes: ptr<i64> = calloc(64, 8)
+    let g: ptr<i64> = calloc(64, 8)
+    let mut np: i64 = 0
+    let mut C: i64 = 1
+    let mut cand: i64 = 2
+    while cand <= FACT {
+        let mut isp: i64 = 1
+        let mut q: i64 = 2
+        while q * q <= cand {
+            if cand % q == 0 {
+                isp = 0
+            }
+            q = q + 1
+        }
+        if isp == 1 {
+            let mut e: i64 = 0
+            let mut pw: i64 = cand
+            while pw <= FACT {
+                e = e + FACT / pw
+                if pw > FACT / cand {
+                    pw = FACT + 1
+                } else {
+                    pw = pw * cand
+                }
+            }
+            let half_in: i64 = e % MOD * ((e + 1) % MOD) % MOD * powmod(2, MOD - 2) % MOD
+            let half_out: i64 = (e + 1) % MOD * ((e + 2) % MOD) % MOD * powmod(2, MOD - 2) % MOD
+            primes[np] = cand
+            g[np] = half_in * powmod(half_out, MOD - 2) % MOD
+            C = C * half_out % MOD
+            np = np + 1
+        }
+        cand = cand + 1
+    }
+
+    # U table for arguments <= K: prefix sums of divisor counts
+    let dcnt: ptr<i32> = calloc(K + 1, 4)
+    let mut i: i64 = 1
+    while i <= K {
+        let mut j: i64 = i
+        while j <= K {
+            dcnt[j] = dcnt[j] + 1
+            j = j + i
+        }
+        i = i + 1
+    }
+    let usmall: ptr<i64> = calloc(K + 1, 8)
+    let mut run: i64 = 0
+    i = 1
+    while i <= K {
+        run = (run + (dcnt[i] as i64)) % MOD
+        usmall[i] = run
+        i = i + 1
+    }
+    free(dcnt)
+
+    let acc: ptr<i64> = calloc(1, 8)
+    dfs(0, 1, 1, 1, primes, np, g, usmall, acc)
+    printf("%lld\n", C * acc[0] % MOD)
+
+    free(primes)
+    free(g)
+    free(usmall)
+    free(acc)
+    return 0
+}

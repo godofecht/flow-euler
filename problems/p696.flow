@@ -1,0 +1,176 @@
+# Project Euler 696
+# Mahjong: w(10^8, 10^8, 30) mod 1e9+7.
+#
+# Split by suit: a hand is t triples + one pair, and the pair's suit is
+# forced (only that suit holds a tile count = 2 mod 3), so
+#     w(n, s, t) = s * [x^t] B(x) * A(x)^(s-1),
+# where a_t(n) / b_t(n) count one-suit multisets forming exactly t triples
+# without / with the pair.  Counting multisets once despite ambiguous
+# decompositions (3 chows = 3 pungs, and pair-shift trades like
+# 22 345 345 = 234 234 55) is done with a subset-construction DP: track the
+# set of reachable (pending chows, pair used, triples) states per multiset,
+# so decomposability is judged deterministically.
+#
+# data/p696_tables.txt holds a_t(n), b_t(n) mod 1e9+7 for n = 401..444 from
+# that DP (t = 0..30; 62 rows).  Both sequences are polynomial in n of
+# degree <= t+1 there (checked by extrapolating to n = 600 and n = 1000
+# against the direct DP), so Lagrange interpolation gives n = 10^8.
+# Verified: w(4,1,1)=20, w(9,1,4)=13259, w(9,3,4)=5237550,
+# w(1000,1000,5) = 107662178 mod 1e9+7.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const NPTS: i64 = 44        # samples at n = 401..444
+const TMAX: i64 = 30
+const BIGN: i64 = 100000000
+const SUITS: i64 = 100000000
+
+function powmod(base: i64, exp: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % MOD
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 {
+            result = result * b % MOD
+        }
+        b = b * b % MOD
+        e = e >> 1
+    }
+    return result
+}
+
+# Lagrange interpolation at X from points (401+i, ys[i]), i = 0..NPTS-1
+function lagrange(ys: ptr<i64>, X: i64) -> i64 {
+    let mut res: i64 = 0
+    let mut i: i64 = 0
+    while i < NPTS {
+        let mut num: i64 = 1
+        let mut den: i64 = 1
+        let mut j: i64 = 0
+        while j < NPTS {
+            if j != i {
+                num = num * ((X - (401 + j)) % MOD) % MOD
+                let mut d: i64 = (i - j) % MOD
+                if d < 0 {
+                    d = d + MOD
+                }
+                den = den * d % MOD
+            }
+            j = j + 1
+        }
+        res = (res + ys[i] * num % MOD * powmod(den, MOD - 2)) % MOD
+        i = i + 1
+    }
+    return res
+}
+
+# multiply degree-<=TMAX polynomials mod x^(TMAX+1)
+function pmul(u: ptr<i64>, v: ptr<i64>, out: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i <= TMAX {
+        out[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i <= TMAX {
+        if u[i] != 0 {
+            let mut j: i64 = 0
+            while i + j <= TMAX {
+                out[i + j] = (out[i + j] + u[i] * v[j]) % MOD
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+}
+
+function main() -> i32 {
+    let f: ptr<void> = fopen("data/p696_tables.txt", "r")
+    if f == 0 {
+        printf("failed to read data/p696_tables.txt\n")
+        return 1
+    }
+    let tab: ptr<i64> = calloc(62 * NPTS, 8)
+    let mut idx: i64 = 0
+    let mut cur: i64 = 0
+    let mut have: i64 = 0
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        if c >= 48 && c <= 57 {
+            cur = cur * 10 + ((c - 48) as i64)
+            have = 1
+        } else {
+            if have == 1 {
+                tab[idx] = cur
+                idx = idx + 1
+                cur = 0
+                have = 0
+            }
+        }
+        c = fgetc(f)
+    }
+    if have == 1 {
+        tab[idx] = cur
+        idx = idx + 1
+    }
+    fclose(f)
+
+    # interpolate a_t(BIGN), b_t(BIGN)
+    let A: ptr<i64> = calloc(TMAX + 1, 8)
+    let B: ptr<i64> = calloc(TMAX + 1, 8)
+    let mut t: i64 = 0
+    while t <= TMAX {
+        A[t] = lagrange(tab + t * NPTS, BIGN)
+        B[t] = lagrange(tab + (31 + t) * NPTS, BIGN)
+        t = t + 1
+    }
+
+    # res = A(x)^(SUITS-1) mod x^31, then * B(x); answer = SUITS * res[TMAX]
+    let res: ptr<i64> = calloc(TMAX + 1, 8)
+    let base: ptr<i64> = calloc(TMAX + 1, 8)
+    let tmp: ptr<i64> = calloc(TMAX + 1, 8)
+    res[0] = 1
+    let mut i: i64 = 0
+    while i <= TMAX {
+        base[i] = A[i]
+        i = i + 1
+    }
+    let mut e: i64 = SUITS - 1
+    while e > 0 {
+        if (e & 1) == 1 {
+            pmul(res, base, tmp)
+            i = 0
+            while i <= TMAX {
+                res[i] = tmp[i]
+                i = i + 1
+            }
+        }
+        e = e >> 1
+        if e > 0 {
+            pmul(base, base, tmp)
+            i = 0
+            while i <= TMAX {
+                base[i] = tmp[i]
+                i = i + 1
+            }
+        }
+    }
+    pmul(res, B, tmp)
+    let ans: i64 = SUITS % MOD * tmp[TMAX] % MOD
+    printf("%lld\n", ans)
+
+    free(tab)
+    free(A)
+    free(B)
+    free(res)
+    free(base)
+    free(tmp)
+    return 0
+}

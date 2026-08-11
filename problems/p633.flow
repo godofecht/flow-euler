@@ -1,0 +1,66 @@
+# Project Euler 633
+# Square Prime Factors II: the limiting density of integers with exactly
+# seven square prime factors.
+#
+# Divisibility by p^2 for distinct primes is independent in density, so
+#   c_k = [z^k] prod_p (1 - 1/p^2 + z/p^2) = (6/pi^2) * e_k({1/(p^2-1)}),
+# the elementary symmetric function accumulated prime by prime (all terms
+# positive, no cancellation).  Primes above 5*10^7 shift e_7 by under
+# 1e-16 relative, far below the 5 significant digits asked for.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const X: i64 = 50000000
+
+function main() -> i32 {
+    let sieve: ptr<i8> = calloc(X + 1, 1)
+    let mut i: i64 = 2
+    while i * i <= X {
+        if sieve[i] == 0 {
+            let mut j: i64 = i * i
+            while j <= X {
+                sieve[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let e: ptr<f64> = calloc(8, 8)
+    e[0] = 1.0
+    let mut p: i64 = 2
+    while p <= X {
+        if sieve[p] == 0 {
+            let x: f64 = 1.0 / ((p as f64) * (p as f64) - 1.0)
+            let mut k: i64 = 7
+            while k >= 1 {
+                e[k] = e[k] + x * e[k - 1]
+                k = k - 1
+            }
+        }
+        p = p + 1
+    }
+
+    let pi: f64 = 3.14159265358979323846
+    let c7: f64 = 6.0 / (pi * pi) * e[7]
+
+    # format as m.mmmm e-XX with 5 significant digits
+    let mut mant: f64 = c7
+    let mut ex: i64 = 0
+    while mant < 1.0 {
+        mant = mant * 10.0
+        ex = ex - 1
+    }
+    while mant >= 10.0 {
+        mant = mant / 10.0
+        ex = ex + 1
+    }
+    printf("%.4fe%lld\n", mant, ex)
+
+    free(sieve)
+    free(e)
+    return 0
+}

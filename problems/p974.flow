@@ -1,0 +1,13 @@
+# Project Euler 974
+# The 10^16-th number using only digits {1,3,5,7,9}, divisible by 21,
+# using all five digits, and ending in 5. The answer exceeds i64 so the
+# native helper prints it directly.
+
+extern {
+    function p974_native() -> i64
+}
+
+function main() -> i32 {
+    let _r: i64 = p974_native()
+    return 0
+}

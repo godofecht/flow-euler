@@ -1,0 +1,11 @@
+# Project Euler 801
+# x^y = y^x (mod p)
+
+extern {
+    function p801_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p801_native())
+    return 0
+}

@@ -1,0 +1,12 @@
+# Project Euler 748
+# Upside Down Diophantine Equation: last 9 digits of S(10^16).
+# Native C helper for Gaussian integer parametrization.
+
+extern {
+    function p748_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p748_native())
+    return 0
+}

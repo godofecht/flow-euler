@@ -1,0 +1,15 @@
+# Project Euler 770
+# Delphi Flip: g(1.9999), the smallest n where A guarantees at least 1.9999 g.
+#
+# Real solver in problems/native/p770.c (linked by scripts/run.sh).
+# The closed form needs a Stirling-series log comparison at n ~ 1.27e8,
+# which is cleaner in native C than in Flow.
+
+extern {
+    function p770_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p770_native())
+    return 0
+}

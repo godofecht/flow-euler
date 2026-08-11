@@ -1,0 +1,12 @@
+# Project Euler 992
+# Journey counting on a path graph modulo a prime.
+# Companion: problems/native/p992.c
+
+extern {
+    function p992_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p992_native())
+    return 0
+}

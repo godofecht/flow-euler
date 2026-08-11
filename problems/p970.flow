@@ -1,0 +1,11 @@
+# Project Euler 970
+# Real solver in problems/native/p970.c (linked by scripts/run.sh).
+
+extern {
+    function p970_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p970_native())
+    return 0
+}

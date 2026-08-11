@@ -1,0 +1,229 @@
+# Project Euler 685
+# Inverse Digit Sum II: S(10^4) = sum f(n^3, n^4) mod 1e9+7, where f(s, m)
+# is the m-th positive integer with digit sum s.
+#
+# Numbers with digit sum s and d digits are all-9 strings with a small
+# total "deficiency" t = 9d - s spread over the digits (first digit loses
+# at most 8).  Choose the digit count by comparing m against per-length
+# counts, then unrank digit by digit: at each position try the largest
+# deficiency first, counting completions with capped-at-1e30 i128
+# binomials (any capped count exceeds every possible m, so comparisons
+# stay exact).  Runs of unchanged 9s are jumped in closed form.  The value
+# mod p is 10^d - 1 minus the few lowered digits.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const KMAX: i64 = 10000
+
+function powmod(base: i64, exp: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % MOD
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 {
+            result = result * b % MOD
+        }
+        b = b * b % MOD
+        e = e >> 1
+    }
+    return result
+}
+
+function cap128() -> i128 {
+    let a: i128 = 1000000000000000 as i128
+    return a * a          # 1e30
+}
+
+# C(n, k) exact in i128, saturating at 1e30
+function binom_capped(n: i64, k0: i64) -> i128 {
+    if k0 < 0 || n < 0 || k0 > n {
+        return 0 as i128
+    }
+    let mut k: i64 = k0
+    if n - k < k {
+        k = n - k
+    }
+    let CAP: i128 = cap128()
+    let mut c: i128 = 1 as i128
+    let mut i: i64 = 1
+    while i <= k {
+        let fac: i128 = (n - k + i) as i128
+        if c > CAP / fac {
+            return CAP
+        }
+        c = c * fac / (i as i128)
+        if c >= CAP {
+            return CAP
+        }
+        i = i + 1
+    }
+    return c
+}
+
+# number of ways to write tau as rho digits each in [0,9]; capped at 1e30
+function Wcnt(rho: i64, tau: i64) -> i128 {
+    if tau < 0 || tau > 9 * rho {
+        return 0 as i128
+    }
+    if rho == 0 {
+        if tau == 0 {
+            return 1 as i128
+        }
+        return 0 as i128
+    }
+    let CAP: i128 = cap128()
+    let mut tot: i128 = 0 as i128
+    let mut sign: i64 = 1
+    let mut k: i64 = 0
+    let mut t2: i64 = tau
+    while t2 >= 0 {
+        let term: i128 = binom_capped(rho, k) * 1 as i128 * binom_capped(t2 + rho - 1, t2)
+        # (binom_capped(rho,k) is tiny for k<=3; product cannot overflow the cap regime)
+        if term >= CAP {
+            # capped counts always exceed any m; sign is + here (k=0 dominates)
+            return CAP
+        }
+        if sign == 1 {
+            tot = tot + term
+        } else {
+            tot = tot - term
+        }
+        sign = 0 - sign
+        k = k + 1
+        t2 = t2 - 10
+    }
+    if tot < 0 as i128 {
+        tot = 0 as i128
+    }
+    if tot > CAP {
+        tot = CAP
+    }
+    return tot
+}
+
+# d-digit numbers with deficiency t (first digit >= 1)
+function Wfull(d: i64, t: i64) -> i128 {
+    let CAP: i128 = cap128()
+    let mut tot: i128 = 0 as i128
+    let mut b1: i64 = 0
+    while b1 <= 8 && b1 <= t {
+        tot = tot + Wcnt(d - 1, t - b1)
+        if tot > CAP {
+            tot = CAP
+        }
+        b1 = b1 + 1
+    }
+    return tot
+}
+
+# f(s, m) mod MOD
+function f_mod(s: i64, m0: i64) -> i64 {
+    let mut d: i64 = (s + 8) / 9
+    let mut t: i64 = 9 * d - s
+    let mut m: i64 = m0
+    let mut choosing: i64 = 1
+    while choosing == 1 {
+        let tot: i128 = Wfull(d, t)
+        if (m as i128) > tot {
+            m = m - (tot as i64)
+            d = d + 1
+            t = t + 9
+        } else {
+            choosing = 0
+        }
+    }
+
+    # unrank: sparse deviations (position, lowered-by)
+    let dpos: ptr<i64> = calloc(64, 8)
+    let dval: ptr<i64> = calloc(64, 8)
+    let mut nd: i64 = 0
+    let mut i: i64 = 1
+    let mut trem: i64 = t
+    while trem > 0 {
+        let r: i64 = d - i + 1
+        let mut cap: i64 = 9
+        if i == 1 {
+            cap = 8
+        }
+        let mut placed: i64 = 0
+        let mut b: i64 = trem
+        if b > cap {
+            b = cap
+        }
+        while b >= 1 && placed == 0 {
+            let w: i128 = Wcnt(r - 1, trem - b)
+            if (m as i128) > w {
+                m = m - (w as i64)
+                b = b - 1
+            } else {
+                dpos[nd] = i
+                dval[nd] = b
+                nd = nd + 1
+                trem = trem - b
+                i = i + 1
+                placed = 1
+            }
+        }
+        if placed == 0 {
+            # this position keeps digit 9; jump the run
+            if trem == 1 {
+                # the m-th remaining vector has its single 1 at position i+m
+                dpos[nd] = i + m
+                dval[nd] = 1
+                nd = nd + 1
+                trem = 0
+            } else {
+                if trem == 2 {
+                    # cum(q) = sum_{j=1..q} (r-j) = q*r - q(q+1)/2 in i128
+                    let mut lo: i64 = 1
+                    let mut hi: i64 = r - 1
+                    while lo < hi {
+                        let mid: i64 = (lo + hi) / 2
+                        let cum: i128 = (mid as i128) * (r as i128)
+                            - (mid as i128) * ((mid + 1) as i128) / (2 as i128)
+                        if cum >= (m as i128) {
+                            hi = mid
+                        } else {
+                            lo = mid + 1
+                        }
+                    }
+                    let q: i64 = lo
+                    let used: i128 = ((q - 1) as i128) * (r as i128)
+                        - ((q - 1) as i128) * (q as i128) / (2 as i128)
+                    m = m - (used as i64)
+                    i = i + q
+                } else {
+                    i = i + 1
+                }
+            }
+        }
+    }
+
+    # value = (10^d - 1) - sum b * 10^(d - pos)  (mod MOD)
+    let mut v: i64 = (powmod(10, d) - 1 + MOD) % MOD
+    let mut u: i64 = 0
+    while u < nd {
+        v = (v - dval[u] * powmod(10, d - dpos[u]) % MOD + MOD) % MOD
+        u = u + 1
+    }
+    free(dpos)
+    free(dval)
+    return v
+}
+
+function main() -> i32 {
+    let mut S: i64 = 0
+    let mut n: i64 = 1
+    while n <= KMAX {
+        let s: i64 = n * n * n
+        let m: i64 = s * n
+        S = (S + f_mod(s, m)) % MOD
+        n = n + 1
+    }
+    printf("%lld\n", S)
+    return 0
+}

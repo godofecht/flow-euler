@@ -1,0 +1,151 @@
+# Project Euler 1007
+# Alternating Difference: creative-telescoping recurrence for an algebraic
+# generating function. 10M terms, modular arithmetic mod 1e9+9.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000009
+const TARGET: i64 = 10000000
+
+function mod_pow(base: i64, exp: i64, m: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % m
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 {
+            result = result * b % m
+        }
+        b = b * b % m
+        e = e >> 1
+    }
+    return result
+}
+
+# polynomial_value: Horner's method, coefficients low degree first
+function poly_val(coeffs: ptr<i64>, n: i64) -> i64 {
+    let mut v: i64 = 0
+    let mut i: i64 = 11
+    while i >= 0 {
+        v = (v * n + coeffs[i]) % MOD
+        i = i - 1
+    }
+    return v
+}
+
+function main() -> i32 {
+    # 11 x 12 coefficient table (low degree first per row)
+    let coeffs: ptr<i64> = calloc(11 * 12, 8)
+
+    # Row 0
+    coeffs[0] = 564542217; coeffs[1] = 325536195; coeffs[2] = 625565095
+    coeffs[3] = 258562828; coeffs[4] = 50309146; coeffs[5] = 721049696
+    coeffs[6] = 308910873; coeffs[7] = 234609857; coeffs[8] = 352444580
+    coeffs[9] = 112684852; coeffs[10] = 526098889; coeffs[11] = 775427372
+
+    # Row 1
+    coeffs[12] = 756354407; coeffs[13] = 876712396; coeffs[14] = 925232674
+    coeffs[15] = 209529903; coeffs[16] = 431043426; coeffs[17] = 98036193
+    coeffs[18] = 411159730; coeffs[19] = 650080946; coeffs[20] = 586735744
+    coeffs[21] = 802393957; coeffs[22] = 917731008; coeffs[23] = 662122179
+
+    # Row 2
+    coeffs[24] = 770353449; coeffs[25] = 88154905; coeffs[26] = 504692236
+    coeffs[27] = 655625322; coeffs[28] = 572603598; coeffs[29] = 991869888
+    coeffs[30] = 915468074; coeffs[31] = 693094161; coeffs[32] = 179919603
+    coeffs[33] = 873974932; coeffs[34] = 986423939; coeffs[35] = 193800523
+
+    # Row 3
+    coeffs[36] = 547044626; coeffs[37] = 431921333; coeffs[38] = 336871141
+    coeffs[39] = 405939744; coeffs[40] = 684304146; coeffs[41] = 406844875
+    coeffs[42] = 110268327; coeffs[43] = 6418661; coeffs[44] = 533987403
+    coeffs[45] = 378546146; coeffs[46] = 256517355; coeffs[47] = 458272153
+
+    # Row 4
+    coeffs[48] = 584021986; coeffs[49] = 820086388; coeffs[50] = 399407432
+    coeffs[51] = 363471199; coeffs[52] = 28065946; coeffs[53] = 158462463
+    coeffs[54] = 212035288; coeffs[55] = 642246323; coeffs[56] = 128937736
+    coeffs[57] = 729528060; coeffs[58] = 400553445; coeffs[59] = 904647134
+
+    # Row 5
+    coeffs[60] = 130412455; coeffs[61] = 271277001; coeffs[62] = 847789671
+    coeffs[63] = 369809900; coeffs[64] = 273501501; coeffs[65] = 415528861
+    coeffs[66] = 103000357; coeffs[67] = 79415045; coeffs[68] = 892620950
+    coeffs[69] = 963713973; coeffs[70] = 920486784; coeffs[71] = 150788293
+
+    # Row 6
+    coeffs[72] = 841263954; coeffs[73] = 877714966; coeffs[74] = 231261912
+    coeffs[75] = 145551205; coeffs[76] = 358810941; coeffs[77] = 739118822
+    coeffs[78] = 741630308; coeffs[79] = 51109887; coeffs[80] = 572039589
+    coeffs[81] = 586686863; coeffs[82] = 780306805; coeffs[83] = 753840921
+
+    # Row 7
+    coeffs[84] = 924453715; coeffs[85] = 724710183; coeffs[86] = 251343960
+    coeffs[87] = 617970784; coeffs[88] = 108843307; coeffs[89] = 820712895
+    coeffs[90] = 926891587; coeffs[91] = 544054172; coeffs[92] = 772790579
+    coeffs[93] = 265582300; coeffs[94] = 658210597; coeffs[95] = 233845863
+
+    # Row 8
+    coeffs[96] = 348850580; coeffs[97] = 18190700; coeffs[98] = 135200071
+    coeffs[99] = 740796395; coeffs[100] = 394618090; coeffs[101] = 119264792
+    coeffs[102] = 469650557; coeffs[103] = 922517855; coeffs[104] = 620146658
+    coeffs[105] = 577934689; coeffs[106] = 143405744; coeffs[107] = 743846391
+
+    # Row 9
+    coeffs[108] = 363458011; coeffs[109] = 696243382; coeffs[110] = 636220249
+    coeffs[111] = 229509005; coeffs[112] = 303332388; coeffs[113] = 631146571
+    coeffs[114] = 677124719; coeffs[115] = 152104366; coeffs[116] = 123244817
+    coeffs[117] = 586518959; coeffs[118] = 314105934; coeffs[119] = 924615366
+
+    # Row 10 (denominator polynomial)
+    coeffs[120] = 193410267; coeffs[121] = 911570216; coeffs[122] = 570155372
+    coeffs[123] = 848170664; coeffs[124] = 434343571; coeffs[125] = 332813236
+    coeffs[126] = 991880938; coeffs[127] = 357506900; coeffs[128] = 867920836
+    coeffs[129] = 464991138; coeffs[130] = 0; coeffs[131] = 1
+
+    # Initial values: A(0)..A(10)
+    let vals: ptr<i64> = calloc(TARGET + 1, 8)
+    vals[0] = 0
+    vals[1] = MOD - 1
+    vals[2] = MOD - 2
+    vals[3] = MOD - 6
+    vals[4] = MOD - 20
+    vals[5] = MOD - 76
+    vals[6] = MOD - 314
+    vals[7] = MOD - 1409
+    vals[8] = MOD - 6732
+    vals[9] = MOD - 33900
+    vals[10] = MOD - 177666
+
+    if TARGET < 11 {
+        printf("%lld\n", vals[TARGET])
+        free(coeffs)
+        free(vals)
+        return 0
+    }
+
+    # Recurrence: for n = 1 .. TARGET-10,
+    #   A(n+10) = -sum_{j=0..9} poly(coeffs[j], n) * A(n+j) / poly(coeffs[10], n)
+    let mut n: i64 = 1
+    while n <= TARGET - 10 {
+        let mut total: i64 = 0
+        let mut j: i64 = 0
+        while j < 10 {
+            let pj: i64 = poly_val(coeffs + j * 12, n)
+            total = (total + pj * vals[n + j]) % MOD
+            j = j + 1
+        }
+        let den: i64 = poly_val(coeffs + 120, n)
+        let inv_den: i64 = mod_pow(den, MOD - 2, MOD)
+        vals[n + 10] = (MOD - total) * inv_den % MOD
+        n = n + 1
+    }
+
+    printf("%lld\n", vals[TARGET])
+
+    free(coeffs)
+    free(vals)
+    return 0
+}

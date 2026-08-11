@@ -1,0 +1,12 @@
+# Project Euler 956
+# Root-of-unity filter over prime exponents, mod 999999001.
+# Native C helper for modular exponentiation and sieve.
+
+extern {
+    function p956_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p956_native())
+    return 0
+}

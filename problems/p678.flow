@@ -1,0 +1,261 @@
+# Project Euler 678
+# Fermat-like Equations: count (a,b,c,e,f) with 0 < a < b, e >= 2, f >= 3
+# and a^e + b^e = c^f <= 10^18.
+#
+# Split by e:
+#   e = 2:  for every perfect power m = c^f, count a < b with a^2 + b^2 = m
+#           from the factorisation of c (r2 divisor formula; square /
+#           half-square corrections read off the exponents, no big sqrt).
+#   e = 3:  f = 3 is impossible (Fermat); for f >= 4 use
+#           a^3 + b^3 = (a+b)(a^2-ab+b^2): a+b = d runs over divisors of
+#           c^f with m <= d^3 <= 4m, then ab and the discriminant decide.
+#   e >= 4: few enough pairs (a, b) to enumerate directly; each sum is
+#           looked up in a hash table mapping c^f -> number of (c, f) pairs.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 1000000000000000000
+const HB: i64 = 4194304          # hash slots (2^22), ~1.03M keys
+const HMASK: i64 = 4194303
+
+function isqrt64(n: i64) -> i64 {
+    if n <= 0 {
+        return 0
+    }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+# a^e, or N+1 if it exceeds N (overflow-safe)
+function ipow_capped(a: i64, e: i64) -> i64 {
+    let mut cur: i64 = 1
+    let mut i: i64 = 0
+    while i < e {
+        if cur > N / a {
+            return N + 1
+        }
+        cur = cur * a
+        i = i + 1
+    }
+    return cur
+}
+
+function hash_slot(keys: ptr<i64>, s: i64) -> i64 {
+    let mut h: i64 = s % HB
+    while keys[h] != 0 && keys[h] != s {
+        h = (h + 1) & HMASK
+    }
+    return h
+}
+
+function main() -> i32 {
+    # smallest-prime-factor sieve up to 10^6 (c <= N^(1/3))
+    let CM: i64 = 1000000
+    let spf: ptr<i32> = calloc(CM + 1, 4)
+    let mut i: i64 = 2
+    while i <= CM {
+        if spf[i] == 0 {
+            let mut j: i64 = i
+            while j <= CM {
+                if spf[j] == 0 {
+                    spf[j] = i as i32
+                }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let hkey: ptr<i64> = calloc(HB, 8)
+    let hcnt: ptr<i64> = calloc(HB, 8)
+
+    let pf: ptr<i64> = calloc(64, 8)    # prime factors of c
+    let px: ptr<i64> = calloc(64, 8)    # exponents
+    let divs: ptr<i64> = calloc(70000, 8)
+
+    let mut total: i64 = 0
+
+    # ---- enumerate (c, f) pairs: e=2 formula, e=3 divisors, hash fill ----
+    let mut f: i64 = 3
+    while ipow_capped(2, f) <= N {
+        let mut c: i64 = 2
+        let mut m: i64 = ipow_capped(c, f)
+        while m <= N {
+            # register in hash for the e >= 4 loop
+            let hs: i64 = hash_slot(hkey, m)
+            hkey[hs] = m
+            hcnt[hs] = hcnt[hs] + 1
+
+            # factor c
+            let mut np: i64 = 0
+            let mut cc: i64 = c
+            while cc > 1 {
+                let p: i64 = spf[cc] as i64
+                let mut x: i64 = 0
+                while cc % p == 0 {
+                    cc = cc / p
+                    x = x + 1
+                }
+                pf[np] = p
+                px[np] = x
+                np = np + 1
+            }
+
+            # e = 2: B = prod (x*f + 1) over p = 1 mod 4; need q = 3 mod 4
+            # exponents even; square / half-square from exponents alone
+            let mut B: i64 = 1
+            let mut ok: i64 = 1
+            let mut allev: i64 = 1        # all exponents of m even?
+            let mut oddev: i64 = 1        # all odd-prime exponents even?
+            let mut s2: i64 = 0           # exponent of 2 in m
+            i = 0
+            while i < np {
+                let xf: i64 = px[i] * f
+                if pf[i] == 2 {
+                    s2 = xf
+                } else {
+                    if xf % 2 == 1 {
+                        oddev = 0
+                    }
+                    if pf[i] % 4 == 1 {
+                        B = B * (xf + 1)
+                    } else {
+                        if xf % 2 == 1 {
+                            ok = 0
+                        }
+                    }
+                }
+                if xf % 2 == 1 {
+                    allev = 0
+                }
+                i = i + 1
+            }
+            if ok == 1 {
+                let mut sq: i64 = 0
+                if allev == 1 {
+                    sq = 1
+                }
+                let mut hsq: i64 = 0
+                if s2 >= 1 && (s2 - 1) % 2 == 0 && oddev == 1 {
+                    hsq = 1
+                }
+                total = total + (B - sq - hsq) / 2
+            }
+
+            # e = 3, f >= 4: d = a+b over divisors of m, m <= d^3 <= 4m
+            if f >= 4 {
+                divs[0] = 1
+                let mut nd: i64 = 1
+                i = 0
+                while i < np {
+                    let xf: i64 = px[i] * f
+                    let mut nnd: i64 = nd
+                    let mut pe: i64 = 1
+                    let mut t: i64 = 1
+                    while t <= xf {
+                        # cap: only extend divisors while pe*p stays <= dmax bound
+                        pe = pe * pf[i]
+                        let mut u: i64 = 0
+                        while u < nd {
+                            let dv: i64 = divs[u]
+                            # keep divisors up to 2e6 (d^3 <= 4m <= 4e18)
+                            if dv <= 2000000 / pe {
+                                divs[nnd] = dv * pe
+                                nnd = nnd + 1
+                            }
+                            u = u + 1
+                        }
+                        t = t + 1
+                    }
+                    nd = nnd
+                    i = i + 1
+                }
+                let mut u: i64 = 0
+                while u < nd {
+                    let d: i64 = divs[u]
+                    if m % d == 0 {
+                        let d3: i64 = d * d * d
+                        if d3 >= m && d3 <= 4 * m {
+                            let q: i64 = m / d
+                            let t2: i64 = d * d - q
+                            if t2 > 0 && t2 % 3 == 0 {
+                                let ab: i64 = t2 / 3
+                                let disc: i64 = d * d - 4 * ab
+                                if disc > 0 {
+                                    let rr: i64 = isqrt64(disc)
+                                    if rr * rr == disc && (d - rr) % 2 == 0 {
+                                        let aa: i64 = (d - rr) / 2
+                                        let bbv: i64 = (d + rr) / 2
+                                        if aa >= 1 && aa < bbv {
+                                            if aa * aa * aa + bbv * bbv * bbv == m {
+                                                total = total + 1
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    u = u + 1
+                }
+            }
+
+            c = c + 1
+            m = ipow_capped(c, f)
+        }
+        f = f + 1
+    }
+
+    # ---- e >= 4: enumerate pairs, look sums up in the hash ----
+    let P: ptr<i64> = calloc(40000, 8)
+    let mut e: i64 = 4
+    while ipow_capped(2, e) < N {
+        let mut amax: i64 = 0
+        let mut a: i64 = 1
+        let mut pa: i64 = ipow_capped(a, e)
+        while pa <= N {
+            P[a] = pa
+            amax = a
+            a = a + 1
+            pa = ipow_capped(a, e)
+        }
+        a = 1
+        while a < amax {
+            let ae: i64 = P[a]
+            if ae + P[a + 1] > N {
+                a = amax
+            } else {
+                let mut b: i64 = a + 1
+                while b <= amax && ae + P[b] <= N {
+                    let s: i64 = ae + P[b]
+                    let hs2: i64 = hash_slot(hkey, s)
+                    if hkey[hs2] == s {
+                        total = total + hcnt[hs2]
+                    }
+                    b = b + 1
+                }
+                a = a + 1
+            }
+        }
+        e = e + 1
+    }
+
+    printf("%lld\n", total)
+
+    free(spf)
+    free(hkey)
+    free(hcnt)
+    free(pf)
+    free(px)
+    free(divs)
+    free(P)
+    return 0
+}

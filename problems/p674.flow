@@ -1,0 +1,275 @@
+# Project Euler 674
+# Solving I-equations: sum of least simultaneous values over all pairs of
+# expressions in data/p674.txt, last nine digits.
+#
+# I(x,y) = (1+x+y)^2 + y - x is injective on N^2 (value ranges for
+# consecutive argument sums are disjoint) and strictly exceeds both
+# arguments, so e1 = e2 reduces to syntactic unification: I nodes match
+# argument-wise, variables bind via union-find, and any binding cycle
+# (occurs check) means no solution.  I is increasing in both arguments,
+# so the least simultaneous value is the unified expression evaluated
+# with all free variables set to 0, mod 10^9.
+# Expressions are hash-consed; unification memoises visited node pairs
+# and evaluation memoises per pair via epoch stamps.
+
+extern {
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MODV: i64 = 1000000000
+const NCAP: i64 = 40000
+const HB: i64 = 131072         # node hash slots (power of two)
+const VCAP: i64 = 19684        # base-27 packed variable ids
+const SB: i64 = 1048576        # seen-set slots (power of two)
+
+# node arrays: typ (0 = var, 1 = I), le (var id or left node), ri
+# ctx layout (single i64 buffer offsets documented in main)
+
+function node_get(typ: ptr<i64>, le: ptr<i64>, ri: ptr<i64>,
+                  hkey: ptr<i64>, hval: ptr<i64>, ncnt: ptr<i64>,
+                  t: i64, a: i64, b: i64) -> i64 {
+    let key: i64 = (t * 40009 + a) * 40009 + b + 1
+    let mut h: i64 = key % HB
+    if h < 0 {
+        h = h + HB
+    }
+    while hkey[h] != 0 {
+        if hkey[h] == key {
+            return hval[h]
+        }
+        h = (h + 1) & (HB - 1)
+    }
+    let id: i64 = ncnt[0]
+    ncnt[0] = id + 1
+    typ[id] = t
+    le[id] = a
+    ri[id] = b
+    hkey[h] = key
+    hval[h] = id
+    return id
+}
+
+function uf_find(parent: ptr<i64>, pep: ptr<i64>, ep: i64, v0: i64) -> i64 {
+    let mut v: i64 = v0
+    while pep[v] == ep && parent[v] != v {
+        v = parent[v]
+    }
+    return v
+}
+
+function unify(typ: ptr<i64>, le: ptr<i64>, ri: ptr<i64>,
+               parent: ptr<i64>, pep: ptr<i64>,
+               bnd: ptr<i64>, bep: ptr<i64>,
+               skey: ptr<i64>, sep: ptr<i64>, ep: i64,
+               a: i64, b: i64) -> i64 {
+    if a == b {
+        return 1
+    }
+    if typ[a] == 1 && typ[b] == 1 {
+        # seen check on (a, b)
+        let key: i64 = a * NCAP + b + 1
+        let mut h: i64 = key % SB
+        while sep[h] == ep {
+            if skey[h] == key {
+                return 1
+            }
+            h = (h + 1) & (SB - 1)
+        }
+        skey[h] = key
+        sep[h] = ep
+        if unify(typ, le, ri, parent, pep, bnd, bep, skey, sep, ep, le[a], le[b]) == 0 {
+            return 0
+        }
+        return unify(typ, le, ri, parent, pep, bnd, bep, skey, sep, ep, ri[a], ri[b])
+    }
+    if typ[a] == 0 {
+        let ra: i64 = uf_find(parent, pep, ep, le[a])
+        if bep[ra] == ep {
+            return unify(typ, le, ri, parent, pep, bnd, bep, skey, sep, ep, bnd[ra], b)
+        }
+        if typ[b] == 0 {
+            let rb: i64 = uf_find(parent, pep, ep, le[b])
+            if ra == rb {
+                return 1
+            }
+            if bep[rb] == ep {
+                # bind a-side var to b's binding (re-run with node)
+                return unify(typ, le, ri, parent, pep, bnd, bep, skey, sep, ep, a, bnd[rb])
+            }
+            parent[ra] = rb
+            pep[ra] = ep
+            parent[rb] = rb
+            pep[rb] = ep
+            return 1
+        }
+        bnd[ra] = b
+        bep[ra] = ep
+        return 1
+    }
+    # a is I, b is var
+    return unify(typ, le, ri, parent, pep, bnd, bep, skey, sep, ep, b, a)
+}
+
+# evaluate node with free vars = 0; est: 0 untouched, 1 in progress, 2 done
+# returns value, or -1 if a binding cycle was hit (no solution)
+function ev(typ: ptr<i64>, le: ptr<i64>, ri: ptr<i64>,
+            parent: ptr<i64>, pep: ptr<i64>,
+            bnd: ptr<i64>, bep: ptr<i64>,
+            memo: ptr<i64>, est: ptr<i64>, eep: ptr<i64>, ep: i64,
+            n: i64) -> i64 {
+    if eep[n] == ep && est[n] == 2 {
+        return memo[n]
+    }
+    if eep[n] == ep && est[n] == 1 {
+        return 0 - 1
+    }
+    eep[n] = ep
+    est[n] = 1
+    let mut v: i64 = 0
+    if typ[n] == 0 {
+        let r: i64 = uf_find(parent, pep, ep, le[n])
+        if bep[r] == ep {
+            v = ev(typ, le, ri, parent, pep, bnd, bep, memo, est, eep, ep, bnd[r])
+            if v < 0 {
+                return 0 - 1
+            }
+        } else {
+            v = 0
+        }
+    } else {
+        let x: i64 = ev(typ, le, ri, parent, pep, bnd, bep, memo, est, eep, ep, le[n])
+        if x < 0 {
+            return 0 - 1
+        }
+        let y: i64 = ev(typ, le, ri, parent, pep, bnd, bep, memo, est, eep, ep, ri[n])
+        if y < 0 {
+            return 0 - 1
+        }
+        let s: i64 = (1 + x + y) % MODV
+        v = ((s * s + y - x) % MODV + MODV) % MODV
+    }
+    est[n] = 2
+    memo[n] = v
+    return v
+}
+
+function main() -> i32 {
+    let typ: ptr<i64> = calloc(NCAP, 8)
+    let le: ptr<i64> = calloc(NCAP, 8)
+    let ri: ptr<i64> = calloc(NCAP, 8)
+    let hkey: ptr<i64> = calloc(HB, 8)
+    let hval: ptr<i64> = calloc(HB, 8)
+    let ncnt: ptr<i64> = calloc(1, 8)
+
+    let roots: ptr<i64> = calloc(200, 8)
+    let mut nexpr: i64 = 0
+
+    # parse file with an explicit stack machine (avoids parser recursion):
+    # stack entries: node ids or -1 marker for pending 'I('
+    let stack: ptr<i64> = calloc(20000, 8)
+    let mut sp: i64 = 0
+    let f: ptr<void> = fopen("data/p674.txt", "r")
+    if f == 0 {
+        printf("failed to read data/p674.txt\n")
+        return 1
+    }
+    let mut vid: i64 = 0
+    let mut inv: i64 = 0
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        let ch: i64 = c as i64
+        if ch >= 97 && ch <= 122 {
+            vid = vid * 27 + (ch - 96)
+            inv = 1
+        } else {
+            if inv == 1 {
+                stack[sp] = node_get(typ, le, ri, hkey, hval, ncnt, 0, vid, 0)
+                sp = sp + 1
+                vid = 0
+                inv = 0
+            }
+            if ch == 73 {          # 'I'
+                stack[sp] = 0 - 1  # marker
+                sp = sp + 1
+            }
+            if ch == 41 {          # ')' -> combine top two nodes under marker
+                let b: i64 = stack[sp - 1]
+                let a: i64 = stack[sp - 2]
+                sp = sp - 3        # pop b, a, marker
+                stack[sp] = node_get(typ, le, ri, hkey, hval, ncnt, 1, a, b)
+                sp = sp + 1
+            }
+            if ch == 10 {          # newline: expression complete
+                if sp > 0 {
+                    roots[nexpr] = stack[sp - 1]
+                    nexpr = nexpr + 1
+                    sp = 0
+                }
+            }
+        }
+        c = fgetc(f)
+    }
+    if inv == 1 {
+        stack[sp] = node_get(typ, le, ri, hkey, hval, ncnt, 0, vid, 0)
+        sp = sp + 1
+    }
+    if sp > 0 {
+        roots[nexpr] = stack[sp - 1]
+        nexpr = nexpr + 1
+    }
+    fclose(f)
+
+    let parent: ptr<i64> = calloc(VCAP, 8)
+    let pep: ptr<i64> = calloc(VCAP, 8)
+    let bnd: ptr<i64> = calloc(VCAP, 8)
+    let bep: ptr<i64> = calloc(VCAP, 8)
+    let skey: ptr<i64> = calloc(SB, 8)
+    let sepp: ptr<i64> = calloc(SB, 8)
+    let memo: ptr<i64> = calloc(NCAP, 8)
+    let est: ptr<i64> = calloc(NCAP, 8)
+    let eep: ptr<i64> = calloc(NCAP, 8)
+
+    let mut total: i64 = 0
+    let mut ep: i64 = 0
+    let mut i: i64 = 0
+    while i < nexpr {
+        let mut j: i64 = i + 1
+        while j < nexpr {
+            ep = ep + 1
+            if unify(typ, le, ri, parent, pep, bnd, bep, skey, sepp, ep,
+                     roots[i], roots[j]) == 1 {
+                let v: i64 = ev(typ, le, ri, parent, pep, bnd, bep,
+                                memo, est, eep, ep, roots[i])
+                if v >= 0 {
+                    total = (total + v) % MODV
+                }
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    printf("%lld\n", total)
+
+    free(typ)
+    free(le)
+    free(ri)
+    free(hkey)
+    free(hval)
+    free(ncnt)
+    free(roots)
+    free(stack)
+    free(parent)
+    free(pep)
+    free(bnd)
+    free(bep)
+    free(skey)
+    free(sepp)
+    free(memo)
+    free(est)
+    free(eep)
+    return 0
+}

@@ -1,0 +1,158 @@
+# Project Euler 689
+# Binary Series: p(0.5) = P(sum d_i(x)/i^2 > 1/2) for uniform x, to 8 dp.
+#
+# The bits d_i are iid Bernoulli(1/2).  Enumerate the first K = 26 bits
+# exactly (pruning when the partial sum already exceeds 1/2 or cannot
+# reach it).  The tail sum X = sum_{i>K} d_i/i^2 has bounded support
+# [0, T], so its periodised Fourier sine series is exact:
+#   P(X > a) = (mu + R - a)/(2R) - sum_k phi_k sin(pi k (a-mu)/R)/(pi k),
+# phi_k = prod_{i>K} cos(pi k / (2 R i^2)), which decays fast.  P(X > a)
+# is tabulated on a 2^16 grid (interpolation error ~ 1e-16) and looked up
+# per surviving bit pattern.  Result is K-independent to 1e-10 for
+# K = 22..28.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function cos(x: f64) -> f64
+    function sin(x: f64) -> f64
+    function exp(x: f64) -> f64
+}
+
+const K: i64 = 26
+const M: i64 = 400000
+const NG: i64 = 65536
+const PI: f64 = 3.14159265358979323846
+
+# recursive enumeration over bits 1..K
+function walk(i: i64, S: f64, prob: f64, w: ptr<f64>, Rk: ptr<f64>,
+              Gv: ptr<f64>, mu: f64, R: f64, acc: ptr<f64>) -> void {
+    let a: f64 = 0.5 - S
+    if a < 0.0 {
+        acc[0] = acc[0] + prob
+        return
+    }
+    if i == K + 1 {
+        # G(a) via table over x = a - mu in [-R, R]
+        let x: f64 = a - mu
+        if x <= 0.0 - R {
+            acc[0] = acc[0] + prob
+            return
+        }
+        if x >= R {
+            return
+        }
+        let f: f64 = (x + R) / (2.0 * R) * (NG as f64)
+        let mut j: i64 = f as i64
+        if j >= NG {
+            j = NG - 1
+        }
+        let fr: f64 = f - (j as f64)
+        acc[0] = acc[0] + prob * (Gv[j] * (1.0 - fr) + Gv[j + 1] * fr)
+        return
+    }
+    if a > Rk[i] {
+        return
+    }
+    walk(i + 1, S, prob * 0.5, w, Rk, Gv, mu, R, acc)
+    walk(i + 1, S + w[i - 1], prob * 0.5, w, Rk, Gv, mu, R, acc)
+}
+
+function main() -> i32 {
+    let w: ptr<f64> = calloc(K + 1, 8)
+    let mut i: i64 = 1
+    while i <= K {
+        w[i - 1] = 1.0 / ((i * i) as f64)
+        i = i + 1
+    }
+
+    # tail support T = sum_{i=K+1..M} 1/i^2 + 1/M
+    let mut T: f64 = 0.0
+    i = K + 1
+    while i <= M {
+        T = T + 1.0 / ((i * i) as f64)
+        i = i + 1
+    }
+    T = T + 1.0 / (M as f64)
+    let mu: f64 = T / 2.0
+    let R: f64 = T / 2.0
+
+    # phi_k
+    let KF: i64 = 300
+    let phis: ptr<f64> = calloc(KF + 1, 8)
+    let mut kmax: i64 = 0
+    let mut k: i64 = 1
+    while k <= KF && kmax == 0 {
+        let t: f64 = PI * (k as f64) / R
+        let mut val: f64 = 1.0
+        let mut broke: i64 = 0
+        i = K + 1
+        while i <= M && broke == 0 {
+            val = val * cos(t / (2.0 * ((i * i) as f64)))
+            let mut av: f64 = val
+            if av < 0.0 {
+                av = 0.0 - av
+            }
+            if av < 0.000000000000000001 {
+                broke = 1
+            }
+            i = i + 1
+        }
+        if broke == 0 {
+            val = val * exp(0.0 - t * t / (24.0 * (M as f64) * (M as f64) * (M as f64)))
+        }
+        phis[k] = val
+        let mut av2: f64 = val
+        if av2 < 0.0 {
+            av2 = 0.0 - av2
+        }
+        if av2 / (PI * (k as f64)) < 0.00000000000001 && k > 40 {
+            kmax = k
+        }
+        k = k + 1
+    }
+    if kmax == 0 {
+        kmax = KF
+    }
+
+    # G table over x in [-R, R]
+    let Gv: ptr<f64> = calloc(NG + 1, 8)
+    let mut j: i64 = 0
+    while j <= NG {
+        let x: f64 = 0.0 - R + 2.0 * R * (j as f64) / (NG as f64)
+        let mut g: f64 = (R - x) / (2.0 * R)
+        k = 1
+        while k <= kmax {
+            g = g - phis[k] * sin(PI * (k as f64) * x / R) / (PI * (k as f64))
+            k = k + 1
+        }
+        if g < 0.0 {
+            g = 0.0
+        }
+        if g > 1.0 {
+            g = 1.0
+        }
+        Gv[j] = g
+        j = j + 1
+    }
+
+    # Rk[i] = max achievable from bits i..K plus tail
+    let Rk: ptr<f64> = calloc(K + 2, 8)
+    Rk[K + 1] = T
+    i = K
+    while i >= 1 {
+        Rk[i] = Rk[i + 1] + w[i - 1]
+        i = i - 1
+    }
+
+    let acc: ptr<f64> = calloc(1, 8)
+    walk(1, 0.0, 1.0, w, Rk, Gv, mu, R, acc)
+    printf("%.8f\n", acc[0])
+
+    free(w)
+    free(phis)
+    free(Gv)
+    free(Rk)
+    free(acc)
+    return 0
+}

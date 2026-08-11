@@ -1,0 +1,12 @@
+# Project Euler 857
+# Beautiful Graphs: G(10^7) mod (10^9+7).
+# Native C helper for the modular rolling recurrence.
+
+extern {
+    function p857_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p857_native())
+    return 0
+}

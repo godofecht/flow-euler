@@ -1,0 +1,12 @@
+# Project Euler 781
+# Feynman Diagrams: F(50000) mod 1e9+7.
+# Native C helper does the NTT-based power-series inversion.
+
+extern {
+    function p781_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p781_native())
+    return 0
+}

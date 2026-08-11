@@ -45,16 +45,16 @@ Reproduce with `./scripts/bench.sh`.
 
 ## Progress
 
-766 problems solved. Of the 750 problems with known answers in `answers.txt`, 728 have Flow solutions (22 remain unsolved, mostly requiring floating-point, bignum, or file input).
+855 problems solved. Of the 816 problems with known answers in `answers.txt`, 814 have Flow solutions (2 remain unsolved: 771, 780).
 
 | Range | Solved | Status |
 |-------|--------|--------|
 | 001-200 | 200 | done |
 | 201-400 | 200 | done |
 | 401-600 | 200 | done |
-| 601-1000 | 166 | in progress |
+| 601-1007 | 255 | in progress |
 
-61 problems use native C/C++ helpers (`problems/native/`) for NTT, i128, or multiprecision arithmetic.
+117 problems use native C/C++ helpers (`problems/native/`) for NTT, i128, or multiprecision arithmetic.
 
 ## Layout
 

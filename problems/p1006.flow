@@ -1,0 +1,398 @@
+# Project Euler 1006
+# Fibonacci Subwords: Psi(10^18) mod 101001001.
+#
+# The k+1 distinct length-k factors of the Fibonacci word f = 010010100...
+# are exactly the k+1 length-k windows of the two-sided word
+#     ... f2 f1 f0 1 | 0 f0 f1 f2 ...        (window j covers [-j, k-1-j])
+# (rotation coding of x -> x + a on the circle, a = (3-sqrt5)/2; the k+1
+# breakpoints frac(-j*a) each start one distinct factor, and the factor
+# started at frac(-j*a) reads c_{t-j} where c_t = floor((t+1)a) - floor(t*a),
+# whose negative side mirrors f).
+#
+# Each window value splits into a left part (reversed f-prefix, digit weight
+# 10^i) and a right part (f-prefix, digit weight 10^-i).  Summing squares
+# over j gives:
+#   * geometric-weighted sums of prefix values U_n = sum f_i 10^i and
+#     V_n = sum f_i 10^-i, plus their squares -- computed with O(log k)
+#     Fibonacci block merges;
+#   * one cross term sum_{a+b <= k-4} f_a f_b z^(a+b) for z = 10 and 10^-1,
+#     i.e. sums of z^(u+v) over pairs of upper-Wythoff numbers u+v <= k-2
+#     (f_a = 1 iff a+1 = floor(n*phi^2)); a number is upper Wythoff iff its
+#     Zeckendorf representation ends at an odd Fibonacci index, so this is
+#     a digit DP over Fibonacci indices with an exact-budget state.
+# Verified against brute force for k <= 20000 and Psi(3), Psi(10).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const M: i64 = 101001001
+const K: i64 = 1000000000000000000
+
+function powmod(base: i64, exp: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % M
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 {
+            result = result * b % M
+        }
+        b = b * b % M
+        e = e >> 1
+    }
+    return result
+}
+
+# modular inverse via extended Euclid (M is not prime)
+function inv_mod(a0: i64) -> i64 {
+    let mut g: i64 = M
+    let mut x: i64 = 0
+    let mut r: i64 = a0 % M
+    let mut s: i64 = 1
+    while r != 0 {
+        let q: i64 = g / r
+        let t: i64 = g - q * r
+        g = r
+        r = t
+        let u: i64 = x - q * s
+        x = s
+        s = u
+    }
+    x = x % M
+    if x < 0 {
+        x = x + M
+    }
+    return x
+}
+
+# Package for a 0/1 word w of length L with digit weight om^i, outer weight y:
+#   [0]=L  [1]=om^L  [2]=y^L  [3]=S=sum w_i om^i
+#   [4]=T0=sum_{n<L} y^n  [5]=T1=sum y^n U_n  [6]=T2=sum y^n U_n^2
+# where U_n = sum_{i<n} w_i om^i.
+function pkg_merge(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>) -> void {
+    let La: i64 = a[0]
+    let wA: i64 = a[1]
+    let yA: i64 = a[2]
+    let Sa: i64 = a[3]
+    let T0a: i64 = a[4]
+    let T1a: i64 = a[5]
+    let T2a: i64 = a[6]
+    let Lb: i64 = b[0]
+    let wB: i64 = b[1]
+    let yB: i64 = b[2]
+    let Sb: i64 = b[3]
+    let T0b: i64 = b[4]
+    let T1b: i64 = b[5]
+    let T2b: i64 = b[6]
+    out[0] = La + Lb
+    out[1] = wA * wB % M
+    out[2] = yA * yB % M
+    out[3] = (Sa + wA * Sb) % M
+    out[4] = (T0a + yA * T0b) % M
+    out[5] = (T1a + yA * ((Sa * T0b + wA * T1b) % M)) % M
+    let c1: i64 = Sa * Sa % M * T0b % M
+    let c2: i64 = 2 * Sa % M * wA % M * T1b % M
+    let c3: i64 = wA * wA % M * T2b % M
+    out[6] = (T2a + yA * ((c1 + c2 + c3) % M)) % M
+}
+
+function pkg_set(p: ptr<i64>, l: i64, w: i64, y: i64, s: i64, t0: i64, t1: i64, t2: i64) -> void {
+    p[0] = l
+    p[1] = w
+    p[2] = y
+    p[3] = s
+    p[4] = t0
+    p[5] = t1
+    p[6] = t2
+}
+
+function pkg_copy(dst: ptr<i64>, src: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < 7 {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+# Package of the first N letters of the Fibonacci word (om, y as above).
+# Blocks: b1 = "0", b2 = "01", bn = b_{n-1} b_{n-2}.
+function f_prefix_pkg(N: i64, om: i64, y: i64, out: ptr<i64>) -> void {
+    let blk: ptr<i64> = calloc(96 * 7, 8)
+    pkg_set(blk + 1 * 7, 1, om, y, 0, 1, 0, 0)
+    let one: ptr<i64> = calloc(7, 8)
+    pkg_set(one, 1, om, y, 1, 1, 0, 0)
+    pkg_merge(blk + 1 * 7, one, blk + 2 * 7)
+    let mut top: i64 = 2
+    while blk[top * 7 + 0] < N {
+        top = top + 1
+        pkg_merge(blk + (top - 1) * 7, blk + (top - 2) * 7, blk + top * 7)
+    }
+    # acc = identity package (empty word)
+    let acc: ptr<i64> = calloc(7, 8)
+    let tmp: ptr<i64> = calloc(7, 8)
+    pkg_set(acc, 0, 1, 1, 0, 0, 0, 0)
+    let mut n: i64 = top
+    let mut rem: i64 = N
+    let mut done: i64 = 0
+    while done == 0 {
+        if rem == blk[n * 7 + 0] {
+            pkg_merge(acc, blk + n * 7, tmp)
+            pkg_copy(acc, tmp)
+            done = 1
+        } else {
+            if n <= 2 {
+                # rem < len(b2)=2, so rem == 1: single "0"
+                pkg_merge(acc, blk + 1 * 7, tmp)
+                pkg_copy(acc, tmp)
+                done = 1
+            } else {
+                if rem <= blk[(n - 1) * 7 + 0] {
+                    n = n - 1
+                } else {
+                    pkg_merge(acc, blk + (n - 1) * 7, tmp)
+                    pkg_copy(acc, tmp)
+                    rem = rem - blk[(n - 1) * 7 + 0]
+                    n = n - 2
+                }
+            }
+        }
+    }
+    pkg_copy(out, acc)
+    free(blk)
+    free(one)
+    free(acc)
+    free(tmp)
+}
+
+# sum of z^(u+v) over pairs u, v of upper-Wythoff numbers with u + v <= X.
+# Digit DP over Zeckendorf indices i = imax..2 (F[2]=1, F[3]=2, ...).
+# State: exact budget R = X_{>=i} - u_{>=i} - v_{>=i} (or FREE once
+# R >= 2(F_i - 1)), previous digit of u and v, and the parity class of the
+# most recent 1 in u and v (0 none, 1 even index, 2 odd index); u, v are
+# upper Wythoff iff their lowest 1 sits at an odd index.
+function pair_sum(z: i64, X: i64) -> i64 {
+    if X < 4 {
+        return 0
+    }
+    let F: ptr<i64> = calloc(96, 8)
+    F[2] = 1
+    F[3] = 2
+    let mut nf: i64 = 3
+    while F[nf] < 4600000000000000000 {
+        nf = nf + 1
+        F[nf] = F[nf - 1] + F[nf - 2]
+    }
+    let mut imax: i64 = 2
+    while F[imax + 1] <= X {
+        imax = imax + 1
+    }
+    # Zeckendorf digits of X and running tails below each index
+    let xd: ptr<i64> = calloc(96, 8)
+    let mut remx: i64 = X
+    let mut i: i64 = imax
+    while i >= 2 {
+        if F[i] <= remx {
+            xd[i] = 1
+            remx = remx - F[i]
+        }
+        i = i - 1
+    }
+    let xtail: ptr<i64> = calloc(96, 8)
+    i = 3
+    while i <= imax {
+        xtail[i] = xtail[i - 1] + xd[i - 1] * F[i - 1]
+        i = i + 1
+    }
+    let zpow: ptr<i64> = calloc(96, 8)
+    i = 2
+    while i <= imax {
+        zpow[i] = powmod(z, F[i])
+        i = i + 1
+    }
+
+    # state arrays: code = ul + 2*vl + 4*up + 12*vp + 36*free  (< 72)
+    let CAP: i64 = 512
+    let curR: ptr<i64> = calloc(CAP, 8)
+    let curC: ptr<i64> = calloc(CAP, 8)
+    let curV: ptr<i64> = calloc(CAP, 8)
+    let newR: ptr<i64> = calloc(CAP, 8)
+    let newC: ptr<i64> = calloc(CAP, 8)
+    let newV: ptr<i64> = calloc(CAP, 8)
+    let mut ncur: i64 = 1
+    curR[0] = 0
+    curC[0] = 0
+    curV[0] = 1
+
+    i = imax
+    while i >= 2 {
+        let xi: i64 = xd[i]
+        let fi: i64 = F[i]
+        let xt: i64 = xtail[i]
+        let zp: i64 = zpow[i]
+        let mut par: i64 = 1
+        if (i & 1) == 1 {
+            par = 2
+        }
+        let mut nnew: i64 = 0
+        let mut si: i64 = 0
+        while si < ncur {
+            let R: i64 = curR[si]
+            let code: i64 = curC[si]
+            let wgt: i64 = curV[si]
+            let fr: i64 = code / 36
+            let rest: i64 = code % 36
+            let vp: i64 = rest / 12
+            let up: i64 = rest % 12 / 4
+            let vl: i64 = rest % 4 / 2
+            let ul: i64 = rest % 2
+            let mut ui: i64 = 0
+            while ui < 2 {
+                if ui == 1 && ul == 1 {
+                    ui = 2
+                } else {
+                    let mut vi: i64 = 0
+                    while vi < 2 {
+                        if vi == 1 && vl == 1 {
+                            vi = 2
+                        } else {
+                            let mut nR: i64 = 0
+                            let mut nfr: i64 = fr
+                            let mut dead: i64 = 0
+                            if fr == 0 {
+                                nR = R + (xi - ui - vi) * fi
+                                if nR + xt < 0 {
+                                    dead = 1
+                                }
+                                if nR >= 2 * (fi - 1) {
+                                    nfr = 1
+                                    nR = 0
+                                }
+                            }
+                            if dead == 0 {
+                                let mut nup: i64 = up
+                                if ui == 1 {
+                                    nup = par
+                                }
+                                let mut nvp: i64 = vp
+                                if vi == 1 {
+                                    nvp = par
+                                }
+                                let mut w2: i64 = wgt
+                                if ui + vi >= 1 {
+                                    w2 = w2 * zp % M
+                                }
+                                if ui + vi == 2 {
+                                    w2 = w2 * zp % M
+                                }
+                                let ncode: i64 = ui + 2 * vi + 4 * nup + 12 * nvp + 36 * nfr
+                                # linear-search insert
+                                let mut hit: i64 = 0 - 1
+                                let mut t: i64 = 0
+                                while t < nnew {
+                                    if newC[t] == ncode && newR[t] == nR {
+                                        hit = t
+                                        t = nnew
+                                    } else {
+                                        t = t + 1
+                                    }
+                                }
+                                if hit >= 0 {
+                                    newV[hit] = (newV[hit] + w2) % M
+                                } else {
+                                    newR[nnew] = nR
+                                    newC[nnew] = ncode
+                                    newV[nnew] = w2
+                                    nnew = nnew + 1
+                                }
+                            }
+                            vi = vi + 1
+                        }
+                    }
+                    ui = ui + 1
+                }
+            }
+            si = si + 1
+        }
+        let mut t2: i64 = 0
+        while t2 < nnew {
+            curR[t2] = newR[t2]
+            curC[t2] = newC[t2]
+            curV[t2] = newV[t2]
+            t2 = t2 + 1
+        }
+        ncur = nnew
+        i = i - 1
+    }
+
+    let mut total: i64 = 0
+    let mut si2: i64 = 0
+    while si2 < ncur {
+        let code: i64 = curC[si2]
+        let fr: i64 = code / 36
+        let rest: i64 = code % 36
+        let vp: i64 = rest / 12
+        let up: i64 = rest % 12 / 4
+        if up == 2 && vp == 2 {
+            if fr == 1 || curR[si2] >= 0 {
+                total = (total + curV[si2]) % M
+            }
+        }
+        si2 = si2 + 1
+    }
+    free(F)
+    free(xd)
+    free(xtail)
+    free(zpow)
+    free(curR)
+    free(curC)
+    free(curV)
+    free(newR)
+    free(newC)
+    free(newV)
+    return total
+}
+
+function main() -> i32 {
+    let r: i64 = 10
+    let s: i64 = inv_mod(10)
+    let inv_r2: i64 = s * s % M
+
+    # prefix packages over the first k-1 letters of f
+    let A: ptr<i64> = calloc(7, 8)
+    let B: ptr<i64> = calloc(7, 8)
+    f_prefix_pkg(K - 1, r, inv_r2, A)
+    f_prefix_pkg(K - 1, s, r * r % M, B)
+    let Uk1: i64 = A[3]
+    let T0A: i64 = A[4]
+    let T1A: i64 = A[5]
+    let T2A: i64 = A[6]
+    let Vk1: i64 = B[3]
+    let T1B: i64 = B[5]
+    let T2B: i64 = B[6]
+
+    let r2k2: i64 = powmod(10, 2 * K - 2)
+
+    # edge windows: j=0 (0 + f-prefix) and j=k (reversed prefix + 1)
+    let W0sq: i64 = r2k2 * inv_r2 % M * (Vk1 * Vk1 % M) % M
+    let Wk: i64 = (10 * Uk1 + 1) % M
+    let Wksq: i64 = Wk * Wk % M
+
+    let term1: i64 = r2k2 * ((100 * T2A % M + 20 * T1A % M + T0A) % M) % M
+    let term3: i64 = inv_r2 * T2B % M
+    let term2b: i64 = 2 * T1B % M
+
+    # cross term via pair sums over upper-Wythoff numbers
+    let Es: i64 = pair_sum(s, K - 2) * 100 % M
+    let Er: i64 = pair_sum(10, K - 2) * inv_r2 % M
+    let inv99: i64 = inv_mod(99)
+    let gam: i64 = inv99 * ((r2k2 * Es % M - 10000 * Er % M + M) % M) % M
+    let term2a: i64 = 2 * s % M * gam % M
+
+    let psi: i64 = ((W0sq + Wksq) % M + (term1 + term2a) % M + (term2b + term3) % M) % M
+    printf("%lld\n", psi)
+
+    free(A)
+    free(B)
+    return 0
+}

@@ -1,0 +1,12 @@
+# Project Euler 785
+# Symmetric Diophantine Equation.
+# Native C solver handles the coprime-pair parameterisation.
+
+extern {
+    function p785_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p785_native())
+    return 0
+}

@@ -1,0 +1,13 @@
+# Project Euler 981
+# Counts equivalence classes of words over {x,y,z} with cube counts,
+# weighted by canonical-product sign and q-multinomial at q=-1, mod 888888883.
+# Native C helper for the factorial precomputation and triple loop.
+
+extern {
+    function p981_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p981_native())
+    return 0
+}

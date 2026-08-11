@@ -1,0 +1,342 @@
+# Project Euler 646
+# Bounded Divisors: S(70!, 10^20, 10^60) mod 1e9+7, where S sums
+# lambda(d) * d over divisors d of 70! in [L, H].
+#
+# Meet in the middle over the 3.5e12 divisors: primes are split greedily
+# into two sets with balanced divisor counts; the smaller side is
+# enumerated, sorted, and prefix-summed (lambda(b) * b mod p), the other
+# side streams with a binary-searched range per divisor.
+# Ordering uses exact 90-bit fixed-point logs: keys add exactly, so a
+# divisor equal to a bound compares equal, and otherwise |d - 10^E| >= 1
+# gives a log gap >= ~4e-21, dwarfing the < 2e-25 rounding error.
+# Verified against exact enumeration for S(10!,1e2,1e3) = 1457,
+# S(15!,1e3,1e5) = -107974, S(30!,1e8,1e12) = 9766732243224.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const NFACT: i64 = 70
+const LEXP: i64 = 20          # L = 10^LEXP
+const HEXP: i64 = 60          # H = 10^HEXP
+const BCAP: i64 = 4200000
+
+function key_of(lp_hi: ptr<i64>, lp_lo: ptr<i64>, p: i64) -> i128 {
+    let sh: i128 = 35184372088832 as i128     # 2^45
+    return (lp_hi[p] as i128) * sh + (lp_lo[p] as i128)
+}
+
+# iterative quicksort on (keys i128, vals i64)
+function qsort_kv(keys: ptr<i128>, vals: ptr<i64>, n: i64) -> void {
+    let stk: ptr<i64> = calloc(256, 8)
+    let mut sp: i64 = 0
+    stk[0] = 0
+    stk[1] = n - 1
+    sp = 2
+    while sp > 0 {
+        let hi: i64 = stk[sp - 1]
+        let lo: i64 = stk[sp - 2]
+        sp = sp - 2
+        if lo < hi {
+            if hi - lo < 12 {
+                # insertion sort
+                let mut i: i64 = lo + 1
+                while i <= hi {
+                    let kk: i128 = keys[i]
+                    let vv: i64 = vals[i]
+                    let mut j: i64 = i - 1
+                    while j >= lo && keys[j] > kk {
+                        keys[j + 1] = keys[j]
+                        vals[j + 1] = vals[j]
+                        j = j - 1
+                    }
+                    keys[j + 1] = kk
+                    vals[j + 1] = vv
+                    i = i + 1
+                }
+            } else {
+                # median of three -> pivot at hi
+                let mid: i64 = (lo + hi) / 2
+                if keys[mid] < keys[lo] {
+                    let tk: i128 = keys[mid]; keys[mid] = keys[lo]; keys[lo] = tk
+                    let tv: i64 = vals[mid]; vals[mid] = vals[lo]; vals[lo] = tv
+                }
+                if keys[hi] < keys[lo] {
+                    let tk: i128 = keys[hi]; keys[hi] = keys[lo]; keys[lo] = tk
+                    let tv: i64 = vals[hi]; vals[hi] = vals[lo]; vals[lo] = tv
+                }
+                if keys[hi] < keys[mid] {
+                    let tk: i128 = keys[hi]; keys[hi] = keys[mid]; keys[mid] = tk
+                    let tv: i64 = vals[hi]; vals[hi] = vals[mid]; vals[mid] = tv
+                }
+                let piv: i128 = keys[mid]
+                let mut i: i64 = lo
+                let mut j: i64 = hi
+                while i <= j {
+                    while keys[i] < piv {
+                        i = i + 1
+                    }
+                    while keys[j] > piv {
+                        j = j - 1
+                    }
+                    if i <= j {
+                        let tk: i128 = keys[i]; keys[i] = keys[j]; keys[j] = tk
+                        let tv: i64 = vals[i]; vals[i] = vals[j]; vals[j] = tv
+                        i = i + 1
+                        j = j - 1
+                    }
+                }
+                stk[sp] = lo; stk[sp + 1] = j; sp = sp + 2
+                stk[sp] = i; stk[sp + 1] = hi; sp = sp + 2
+            }
+        }
+    }
+    free(stk)
+}
+
+# recursive streaming over A-side divisors
+function walkA(ip: i64, nA: i64, aprimes: ptr<i64>, aexp: ptr<i64>,
+               lp_hi: ptr<i64>, lp_lo: ptr<i64>,
+               key: i128, sgn: i64, vmod: i64,
+               klo0: i128, khi0: i128,
+               bkeys: ptr<i128>, bpref: ptr<i64>, nb: i64,
+               acc: ptr<i64>) -> void {
+    if ip == nA {
+        let klo: i128 = klo0 - key
+        let khi: i128 = khi0 - key
+        # first index with bkey >= klo
+        let mut lo: i64 = 0
+        let mut hi: i64 = nb
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if bkeys[mid] < klo {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        let i0: i64 = lo
+        # first index with bkey > khi
+        lo = 0
+        hi = nb
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if bkeys[mid] <= khi {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        let i1: i64 = lo
+        if i1 > i0 {
+            let rangesum: i64 = ((bpref[i1] - bpref[i0]) % MOD + MOD) % MOD
+            let term: i64 = vmod * rangesum % MOD
+            if sgn == 1 {
+                acc[0] = (acc[0] + term) % MOD
+            } else {
+                acc[0] = (acc[0] - term + MOD) % MOD
+            }
+        }
+        return
+    }
+    let p: i64 = aprimes[ip]
+    let e: i64 = aexp[ip]
+    let kp: i128 = key_of(lp_hi, lp_lo, p)
+    let mut k: i128 = key
+    let mut s: i64 = sgn
+    let mut m: i64 = vmod
+    let mut j: i64 = 0
+    while j <= e {
+        walkA(ip + 1, nA, aprimes, aexp, lp_hi, lp_lo, k, s, m,
+              klo0, khi0, bkeys, bpref, nb, acc)
+        k = k + kp
+        s = 0 - s
+        m = m * (p % MOD) % MOD
+        j = j + 1
+    }
+}
+
+function main() -> i32 {
+    let lp_hi: ptr<i64> = calloc(70, 8)
+    let lp_lo: ptr<i64> = calloc(70, 8)
+    lp_hi[2] = 35184372088832; lp_lo[2] = 0
+    lp_hi[3] = 55765910372218; lp_lo[3] = 28718273670216
+    lp_hi[5] = 81695582054029; lp_lo[5] = 27143733165936
+    lp_hi[7] = 98775020163088; lp_lo[7] = 24656546046991
+    lp_hi[11] = 121717929286005; lp_lo[11] = 1030321070489
+    lp_hi[13] = 130197647935368; lp_lo[13] = 28010264356978
+    lp_hi[17] = 143814813505826; lp_lo[17] = 13580471717386
+    lp_hi[19] = 149460662239386; lp_lo[19] = 348383530181
+    lp_hi[23] = 159158687028794; lp_lo[23] = 22862384261715
+    lp_hi[29] = 170925010933042; lp_lo[29] = 30002115389543
+    lp_hi[31] = 174310286385770; lp_lo[31] = 15759379298558
+    lp_hi[37] = 183291345595707; lp_lo[37] = 5083077604958
+    lp_hi[41] = 188502103215750; lp_lo[41] = 15279225905332
+    lp_hi[43] = 190919718181953; lp_lo[43] = 11039161118608
+    lp_hi[47] = 195434720957904; lp_lo[47] = 1908955837756
+    lp_hi[53] = 201533284568583; lp_lo[53] = 11514214811642
+    lp_hi[59] = 206977101914528; lp_lo[59] = 11709912803785
+    lp_hi[61] = 208669269245941; lp_lo[61] = 14894089328475
+    lp_hi[67] = 213431539201107; lp_lo[67] = 33444092302059
+
+    # primes up to NFACT and exponents in NFACT!
+    let primes: ptr<i64> = calloc(32, 8)
+    let exps: ptr<i64> = calloc(32, 8)
+    let mut np: i64 = 0
+    let mut cand: i64 = 2
+    while cand <= NFACT {
+        let mut isp: i64 = 1
+        let mut q: i64 = 2
+        while q * q <= cand {
+            if cand % q == 0 {
+                isp = 0
+            }
+            q = q + 1
+        }
+        if isp == 1 {
+            let mut e: i64 = 0
+            let mut pw: i64 = cand
+            while pw <= NFACT {
+                e = e + NFACT / pw
+                if pw > NFACT / cand {
+                    pw = NFACT + 1
+                } else {
+                    pw = pw * cand
+                }
+            }
+            primes[np] = cand
+            exps[np] = e
+            np = np + 1
+        }
+        cand = cand + 1
+    }
+
+    # greedy split by descending (e+1): assign to the side with the
+    # smaller current divisor-count product
+    let ordv: ptr<i64> = calloc(32, 8)
+    let mut i: i64 = 0
+    while i < np {
+        ordv[i] = i
+        i = i + 1
+    }
+    # selection sort by exps desc (stable enough; ties by prime asc)
+    i = 0
+    while i < np {
+        let mut best: i64 = i
+        let mut j: i64 = i + 1
+        while j < np {
+            if exps[ordv[j]] > exps[ordv[best]] {
+                best = j
+            }
+            j = j + 1
+        }
+        let t: i64 = ordv[i]
+        ordv[i] = ordv[best]
+        ordv[best] = t
+        i = i + 1
+    }
+    let aidx: ptr<i64> = calloc(32, 8)
+    let bidx: ptr<i64> = calloc(32, 8)
+    let mut nA: i64 = 0
+    let mut nB: i64 = 0
+    let mut ta: i64 = 1
+    let mut tb: i64 = 1
+    i = 0
+    while i < np {
+        let pi: i64 = ordv[i]
+        if ta <= tb {
+            aidx[nA] = pi
+            nA = nA + 1
+            ta = ta * (exps[pi] + 1)
+        } else {
+            bidx[nB] = pi
+            nB = nB + 1
+            tb = tb * (exps[pi] + 1)
+        }
+        i = i + 1
+    }
+
+    # enumerate B divisors iteratively
+    let bkeys: ptr<i128> = calloc(BCAP, 16)
+    let bval: ptr<i64> = calloc(BCAP, 8)      # signed lambda*b mod
+    bkeys[0] = 0 as i128
+    bval[0] = 1
+    let mut nb: i64 = 1
+    i = 0
+    while i < nB {
+        let p: i64 = primes[bidx[i]]
+        let e: i64 = exps[bidx[i]]
+        let kp: i128 = key_of(lp_hi, lp_lo, p)
+        let old: i64 = nb
+        let mut kacc: i128 = 0 as i128
+        let mut sacc: i64 = 1
+        let mut macc: i64 = 1
+        let mut j: i64 = 1
+        while j <= e {
+            kacc = kacc + kp
+            sacc = 0 - sacc
+            macc = macc * (p % MOD) % MOD
+            let mut u: i64 = 0
+            while u < old {
+                bkeys[nb] = bkeys[u] + kacc
+                let mut v: i64 = bval[u] * macc % MOD
+                if sacc == 0 - 1 {
+                    v = 0 - v
+                }
+                bval[nb] = v
+                nb = nb + 1
+                u = u + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    qsort_kv(bkeys, bval, nb)
+
+    # prefix sums (mod, kept non-negative)
+    let bpref: ptr<i64> = calloc(nb + 1, 8)
+    bpref[0] = 0
+    i = 0
+    while i < nb {
+        bpref[i + 1] = ((bpref[i] + bval[i]) % MOD + MOD) % MOD
+        i = i + 1
+    }
+
+    # bounds: 10^E keys
+    let k10: i128 = key_of(lp_hi, lp_lo, 2) + key_of(lp_hi, lp_lo, 5)
+    let klo0: i128 = k10 * (LEXP as i128)
+    let khi0: i128 = k10 * (HEXP as i128)
+
+    # stream A side
+    let aprimes: ptr<i64> = calloc(32, 8)
+    let aexp: ptr<i64> = calloc(32, 8)
+    i = 0
+    while i < nA {
+        aprimes[i] = primes[aidx[i]]
+        aexp[i] = exps[aidx[i]]
+        i = i + 1
+    }
+    let acc: ptr<i64> = calloc(1, 8)
+    walkA(0, nA, aprimes, aexp, lp_hi, lp_lo, 0 as i128, 1, 1,
+          klo0, khi0, bkeys, bpref, nb, acc)
+
+    printf("%lld\n", acc[0])
+
+    free(lp_hi)
+    free(lp_lo)
+    free(primes)
+    free(exps)
+    free(ordv)
+    free(aidx)
+    free(bidx)
+    free(bkeys)
+    free(bval)
+    free(bpref)
+    free(aprimes)
+    free(aexp)
+    free(acc)
+    return 0
+}

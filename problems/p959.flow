@@ -1,0 +1,12 @@
+# Project Euler 959
+# Asymmetric Random Walk: f(89, 97).
+# Real solver in problems/native/p959.c (linked by scripts/run.sh).
+
+extern {
+    function p959_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.9f\n", p959_native())
+    return 0
+}

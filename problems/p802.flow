@@ -1,0 +1,11 @@
+# Project Euler 802
+# Iterated Composition — Mertens / Mobius inversion on periods of F(z)=z^2-z+i*pi.
+
+extern {
+    function p802_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p802_native())
+    return 0
+}

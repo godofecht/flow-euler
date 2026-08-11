@@ -1,0 +1,12 @@
+# Project Euler 787
+# Bezout's Game — H(10^9).
+# Native C helper for linear sieve + Du Jiao sieve + Mobius inversion.
+
+extern {
+    function p787_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p787_native())
+    return 0
+}

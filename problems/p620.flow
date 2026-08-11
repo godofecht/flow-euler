@@ -1,0 +1,70 @@
+# Project Euler 620
+# Planetary Gears: G(500).
+#
+# Radii scale with circumference; with c = s+p+q the p-planet triangle
+# (D, s+q, s+p) and the q-planet triangle are the same triangle with the
+# two sides swapped, so the two meshing phases satisfy
+# A_p + A_q = s + (p+q)/2 identically and the whole assembly reduces to
+# one condition: A(D) = b*u + a*(pi - w) must be a multiple of 1/2
+# (a = (s+p)/2pi, b = (s+q)/2pi, u and w the triangle angles at the two
+# gear centres).  A increases monotonically from 0 as the centre distance
+# D grows from q-p side-by-side degeneracy (excluded: the two equal
+# planets would coincide) up to the 1cm-gap bound D = (p+q)/2pi - 1, so
+#   g = floor(2 * A(Dmax)).
+# Verified: g(16,5,5,6) = 9, G(16) = 9, G(20) = 205.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function acos(x: f64) -> f64
+}
+
+const N: i64 = 500
+const PI: f64 = 3.14159265358979323846
+
+function g_val(s: i64, p: i64, q: i64) -> i64 {
+    let a: f64 = ((s + p) as f64) / (2.0 * PI)
+    let b: f64 = ((s + q) as f64) / (2.0 * PI)
+    let Dlo: f64 = b - a
+    let D: f64 = ((p + q) as f64) / (2.0 * PI) - 1.0
+    if D <= Dlo {
+        return 0
+    }
+    let mut cu: f64 = (D * D + b * b - a * a) / (2.0 * D * b)
+    let mut cw: f64 = (D * D + a * a - b * b) / (2.0 * D * a)
+    if cu > 1.0 {
+        cu = 1.0
+    }
+    if cu < 0.0 - 1.0 {
+        cu = 0.0 - 1.0
+    }
+    if cw > 1.0 {
+        cw = 1.0
+    }
+    if cw < 0.0 - 1.0 {
+        cw = 0.0 - 1.0
+    }
+    let u: f64 = acos(cu)
+    let w: f64 = acos(cw)
+    let A: f64 = b * u + a * (PI - w)
+    return (2.0 * A + 0.000000000001) as i64
+}
+
+function main() -> i32 {
+    let mut tot: i64 = 0
+    let mut s: i64 = 5
+    while s + 11 <= N {
+        let mut p: i64 = 5
+        while s + 2 * p + 1 <= N {
+            let mut q: i64 = p + 1
+            while s + p + q <= N {
+                tot = tot + g_val(s, p, q)
+                q = q + 1
+            }
+            p = p + 1
+        }
+        s = s + 1
+    }
+    printf("%lld\n", tot)
+    return 0
+}

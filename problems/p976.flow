@@ -1,0 +1,12 @@
+# Project Euler 976
+# F(10^7, 10^7) modulo 1234567891.
+# Native C helper for the modular-binomial summation.
+
+extern {
+    function p976_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p976_native())
+    return 0
+}

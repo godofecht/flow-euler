@@ -1,0 +1,12 @@
+# Project Euler 855
+# Delphi Paper: S(5,8) = (5!)^8 * (8!)^5 / (40!)^2, a tiny value ~6.88e-57.
+# Native C helper computes it in log-space to avoid overflow.
+
+extern {
+    function p855_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.10e\n", p855_native())
+    return 0
+}

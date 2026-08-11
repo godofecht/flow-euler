@@ -1,0 +1,11 @@
+# Project Euler 786
+# Billiard -- B(10^9).
+
+extern {
+    function p786_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p786_native())
+    return 0
+}

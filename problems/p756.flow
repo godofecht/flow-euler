@@ -1,0 +1,11 @@
+# Project Euler 756: Approximating a Sum
+# Real solver in problems/native/p756.c (linked by scripts/run.sh).
+
+extern {
+    function p756_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.6f\n", p756_native())
+    return 0
+}

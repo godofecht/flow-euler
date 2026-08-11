@@ -1,0 +1,10 @@
+# Project Euler 667: Moving Pentagon
+
+extern {
+    function p667_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.10f\n", p667_native())
+    return 0
+}

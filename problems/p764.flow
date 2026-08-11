@@ -1,0 +1,114 @@
+# Project Euler 764
+# Asymmetric Diophantine Equation: 16x^2 + y^4 = z^2 with x, y, z positive
+# integers and gcd(x, y, z) = 1.  S(N) sums x + y + z over all solutions
+# with 1 <= x, y, z <= N.  Find S(10^16) mod 10^9.
+#
+# Rewrite as (4x)^2 + (y^2)^2 = z^2, a Pythagorean triple.
+#   y odd: the triple is primitive, so y^2 = m^2 - n^2, 4x = 2mn,
+#          z = m^2 + n^2.  Then m - n = s^2, m + n = t^2 for odd coprime
+#          s < t, giving x = (t^4 - s^4)/8, y = st, z = (t^4 + s^4)/2.
+#   y even: x is odd, z = 4w, and (x, (y/2)^2, w) is primitive:
+#          x = m^2 - n^2, (y/2)^2 = 2mn, w = m^2 + n^2.  Since 2mn is a
+#          square with gcd(m, n) = 1, {m, n} = {2s^2, t^2} with t odd and
+#          gcd(s, t) = 1, so y = 4st and, by which of 2s^2, t^2 is larger,
+#          x = 4s^4 - t^4, z = 16s^4 + 4t^4   (2s^2 > t^2), or
+#          x = t^4 - 4s^4, z = 4t^4 + 16s^4   (t^2 > 2s^2).
+# Each primitive triple arises once, so the three families enumerate every
+# solution exactly once.  z <= 10^16 bounds s, t near 12000; everything
+# fits in i64 and the running sum is reduced mod 10^9.
+
+const N: i64 = 10000000000000000
+const MOD: i64 = 1000000000
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let r: i64 = x % y
+        x = y
+        y = r
+    }
+    return x
+}
+
+function main() -> i32 {
+    let mut total: i64 = 0
+
+    # Family 1: y odd.  Odd coprime s < t.
+    # x = (t^4 - s^4)/8, y = s t, z = (t^4 + s^4)/2.
+    let mut t: i64 = 3
+    while (t * t * t * t + 1) / 2 <= N {
+        let t4: i64 = t * t * t * t
+        let mut s: i64 = 1
+        while s < t {
+            let s4: i64 = s * s * s * s
+            let z: i64 = (t4 + s4) / 2
+            if z > N {
+                s = t
+            } else {
+                if gcd(s, t) == 1 {
+                    let x: i64 = (t4 - s4) / 8
+                    let y: i64 = s * t
+                    if x >= 1 && x <= N && y <= N {
+                        total = (total + (x + y + z) % MOD) % MOD
+                    }
+                }
+                s = s + 2
+            }
+        }
+        t = t + 2
+    }
+
+    # Family 2: y even, m = 2s^2 > n = t^2, t odd, gcd(s, t) = 1.
+    # x = 4s^4 - t^4, y = 4 s t, z = 16s^4 + 4t^4.
+    let mut s2: i64 = 1
+    while 16 * s2 * s2 * s2 * s2 + 4 <= N {
+        let s4: i64 = s2 * s2 * s2 * s2
+        let mut tt: i64 = 1
+        while tt * tt < 2 * s2 * s2 {
+            let t4: i64 = tt * tt * tt * tt
+            let z: i64 = 16 * s4 + 4 * t4
+            if z > N {
+                tt = 2 * s2 * s2
+            } else {
+                if gcd(s2, tt) == 1 {
+                    let x: i64 = 4 * s4 - t4
+                    let y: i64 = 4 * s2 * tt
+                    if x >= 1 && x <= N && y <= N {
+                        total = (total + (x + y + z) % MOD) % MOD
+                    }
+                }
+                tt = tt + 2
+            }
+        }
+        s2 = s2 + 1
+    }
+
+    # Family 3: y even, m = t^2 > n = 2s^2, t odd, gcd(s, t) = 1.
+    # x = t^4 - 4s^4, y = 4 s t, z = 4t^4 + 16s^4.
+    let mut t3: i64 = 1
+    while 4 * t3 * t3 * t3 * t3 + 16 <= N {
+        let t4: i64 = t3 * t3 * t3 * t3
+        let mut ss: i64 = 1
+        while 2 * ss * ss < t3 * t3 {
+            let s4b: i64 = ss * ss * ss * ss
+            let z: i64 = 4 * t4 + 16 * s4b
+            if z > N {
+                ss = t3 * t3
+            } else {
+                if gcd(ss, t3) == 1 {
+                    let x: i64 = t4 - 4 * s4b
+                    let y: i64 = 4 * ss * t3
+                    if x >= 1 && x <= N && y <= N {
+                        total = (total + (x + y + z) % MOD) % MOD
+                    }
+                }
+                ss = ss + 1
+            }
+        }
+        t3 = t3 + 2
+    }
+
+    printf("%lld\n", total)
+    return 0
+}

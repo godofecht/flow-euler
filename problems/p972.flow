@@ -1,0 +1,14 @@
+# Project Euler 972
+# Rational triangles on the unit sphere.
+#
+# The heavy lifting (lattice construction and triple counting) lives in the
+# native C companion; Flow just shells out to it and prints the answer.
+
+extern {
+    function p972_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p972_native())
+    return 0
+}

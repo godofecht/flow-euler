@@ -1,0 +1,11 @@
+# Project Euler 807
+# Loops of Ropes - P(n) = A(2n-1,n)/(2n-1)!, exact bignum solver in native/p807.c.
+
+extern {
+    function p807_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.10f\n", p807_native())
+    return 0
+}

@@ -1,0 +1,12 @@
+# Project Euler 1001
+# Connections I: connectivity number of a chord diagram, mod 1003443221.
+# Native C helper for leftist heap + DSU + Fenwick/interval DP.
+
+extern {
+    function p1001_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p1001_native())
+    return 0
+}

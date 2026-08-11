@@ -1,0 +1,96 @@
+# Project Euler 1005
+# Median Prime List: product of primes in the median prime list summing to 2026, mod 1e9.
+# Sieve primes up to N, DP to count subset-sums, reconstruct the median subset, multiply.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+
+function main() -> i32 {
+    let N: i64 = 2026
+
+    # Sieve primes up to N
+    let sieve: ptr<i8> = calloc(N + 1, 1)
+    sieve[0] = 1
+    sieve[1] = 1
+    let mut p: i64 = 2
+    while p * p <= N {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m <= N {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    # Collect primes
+    let primes: ptr<i64> = calloc(N + 1, 8)
+    let mut np: i64 = 0
+    let mut i: i64 = 2
+    while i <= N {
+        if sieve[i] == 0 {
+            primes[np] = i
+            np = np + 1
+        }
+        i = i + 1
+    }
+
+    # DP: count[index][sum] = number of ways to form sum using primes[index..np]
+    # count[np][0] = 1, count[np][s>0] = 0
+    # count[i][s] = count[i+1][s] + (s >= primes[i] ? count[i+1][s - primes[i]] : 0)
+    let dp: ptr<i64> = calloc((np + 1) * (N + 1), 8)
+    dp[np * (N + 1) + 0] = 1
+
+    let mut idx: i64 = np - 1
+    while idx >= 0 {
+        let mut s: i64 = 0
+        while s <= N {
+            dp[idx * (N + 1) + s] = dp[(idx + 1) * (N + 1) + s]
+            if s >= primes[idx] {
+                dp[idx * (N + 1) + s] = dp[idx * (N + 1) + s] + dp[(idx + 1) * (N + 1) + s - primes[idx]]
+            }
+            s = s + 1
+        }
+        idx = idx - 1
+    }
+
+    # The median is the (total_ways - 1) / 2-th subset (0-indexed)
+    let total_ways: i64 = dp[0 * (N + 1) + N]
+    let mut rank: i64 = (total_ways - 1) / 2
+
+    # Reconstruct the median prime list
+    let mut product: i64 = 1
+    let mut remaining: i64 = N
+    let mut start: i64 = 0
+
+    while remaining > 0 {
+        let mut j: i64 = start
+        while j < np {
+            if primes[j] > remaining {
+                break
+            }
+            let block: i64 = dp[(j + 1) * (N + 1) + remaining - primes[j]]
+            if rank >= block {
+                rank = rank - block
+            } else {
+                product = product * primes[j] % MOD
+                remaining = remaining - primes[j]
+                start = j + 1
+                break
+            }
+            j = j + 1
+        }
+    }
+
+    printf("%lld\n", product)
+
+    free(sieve)
+    free(primes)
+    free(dp)
+    return 0
+}
