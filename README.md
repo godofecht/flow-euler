@@ -1,51 +1,43 @@
-# Flow × Project Euler
+# Flow x Project Euler
 
-[![Verify](https://github.com/godofecht/flow-euler/actions/workflows/verify.yml/badge.svg)](https://github.com/godofecht/flow-euler/actions/workflows/verify.yml)
+[![Verify (C backend)](https://github.com/godofecht/flow-euler/actions/workflows/verify.yml/badge.svg)](https://github.com/godofecht/flow-euler/actions/workflows/verify.yml)
+[![MLIR backend](https://github.com/godofecht/flow-euler/actions/workflows/mlir.yml/badge.svg)](https://github.com/godofecht/flow-euler/actions/workflows/mlir.yml)
 
-Solving [Project Euler](https://projecteuler.net) in [Flow](https://github.com/flooooooooooow/flow) — a statically typed language that reads close to high-level math code and compiles to native C (and MLIR).
+Solving [Project Euler](https://projecteuler.net) in [Flow](https://github.com/flooooooooooow/flow), a statically typed language that reads close to high-level math and compiles to native C and MLIR.
 
-**Thesis:** Flow’s syntax is expressive enough to write number-theory algorithms clearly; its compilation path makes those programs as fast as (or faster than) hand-written C.
-
-Reference solutions inspired by [leonlan/projecteuler](https://github.com/leonlan/projecteuler).
+855 problems solved. 814 of 816 known answers have Flow solutions. 117 use native C helpers for algorithms that need `__int128`, GMP, MPFR, or NTT.
 
 ## Quick start
 
 ```bash
-# Needs a Flow checkout (https://github.com/flooooooooooow/flow)
-export FLOW_REPO=$HOME/flow          # path to the Flow repo
-./scripts/run.sh 1                   # run problem 001
-./scripts/run.sh all                 # run every solved problem
-./scripts/verify.sh                  # check against answers.txt
-./scripts/bench.sh                   # Flow-generated C vs hand-written C
+git clone https://github.com/flooooooooooow/flow.git ~/flow
+export FLOW_REPO=$HOME/flow
+
+./scripts/run.sh 1              # run problem 001
+./scripts/run.sh all            # run every solved problem
+./scripts/verify.sh             # check all against answers.txt
+./scripts/bench.sh              # Flow-generated C vs hand-written C
 ```
 
 Each `problems/pNNN.flow` prints a single answer line.
 
-> Tip: point `FLOW_BIN` at `$FLOW_REPO/flow` (not a symlink). Symlinked `~/.local/bin/flow` breaks Flow’s `SCRIPT_DIR` resolution.
+> Point `FLOW_BIN` at `$FLOW_REPO/flow` (not a symlink). Symlinked `~/.local/bin/flow` breaks Flow's `SCRIPT_DIR` resolution.
 
-## Why Flow here
+## MLIR backend
 
-| Concern | Flow | Typical C | Typical Python |
-|---------|------|-----------|----------------|
-| Expressiveness | ranges, typed helpers, clear control flow | verbose loops | excellent, but slow |
-| Performance | compiles to `-O3` C / MLIR | baseline | 10–100× slower on tight loops |
-| Types | `i32` / `i64` where it matters | same | duck typing |
-| Deployment | one native binary | same | interpreter + deps |
+Flow also compiles through MLIR. This repo tests both paths in CI.
 
-### Benchmark snapshot (PE 010 sieve, 2e6)
+```bash
+brew install llvm               # provides mlir-opt, mlir-translate, llc
+export LLVM_BIN=/opt/homebrew/opt/llvm/bin
 
-Same algorithm, both compiled with `clang -O3 -march=native`, 200 in-process rounds on Apple Silicon:
+./scripts/verify-mlir.sh        # verify through MLIR backend
+./scripts/verify-mlir.sh 1 50   # problems 1-50 only
+```
 
-| Impl | µs / run |
-|------|----------|
-| Flow → C | **1675** |
-| Hand-written C | 1767 |
-
-Reproduce with `./scripts/bench.sh`.
+See [docs/backends.md](docs/backends.md) for details on the MLIR pipeline, current limitations, and manual compilation steps.
 
 ## Progress
-
-855 problems solved. Of the 816 problems with known answers in `answers.txt`, 814 have Flow solutions (2 remain unsolved: 771, 780).
 
 | Range | Solved | Status |
 |-------|--------|--------|
@@ -54,20 +46,43 @@ Reproduce with `./scripts/bench.sh`.
 | 401-600 | 200 | done |
 | 601-1007 | 255 | in progress |
 
-117 problems use native C/C++ helpers (`problems/native/`) for NTT, i128, or multiprecision arithmetic.
+816 known answers in `answers.txt`. 814 have Flow solutions. 2 remain unsolved (771, 780).
+
+117 problems use native C/C++ helpers for NTT, `__int128`, GMP, or MPFR.
+
+## Why Flow here
+
+| Concern | Flow | Hand-written C | Python |
+|---------|------|----------------|--------|
+| Expressiveness | ranges, typed helpers, clear control flow | verbose loops | excellent, but slow |
+| Performance | compiles to `-O3` C / MLIR | baseline | 10-100x slower on tight loops |
+| Types | `i32` / `i64` where it matters | same | duck typing |
+| Deployment | one native binary | same | interpreter + deps |
+
+### Benchmark (PE 010 sieve, 2e6)
+
+Same algorithm, both compiled with `clang -O3 -march=native`, 200 in-process rounds on Apple Silicon.
+
+| Impl | us / run |
+|------|----------|
+| Flow to C | **1675** |
+| Hand-written C | 1767 |
+
+Reproduce with `./scripts/bench.sh`.
 
 ## Layout
 
 ```
-problems/        # one Flow file per Euler problem
-problems/native/ # C/C++ helpers for problems needing NTT, i128, or multiprecision
-data/            # input grids / digit strings when needed
-bench/           # C twins + timing harness
-scripts/         # run / verify / bench
-answers.txt      # expected answers for automated checks
+problems/           one .flow file per Euler problem
+problems/native/    C/C++ helpers (NTT, i128, GMP, MPFR)
+data/               input grids, digit strings, tables
+bench/              hand-written C twins + timing harness
+scripts/            run, verify, verify-mlir, bench
+answers.txt         expected answers for automated checks
+docs/               architecture, backends, adding solutions
 ```
 
-## Example — PE 001
+## Example: PE 001
 
 ```flow
 function sum_multiples(limit: i64, step: i64) -> i64 {
@@ -83,8 +98,40 @@ function solve(limit: i64) -> i64 {
 }
 ```
 
-Readable arithmetic-series code; Flow lowers the stepped `for` to a tight C loop.
+Readable arithmetic-series code. Flow lowers the stepped `for` to a tight C loop.
+
+## Example: native helper (PE 775)
+
+Some algorithms need `__int128` or modular arithmetic that is cleaner in C. The Flow file declares an extern and calls it:
+
+```flow
+extern {
+    function p775_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p775_native())
+    return 0
+}
+```
+
+The C file under `problems/native/p775.c` implements the solver and exports `long long p775_native(void)`. The build system auto-links GMP and MPFR if Homebrew headers are present.
+
+See [docs/adding-solutions.md](docs/adding-solutions.md) for the full guide.
+
+## CI
+
+Two GitHub Actions workflows run on every push and pull request:
+
+- **verify.yml**: compiles every solution through the C backend and checks answers against `answers.txt`. Runs on `macos-14` with a 120-minute timeout.
+- **mlir.yml**: compiles every pure-Flow solution through the MLIR backend (`Flow -> MLIR -> LLVM IR -> llc -> clang`). Reports MLIR lowering failures separately from answer mismatches. Runs on `macos-14` with a 60-minute timeout.
+
+## Documentation
+
+- [docs/architecture.md](docs/architecture.md): repository structure, solution patterns, compilation paths
+- [docs/backends.md](docs/backends.md): C and MLIR backend details, prerequisites, limitations
+- [docs/adding-solutions.md](docs/adding-solutions.md): how to add a new solution, native helper conventions
 
 ## License
 
-Solutions are educational. Project Euler problems remain © Project Euler.
+Solutions are educational. Project Euler problems remain (c) Project Euler.

@@ -1,0 +1,40 @@
+name: MLIR Backend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  mlir-verify:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Checkout Flow compiler
+        run: |
+          git clone https://github.com/flooooooooooow/flow.git "$HOME/flow"
+
+      - name: Install Python dependencies
+        run: python3 -m pip install numpy
+
+      - name: Install LLVM (mlir-opt, mlir-translate, llc)
+        run: brew install llvm
+
+      - name: Verify solutions through MLIR backend
+        env:
+          FLOW_HOST: python
+          FLOW_REPO: ${{ github.workspace }}/../flow
+          LLVM_BIN: /opt/homebrew/opt/llvm/bin
+        run: |
+          export FLOW_REPO="$HOME/flow"
+          export LLVM_BIN="/opt/homebrew/opt/llvm/bin"
+          ./scripts/verify-mlir.sh
