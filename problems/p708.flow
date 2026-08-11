@@ -1,0 +1,12 @@
+# Project Euler 708
+# Twos Are All You Need: S(10^14) = sum_{n<=N} 2^{Omega(n)}.
+# Native C helper performs the powerful-number DFS over a tau prefix.
+
+extern {
+    function p708_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p708_native())
+    return 0
+}

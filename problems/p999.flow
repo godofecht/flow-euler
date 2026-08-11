@@ -1,0 +1,12 @@
+# Project Euler 999
+# Rescaled elliptic divisibility sequence: a_{10^18+3} mod 1234567891.
+# Native C helper for the O(log n) EDS doubling recurrence.
+
+extern {
+    function p999_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p999_native())
+    return 0
+}

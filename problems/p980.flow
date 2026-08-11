@@ -1,0 +1,12 @@
+# Project Euler 980
+# Count ordered pairs of 50-letter {x,y,z} strings whose concatenation is
+# neutral, modelled as quaternion group Q8 products. Native C helper.
+
+extern {
+    function p980_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p980_native())
+    return 0
+}

@@ -1,0 +1,13 @@
+# Project Euler 768
+# Chandelier: f(360, 20) via generating functions over cyclotomic fields.
+#
+# The exact-integer polynomial algebra lives in the native C unit.
+
+extern {
+    function p768_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p768_native())
+    return 0
+}

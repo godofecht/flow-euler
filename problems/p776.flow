@@ -1,0 +1,10 @@
+# Project Euler 776: Digit Sum Division
+
+extern {
+    function p776_print()
+}
+
+function main() -> i32 {
+    p776_print()
+    return 0
+}

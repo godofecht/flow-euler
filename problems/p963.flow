@@ -1,0 +1,10 @@
+# Project Euler 963: A Gated Town
+
+extern {
+    function p963_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p963_native())
+    return 0
+}

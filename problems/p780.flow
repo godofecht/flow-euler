@@ -1,0 +1,332 @@
+# Project Euler 780
+# Toriangulations: count tilings of a x b tori by unit equilateral triangles,
+# up to continuous motion of the triangles. G(N) = sum F(n), n <= N = 10^9.
+#
+# Every tiling is a strip tiling: rows of 2*lambda triangles between parallel
+# full lines, s rows, n = 2*lambda*s. On a fixed ordered a x b torus each
+# valid strip direction gives one connected family, and families merge exactly
+# at edge-to-edge tilings, i.e. at copies of the triangular lattice T that
+# contain the torus lattice. With m = n/2 this gives
+#   G(N) = 2*D(M) + 4*T(M) - (4/3)*R(M),  M = N/2, where
+#   D(M) = sum_{m<=M} d(m)                       (axis-parallel directions),
+#   T(M) = #{(lambda,s,p,q): gcd(p,q)=1, p,q>=1,
+#            sqrt(3)*p*q*s < lambda, lambda*s <= M}   (tilted directions;
+#            counted via 2^omega(k) over k = p*q, segmented sieve),
+#   R(M) = # rectangular sublattices of T with index <= M
+#        = (1/2) sum over primitive Eisenstein points u, 3 !| norm(u),
+#          of D(floor(M/2 / norm(u)))   (axes t*u and r*u*sqrt(-3)),
+#          computed with Moebius over content, the ellipse point count
+#          Circ(z) = 6*sum chi_3(d)*floor(z/d), and floor-value blocks.
+# Verified: G(6)=14, G(100)=8090, G(10^5) = 645124048 (mod 1e9+7).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 1000000000
+const MOD: i64 = 1000000007
+const INV3: i64 = 333333336
+const PLIM: i64 = 17000
+const BS: i64 = 1048576
+
+function isqrt64(n: i64) -> i64 {
+    if n <= 0 {
+        return 0
+    }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+# D(v) = sum_{t<=v} d(t) via the hyperbola method (exact, fits i64)
+function dbig(v: i64) -> i64 {
+    if v <= 0 {
+        return 0
+    }
+    let q: i64 = isqrt64(v)
+    let mut s: i64 = 0
+    let mut k: i64 = 1
+    while k <= q {
+        s = s + v / k
+        k = k + 1
+    }
+    return 2 * s - q * q
+}
+
+# Nonzero Eisenstein points with norm <= z: Circ(z) = 6*sum_d chi(d)*floor(z/d),
+# chi the character mod 3; partial sum of chi over 1..t is (t % 3 == 1).
+function circ(z: i64) -> i64 {
+    if z <= 0 {
+        return 0
+    }
+    let mut tot: i64 = 0
+    let mut d: i64 = 1
+    while d <= z {
+        let v: i64 = z / d
+        let d2: i64 = z / v
+        let mut x2: i64 = 0
+        if d2 % 3 == 1 {
+            x2 = 1
+        }
+        let mut x1: i64 = 0
+        if (d - 1) % 3 == 1 {
+            x1 = 1
+        }
+        tot = tot + v * (x2 - x1)
+        d = d2 + 1
+    }
+    return 6 * tot
+}
+
+# Primitive nonzero points with norm <= y (Moebius over content)
+function primall(y: i64, mu: ptr<i64>) -> i64 {
+    if y <= 0 {
+        return 0
+    }
+    let q: i64 = isqrt64(y)
+    let mut tot: i64 = 0
+    let mut g: i64 = 1
+    while g <= q {
+        if mu[g] != 0 {
+            tot = tot + mu[g] * circ(y / (g * g))
+        }
+        g = g + 1
+    }
+    return tot
+}
+
+# Primitive points with norm <= x and norm not divisible by 3:
+# PF(x) = sum_i (-1)^i * primall(x / 3^i)
+function pfree(x: i64, mu: ptr<i64>) -> i64 {
+    let mut tot: i64 = 0
+    let mut sign: i64 = 1
+    let mut y: i64 = x
+    while y >= 1 {
+        tot = tot + sign * primall(y, mu)
+        sign = 0 - sign
+        y = y / 3
+    }
+    return tot
+}
+
+function main() -> i32 {
+    let M: i64 = N / 2
+
+    # ---- part A: 2*D(M) ----
+    let dm: i64 = dbig(M) % MOD
+
+    # ---- part B: T(M), tilted (torus, direction) nodes / 4 ----
+    let m2m1: i64 = M * M - 1
+    let kmax: i64 = isqrt64(m2m1 / 3)
+    let smax: i64 = isqrt64(kmax)
+
+    let hh: ptr<i64> = calloc(smax + 2, 8)
+    let mut s: i64 = 1
+    while s <= smax {
+        hh[s] = hh[s - 1] + M / s
+        s = s + 1
+    }
+
+    # primes up to PLIM for the segmented 2^omega sieve
+    let comp: ptr<i64> = calloc(PLIM + 1, 8)
+    let prlist: ptr<i64> = calloc(2100, 8)
+    let mut npr: i64 = 0
+    let mut i: i64 = 2
+    while i <= PLIM {
+        if comp[i] == 0 {
+            prlist[npr] = i
+            npr = npr + 1
+            let mut j: i64 = i * i
+            while j <= PLIM {
+                comp[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let pw2: ptr<i64> = calloc(16, 8)
+    pw2[0] = 1
+    i = 1
+    while i < 16 {
+        pw2[i] = pw2[i - 1] * 2
+        i = i + 1
+    }
+
+    let cnt: ptr<i64> = calloc(BS, 8)
+    let rem: ptr<i64> = calloc(BS, 8)
+
+    let mut tmod: i64 = 0
+    let mut base: i64 = 0      # floor(sqrt(3)*k), maintained incrementally
+    let mut scur: i64 = smax   # S_k, nonincreasing in k
+
+    let mut lo: i64 = 1
+    while lo <= kmax {
+        let mut hi: i64 = lo + BS
+        if hi > kmax + 1 {
+            hi = kmax + 1
+        }
+        let blen: i64 = hi - lo
+        i = 0
+        while i < blen {
+            cnt[i] = 0
+            rem[i] = lo + i
+            i = i + 1
+        }
+        let mut pi: i64 = 0
+        while pi < npr {
+            let pr: i64 = prlist[pi]
+            let mut st: i64 = ((lo + pr - 1) / pr) * pr
+            let mut j: i64 = st - lo
+            while j < blen {
+                cnt[j] = cnt[j] + 1
+                rem[j] = rem[j] / pr
+                j = j + pr
+            }
+            let mut pe: i64 = pr * pr
+            while pe < hi {
+                st = ((lo + pe - 1) / pe) * pe
+                j = st - lo
+                while j < blen {
+                    rem[j] = rem[j] / pr
+                    j = j + pe
+                }
+                pe = pe * pr
+            }
+            pi = pi + 1
+        }
+
+        i = 0
+        while i < blen {
+            let k: i64 = lo + i
+            # advance base = floor(sqrt(3*k*k))
+            base = base + 1
+            while (base + 1) * (base + 1) <= 3 * k * k {
+                base = base + 1
+            }
+            # shrink S_k: largest s with 3*k^2*s^4 <= M^2-1
+            let qk: i64 = m2m1 / (3 * k * k)
+            while scur > 0 && scur * scur * scur * scur > qk {
+                scur = scur - 1
+            }
+            if scur > 0 {
+                # sub = sum_{s<=S_k} floor(sqrt(3)*k*s), incremental
+                let mut sub: i64 = 0
+                let mut v: i64 = 0
+                let mut t: i64 = 0
+                let mut ss: i64 = 1
+                while ss <= scur {
+                    t = t + k
+                    v = v + base
+                    let tgt: i64 = 3 * t * t
+                    while (v + 1) * (v + 1) <= tgt {
+                        v = v + 1
+                    }
+                    sub = sub + v
+                    ss = ss + 1
+                }
+                let mut wexp: i64 = cnt[i]
+                if rem[i] > 1 {
+                    wexp = wexp + 1
+                }
+                tmod = (tmod + pw2[wexp] * ((hh[scur] - sub) % MOD)) % MOD
+            }
+            i = i + 1
+        }
+        lo = hi
+    }
+
+    # ---- part C: R(M) = (1/2) sum_{k<=J, 3!|k} primpts(k) * D(J/k) ----
+    let jj: i64 = M / 2
+    let vj: i64 = isqrt64(jj)
+
+    # Moebius sieve up to vj
+    let mu: ptr<i64> = calloc(vj + 2, 8)
+    let isc: ptr<i64> = calloc(vj + 2, 8)
+    i = 0
+    while i <= vj {
+        mu[i] = 1
+        i = i + 1
+    }
+    i = 2
+    while i <= vj {
+        if isc[i] == 0 {
+            let mut j: i64 = i
+            while j <= vj {
+                if j > i {
+                    isc[j] = 1
+                }
+                mu[j] = 0 - mu[j]
+                j = j + i
+            }
+            let pp: i64 = i * i
+            j = pp
+            while j <= vj {
+                mu[j] = 0
+                j = j + pp
+            }
+        }
+        i = i + 1
+    }
+
+    # small divisor-summatory prefix D(v) for v <= vj
+    let dcnt: ptr<i64> = calloc(vj + 2, 8)
+    i = 1
+    while i <= vj {
+        let mut j: i64 = i
+        while j <= vj {
+            dcnt[j] = dcnt[j] + 1
+            j = j + i
+        }
+        i = i + 1
+    }
+    let dpre: ptr<i64> = calloc(vj + 2, 8)
+    i = 1
+    while i <= vj {
+        dpre[i] = dpre[i - 1] + dcnt[i]
+        i = i + 1
+    }
+
+    let mut r2mod: i64 = 0     # 2*R(M) mod p
+    let mut k2: i64 = 0
+    let mut pfprev: i64 = 0
+    let mut k: i64 = 1
+    while k <= jj {
+        let v: i64 = jj / k
+        k2 = jj / v
+        let mut dv: i64 = 0
+        if v <= vj {
+            dv = dpre[v]
+        } else {
+            dv = dbig(v)
+        }
+        let pf2: i64 = pfree(k2, mu)
+        let diff: i64 = pf2 - pfprev
+        r2mod = (r2mod + (diff % MOD) * (dv % MOD)) % MOD
+        pfprev = pf2
+        k = k2 + 1
+    }
+
+    # ---- assemble: G = 2*D(M) + 4*T - (4/3)*R = 2*D + 4*T - (2/3)*(2R) ----
+    let mut g: i64 = (2 * dm + 4 * tmod) % MOD
+    let rterm: i64 = ((r2mod * 2) % MOD) * INV3 % MOD
+    g = (g + MOD - rterm) % MOD
+    printf("%lld\n", g)
+
+    free(hh)
+    free(comp)
+    free(prlist)
+    free(pw2)
+    free(cnt)
+    free(rem)
+    free(mu)
+    free(isc)
+    free(dcnt)
+    free(dpre)
+    return 0
+}

@@ -1,0 +1,12 @@
+# Project Euler 971
+# Sum of C_p = 1 + n*t over primes p <= 10^8 with p % 5 == 1,
+# where n=(p-1)/5 and t counts elements of mu5 on a cycle of phi(s)=s*(1+s)^n mod p.
+
+extern {
+    function p971_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p971_native())
+    return 0
+}

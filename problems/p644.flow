@@ -1,0 +1,11 @@
+# Project Euler 644
+# Squares on the Line: compute f(200, 500) for the random first move game.
+
+extern {
+    function p644_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.8f\n", p644_native())
+    return 0
+}

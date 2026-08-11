@@ -1,0 +1,12 @@
+# Project Euler 698
+# 123 Numbers: F(111111111111222333) mod 123123123.
+# Native C helper with GMP for bignum factorials.
+
+extern {
+    function p698_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p698_native())
+    return 0
+}

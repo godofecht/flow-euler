@@ -1,0 +1,233 @@
+# Project Euler 683
+# The Chase II: G(500) in scientific notation, 9 significant digits.
+#
+# In a round with j players the distance between the two dice performs a
+# lazy walk on Z_j with steps -2..2 and probabilities (1,2,3,2,1)/9,
+# absorbed at 0 (checked at turn starts).  The eliminated player pays s^2
+# after s turns, so the pot is sum over rounds j = 2..n of the mean of
+# E[s^2 | start distance d] over d uniform in 0..j-1.
+# First and second moments come from two linear solves with the same
+# matrix I - P (restricted to d = 1..j-1): h1 = 1 + P h1,
+# h2 = 1 + 2 P h1 + P h2.  The matrix is pentadiagonal except for two
+# wrap entries (1, j-1) and (j-1, 1); it is an M-matrix, so a banded LU
+# without pivoting is stable, and the two corners are restored with a
+# rank-2 Woodbury correction.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const JMAX: i64 = 500
+
+# band storage: B[(c - r + 2) * (JMAX + 2) + r] for |c - r| <= 2, rows 1..m
+# after lu(), sub-diagonals hold multipliers, diagonal holds pivots
+
+function lu_band(B: ptr<f64>, m: i64) -> void {
+    let S: i64 = JMAX + 2
+    let mut k: i64 = 1
+    while k <= m {
+        let piv: f64 = B[2 * S + k]
+        let mut r: i64 = k + 1
+        while r <= k + 2 && r <= m {
+            let dd: i64 = k - r + 2
+            let f: f64 = B[dd * S + r] / piv
+            B[dd * S + r] = f
+            let mut c: i64 = k + 1
+            while c <= k + 2 && c <= m {
+                if c - r >= 0 - 2 && c - r <= 2 {
+                    B[(c - r + 2) * S + r] = B[(c - r + 2) * S + r] - f * B[(c - k + 2) * S + k]
+                }
+                c = c + 1
+            }
+            r = r + 1
+        }
+        k = k + 1
+    }
+}
+
+function solve_band(B: ptr<f64>, m: i64, rhs: ptr<f64>, x: ptr<f64>) -> void {
+    let S: i64 = JMAX + 2
+    # forward
+    let mut r: i64 = 1
+    while r <= m {
+        let mut v: f64 = rhs[r]
+        let mut k: i64 = r - 2
+        while k <= r - 1 {
+            if k >= 1 {
+                v = v - B[(k - r + 2) * S + r] * x[k]
+            }
+            k = k + 1
+        }
+        x[r] = v
+        r = r + 1
+    }
+    # back
+    r = m
+    while r >= 1 {
+        let mut v: f64 = x[r]
+        let mut c: i64 = r + 1
+        while c <= r + 2 && c <= m {
+            v = v - B[(c - r + 2) * S + r] * x[c]
+            c = c + 1
+        }
+        x[r] = v / B[2 * S + r]
+        r = r - 1
+    }
+}
+
+function main() -> i32 {
+    let S: i64 = JMAX + 2
+    let B: ptr<f64> = calloc(5 * S, 8)
+    let rhs: ptr<f64> = calloc(S, 8)
+    let h1: ptr<f64> = calloc(S, 8)
+    let h2: ptr<f64> = calloc(S, 8)
+    let w1: ptr<f64> = calloc(S, 8)
+    let w2: ptr<f64> = calloc(S, 8)
+    let pstep: ptr<f64> = calloc(5, 8)
+    pstep[0] = 1.0 / 9.0
+    pstep[1] = 2.0 / 9.0
+    pstep[2] = 3.0 / 9.0
+    pstep[3] = 2.0 / 9.0
+    pstep[4] = 1.0 / 9.0
+
+    let mut G: f64 = 0.0
+    let mut j: i64 = 2
+    while j <= JMAX {
+        let m: i64 = j - 1
+        # build band (and note corners for j >= 5)
+        let mut i: i64 = 0
+        while i < 5 * S {
+            B[i] = 0.0
+            i = i + 1
+        }
+        let mut d: i64 = 1
+        while d <= m {
+            B[2 * S + d] = 1.0
+            let mut sidx: i64 = 0
+            while sidx < 5 {
+                let t: i64 = ((d + sidx - 2) % j + j) % j
+                if t != 0 {
+                    let off: i64 = t - d
+                    if off >= 0 - 2 && off <= 2 {
+                        B[(off + 2) * S + d] = B[(off + 2) * S + d] - pstep[sidx]
+                    }
+                    # else: wrap corner, handled by Woodbury below
+                }
+                sidx = sidx + 1
+            }
+            d = d + 1
+        }
+        lu_band(B, m)
+
+        # h1: rhs = 1
+        d = 1
+        while d <= m {
+            rhs[d] = 1.0
+            d = d + 1
+        }
+        solve_band(B, m, rhs, h1)
+
+        if j >= 5 {
+            # Woodbury for corners A[1][m] = A[m][1] = -1/9
+            d = 1
+            while d <= m {
+                rhs[d] = 0.0
+                d = d + 1
+            }
+            rhs[1] = 1.0
+            solve_band(B, m, rhs, w1)
+            rhs[1] = 0.0
+            rhs[m] = 1.0
+            solve_band(B, m, rhs, w2)
+
+            # K = [[1 - w1[m]/9, -w2[m]/9], [-w1[1]/9, 1 - w2[1]/9]]
+            let k11: f64 = 1.0 - w1[m] / 9.0
+            let k12: f64 = 0.0 - w2[m] / 9.0
+            let k21: f64 = 0.0 - w1[1] / 9.0
+            let k22: f64 = 1.0 - w2[1] / 9.0
+            let det: f64 = k11 * k22 - k12 * k21
+
+            # correct h1: t = (-h1[m]/9, -h1[1]/9); h1 -= [w1 w2] K^-1 t
+            let t1: f64 = 0.0 - h1[m] / 9.0
+            let t2: f64 = 0.0 - h1[1] / 9.0
+            let c1: f64 = (k22 * t1 - k12 * t2) / det
+            let c2: f64 = (k11 * t2 - k21 * t1) / det
+            d = 1
+            while d <= m {
+                h1[d] = h1[d] - w1[d] * c1 - w2[d] * c2
+                d = d + 1
+            }
+
+            # h2 rhs = 1 + 2 * P h1 (full wrap, h1[0] = 0)
+            d = 1
+            while d <= m {
+                let mut acc: f64 = 0.0
+                let mut s2: i64 = 0
+                while s2 < 5 {
+                    let t: i64 = ((d + s2 - 2) % j + j) % j
+                    if t != 0 {
+                        acc = acc + pstep[s2] * h1[t]
+                    }
+                    s2 = s2 + 1
+                }
+                rhs[d] = 1.0 + 2.0 * acc
+                d = d + 1
+            }
+            solve_band(B, m, rhs, h2)
+            let u1: f64 = 0.0 - h2[m] / 9.0
+            let u2: f64 = 0.0 - h2[1] / 9.0
+            let e1: f64 = (k22 * u1 - k12 * u2) / det
+            let e2: f64 = (k11 * u2 - k21 * u1) / det
+            d = 1
+            while d <= m {
+                h2[d] = h2[d] - w1[d] * e1 - w2[d] * e2
+                d = d + 1
+            }
+        } else {
+            # j <= 4: wraps landed inside the band already; h1 is final
+            d = 1
+            while d <= m {
+                let mut acc: f64 = 0.0
+                let mut s2: i64 = 0
+                while s2 < 5 {
+                    let t: i64 = ((d + s2 - 2) % j + j) % j
+                    if t != 0 {
+                        acc = acc + pstep[s2] * h1[t]
+                    }
+                    s2 = s2 + 1
+                }
+                rhs[d] = 1.0 + 2.0 * acc
+                d = d + 1
+            }
+            solve_band(B, m, rhs, h2)
+        }
+
+        let mut tot: f64 = 0.0
+        d = 1
+        while d <= m {
+            tot = tot + h2[d]
+            d = d + 1
+        }
+        G = G + tot / (j as f64)
+        j = j + 1
+    }
+
+    # scientific notation, 9 significant digits
+    let mut mant: f64 = G
+    let mut ex: i64 = 0
+    while mant >= 10.0 {
+        mant = mant / 10.0
+        ex = ex + 1
+    }
+    printf("%.8fe%lld\n", mant, ex)
+
+    free(B)
+    free(rhs)
+    free(h1)
+    free(h2)
+    free(w1)
+    free(w2)
+    free(pstep)
+    return 0
+}

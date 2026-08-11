@@ -1,0 +1,11 @@
+# Project Euler 740
+# Secret Santa: probability the last person gets at least one of their own slips.
+
+extern {
+    function p740_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.10f\n", p740_native())
+    return 0
+}

@@ -1,0 +1,11 @@
+# Project Euler 760
+# Sum over Bitwise Operators: G(10^18) mod 10^9+7.
+
+extern {
+    function p760_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p760_native())
+    return 0
+}

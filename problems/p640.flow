@@ -1,0 +1,70 @@
+# Project Euler 640
+# Shut the Box: expected turns for Bob to flip all 12 cards face down
+# under optimal play.
+#
+# State = bitmask of face-up cards.  Each roll (x, y) lets Bob toggle card
+# x, y, or x+y; the Bellman equation V(s) = 1 + E[min choice V(s')] is a
+# stochastic shortest path problem, solved by value iteration from V = 0
+# (monotone convergence; the check game with two coins and four cards
+# gives 5.673651 as stated).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let N: i64 = 4096
+    let V: ptr<f64> = calloc(N, 8)
+    let Vn: ptr<f64> = calloc(N, 8)
+
+    let mut it: i64 = 0
+    let mut diff: f64 = 1.0
+    while it < 20000 && diff > 0.0000000000001 {
+        diff = 0.0
+        let mut s: i64 = 1
+        while s < N {
+            let mut tot: f64 = 0.0
+            let mut x: i64 = 1
+            while x <= 6 {
+                let mut y: i64 = 1
+                while y <= 6 {
+                    # choices: toggle card x, y, or x+y (cards 1..12)
+                    let mut best: f64 = V[s ^ (1 << (x - 1))]
+                    let vy: f64 = V[s ^ (1 << (y - 1))]
+                    if vy < best {
+                        best = vy
+                    }
+                    let vxy: f64 = V[s ^ (1 << (x + y - 1))]
+                    if vxy < best {
+                        best = vxy
+                    }
+                    tot = tot + best
+                    y = y + 1
+                }
+                x = x + 1
+            }
+            Vn[s] = 1.0 + tot / 36.0
+            s = s + 1
+        }
+        s = 1
+        while s < N {
+            let d: f64 = Vn[s] - V[s]
+            let mut ad: f64 = d
+            if ad < 0.0 {
+                ad = 0.0 - ad
+            }
+            if ad > diff {
+                diff = ad
+            }
+            V[s] = Vn[s]
+            s = s + 1
+        }
+        it = it + 1
+    }
+
+    printf("%.6f\n", V[N - 1])
+    free(V)
+    free(Vn)
+    return 0
+}

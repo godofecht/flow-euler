@@ -1,0 +1,350 @@
+# Project Euler 671
+# Colouring a Loop: F_10(10004003002001) mod 1000004321.
+#
+# Tilings of the 2 x n loop (1x1/1x2/1x3 tiles, vertical 1x2 allowed, no
+# four tile corners at a point, adjacent tiles differently coloured) are
+# counted up to rotation of the loop: F_4(3) = 104 is not divisible by
+# k(k-1) = 12, which rules out any fixed-position count, and Burnside over
+# rotations reproduces all three given values exactly.
+#
+# Fixed configurations of period d come from a transfer matrix whose state
+# is (top overhang, bottom overhang, interface colour classes) with colours
+# tracked relative to the two seam colours A and B (interface tiles always
+# have distinct colours since they share a column).  This class tracking
+# also kills self-adjacent periodic colourings automatically.  The target
+# n is prime, so F = (FIX(n) + (n-1) FIX(1)) / n mod 1000004321.
+# Verified: F_4(3)=104, F_5(7)=3327300, F_6(101)=75309980 mod 1000004321.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000004321
+const K: i64 = 10
+const N: i64 = 10004003002001
+const NS: i64 = 66            # 3 vertical states + 63 D-states
+
+function inv_mod(a0: i64) -> i64 {
+    let mut g: i64 = MOD
+    let mut x: i64 = 0
+    let mut r: i64 = a0 % MOD
+    let mut s: i64 = 1
+    while r != 0 {
+        let q: i64 = g / r
+        let t: i64 = g - q * r
+        g = r
+        r = t
+        let u: i64 = x - q * s
+        x = s
+        s = u
+    }
+    x = x % MOD
+    if x < 0 {
+        x = x + MOD
+    }
+    return x
+}
+
+function matmul(a: ptr<i64>, b: ptr<i64>, c: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < NS {
+        let mut j: i64 = 0
+        while j < NS {
+            let mut acc: i64 = 0
+            let mut t: i64 = 0
+            while t < NS {
+                acc = (acc + a[i * NS + t] * b[t * NS + j]) % MOD
+                t = t + 1
+            }
+            c[i * NS + j] = acc
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+# fresh-colour option count given f distinct forbidden colours of which
+# nab are in {A, B}:  K - (f + 2 - nab)
+function fresh_cnt(f: i64, nab: i64) -> i64 {
+    let c: i64 = K - (f + 2 - nab)
+    if c < 0 {
+        return 0
+    }
+    return c
+}
+
+function main() -> i32 {
+    # state indexing: 0..2 = ('V', x); D-states packed via lookup table
+    let didx: ptr<i64> = calloc(81, 8)     # (o1*3+o2)*9 + x*3+y  -> state id
+    let mut ns: i64 = 3
+    let mut o1: i64 = 0
+    while o1 < 3 {
+        let mut o2: i64 = 0
+        while o2 < 3 {
+            let mut x: i64 = 0
+            while x < 3 {
+                let mut y: i64 = 0
+                while y < 3 {
+                    if x == y && x != 2 {
+                        didx[(o1 * 3 + o2) * 9 + x * 3 + y] = 0 - 1
+                    } else {
+                        didx[(o1 * 3 + o2) * 9 + x * 3 + y] = ns
+                        ns = ns + 1
+                    }
+                    y = y + 1
+                }
+                x = x + 1
+            }
+            o2 = o2 + 1
+        }
+        o1 = o1 + 1
+    }
+
+    let T: ptr<i64> = calloc(NS * NS, 8)
+
+    # transitions from V-states
+    let mut xv: i64 = 0
+    while xv < 3 {
+        let i: i64 = xv
+        # vertical again: forbidden {x}
+        let mut z: i64 = 0
+        while z < 2 {
+            if z != xv {
+                T[i * NS + z] = (T[i * NS + z] + 1) % MOD
+            }
+            z = z + 1
+        }
+        let mut nab: i64 = 0
+        if xv < 2 {
+            nab = 1
+        }
+        T[i * NS + 2] = (T[i * NS + 2] + fresh_cnt(1, nab)) % MOD
+        # two horizontals lengths a, b; colours w (top), zz (bottom)
+        let mut a: i64 = 1
+        while a <= 3 {
+            let mut b: i64 = 1
+            while b <= 3 {
+                let mut w: i64 = 0
+                while w < 3 {
+                    # weight for w given forbidden {xv}
+                    let mut cw: i64 = 0
+                    if w < 2 {
+                        if w != xv {
+                            cw = 1
+                        }
+                    } else {
+                        cw = fresh_cnt(1, nab)
+                    }
+                    if cw > 0 {
+                        let mut zz: i64 = 0
+                        while zz < 3 {
+                            # forbidden {xv, w}: distinct colours
+                            let mut nab2: i64 = 0
+                            if xv < 2 {
+                                nab2 = nab2 + 1
+                            }
+                            if w < 2 {
+                                nab2 = nab2 + 1
+                            }
+                            let mut cz: i64 = 0
+                            if zz < 2 {
+                                if zz != xv && zz != w {
+                                    cz = 1
+                                }
+                            } else {
+                                cz = fresh_cnt(2, nab2)
+                            }
+                            if cz > 0 {
+                                let st2: i64 = didx[((a - 1) * 3 + (b - 1)) * 9 + w * 3 + zz]
+                                if st2 >= 0 {
+                                    T[i * NS + st2] = (T[i * NS + st2] + cw * cz) % MOD
+                                }
+                            }
+                            zz = zz + 1
+                        }
+                    }
+                    w = w + 1
+                }
+                b = b + 1
+            }
+            a = a + 1
+        }
+        xv = xv + 1
+    }
+
+    # transitions from D-states
+    o1 = 0
+    while o1 < 3 {
+        let mut o2: i64 = 0
+        while o2 < 3 {
+            let mut x: i64 = 0
+            while x < 3 {
+                let mut y: i64 = 0
+                while y < 3 {
+                    let i: i64 = didx[(o1 * 3 + o2) * 9 + x * 3 + y]
+                    if i >= 0 {
+                        # forbidden pair {x, y} for any new tile here
+                        let mut nab: i64 = 0
+                        if x < 2 {
+                            nab = nab + 1
+                        }
+                        if y < 2 {
+                            nab = nab + 1
+                        }
+                        if o1 > 0 && o2 > 0 {
+                            let st2: i64 = didx[((o1 - 1) * 3 + (o2 - 1)) * 9 + x * 3 + y]
+                            T[i * NS + st2] = (T[i * NS + st2] + 1) % MOD
+                        }
+                        if o1 > 0 && o2 == 0 {
+                            let mut b: i64 = 1
+                            while b <= 3 {
+                                let mut z: i64 = 0
+                                while z < 3 {
+                                    let mut c: i64 = 0
+                                    if z < 2 {
+                                        if z != x && z != y {
+                                            c = 1
+                                        }
+                                    } else {
+                                        c = fresh_cnt(2, nab)
+                                    }
+                                    if c > 0 {
+                                        let st2: i64 = didx[((o1 - 1) * 3 + (b - 1)) * 9 + x * 3 + z]
+                                        if st2 >= 0 {
+                                            T[i * NS + st2] = (T[i * NS + st2] + c) % MOD
+                                        }
+                                    }
+                                    z = z + 1
+                                }
+                                b = b + 1
+                            }
+                        }
+                        if o1 == 0 && o2 > 0 {
+                            let mut a: i64 = 1
+                            while a <= 3 {
+                                let mut w: i64 = 0
+                                while w < 3 {
+                                    let mut c: i64 = 0
+                                    if w < 2 {
+                                        if w != x && w != y {
+                                            c = 1
+                                        }
+                                    } else {
+                                        c = fresh_cnt(2, nab)
+                                    }
+                                    if c > 0 {
+                                        let st2: i64 = didx[((a - 1) * 3 + (o2 - 1)) * 9 + w * 3 + y]
+                                        if st2 >= 0 {
+                                            T[i * NS + st2] = (T[i * NS + st2] + c) % MOD
+                                        }
+                                    }
+                                    w = w + 1
+                                }
+                                a = a + 1
+                            }
+                        }
+                        if o1 == 0 && o2 == 0 {
+                            # corner rule: vertical only
+                            let mut z: i64 = 0
+                            while z < 3 {
+                                let mut c: i64 = 0
+                                if z < 2 {
+                                    if z != x && z != y {
+                                        c = 1
+                                    }
+                                } else {
+                                    c = fresh_cnt(2, nab)
+                                }
+                                if c > 0 {
+                                    T[i * NS + z] = (T[i * NS + z] + c) % MOD
+                                }
+                                z = z + 1
+                            }
+                        }
+                    }
+                    y = y + 1
+                }
+                x = x + 1
+            }
+            o2 = o2 + 1
+        }
+        o1 = o1 + 1
+    }
+
+    # FIX(d) = K * (T^d)[V_A][V_A] + K(K-1) * sum over (o1,o2) diag with (A,B)
+    let R: ptr<i64> = calloc(NS * NS, 8)
+    let Bm: ptr<i64> = calloc(NS * NS, 8)
+    let W: ptr<i64> = calloc(NS * NS, 8)
+
+    # FIX(1): directly from T
+    let mut fix1: i64 = K % MOD * T[0 * NS + 0] % MOD
+    o1 = 0
+    while o1 < 3 {
+        let mut o2: i64 = 0
+        while o2 < 3 {
+            let st: i64 = didx[(o1 * 3 + o2) * 9 + 0 * 3 + 1]
+            fix1 = (fix1 + K * (K - 1) % MOD * T[st * NS + st]) % MOD
+            o2 = o2 + 1
+        }
+        o1 = o1 + 1
+    }
+
+    # R = T^N
+    let mut i: i64 = 0
+    while i < NS * NS {
+        R[i] = 0
+        Bm[i] = T[i]
+        i = i + 1
+    }
+    i = 0
+    while i < NS {
+        R[i * NS + i] = 1
+        i = i + 1
+    }
+    let mut e: i64 = N
+    while e > 0 {
+        if (e & 1) == 1 {
+            matmul(R, Bm, W)
+            i = 0
+            while i < NS * NS {
+                R[i] = W[i]
+                i = i + 1
+            }
+        }
+        e = e >> 1
+        if e > 0 {
+            matmul(Bm, Bm, W)
+            i = 0
+            while i < NS * NS {
+                Bm[i] = W[i]
+                i = i + 1
+            }
+        }
+    }
+    let mut fixn: i64 = K % MOD * R[0 * NS + 0] % MOD
+    o1 = 0
+    while o1 < 3 {
+        let mut o2: i64 = 0
+        while o2 < 3 {
+            let st: i64 = didx[(o1 * 3 + o2) * 9 + 0 * 3 + 1]
+            fixn = (fixn + K * (K - 1) % MOD * R[st * NS + st]) % MOD
+            o2 = o2 + 1
+        }
+        o1 = o1 + 1
+    }
+
+    # N is prime: F = (FIX(N) + (N-1) FIX(1)) / N mod MOD
+    let nm: i64 = N % MOD
+    let nm1: i64 = (N - 1) % MOD
+    let tot: i64 = (fixn + nm1 * fix1) % MOD
+    let ans: i64 = tot * inv_mod(nm) % MOD
+    printf("%lld\n", ans)
+
+    free(didx)
+    free(T)
+    free(R)
+    free(Bm)
+    free(W)
+    return 0
+}

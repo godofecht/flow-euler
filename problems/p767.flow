@@ -1,0 +1,13 @@
+# Project Euler 767
+# Window into a Matrix II: B(10^5, 10^16) mod 1e9+7.
+#
+# Heavy NTT-based convolution lives in the native C unit.
+
+extern {
+    function p767_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p767_native())
+    return 0
+}

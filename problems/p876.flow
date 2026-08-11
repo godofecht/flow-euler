@@ -1,0 +1,12 @@
+# Project Euler 876
+# Triplet Tricks: sum_{k=1}^{18} F(6^k, 10^k).
+# Native C helper for the divisor-pair enumeration.
+
+extern {
+    function p876_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p876_native())
+    return 0
+}

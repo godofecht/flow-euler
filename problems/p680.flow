@@ -1,0 +1,230 @@
+# Project Euler 680
+# Yarra Gnisrever: R(10^18, 10^6) mod 10^9.
+#
+# A stays a union of arithmetic runs, so represent it as an implicit treap
+# whose nodes are segments (start value, length, direction) keyed by
+# position, with a lazy reverse flag.  Each of the 10^6 reversals is two
+# position-splits, a flag toggle, and two merges; at most two new nodes per
+# operation.  The final sum uses sum(i) and sum(i^2) closed forms with the
+# exact divisions by 2 and 6 done before reducing mod 10^9 (composite
+# modulus, so no inverses).
+#
+# In the R(5,4) example the fourth operation has s > t; matching the given
+# value 27 requires treating that as reversing [t, s].
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MODM: i64 = 1000000000
+const BIGN: i64 = 1000000000000000000
+const K: i64 = 1000000
+const CAP: i64 = 2100000
+
+# node pool: 8 slots per node
+#   0 pri, 1 left, 2 right, 3 len, 4 val, 5 dir, 6 sz, 7 flip
+# misc: [0] node count, [1] rng state, [2] split second-result
+
+function nn_new(P: ptr<i64>, misc: ptr<i64>, val: i64, ln: i64, dr: i64) -> i64 {
+    let x: i64 = misc[0] + 1
+    misc[0] = x
+    let mut st: i64 = misc[1]
+    st = (st * 1103515245 + 12345) % 2147483648
+    misc[1] = st
+    let b: i64 = x * 8
+    P[b + 0] = st
+    P[b + 1] = 0
+    P[b + 2] = 0
+    P[b + 3] = ln
+    P[b + 4] = val
+    P[b + 5] = dr
+    P[b + 6] = ln
+    P[b + 7] = 0
+    return x
+}
+
+function nn_push(P: ptr<i64>, x: i64) -> void {
+    let b: i64 = x * 8
+    if P[b + 7] == 1 {
+        let l: i64 = P[b + 1]
+        P[b + 1] = P[b + 2]
+        P[b + 2] = l
+        if P[b + 5] == 0 {
+            P[b + 4] = P[b + 4] + P[b + 3] - 1
+            P[b + 5] = 1
+        } else {
+            P[b + 4] = P[b + 4] - P[b + 3] + 1
+            P[b + 5] = 0
+        }
+        if P[b + 1] != 0 {
+            P[P[b + 1] * 8 + 7] = 1 - P[P[b + 1] * 8 + 7]
+        }
+        if P[b + 2] != 0 {
+            P[P[b + 2] * 8 + 7] = 1 - P[P[b + 2] * 8 + 7]
+        }
+        P[b + 7] = 0
+    }
+}
+
+function nn_upd(P: ptr<i64>, x: i64) -> void {
+    let b: i64 = x * 8
+    P[b + 6] = P[b + 3] + P[P[b + 1] * 8 + 6] + P[P[b + 2] * 8 + 6]
+}
+
+function tr_merge(P: ptr<i64>, a: i64, b: i64) -> i64 {
+    if a == 0 {
+        return b
+    }
+    if b == 0 {
+        return a
+    }
+    if P[a * 8 + 0] > P[b * 8 + 0] {
+        nn_push(P, a)
+        P[a * 8 + 2] = tr_merge(P, P[a * 8 + 2], b)
+        nn_upd(P, a)
+        return a
+    }
+    nn_push(P, b)
+    P[b * 8 + 1] = tr_merge(P, a, P[b * 8 + 1])
+    nn_upd(P, b)
+    return b
+}
+
+# split first k elements off; returns left root, stores right root in misc[2]
+function tr_split(P: ptr<i64>, misc: ptr<i64>, x: i64, k: i64) -> i64 {
+    if x == 0 {
+        misc[2] = 0
+        return 0
+    }
+    nn_push(P, x)
+    let b: i64 = x * 8
+    let lsz: i64 = P[P[b + 1] * 8 + 6]
+    if k <= lsz {
+        let a: i64 = tr_split(P, misc, P[b + 1], k)
+        P[b + 1] = misc[2]
+        nn_upd(P, x)
+        misc[2] = x
+        return a
+    }
+    let k2: i64 = k - lsz
+    if k2 >= P[b + 3] {
+        let a2: i64 = tr_split(P, misc, P[b + 2], k2 - P[b + 3])
+        P[b + 2] = a2
+        nn_upd(P, x)
+        # misc[2] already holds the right part
+        return x
+    }
+    # split inside this node's segment at offset k2
+    let mut nv: i64 = 0
+    if P[b + 5] == 0 {
+        nv = P[b + 4] + k2
+    } else {
+        nv = P[b + 4] - k2
+    }
+    let nn: i64 = nn_new(P, misc, nv, P[b + 3] - k2, P[b + 5])
+    P[b + 3] = k2
+    let xr: i64 = P[b + 2]
+    P[b + 2] = 0
+    nn_upd(P, x)
+    misc[2] = tr_merge(P, nn, xr)
+    return x
+}
+
+# accumulate sum of i*A[i] mod MODM; acc: [0] position, [1] total
+function tr_visit(P: ptr<i64>, x: i64, acc: ptr<i64>) -> void {
+    if x == 0 {
+        return
+    }
+    nn_push(P, x)
+    let b: i64 = x * 8
+    tr_visit(P, P[b + 1], acc)
+    let L: i64 = P[b + 3]
+    let a0: i64 = P[b + 4]
+    let dr: i64 = P[b + 5]
+    let p: i64 = acc[0]
+    # S1 = L(L-1)/2 mod, S2 = (L-1)L(2L-1)/6 mod, exact divisions first
+    let mut u: i64 = L - 1
+    let mut v: i64 = L
+    if u % 2 == 0 {
+        u = u / 2
+    } else {
+        v = v / 2
+    }
+    let S1: i64 = (u % MODM) * (v % MODM) % MODM
+    u = L - 1
+    v = L
+    let mut w: i64 = 2 * L - 1
+    if u % 2 == 0 {
+        u = u / 2
+    } else {
+        v = v / 2
+    }
+    if u % 3 == 0 {
+        u = u / 3
+    } else {
+        if v % 3 == 0 {
+            v = v / 3
+        } else {
+            w = w / 3
+        }
+    }
+    let S2: i64 = (u % MODM) * (v % MODM) % MODM * (w % MODM) % MODM
+    let pm: i64 = p % MODM
+    let am: i64 = a0 % MODM
+    let lm: i64 = L % MODM
+    let base: i64 = lm * pm % MODM * am % MODM
+    let mut contrib: i64 = 0
+    if dr == 0 {
+        contrib = (base + (pm + am) % MODM * S1 + S2) % MODM
+    } else {
+        contrib = (base + ((am - pm + MODM) % MODM) * S1 % MODM + MODM - S2) % MODM
+    }
+    acc[1] = (acc[1] + contrib) % MODM
+    acc[0] = p + L
+    tr_visit(P, P[b + 2], acc)
+}
+
+function main() -> i32 {
+    let P: ptr<i64> = calloc(CAP * 8, 8)
+    let misc: ptr<i64> = calloc(4, 8)
+    misc[1] = 987654321
+
+    let mut root: i64 = nn_new(P, misc, 0, BIGN, 0)
+
+    let mut fa: i64 = 1     # F(2j-1) mod N
+    let mut fb: i64 = 1     # F(2j) mod N
+    let mut j: i64 = 0
+    while j < K {
+        let mut s: i64 = fa
+        let mut t: i64 = fb
+        if s > t {
+            let tmp: i64 = s
+            s = t
+            t = tmp
+        }
+        let nfa: i64 = (fa + fb) % BIGN
+        let nfb: i64 = (fb + nfa) % BIGN
+        fa = nfa
+        fb = nfb
+
+        let ab: i64 = tr_split(P, misc, root, t + 1)
+        let c: i64 = misc[2]
+        let a: i64 = tr_split(P, misc, ab, s)
+        let bnode: i64 = misc[2]
+        if bnode != 0 {
+            P[bnode * 8 + 7] = 1 - P[bnode * 8 + 7]
+        }
+        root = tr_merge(P, tr_merge(P, a, bnode), c)
+        j = j + 1
+    }
+
+    let acc: ptr<i64> = calloc(2, 8)
+    tr_visit(P, root, acc)
+    printf("%lld\n", acc[1])
+
+    free(P)
+    free(misc)
+    free(acc)
+    return 0
+}

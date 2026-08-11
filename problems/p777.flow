@@ -1,0 +1,226 @@
+# Project Euler 777
+# Lissajous curves x = cos(a t), y = cos(b (t - pi/10)): s(10^6) in
+# scientific notation, 10 significant digits.
+#
+# Self-crossings pair parameters t1 != t2 with equal x and equal y.
+# cos(a t1) = cos(a t2) forces t1 - t2 = 2 pi k / a (shift) or
+# t1 + t2 = 2 pi k / a (reflect); likewise for y around the phase pi/10.
+# Shift-shift gives t1 = t2 (a, b coprime). The two mixed families give
+# lattice-indexed crossing points whose cos^2 values sum over full
+# residue systems, so the pair sums telescope:
+#   family sums 2ab - 3a and 2ab - 3b in total, d(a,b) = (4ab - 3a - 3b)/2.
+# Reflect-reflect needs t1 + t2 = s with s = 0 mod 2pi/a and
+# s = pi/5 mod 2pi/b, solvable exactly when 10 | ab. Then gamma(s - t) =
+# gamma(t): the curve doubles onto itself, each image crossing is covered
+# by 4 parameter pairs (2 per family), and the pairs lying on the fold
+# (cos^2 = 1 there) are not crossings. Removing 3b - 4 and 3a - 4 and
+# dividing by 4 gives d(a,b) = (2ab - 3a - 3b + 4)/4 when 10 | ab.
+# Both forms verified against a numerical crossing finder for all coprime
+# pairs 2 <= a, b <= 12 plus larger spot checks, and against the given
+# d values, s(10) = 1602.5 and s(100) = 24256505 exactly.
+#
+# Sum over coprime ordered pairs 2 <= a, b <= M in exact quarter units:
+#   4 s = sum_all (8ab - 6(a+b)) - sum_{10 | ab} (6ab - 3(a+b) - 4)
+# with [10 | ab] = 1 - [both odd] - [both not div 5] + [both odd, not div 5]
+# since a, b are coprime. Each class sum uses Mobius over d <= M with
+# closed-form inner sums of multiples of d in the class. Accumulate in
+# i128, then print 25 * (4 s) = 100 s rounded to 10 significant digits.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const M: i64 = 1000000
+
+function tri(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    return n * (n + 1) / 2
+}
+
+function sum_odd(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let k: i64 = (n + 1) / 2
+    return k * k
+}
+
+function cnt_odd(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    return (n + 1) / 2
+}
+
+function main() -> i32 {
+    # Mobius sieve via smallest prime factor
+    let spf: ptr<i64> = calloc(M + 1, 8)
+    let mu: ptr<i64> = calloc(M + 1, 8)
+    let mut i: i64 = 2
+    while i <= M {
+        if spf[i] == 0 {
+            let mut j: i64 = i
+            while j <= M {
+                if spf[j] == 0 {
+                    spf[j] = i
+                }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    mu[1] = 1
+    i = 2
+    while i <= M {
+        let p: i64 = spf[i]
+        let r: i64 = i / p
+        if r % p == 0 {
+            mu[i] = 0
+        } else {
+            mu[i] = 0 - mu[r]
+        }
+        i = i + 1
+    }
+
+    # per class accumulators: A = sum ab, B = sum (a+b), C = count,
+    # over coprime pairs with both members in the class
+    # class 0: all, 1: odd, 2: not div by 5, 3: odd and not div by 5
+    let mut a0: i128 = 0
+    let mut a1: i128 = 0
+    let mut a2: i128 = 0
+    let mut a3: i128 = 0
+    let mut b0: i128 = 0
+    let mut b1: i128 = 0
+    let mut b2: i128 = 0
+    let mut b3: i128 = 0
+    let mut c0: i128 = 0
+    let mut c1: i128 = 0
+    let mut c2: i128 = 0
+    let mut c3: i128 = 0
+
+    let mut d: i64 = 1
+    while d <= M {
+        let mv: i64 = mu[d]
+        if mv != 0 {
+            let q: i64 = M / d
+            let k5: i64 = q / 5
+            let m128: i128 = mv as i128
+
+            # class 0: all a in [2, M] with d | a
+            let mut f: i64 = d * tri(q)
+            let mut c: i64 = q
+            if d == 1 {
+                f = f - 1
+                c = c - 1
+            }
+            a0 = a0 + m128 * (f as i128) * (f as i128)
+            b0 = b0 + m128 * ((2 * f) as i128) * (c as i128)
+            c0 = c0 + m128 * ((c * c) as i128)
+
+            # class 1: odd multiples of d
+            if d % 2 == 1 {
+                f = d * sum_odd(q)
+                c = cnt_odd(q)
+                if d == 1 {
+                    f = f - 1
+                    c = c - 1
+                }
+                a1 = a1 + m128 * (f as i128) * (f as i128)
+                b1 = b1 + m128 * ((2 * f) as i128) * (c as i128)
+                c1 = c1 + m128 * ((c * c) as i128)
+            }
+
+            # class 2: multiples of d not divisible by 5
+            if d % 5 != 0 {
+                f = d * (tri(q) - 5 * tri(k5))
+                c = q - k5
+                if d == 1 {
+                    f = f - 1
+                    c = c - 1
+                }
+                a2 = a2 + m128 * (f as i128) * (f as i128)
+                b2 = b2 + m128 * ((2 * f) as i128) * (c as i128)
+                c2 = c2 + m128 * ((c * c) as i128)
+            }
+
+            # class 3: odd multiples of d not divisible by 5
+            if d % 2 == 1 && d % 5 != 0 {
+                f = d * (sum_odd(q) - 5 * sum_odd(k5))
+                c = cnt_odd(q) - cnt_odd(k5)
+                if d == 1 {
+                    f = f - 1
+                    c = c - 1
+                }
+                a3 = a3 + m128 * (f as i128) * (f as i128)
+                b3 = b3 + m128 * ((2 * f) as i128) * (c as i128)
+                c3 = c3 + m128 * ((c * c) as i128)
+            }
+        }
+        d = d + 1
+    }
+
+    # G = sum over class pairs of (6ab - 3(a+b) - 4)
+    let g0: i128 = (6 as i128) * a0 - (3 as i128) * b0 - (4 as i128) * c0
+    let g1: i128 = (6 as i128) * a1 - (3 as i128) * b1 - (4 as i128) * c1
+    let g2: i128 = (6 as i128) * a2 - (3 as i128) * b2 - (4 as i128) * c2
+    let g3: i128 = (6 as i128) * a3 - (3 as i128) * b3 - (4 as i128) * c3
+
+    let s4: i128 = (8 as i128) * a0 - (6 as i128) * b0 - (g0 - g1 - g2 + g3)
+    let s100: i128 = s4 * (25 as i128)
+
+    # decimal digits of 100 s, least significant first
+    let dig: ptr<i64> = calloc(64, 8)
+    let mut nd: i64 = 0
+    let mut t: i128 = s100
+    while t > (0 as i128) {
+        dig[nd] = (t % (10 as i128)) as i64
+        t = t / (10 as i128)
+        nd = nd + 1
+    }
+
+    # 10 significant digits with rounding; s = s100 / 100
+    let mant: ptr<i64> = calloc(10, 8)
+    i = 0
+    while i < 10 {
+        if i < nd {
+            mant[i] = dig[nd - 1 - i]
+        } else {
+            mant[i] = 0
+        }
+        i = i + 1
+    }
+    let mut ex: i64 = nd - 1 - 2
+    if nd > 10 && dig[nd - 11] >= 5 {
+        let mut j: i64 = 9
+        let mut carry: i64 = 1
+        while j >= 0 && carry == 1 {
+            mant[j] = mant[j] + 1
+            if mant[j] == 10 {
+                mant[j] = 0
+            } else {
+                carry = 0
+            }
+            j = j - 1
+        }
+        if carry == 1 {
+            mant[0] = 1
+            let mut j2: i64 = 1
+            while j2 < 10 {
+                mant[j2] = 0
+                j2 = j2 + 1
+            }
+            ex = ex + 1
+        }
+    }
+
+    printf("%lld.", mant[0])
+    i = 1
+    while i < 10 {
+        printf("%lld", mant[i])
+        i = i + 1
+    }
+    printf("e%lld\n", ex)
+
+    free(spf)
+    free(mu)
+    free(dig)
+    free(mant)
+    return 0
+}

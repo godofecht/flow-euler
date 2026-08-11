@@ -1,0 +1,12 @@
+# Project Euler 720
+# Unpredictable permutations: rank of the doubling construction mod 1e9+7.
+# The native C helper does the heavy lifting (2^24 arrays + modular rank).
+
+extern {
+    function p720_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p720_native())
+    return 0
+}

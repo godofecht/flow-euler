@@ -1,0 +1,12 @@
+# Project Euler 1002
+# Connections II: maximal above connections in bipartite chord diagram.
+# Native C helper for leftist heap + parity DSU.
+
+extern {
+    function p1002_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p1002_native())
+    return 0
+}

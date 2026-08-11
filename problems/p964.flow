@@ -1,0 +1,12 @@
+# Project Euler 964
+# P(7): a very small rational, printed in scientific notation.
+# Native solver in problems/native/p964.c (exact GMP arithmetic).
+
+extern {
+    function p964_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.10e\n", p964_native())
+    return 0
+}

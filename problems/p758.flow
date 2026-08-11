@@ -1,0 +1,14 @@
+# Project Euler 758
+# Buckets of Water: sum over prime pairs p<q<1000 of the minimal pour
+# count P(2^{p^5}-1, 2^{q^5}-1), modulo 1e9+7.
+#
+# The native helper does the heavy modular continued-fraction work.
+
+extern {
+    function p758_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p758_native())
+    return 0
+}

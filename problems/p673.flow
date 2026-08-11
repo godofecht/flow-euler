@@ -1,0 +1,12 @@
+# Project Euler 673
+# Beds and Desks: count permutations commuting with two involutions.
+# Native C helper for graph component analysis.
+
+extern {
+    function p673_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p673_native())
+    return 0
+}

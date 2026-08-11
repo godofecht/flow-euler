@@ -1,0 +1,12 @@
+# Project Euler 806
+# Nim on Towers of Hanoi: sum of losing indices in the optimal 3-peg solution.
+# Native C helper for the generating-function coefficient sum.
+
+extern {
+    function p806_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p806_native())
+    return 0
+}

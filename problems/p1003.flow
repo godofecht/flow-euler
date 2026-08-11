@@ -1,0 +1,12 @@
+# Project Euler 1003
+# Lonely Singles: S(80), sum of sad integers leaving singletons only at positions < 80.
+# Meet-in-the-middle enumeration with gap-3 constraint. Native C helper.
+
+extern {
+    function p1003_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p1003_native())
+    return 0
+}

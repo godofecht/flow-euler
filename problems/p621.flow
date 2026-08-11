@@ -1,0 +1,12 @@
+# Project Euler 621
+# Sum of three triangular numbers: G(17526 * 10^9).
+# Native C helper for class number computation.
+
+extern {
+    function p621_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p621_native())
+    return 0
+}

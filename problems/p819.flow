@@ -1,0 +1,12 @@
+# Project Euler 819
+# Iterative Sampling - E(10^3), expected steps until all entries equal.
+# Real solver in native/p819.c.
+
+extern {
+    function p819_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.6f\n", p819_native())
+    return 0
+}

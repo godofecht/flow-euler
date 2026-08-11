@@ -1,0 +1,12 @@
+# Project Euler 967
+# B-trivisible: F(10^18, 120) via meet-in-the-middle.
+# Native C helper for the enumeration.
+
+extern {
+    function p967_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p967_native())
+    return 0
+}

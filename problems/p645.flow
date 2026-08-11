@@ -1,0 +1,184 @@
+# Project Euler 645
+# Every Day Is a Holiday: E(10000) to 4 decimal places.
+#
+# All days become holidays once no two adjacent days are both unmarked, so
+# T is the number of uniform birthday draws until the marked set dominates
+# every adjacent pair.  Bonferroni over the adjacent-pair events gives
+#   E(D) = -D * sum_u N_u / u = -D * Int_0^1 (G(t) - 1) / t dt,
+# where N_u is the signed count of domino unions of size u and G(t) their
+# generating function.  Unions are disjoint arcs whose signed weight f(L)
+# obeys f(L) = -f(L-1) - f(L-2)  (f = -1, +1, 0 cyclically), so G(t) is
+# the trace of a 5-state transfer matrix power, minus the spurious
+# all-arc trace, plus the true full-circle weight (2 if 3|D else -1).
+# Verified against exact E(2), E(5), E(8) and E(365) = 1174.3501.
+# Integration: composite 16-point Gauss-Legendre on 40 panels.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const D: i64 = 10000
+
+# 5x5 matrix helpers (row-major)
+function mat5_mul(a: ptr<f64>, b: ptr<f64>, c: ptr<f64>, n: i64) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        let mut j: i64 = 0
+        while j < n {
+            let mut s: f64 = 0.0
+            let mut k: i64 = 0
+            while k < n {
+                s = s + a[i * n + k] * b[k * n + j]
+                k = k + 1
+            }
+            c[i * n + j] = s
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function mat_pow_trace(m: ptr<f64>, n: i64, e0: i64, work: ptr<f64>) -> f64 {
+    # work: 3 matrices of n*n
+    let r: ptr<f64> = work
+    let b: ptr<f64> = work + n * n
+    let t: ptr<f64> = work + 2 * n * n
+    let mut i: i64 = 0
+    while i < n * n {
+        r[i] = 0.0
+        b[i] = m[i]
+        i = i + 1
+    }
+    i = 0
+    while i < n {
+        r[i * n + i] = 1.0
+        i = i + 1
+    }
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 {
+            mat5_mul(r, b, t, n)
+            i = 0
+            while i < n * n {
+                r[i] = t[i]
+                i = i + 1
+            }
+        }
+        e = e >> 1
+        if e > 0 {
+            mat5_mul(b, b, t, n)
+            i = 0
+            while i < n * n {
+                b[i] = t[i]
+                i = i + 1
+            }
+        }
+    }
+    let mut tr: f64 = 0.0
+    i = 0
+    while i < n {
+        tr = tr + r[i * n + i]
+        i = i + 1
+    }
+    return tr
+}
+
+# G(t) - 1 + fcyc * t^D   (configurations with at least one arc)
+function g_of_t(t: f64, fcyc: f64, work: ptr<f64>, m5: ptr<f64>, m4: ptr<f64>) -> f64 {
+    # states: 0 gap, 1 arc len 1, 2 arc mod3=2, 3 arc mod3=0, 4 arc mod3=1
+    let mut i: i64 = 0
+    while i < 25 {
+        m5[i] = 0.0
+        i = i + 1
+    }
+    m5[0 * 5 + 0] = 1.0
+    m5[0 * 5 + 1] = t
+    m5[1 * 5 + 2] = t
+    m5[2 * 5 + 3] = t
+    m5[3 * 5 + 4] = t
+    m5[4 * 5 + 2] = t
+    m5[2 * 5 + 0] = 0.0 - 1.0       # arc ends after L = 2 mod 3: f = -1
+    m5[3 * 5 + 0] = 1.0             # L = 0 mod 3: f = +1
+    m5[4 * 5 + 0] = 0.0             # L = 1 mod 3: f = 0
+    let tr5: f64 = mat_pow_trace(m5, 5, D, work)
+    # spurious all-arc block (states 1..4)
+    i = 0
+    while i < 16 {
+        m4[i] = 0.0
+        i = i + 1
+    }
+    m4[0 * 4 + 1] = t
+    m4[1 * 4 + 2] = t
+    m4[2 * 4 + 3] = t
+    m4[3 * 4 + 1] = t
+    let tr4: f64 = mat_pow_trace(m4, 4, D, work)
+    # t^D
+    let mut tp: f64 = 1.0
+    let mut bb: f64 = t
+    let mut e: i64 = D
+    while e > 0 {
+        if (e & 1) == 1 {
+            tp = tp * bb
+        }
+        bb = bb * bb
+        e = e >> 1
+    }
+    return tr5 - tr4 - 1.0 + fcyc * tp
+}
+
+function main() -> i32 {
+    let gx: ptr<f64> = calloc(16, 8)
+    let gw: ptr<f64> = calloc(16, 8)
+    gx[0] = -0.98940093499164994; gx[1] = -0.9445750230732326
+    gx[2] = -0.86563120238783164; gx[3] = -0.75540440835500311
+    gx[4] = -0.61787624440264377; gx[5] = -0.45801677765722737
+    gx[6] = -0.28160355077925892; gx[7] = -0.095012509837637441
+    gx[8] = 0.095012509837637441; gx[9] = 0.28160355077925892
+    gx[10] = 0.45801677765722737; gx[11] = 0.61787624440264377
+    gx[12] = 0.75540440835500311; gx[13] = 0.86563120238783164
+    gx[14] = 0.9445750230732326;  gx[15] = 0.98940093499164994
+    gw[0] = 0.027152459411754055; gw[1] = 0.062253523938647609
+    gw[2] = 0.095158511682492994; gw[3] = 0.12462897125553395
+    gw[4] = 0.14959598881657665;  gw[5] = 0.16915651939500262
+    gw[6] = 0.18260341504492361;  gw[7] = 0.18945061045506859
+    gw[8] = 0.18945061045506859;  gw[9] = 0.18260341504492361
+    gw[10] = 0.16915651939500262; gw[11] = 0.14959598881657665
+    gw[12] = 0.12462897125553395; gw[13] = 0.095158511682492994
+    gw[14] = 0.062253523938647609; gw[15] = 0.027152459411754055
+
+    let work: ptr<f64> = calloc(75, 8)
+    let m5: ptr<f64> = calloc(25, 8)
+    let m4: ptr<f64> = calloc(16, 8)
+
+    let mut fcyc: f64 = 0.0 - 1.0
+    if D % 3 == 0 {
+        fcyc = 2.0
+    }
+
+    let panels: i64 = 40
+    let h: f64 = 1.0 / (panels as f64)
+    let mut tot: f64 = 0.0
+    let mut pnl: i64 = 0
+    while pnl < panels {
+        let a: f64 = (pnl as f64) * h
+        let mut q: i64 = 0
+        while q < 16 {
+            let t: f64 = a + h * 0.5 * (gx[q] + 1.0)
+            let g: f64 = g_of_t(t, fcyc, work, m5, m4)
+            tot = tot + h * 0.5 * gw[q] * g / t
+            q = q + 1
+        }
+        pnl = pnl + 1
+    }
+
+    let E: f64 = 0.0 - (D as f64) * tot
+    printf("%.4f\n", E)
+
+    free(gx)
+    free(gw)
+    free(work)
+    free(m5)
+    free(m4)
+    return 0
+}

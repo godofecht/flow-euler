@@ -1,0 +1,250 @@
+# Project Euler 654
+# Neighbourly Constraints: T(5000, 10^12) mod 1e9+7.
+#
+# States are the last tuple element a in [1, n-1]; the transfer operator
+# (Mv)_a = sum_{b <= n-a} v_b is one prefix-sum plus a reversal, so each
+# application costs O(n).  Generate u_j = sum(M^j * 1) for 2(n-1)+12 terms,
+# recover the minimal linear recurrence with Berlekamp-Massey (degree n-1),
+# then jump to u_{m-1} with Kitamasa (x^K mod the recurrence polynomial).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const N: i64 = 5000
+const EM: i64 = 999999999999      # m - 1, m = 10^12
+
+function powmod(base: i64, exp: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % MOD
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 {
+            result = result * b % MOD
+        }
+        b = b * b % MOD
+        e = e >> 1
+    }
+    return result
+}
+
+# multiply a (len la) by b (len lb) into res, reduce mod the monic
+# recurrence x^L = sum_{j=0..L-1} D[j] x^{L-1-j}; res has length L
+function polymulred(a: ptr<i64>, la: i64, b: ptr<i64>, lb: i64,
+                    D: ptr<i64>, L: i64, res: ptr<i64>, work: ptr<i64>) -> void {
+    let lr: i64 = la + lb - 1
+    let mut i: i64 = 0
+    while i < lr {
+        work[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i < la {
+        let ai: i64 = a[i]
+        if ai != 0 {
+            let mut j: i64 = 0
+            while j < lb {
+                work[i + j] = (work[i + j] + ai * b[j]) % MOD
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    i = lr - 1
+    while i >= L {
+        let c: i64 = work[i]
+        if c != 0 {
+            work[i] = 0
+            let mut j: i64 = 0
+            while j < L {
+                work[i - 1 - j] = (work[i - 1 - j] + c * D[j]) % MOD
+                j = j + 1
+            }
+        }
+        i = i - 1
+    }
+    i = 0
+    while i < L {
+        if i < lr {
+            res[i] = work[i]
+        } else {
+            res[i] = 0
+        }
+        i = i + 1
+    }
+}
+
+function k2_copy(dst: ptr<i64>, src: ptr<i64>, n: i64) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function main() -> i32 {
+    let terms: i64 = 2 * (N - 1) + 12
+
+    # ---- generate u_j = 1^T M^j 1 ----
+    let v: ptr<i64> = calloc(N + 1, 8)
+    let pre: ptr<i64> = calloc(N + 1, 8)
+    let S: ptr<i64> = calloc(terms + 2, 8)
+    let mut a: i64 = 1
+    while a < N {
+        v[a] = 1
+        a = a + 1
+    }
+    let mut j: i64 = 0
+    while j < terms {
+        # record sum and prefix sums in one pass
+        let mut s: i64 = 0
+        let mut b: i64 = 1
+        while b < N {
+            s = (s + v[b]) % MOD
+            pre[b] = s
+            b = b + 1
+        }
+        S[j] = s
+        # (Mv)_a = pre[n-a]
+        a = 1
+        while a < N {
+            v[a] = pre[N - a]
+            a = a + 1
+        }
+        j = j + 1
+    }
+
+    if EM < terms {
+        printf("%lld\n", S[EM])
+        return 0
+    }
+
+    # ---- Berlekamp-Massey ----
+    # C, B polynomials with C[0] = B[0] = 1
+    let C: ptr<i64> = calloc(terms + 2, 8)
+    let B: ptr<i64> = calloc(terms + 2, 8)
+    let T: ptr<i64> = calloc(terms + 2, 8)
+    C[0] = 1
+    B[0] = 1
+    let mut lenC: i64 = 1
+    let mut lenB: i64 = 1
+    let mut L: i64 = 0
+    let mut m: i64 = 1
+    let mut bb: i64 = 1
+    let mut i: i64 = 0
+    while i < terms {
+        let mut d: i64 = 0
+        let mut k: i64 = 0
+        while k <= L {
+            d = (d + C[k] * S[i - k]) % MOD
+            k = k + 1
+        }
+        if d == 0 {
+            m = m + 1
+        } else {
+            let coef: i64 = d * powmod(bb, MOD - 2) % MOD
+            if 2 * L <= i {
+                # save C into T
+                k = 0
+                while k < lenC {
+                    T[k] = C[k]
+                    k = k + 1
+                }
+                let lenT: i64 = lenC
+                if lenB + m > lenC {
+                    k = lenC
+                    while k < lenB + m {
+                        C[k] = 0
+                        k = k + 1
+                    }
+                    lenC = lenB + m
+                }
+                k = 0
+                while k < lenB {
+                    C[k + m] = ((C[k + m] - coef * B[k]) % MOD + MOD) % MOD
+                    k = k + 1
+                }
+                L = i + 1 - L
+                k = 0
+                while k < lenT {
+                    B[k] = T[k]
+                    k = k + 1
+                }
+                lenB = lenT
+                bb = d
+                m = 1
+            } else {
+                if lenB + m > lenC {
+                    k = lenC
+                    while k < lenB + m {
+                        C[k] = 0
+                        k = k + 1
+                    }
+                    lenC = lenB + m
+                }
+                k = 0
+                while k < lenB {
+                    C[k + m] = ((C[k + m] - coef * B[k]) % MOD + MOD) % MOD
+                    k = k + 1
+                }
+                m = m + 1
+            }
+        }
+        i = i + 1
+    }
+
+    # recurrence: s_n = sum_{j=1..L} D[j-1] s_{n-j}, D[j-1] = -C[j]
+    let D: ptr<i64> = calloc(L + 1, 8)
+    i = 0
+    while i < L {
+        D[i] = (MOD - C[i + 1]) % MOD
+        i = i + 1
+    }
+
+    # ---- Kitamasa: r(x) = x^EM mod (x^L - sum D[j] x^{L-1-j}) ----
+    let r: ptr<i64> = calloc(L + 1, 8)
+    let base: ptr<i64> = calloc(L + 1, 8)
+    let tmp: ptr<i64> = calloc(L + 1, 8)
+    let work: ptr<i64> = calloc(2 * L + 2, 8)
+    r[0] = 1
+    let mut lenR: i64 = 1
+    base[1] = 1          # the polynomial x (L >= 2 here)
+    let mut lenBase: i64 = 2
+    let mut e: i64 = EM
+    while e > 0 {
+        if (e & 1) == 1 {
+            polymulred(r, lenR, base, lenBase, D, L, tmp, work)
+            k2_copy(r, tmp, L)
+            lenR = L
+        }
+        e = e >> 1
+        if e > 0 {
+            polymulred(base, lenBase, base, lenBase, D, L, tmp, work)
+            k2_copy(base, tmp, L)
+            lenBase = L
+        }
+    }
+
+    let mut ans: i64 = 0
+    i = 0
+    while i < L {
+        ans = (ans + r[i] * S[i]) % MOD
+        i = i + 1
+    }
+    printf("%lld\n", ans)
+
+    free(v)
+    free(pre)
+    free(S)
+    free(C)
+    free(B)
+    free(T)
+    free(D)
+    free(r)
+    free(base)
+    free(tmp)
+    free(work)
+    return 0
+}

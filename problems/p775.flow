@@ -1,0 +1,12 @@
+# Project Euler 775
+# Saving Paper: G(10^16) = sum_{n=1..N} (6n - smin(n)) mod 1e9+7.
+# Native C helper implements the closed-form surface-area summation.
+
+extern {
+    function p775_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p775_native())
+    return 0
+}

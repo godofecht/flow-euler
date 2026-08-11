@@ -1,0 +1,11 @@
+# Project Euler 988
+# frog_sum(19, 53) = 2727531976556215755
+
+extern {
+    function p988_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p988_native())
+    return 0
+}

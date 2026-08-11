@@ -1,0 +1,12 @@
+# Project Euler 732
+# Standing on the Shoulders of Trolls - Q(1000).
+# Native C helper in problems/native/p732.c (linked by scripts/run.sh).
+
+extern {
+    function p732_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p732_native())
+    return 0
+}

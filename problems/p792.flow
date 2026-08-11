@@ -1,0 +1,11 @@
+# Project Euler 792
+# Too Many Twos — 2-adic valuation of a tail sum of (-2)^k * C(2k,k).
+
+extern {
+    function p792_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p792_native())
+    return 0
+}

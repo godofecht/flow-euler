@@ -1,0 +1,11 @@
+# Project Euler 782
+# Distinct Rows and Columns -- C(10^4).
+
+extern {
+    function p782_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p782_native())
+    return 0
+}
