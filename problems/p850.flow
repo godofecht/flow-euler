@@ -1,0 +1,11 @@
+# Project Euler 850
+# Fractions of Powers — DFS over primes with totient weighting in C.
+
+extern {
+    function p850_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p850_native())
+    return 0
+}

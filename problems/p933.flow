@@ -1,0 +1,12 @@
+# Project Euler 933
+# Paper Cutting — Sprague-Grundy nimbers + quadruple counting (native).
+# Companion: problems/native/p933.c
+
+extern {
+    function p933_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p933_native())
+    return 0
+}

@@ -1,0 +1,12 @@
+# Project Euler 989
+# Fibonacci sum with nonprimitive pairs, mod 1e9+9.
+# Native C helper for Tonelli-Shanks, Mobius sieve, and sliding window sums.
+
+extern {
+    function p989_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p989_native())
+    return 0
+}

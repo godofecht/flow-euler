@@ -1,0 +1,12 @@
+# Project Euler 828
+# Numbers Challenge: minimum score expression from given numbers.
+# Companion: problems/native/p828.c
+
+extern {
+    function p828_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p828_native())
+    return 0
+}

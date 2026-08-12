@@ -1,0 +1,12 @@
+# Project Euler 861
+# Bi-unitary divisors: sum_{k=2..10} Q_k(10^12).
+# Companion: problems/native/p861.c
+
+extern {
+    function p861_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p861_native())
+    return 0
+}

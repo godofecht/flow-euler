@@ -1,0 +1,11 @@
+# Project Euler 769
+# Count primitive representations of squares by x^2 + 5xy + 3y^2 up to N=10^14.
+
+extern {
+    function p769_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p769_native())
+    return 0
+}

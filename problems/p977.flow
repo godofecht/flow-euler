@@ -1,0 +1,12 @@
+# Project Euler 977
+# Count functions f:[n]->[n] with f^{(x)}(y)=f^{(y)}(x), mod 1e9+7.
+# Native C helper for the modular arithmetic computation.
+
+extern {
+    function p977_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p977_native())
+    return 0
+}

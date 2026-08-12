@@ -1,0 +1,11 @@
+# Project Euler 962: Counting Triangles
+# count_triangles(10^6).
+
+extern {
+    function p962_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p962_native())
+    return 0
+}

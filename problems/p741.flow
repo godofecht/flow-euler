@@ -1,0 +1,11 @@
+# Project Euler 741
+# Binary Grid Colouring: g(7^7) + g(8^8) mod 1e9+7.
+
+extern {
+    function p741_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p741_native())
+    return 0
+}

@@ -1,0 +1,12 @@
+# Project Euler 798
+# Card Stacking Game: C(n, s) mod 1e9+7 with n = s = 10^7.
+# Companion: problems/native/p798.c
+
+extern {
+    function p798_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p798_native())
+    return 0
+}

@@ -1,0 +1,12 @@
+# Project Euler 927
+# Prime-ary Tree: R(10^7) = sum of m in S (intersection of S_p) with m <= 10^7.
+# Native C helper for sieve, Brent cycle detection, and squarefree product sum.
+
+extern {
+    function p927_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p927_native())
+    return 0
+}

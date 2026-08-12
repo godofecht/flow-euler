@@ -5,7 +5,7 @@
 
 Solving [Project Euler](https://projecteuler.net) in [Flow](https://github.com/flooooooooooow/flow), a statically typed language that reads close to high-level math and compiles to native C and MLIR.
 
-965 problems solved. All 965 known answers in `answers.txt` have Flow solutions. 220 use native C/C++ helpers for algorithms that need `__int128`, GMP, MPFR, or NTT.
+1007 problems solved. All 1007 known answers in `answers.txt` have Flow solutions. 262 use native C/C++ helpers for algorithms that need `__int128`, GMP, MPFR, or NTT.
 
 ## Quick start
 
@@ -44,11 +44,11 @@ See [docs/backends.md](docs/backends.md) for details on the MLIR pipeline, curre
 | 001-200 | 200 | done |
 | 201-400 | 200 | done |
 | 401-600 | 200 | done |
-| 601-1007 | 365 | in progress |
+| 601-1007 | 407 | in progress |
 
-965 known answers in `answers.txt`. All 965 have Flow solutions.
+1007 known answers in `answers.txt`. All 1007 have Flow solutions.
 
-220 problems use native C/C++ helpers for NTT, `__int128`, GMP, or MPFR.
+262 problems use native C/C++ helpers for NTT, `__int128`, GMP, or MPFR.
 
 ## Why Flow here
 

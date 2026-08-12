@@ -1,0 +1,12 @@
+# Project Euler 941
+# de Bruijn's Combination Lock — RankDB + radix sort (native).
+# Companion: problems/native/p941.c
+
+extern {
+    function p941_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p941_native())
+    return 0
+}

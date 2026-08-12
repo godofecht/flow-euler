@@ -1,0 +1,11 @@
+# Project Euler 790
+# Clock Grid: C(10^5) via sweep line with a 12-bucket segment tree.
+
+extern {
+    function p790_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p790_native())
+    return 0
+}

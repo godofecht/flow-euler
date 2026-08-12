@@ -1,0 +1,11 @@
+# Project Euler 766
+# Sliding Block Puzzle: BFS over reachable configurations of a 6x5 board.
+
+extern {
+    function p766_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p766_native())
+    return 0
+}

@@ -1,0 +1,14 @@
+# Project Euler 799
+# Pentagonal Puzzle: smallest pentagonal number expressible as a sum of
+# two pentagonal numbers in more than 100 ways.
+# Native C helper for Pollard Rho factoring, Cornacchia, Gaussian integers,
+# and segmented sieve.
+
+extern {
+    function p799_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p799_native())
+    return 0
+}
