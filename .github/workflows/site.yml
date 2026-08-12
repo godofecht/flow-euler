@@ -1,0 +1,57 @@
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Checkout Flow compiler
+        run: |
+          git clone https://github.com/flooooooooooow/flow.git "$HOME/flow"
+
+      - name: Install native dependencies
+        run: brew install gmp mpfr
+
+      - name: Generate site
+        env:
+          FLOW_REPO: ${{ github.workspace }}/flow
+          FLOW_HOST: python
+        run: |
+          python3 scripts/gen-site.py --out site --timeout 30
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

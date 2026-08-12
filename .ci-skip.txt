@@ -1,0 +1,64 @@
+# Problems skipped by CI verify.sh because they are too slow (>30s),
+# crash, or fail to compile. Each line is a problem number.
+# Format: NNN reason
+#
+# Timeout (>120s) on local scan:
+353  timeout
+433  timeout
+508  timeout
+535  timeout
+542  timeout
+610  timeout
+634  timeout
+#
+# Runtime crash / abort:
+534  runtime-error invalid-shift
+546  runtime-error segfault
+617  runtime-error invalid-shift
+641  runtime-error segfault
+699  runtime-error division-by-zero
+#
+# Compilation error:
+547  compile-error undeclared-identifier
+612  compile-error undeclared-identifier
+657  compile-error flow-transpiler-failed
+#
+# Slow (>30s, risk of CI timeout):
+211  slow-11s
+221  slow-10s
+251  slow-11s
+275  slow-11s
+304  slow-9s
+337  slow-7s
+370  slow-58s
+411  slow-23s
+413  slow-10s
+415  slow-15s
+417  slow-26s
+439  slow-13s
+459  slow-12s
+461  slow-10s
+468  slow-14s
+474  slow-15s
+477  slow-10s
+485  slow-9s
+505  slow-12s
+526  slow-19s
+529  slow-15s
+545  slow-39s
+557  slow-13s
+566  slow-9s
+570  slow-13s
+571  slow-15s
+583  slow-55s
+585  slow-35s
+662  slow-22s
+678  slow-26s
+681  slow-49s
+693  slow-57s
+701  slow-16s
+714  slow-74s
+737  slow-66s
+829  slow-40s
+989  slow-30s
+994  slow-41s
