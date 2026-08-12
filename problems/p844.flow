@@ -1,0 +1,11 @@
+# Project Euler 844
+# k-Markov Numbers - S(10^18, 10^18) mod 1405695061.
+
+extern {
+    function p844_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p844_native())
+    return 0
+}

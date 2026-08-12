@@ -1,0 +1,12 @@
+# Project Euler 950
+# Pirate Treasure — exact integer arithmetic (native).
+# Companion: problems/native/p950.c
+
+extern {
+    function p950_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p950_native())
+    return 0
+}

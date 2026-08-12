@@ -1,0 +1,13 @@
+# Project Euler 791
+# Average and Variance: S(10^8) mod 433494437.
+# Sum over quadruples (a,b,c,d) whose average equals twice their variance.
+# Native C helper for the lattice enumeration with prefix sums.
+
+extern {
+    function p791_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p791_native())
+    return 0
+}

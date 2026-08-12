@@ -1,0 +1,11 @@
+# Project Euler 867
+# Tiling Dodecagon - T(10) mod 1e9+7.
+
+extern {
+    function p867_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p867_native())
+    return 0
+}

@@ -1,0 +1,11 @@
+# Project Euler 870: Stone Game IV
+# T(123456) via g-base transition values, exact integer arithmetic in C.
+
+extern {
+    function p870_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.10f\n", p870_native())
+    return 0
+}

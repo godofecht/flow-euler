@@ -1,0 +1,144 @@
+# Project Euler 735
+# Divisors of 2n^2: F(N) = sum over n <= N of the number of divisors of
+# 2n^2 that are at most n, for N = 10^12.
+# Method: F(N) counts pairs (d, n) with d <= n and d | 2n^2. Writing
+# d = g*a, n = g*b with gcd(a, b) = 1 turns the condition into a | 2g,
+# splitting F into two 3D lattice counts over (a, b, k) with parity and
+# ordering constraints. Mobius inversion over odd e removes the gcd
+# condition, and each count reduces to sums of the divisor summatory
+# function D(x) and its partial sums via the hyperbola method, with
+# D(x) for x <= 10^8 served from a sieved prefix table of tau. Runs in
+# a few seconds.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+function isqrt(x: i64) -> i64 {
+    if x <= 0 { return 0 }
+    let mut r: i64 = sqrt(x as f64) as i64
+    while r > 0 && r * r > x { r = r - 1 }
+    while (r + 1) * (r + 1) <= x { r = r + 1 }
+    return r
+}
+
+# Divisor summatory D(x) = sum_{k<=x} floor(x/k), hyperbola method.
+function bigd(x: i64) -> i64 {
+    if x <= 0 { return 0 }
+    let r: i64 = isqrt(x)
+    let mut s: i64 = 0
+    for i in 1..(r + 1) { s = s + x / i }
+    return 2 * s - r * r
+}
+
+function dval(x: i64, tab: ptr<i32>, y: i64) -> i64 {
+    if x <= 0 { return 0 }
+    if x <= y { return tab[x] as i64 }
+    return bigd(x)
+}
+
+# P(x, l) = sum_{b=1..l} floor(x/b)
+function pval(x: i64, l: i64, tab: ptr<i32>, y: i64) -> i64 {
+    if l <= 0 || x <= 0 { return 0 }
+    if l >= x { return dval(x, tab, y) }
+    if l * l <= x {
+        let mut s: i64 = 0
+        for b in 1..(l + 1) { s = s + x / b }
+        return s
+    }
+    let k: i64 = x / (l + 1)
+    let mut s: i64 = dval(x, tab, y)
+    for i in 1..(k + 1) { s = s - (x / i - l) }
+    return s
+}
+
+# T1(m) = #{(a,b,k): a odd, a <= b, a*b*k <= m}
+function t1(m: i64, tab: ptr<i32>, y: i64) -> i64 {
+    let mut s: i64 = 0
+    let mut a: i64 = 1
+    while a * a <= m {
+        let x: i64 = m / a
+        s = s + dval(x, tab, y) - pval(x, a - 1, tab, y)
+        a = a + 2
+    }
+    return s
+}
+
+# T2(m) = #{(c,b,k): b odd, 2c < b, c*b*k <= m}
+function t2(m: i64, tab: ptr<i32>, y: i64) -> i64 {
+    let mut s: i64 = 0
+    let mut c: i64 = 1
+    while c * (2 * c + 1) <= m {
+        let x: i64 = m / c
+        let x2: i64 = x / 2
+        s = s + dval(x, tab, y) - dval(x2, tab, y)
+        s = s - (pval(x, 2 * c, tab, y) - pval(x2, c, tab, y))
+        c = c + 1
+    }
+    return s
+}
+
+function solve(n: i64, y: i64) -> i64 {
+    # Prefix sums of tau up to y; D(1e8) < 2^31 so i32 holds each entry.
+    let tab: ptr<i32> = calloc(y + 1, 4)
+    if tab == null { return -1 }
+    for d in 1..(y + 1) {
+        let mut mm: i64 = d
+        while mm <= y {
+            tab[mm] = tab[mm] + 1
+            mm = mm + d
+        }
+    }
+    let mut acc: i64 = 0
+    for i in 1..(y + 1) {
+        acc = acc + (tab[i] as i64)
+        tab[i] = acc as i32
+    }
+
+    # Mobius values up to sqrt(n).
+    let lim: i64 = isqrt(n)
+    let mu: ptr<i32> = calloc(lim + 1, 4)
+    let comp: ptr<i32> = calloc(lim + 1, 4)
+    if mu == null || comp == null { return -1 }
+    for i in 1..(lim + 1) { mu[i] = 1 }
+    let mut p: i64 = 2
+    while p <= lim {
+        if comp[p] == 0 {
+            let mut m: i64 = p
+            while m <= lim {
+                if m > p { comp[m] = 1 }
+                mu[m] = 0 - mu[m]
+                m = m + p
+            }
+            let p2: i64 = p * p
+            let mut m2: i64 = p2
+            while m2 <= lim {
+                mu[m2] = 0
+                m2 = m2 + p2
+            }
+        }
+        p = p + 1
+    }
+
+    let mut total: i64 = 0
+    let mut e: i64 = 1
+    while e * e <= n {
+        let mv: i64 = mu[e] as i64
+        if mv != 0 {
+            let m: i64 = n / (e * e)
+            total = total + mv * (t1(m, tab, y) + t2(m, tab, y))
+        }
+        e = e + 2
+    }
+    free(tab)
+    free(mu)
+    free(comp)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(1000000000000, 100000000))
+    return 0
+}

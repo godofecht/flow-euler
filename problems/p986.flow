@@ -1,0 +1,12 @@
+# Project Euler 986
+# Sum of G(c,d) for 1<=c,d<=160 via cellular automaton thresholds.
+# Native C helper for the simulation and summation.
+
+extern {
+    function p986_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p986_native())
+    return 0
+}

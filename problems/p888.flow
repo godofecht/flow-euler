@@ -1,0 +1,11 @@
+# Project Euler 888
+# Coin Game: count losing positions with m=1249 piles, N=12491249, mod 912491249.
+
+extern {
+    function p888_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p888_native())
+    return 0
+}

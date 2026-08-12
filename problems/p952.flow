@@ -1,0 +1,12 @@
+# Project Euler 952
+# Order Modulo Factorial — multiplicative order (native).
+# Companion: problems/native/p952.c
+
+extern {
+    function p952_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p952_native())
+    return 0
+}

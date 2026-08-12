@@ -1,0 +1,12 @@
+# Project Euler 939
+# Partisan Nim — partition DP (native).
+# Companion: problems/native/p939.c
+
+extern {
+    function p939_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p939_native())
+    return 0
+}

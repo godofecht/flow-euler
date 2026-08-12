@@ -1,0 +1,11 @@
+# Project Euler 917
+# Path sum in a structured matrix.
+
+extern {
+    function p917_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p917_native())
+    return 0
+}

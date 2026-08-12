@@ -1,0 +1,157 @@
+# Project Euler 771
+# Pseudo-geometric sequences: strictly increasing a_0 < ... < a_n of positive
+# integers, n >= 4, with |a_i^2 - a_{i-1}a_{i+1}| <= 2 at every interior i.
+# G(N) counts them with all terms <= N; find G(10^18) mod 1e9+7.
+#
+# Brute-force enumeration up to N = 316227 (pair-graph DFS) shows every such
+# sequence falls into exactly one class:
+#   runs k,k+1,...,k+m (m >= 4):          (N-4)(N-3)/2
+#   geometric, ratio p/q > 1, L terms:    sum over L>=5, p of
+#       phi(p) * floor(N / p^(L-1))       (start t*q^(L-1), t = 1,2,...)
+#   windows of >= 5 consecutive terms of the Lucas-type sequences
+#       Fibonacci 1,2,3,5,8,...           (x' = 1*x + prev)
+#       NSW       1,3,7,17,...            (x' = 2*x + prev)
+#       1,2,5,13,34,...  1,3,11,41,...    (x' = 3*x - prev, 4*x - prev)
+#       A_P: 1,P,P^2-1,... (P >= 3)       (x' = P*x - prev)
+#       B_P: 1,P,P^2+1,... (P >= 2)       (x' = P*x + prev)
+#     a sequence of m terms <= N gives (m-4)(m-3)/2 windows
+#   the hybrid prefix family 1,2,6,18,...,2*3^k (k >= 3)
+#   10 sporadic sequences whose largest terms are
+#       6,9,9,9,12,16,16,20,48,60
+# The class list reproduces the full brute-force sequence sets at
+# N = 10^3, 2*10^3, 5*10^3, 10^4, 10^5, 316227 and G(N) at 28 values.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N: i64 = 1000000000000000000
+const MOD: i64 = 1000000007
+
+# number of >= 5 term windows with max term <= N of the infinite sequence
+# x0, x1, then x_{k+1} = P*x_k - Q*x_{k-1}
+function windows(x0: i64, x1: i64, P: i64, Q: i64) -> i64 {
+    if x1 > N {
+        return 0
+    }
+    let mut t0: i64 = x0
+    let mut t1: i64 = x1
+    let mut m: i64 = 2
+    let mut go: i64 = 1
+    while go == 1 {
+        let nxt: i128 = (P as i128) * (t1 as i128) - (Q as i128) * (t0 as i128)
+        if nxt > (N as i128) {
+            go = 0
+        } else {
+            t0 = t1
+            t1 = nxt as i64
+            m = m + 1
+        }
+    }
+    if m >= 5 {
+        return (m - 4) * (m - 3) / 2
+    }
+    return 0
+}
+
+function main() -> i32 {
+    # ---- runs: (N-4)(N-3)/2 mod MOD ----
+    let mut ra: i64 = N - 4
+    let mut rb: i64 = N - 3
+    if ra % 2 == 0 {
+        ra = ra / 2
+    } else {
+        rb = rb / 2
+    }
+    let mut total: i64 = ((((ra % MOD) as i128) * ((rb % MOD) as i128)) % (MOD as i128)) as i64
+
+    # ---- geometric: phi sieve up to floor(N^(1/4)) ----
+    let mut p4: i64 = 1
+    let mut grow: i64 = 1
+    while grow == 1 {
+        let s: i64 = p4 + 1
+        let s2: i64 = s * s
+        if s2 * s2 <= N {
+            p4 = s
+        } else {
+            grow = 0
+        }
+    }
+    let phi: ptr<i64> = calloc(p4 + 1, 8)
+    let mut i: i64 = 0
+    while i <= p4 {
+        phi[i] = i
+        i = i + 1
+    }
+    i = 2
+    while i <= p4 {
+        if phi[i] == i {
+            let mut j: i64 = i
+            while j <= p4 {
+                phi[j] = phi[j] - phi[j] / i
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut p: i64 = 2
+    while p <= p4 {
+        let mut pw: i64 = p * p * p * p
+        while pw <= N {
+            total = (total + phi[p] * ((N / pw) % MOD)) % MOD
+            if pw <= N / p {
+                pw = pw * p
+            } else {
+                pw = N + 1
+            }
+        }
+        p = p + 1
+    }
+    free(phi)
+
+    # ---- Lucas-type windows ----
+    total = (total + windows(1, 2, 1, 0 - 1)) % MOD   # Fibonacci
+    total = (total + windows(1, 3, 2, 0 - 1)) % MOD   # NSW
+    total = (total + windows(1, 2, 3, 1)) % MOD       # 1,2,5,13,...
+    total = (total + windows(1, 3, 4, 1)) % MOD       # 1,3,11,41,...
+    p = 2
+    while p <= p4 + 2 {
+        if p >= 3 {
+            total = (total + windows(1, p, p, 1)) % MOD
+        }
+        total = (total + windows(1, p, p, 0 - 1)) % MOD
+        p = p + 1
+    }
+
+    # ---- hybrid 1,2,6,18,...,2*3^k (k >= 3) ----
+    let mut v: i64 = 54
+    while v <= N {
+        total = (total + 1) % MOD
+        v = v * 3
+    }
+
+    # ---- sporadics ----
+    let mx: ptr<i64> = calloc(10, 8)
+    mx[0] = 6
+    mx[1] = 9
+    mx[2] = 9
+    mx[3] = 9
+    mx[4] = 12
+    mx[5] = 16
+    mx[6] = 16
+    mx[7] = 20
+    mx[8] = 48
+    mx[9] = 60
+    i = 0
+    while i < 10 {
+        if mx[i] <= N {
+            total = (total + 1) % MOD
+        }
+        i = i + 1
+    }
+    free(mx)
+
+    printf("%lld\n", total)
+    return 0
+}

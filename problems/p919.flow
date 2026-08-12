@@ -1,0 +1,11 @@
+# Project Euler 919
+# Fortunate Triangles.
+
+extern {
+    function p919_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p919_native())
+    return 0
+}

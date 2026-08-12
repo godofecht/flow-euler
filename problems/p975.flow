@@ -1,0 +1,10 @@
+# Project Euler 975
+
+extern {
+    function p975_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.5f\n", p975_native())
+    return 0
+}

@@ -1,0 +1,9 @@
+# Wrapper for native C solver.
+extern {
+    function p827_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p827_native())
+    return 0
+}

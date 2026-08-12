@@ -1,0 +1,131 @@
+# Project Euler 705: Total Inversion Count of Divided Sequences
+# Method: F(N) decomposes over digit pairs. Stream the digits of all primes
+# below 10^8 (zeros skipped) left to right, keeping W[v] = weighted count of
+# earlier positions whose chosen divisor is v, scaled by the product of the
+# divisor counts of every other processed position. At each digit d with
+# divisor set D and cnt = |D|: ans = ans*cnt + sum over y in D of
+# sum_{x > y} W[x], then W[v] = W[v]*cnt (+ P for v in D), P = P*cnt.
+# Primes come from an odd-only byte sieve of size 10^8. All arithmetic
+# modulo 1e9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function main() -> i32 {
+    let MOD: i64 = 1000000007
+    let N: i64 = 100000000
+
+    # comp[i] marks odd number 2*i+1 as composite (index 0 -> 1, unused)
+    let half: i64 = N / 2
+    let comp: ptr<i8> = calloc(half, 1) as ptr<i8>
+    let mut i: i64 = 1
+    while (2 * i + 1) * (2 * i + 1) < N {
+        if comp[i] == 0 {
+            let p: i64 = 2 * i + 1
+            let mut j: i64 = (p * p) / 2
+            while j < half {
+                comp[j] = 1
+                j = j + p
+            }
+        }
+        i = i + 1
+    }
+
+    # divisor sets per digit: bitmask over values 1..9, and counts
+    let dmask: ptr<i64> = calloc(10, 8) as ptr<i64>
+    let dcnt: ptr<i64> = calloc(10, 8) as ptr<i64>
+    let mut d: i64 = 1
+    while d <= 9 {
+        let mut m: i64 = 0
+        let mut c: i64 = 0
+        let mut v: i64 = 1
+        while v <= d {
+            if d % v == 0 {
+                m = m + (1 << v)
+                c = c + 1
+            }
+            v = v + 1
+        }
+        dmask[d] = m
+        dcnt[d] = c
+        d = d + 1
+    }
+
+    let W: ptr<i64> = calloc(10, 8) as ptr<i64>
+    let digs: ptr<i64> = calloc(16, 8) as ptr<i64>
+    let mut P: i64 = 1
+    let mut ans: i64 = 0
+
+    let mut prime: i64 = 2
+    while prime < N {
+        # extract nonzero digits of prime, most significant first
+        let mut nd: i64 = 0
+        let mut t: i64 = prime
+        while t > 0 {
+            let dig: i64 = t % 10
+            if dig != 0 {
+                digs[nd] = dig
+                nd = nd + 1
+            }
+            t = t / 10
+        }
+        let mut k: i64 = nd - 1
+        while k >= 0 {
+            let dg: i64 = digs[k]
+            let mask: i64 = dmask[dg]
+            let cnt: i64 = dcnt[dg]
+            # add = sum over y in divs(dg) of sum_{x > y} W[x]
+            let mut add: i64 = 0
+            let mut suf: i64 = 0
+            let mut v: i64 = 9
+            while v >= 1 {
+                # before including W[v], suf = sum_{x > v} W[x]
+                if (mask / (1 << v)) % 2 == 1 {
+                    add = (add + suf) % MOD
+                }
+                suf = (suf + W[v]) % MOD
+                v = v - 1
+            }
+            ans = (ans * cnt + add) % MOD
+            v = 1
+            while v <= 9 {
+                W[v] = (W[v] * cnt) % MOD
+                v = v + 1
+            }
+            v = 1
+            while v <= 9 {
+                if (mask / (1 << v)) % 2 == 1 {
+                    W[v] = (W[v] + P) % MOD
+                }
+                v = v + 1
+            }
+            P = (P * cnt) % MOD
+            k = k - 1
+        }
+        # advance to next prime
+        if prime == 2 {
+            prime = 3
+        } else {
+            let mut idx: i64 = prime / 2 + 1
+            while idx < half && comp[idx] == 1 {
+                idx = idx + 1
+            }
+            if idx >= half {
+                prime = N
+            } else {
+                prime = 2 * idx + 1
+            }
+        }
+    }
+
+    free(comp as ptr<void>)
+    free(dmask as ptr<void>)
+    free(dcnt as ptr<void>)
+    free(W as ptr<void>)
+    free(digs as ptr<void>)
+
+    printf("%lld\n", ans)
+    return 0
+}

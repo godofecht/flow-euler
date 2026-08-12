@@ -1,0 +1,11 @@
+# Project Euler 898
+# Claire Voyant: optimal probability of guessing coin toss.
+
+extern {
+    function p898_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.10f\n", p898_native())
+    return 0
+}

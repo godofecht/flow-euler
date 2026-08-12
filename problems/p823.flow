@@ -1,0 +1,7 @@
+extern {
+    function p823_native() -> i64
+}
+function main() -> i32 {
+    printf("%lld\n", p823_native())
+    return 0
+}

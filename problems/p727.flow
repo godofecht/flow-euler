@@ -1,0 +1,78 @@
+# Project Euler 727: Triangle of Circular Arcs
+# For each triple ra < rb < rc <= 100 with gcd 1, place the three circle
+# centers, take D as the incenter of the center triangle (circle through the
+# tangency points is its incircle), find the inner Soddy circle center E by
+# Descartes' theorem plus trilateration, and average d = |DE|.
+
+extern {
+    function sqrt(x: f64) -> f64
+}
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function dist_de(ra: i64, rb: i64, rc: i64) -> f64 {
+    let c: f64 = (ra + rb) as f64
+    let b: f64 = (ra + rc) as f64
+    let a: f64 = (rb + rc) as f64
+    let cx: f64 = (b * b + c * c - a * a) / (2.0 * c)
+    let cy: f64 = sqrt(b * b - cx * cx)
+    let bx: f64 = c
+    # D = incenter of the triangle of centers
+    let s2: f64 = a + b + c
+    let dx: f64 = (b * bx + c * cx) / s2
+    let dy: f64 = (c * cy) / s2
+    # inner Soddy circle radius via Descartes' theorem
+    let k1: f64 = 1.0 / (ra as f64)
+    let k2: f64 = 1.0 / (rb as f64)
+    let k3: f64 = 1.0 / (rc as f64)
+    let k4: f64 = k1 + k2 + k3 + 2.0 * sqrt(k1 * k2 + k2 * k3 + k3 * k1)
+    let r4: f64 = 1.0 / k4
+    let RA: f64 = (ra as f64) + r4
+    let RB: f64 = (rb as f64) + r4
+    let RC: f64 = (rc as f64) + r4
+    # trilateration: subtract pairs of circle equations to get a linear system
+    let a11: f64 = 2.0 * bx
+    let b1: f64 = RA * RA - RB * RB + bx * bx
+    let a21: f64 = 2.0 * cx
+    let a22: f64 = 2.0 * cy
+    let b2: f64 = RA * RA - RC * RC + cx * cx + cy * cy
+    let ex: f64 = b1 / a11
+    let ey: f64 = (b2 - a21 * ex) / a22
+    let vx: f64 = dx - ex
+    let vy: f64 = dy - ey
+    return sqrt(vx * vx + vy * vy)
+}
+
+function main() -> i32 {
+    let N: i64 = 100
+    let mut total: f64 = 0.0
+    let mut count: i64 = 0
+    let mut ra: i64 = 1
+    while ra <= N {
+        let mut rb: i64 = ra + 1
+        while rb <= N {
+            let g: i64 = gcd(ra, rb)
+            let mut rc: i64 = rb + 1
+            while rc <= N {
+                if gcd(g, rc) == 1 {
+                    total = total + dist_de(ra, rb, rc)
+                    count = count + 1
+                }
+                rc = rc + 1
+            }
+            rb = rb + 1
+        }
+        ra = ra + 1
+    }
+    printf("%.8f\n", total / (count as f64))
+    return 0
+}

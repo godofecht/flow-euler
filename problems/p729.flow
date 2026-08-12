@@ -1,0 +1,118 @@
+# Project Euler 729
+# Range of periodic sequences of a_{n+1} = a_n - 1/a_n (the Boole map).
+# Periodic orbits correspond one-to-one with aperiodic binary sign
+# itineraries: the inverse branches g+(y) = (y + sqrt(y*y+4))/2 and
+# g-(y) = -1/g+(y) are contractions, so each binary necklace of length p
+# (mask strictly minimal among its rotations, non-constant) yields one
+# cycle of minimal period p via Newton iteration on the composed inverse
+# map. Each cycle contributes p * (max - min); Kahan-sum S(25), 4dp.
+
+extern {
+    function sqrt(x: f64) -> f64
+}
+
+function main() -> i32 {
+    let big: i64 = 25
+    let mut total: f64 = 0.0
+    let mut comp: f64 = 0.0
+    let mut p: i64 = 2
+    while p <= big {
+        let mut pow2p: i64 = 1
+        let mut j: i64 = 0
+        while j < p {
+            pow2p = pow2p * 2
+            j = j + 1
+        }
+        let mut m: i64 = 1
+        while m < pow2p - 1 {
+            # keep m only if strictly smaller than all its rotations
+            let mut ok: i64 = 1
+            let mut k: i64 = 1
+            let mut pk: i64 = 2
+            while k < p && ok == 1 {
+                let rot: i64 = (m >> k) | ((m % pk) << (p - k))
+                if rot <= m { ok = 0 }
+                k = k + 1
+                pk = pk * 2
+            }
+            if ok == 1 {
+                # contraction warmup from x = 0
+                let mut x: f64 = 0.0
+                let mut sweep: i64 = 0
+                while sweep < 2 {
+                    let mut y: f64 = x
+                    let mut i: i64 = p - 1
+                    while i >= 0 {
+                        let r: f64 = sqrt(y * y + 4.0)
+                        let mut gp: f64 = 0.0
+                        if y >= 0.0 { gp = (y + r) * 0.5 } else { gp = 2.0 / (r - y) }
+                        if ((m >> i) & 1) == 1 { y = gp } else { y = -1.0 / gp }
+                        i = i - 1
+                    }
+                    x = y
+                    sweep = sweep + 1
+                }
+                # Newton on G(x) - x, G = composed inverse branches
+                let mut it: i64 = 0
+                let mut done: i64 = 0
+                while done == 0 && it < 60 {
+                    let mut y: f64 = x
+                    let mut d: f64 = 1.0
+                    let mut i: i64 = p - 1
+                    while i >= 0 {
+                        let r: f64 = sqrt(y * y + 4.0)
+                        let mut gp: f64 = 0.0
+                        let mut gpd: f64 = 0.0
+                        if y >= 0.0 {
+                            gp = (y + r) * 0.5
+                            gpd = (r + y) / (2.0 * r)
+                        } else {
+                            gp = 2.0 / (r - y)
+                            gpd = 2.0 / (r * (r - y))
+                        }
+                        if ((m >> i) & 1) == 1 {
+                            y = gp
+                            d = d * gpd
+                        } else {
+                            y = -1.0 / gp
+                            d = d * gpd / (gp * gp)
+                        }
+                        i = i - 1
+                    }
+                    let nx: f64 = x + (y - x) / (1.0 - d)
+                    let mut diff: f64 = nx - x
+                    if diff < 0.0 { diff = -diff }
+                    let mut ax: f64 = nx
+                    if ax < 0.0 { ax = -ax }
+                    x = nx
+                    if diff <= 0.00000000000001 * (1.0 + ax) { done = 1 }
+                    it = it + 1
+                }
+                # final backward pass collects the orbit points
+                let mut y2: f64 = x
+                let mut mn: f64 = x
+                let mut mx: f64 = x
+                let mut i2: i64 = p - 1
+                while i2 >= 0 {
+                    let r2: f64 = sqrt(y2 * y2 + 4.0)
+                    let mut gp2: f64 = 0.0
+                    if y2 >= 0.0 { gp2 = (y2 + r2) * 0.5 } else { gp2 = 2.0 / (r2 - y2) }
+                    if ((m >> i2) & 1) == 1 { y2 = gp2 } else { y2 = -1.0 / gp2 }
+                    if y2 < mn { mn = y2 }
+                    if y2 > mx { mx = y2 }
+                    i2 = i2 - 1
+                }
+                let contrib: f64 = (p as f64) * (mx - mn)
+                # Kahan summation
+                let t1: f64 = contrib - comp
+                let t2: f64 = total + t1
+                comp = (t2 - total) - t1
+                total = t2
+            }
+            m = m + 1
+        }
+        p = p + 1
+    }
+    printf("%.4f\n", total)
+    return 0
+}

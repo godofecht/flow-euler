@@ -1,0 +1,11 @@
+# Project Euler 742
+# Minimum Area of a Convex Grid Polygon — native C solver.
+
+extern {
+    function p742_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p742_native())
+    return 0
+}

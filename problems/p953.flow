@@ -1,0 +1,10 @@
+# Project Euler 953
+
+extern {
+    function p953_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p953_native())
+    return 0
+}

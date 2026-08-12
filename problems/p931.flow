@@ -1,0 +1,11 @@
+# Project Euler 931: Totient Graph
+# T(10^12) mod 715827883 via Min25 prime sieve and closed-form summation.
+
+extern {
+    function p931_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p931_native())
+    return 0
+}

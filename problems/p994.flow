@@ -1,0 +1,12 @@
+# Project Euler 994
+# Counting triangles: T(1234*10^8, 2345*10^8) mod 1e9+7.
+# Native C helper for totient sieve and Du Jiao summatory recursion.
+
+extern {
+    function p994_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p994_native())
+    return 0
+}

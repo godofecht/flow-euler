@@ -1,0 +1,11 @@
+# Project Euler 993
+# Banana game BB(n) with eventual periodicity.
+
+extern {
+    function p993_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p993_native())
+    return 0
+}

@@ -1,0 +1,11 @@
+# Project Euler 889
+# Rational Blancmange: F(10^18+31, 10^14+31, 62) mod 1000062031.
+
+extern {
+    function p889_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p889_native())
+    return 0
+}

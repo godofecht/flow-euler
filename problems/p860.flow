@@ -1,0 +1,11 @@
+# Project Euler 860
+# Gold and Silver Coin Game - fair arrangements of 9898 stacks mod 989898989.
+
+extern {
+    function p860_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p860_native())
+    return 0
+}

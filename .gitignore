@@ -4,3 +4,4 @@ bench/bin/
 .DS_Store
 a.out
 .build/
+site/

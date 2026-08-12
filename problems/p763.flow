@@ -1,0 +1,11 @@
+# Project Euler 763
+# Amoebas in a 3D Grid: D(10000) mod 1e9 via boundary recurrence.
+
+extern {
+    function p763_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p763_native())
+    return 0
+}

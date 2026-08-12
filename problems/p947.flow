@@ -1,0 +1,12 @@
+# Project Euler 947
+# Fibonacci Residues — native C solver.
+# Companion: problems/native/p947.c
+
+extern {
+    function p947_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p947_native())
+    return 0
+}

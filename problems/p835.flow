@@ -1,0 +1,12 @@
+# Project Euler 835
+# Supernatural Triangles - S(10^(10^10)) mod 1234567891.
+# Real solver in native/p835.c.
+
+extern {
+    function p835_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p835_native())
+    return 0
+}

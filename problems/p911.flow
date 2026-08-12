@@ -1,0 +1,11 @@
+# Project Euler 911
+# Khinchin Exceptions: geometric mean of k_infty(rho_n) for 0<=n<=50.
+
+extern {
+    function p911_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.6f\n", p911_native())
+    return 0
+}

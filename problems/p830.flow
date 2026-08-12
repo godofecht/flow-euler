@@ -1,0 +1,12 @@
+# Project Euler 830
+# Binomials and Powers - S(10^18) mod 83^3 * 89^3 * 97^3.
+# Real solver in native/p830.c.
+
+extern {
+    function p830_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p830_native())
+    return 0
+}

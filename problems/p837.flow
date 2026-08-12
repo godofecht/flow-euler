@@ -1,0 +1,13 @@
+# Project Euler 837
+# Amidakuji: count 3-line identity permutations with m,n rungs.
+# a(123456789, 987654321) mod 1234567891.
+# Native C helper for modular arithmetic with batch inversion.
+
+extern {
+    function p837_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p837_native())
+    return 0
+}

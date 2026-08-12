@@ -1,0 +1,11 @@
+# Project Euler 908: Clock Sequence II
+# C(10^4) mod 1111211113 via moduli generation, binomial coefficients, and Mobius inversion.
+
+extern {
+    function p908_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p908_native())
+    return 0
+}

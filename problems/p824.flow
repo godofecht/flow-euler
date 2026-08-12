@@ -1,0 +1,13 @@
+# Project Euler 824
+# Chess Sliders on a cylindrical board.
+# L(10^9, 10^15) mod (10^7+19)^2.
+# Real solver in native/p824.c.
+
+extern {
+    function p824_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p824_native())
+    return 0
+}

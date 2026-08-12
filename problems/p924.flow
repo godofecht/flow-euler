@@ -1,0 +1,12 @@
+# Project Euler 924
+# Larger Digit Permutation II — native C solver.
+# Companion: problems/native/p924.c
+
+extern {
+    function p924_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p924_native())
+    return 0
+}

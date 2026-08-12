@@ -1,0 +1,11 @@
+# Project Euler 966: Triangle Circle Intersection
+# sum I(a,b,c) for a+b+c <= 200.
+
+extern {
+    function p966_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.2f\n", p966_native())
+    return 0
+}

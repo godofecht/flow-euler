@@ -1,0 +1,204 @@
+# Project Euler 707: Lights Out
+# F(w,h) = 2^(w*h - d) where d is the GF(2) nullity of the w x h Lights Out
+# matrix. By Sutner, d = deg gcd(p_w(x), p_h(x+1)) with p_0 = 1, p_1 = x,
+# p_{n+1} = x*p_n + p_{n-1} over GF(2). For S(199,199) the heights are the
+# Fibonacci numbers f_1..f_199 (astronomically large), so p_{f_k}(x+1) is
+# computed modulo P = p_199(x) via the 2x2 companion matrix B = [[x+1,1],[1,0]]
+# using the Fibonacci addition chain B^{f_k} = B^{f_{k-1}} * B^{f_{k-2}}.
+# Polynomials are bitsets: 14 words of 32 bits each held in i64 slots.
+# Exponents are tracked mod 1e9+6 (Fermat), sum taken mod 1e9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# degree of poly at base b, or -1 if zero
+function pdeg(p: ptr<i64>, b: i64) -> i64 {
+    let mut i: i64 = 13
+    while i >= 0 {
+        if p[b + i] != 0 {
+            let mut w: i64 = p[b + i]
+            let mut d: i64 = 0
+            while w > 1 {
+                w = w / 2
+                d = d + 1
+            }
+            return i * 32 + d
+        }
+        i = i - 1
+    }
+    return -1
+}
+
+function pclear(p: ptr<i64>, b: i64) -> void {
+    for i in 0..14 { p[b + i] = 0 }
+}
+
+function pcopy(d: ptr<i64>, db: i64, s: ptr<i64>, sb: i64) -> void {
+    for i in 0..14 { d[db + i] = s[sb + i] }
+}
+
+function pxorinto(d: ptr<i64>, db: i64, s: ptr<i64>, sb: i64) -> void {
+    for i in 0..14 { d[db + i] = d[db + i] ^ s[sb + i] }
+}
+
+function pbit(p: ptr<i64>, b: i64, i: i64) -> i64 {
+    return (p[b + i / 32] >> (i % 32)) & 1
+}
+
+# a ^= m << s (words are 32-bit values so shifted parts stay below bit 63)
+function pxshift(a: ptr<i64>, ab: i64, m: ptr<i64>, mb: i64, s: i64) -> void {
+    let wo: i64 = s / 32
+    let bo: i64 = s % 32
+    let mask: i64 = 4294967295
+    for j in 0..14 {
+        let w: i64 = m[mb + j]
+        if w != 0 {
+            let k: i64 = wo + j
+            if k < 14 {
+                a[ab + k] = a[ab + k] ^ ((w << bo) & mask)
+            }
+            let hi: i64 = w >> (32 - bo)
+            if hi != 0 && k + 1 < 14 {
+                a[ab + k + 1] = a[ab + k + 1] ^ hi
+            }
+        }
+    }
+}
+
+# r = a * c (carryless product over GF(2)); r is cleared first
+function pmul(r: ptr<i64>, rb: i64, a: ptr<i64>, ab: i64, c: ptr<i64>, cb: i64) -> void {
+    pclear(r, rb)
+    let da: i64 = pdeg(a, ab)
+    let mut i: i64 = 0
+    while i <= da {
+        if pbit(a, ab, i) == 1 {
+            pxshift(r, rb, c, cb, i)
+        }
+        i = i + 1
+    }
+}
+
+# a = a mod m in place (m must be nonzero)
+function pred(a: ptr<i64>, ab: i64, m: ptr<i64>, mb: i64) -> void {
+    let dm: i64 = pdeg(m, mb)
+    let mut da: i64 = pdeg(a, ab)
+    while da >= dm {
+        pxshift(a, ab, m, mb, da - dm)
+        da = pdeg(a, ab)
+    }
+}
+
+# degree of gcd(a, b); both buffers (base 0) are destroyed
+function pgcddeg(a: ptr<i64>, b: ptr<i64>) -> i64 {
+    let mut x: ptr<i64> = a
+    let mut y: ptr<i64> = b
+    while pdeg(y, 0) >= 0 {
+        pred(x, 0, y, 0)
+        let t: ptr<i64> = x
+        x = y
+        y = t
+    }
+    return pdeg(x, 0)
+}
+
+function powmod2(e: i64, md: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut bs: i64 = 2
+    let mut ee: i64 = e
+    while ee > 0 {
+        if ee % 2 == 1 { r = r * bs % md }
+        bs = bs * bs % md
+        ee = ee / 2
+    }
+    return r
+}
+
+# C = A * B with entries reduced mod P; matrices are 4 polys at bases e*14
+function matmul(cm: ptr<i64>, am: ptr<i64>, bm: ptr<i64>, pp: ptr<i64>, t1: ptr<i64>, t2: ptr<i64>) -> void {
+    for e in 0..4 {
+        let i: i64 = e / 2
+        let j: i64 = e % 2
+        pmul(t1, 0, am, (2 * i) * 14, bm, j * 14)
+        pmul(t2, 0, am, (2 * i + 1) * 14, bm, (2 + j) * 14)
+        pxorinto(t1, 0, t2, 0)
+        pred(t1, 0, pp, 0)
+        pcopy(cm, e * 14, t1, 0)
+    }
+}
+
+function main() -> i32 {
+    let md: i64 = 1000000007
+    let q: i64 = 1000000006
+    let w: i64 = 199
+
+    let mut pa: ptr<i64> = calloc(14, 8)
+    let mut pb: ptr<i64> = calloc(14, 8)
+    let mut pt: ptr<i64> = calloc(14, 8)
+    let t1: ptr<i64> = calloc(14, 8)
+    let t2: ptr<i64> = calloc(14, 8)
+    let ga: ptr<i64> = calloc(14, 8)
+    let gb: ptr<i64> = calloc(14, 8)
+    let mut ma: ptr<i64> = calloc(56, 8)
+    let mut mb: ptr<i64> = calloc(56, 8)
+    let mut mc: ptr<i64> = calloc(56, 8)
+
+    # build P = p_199(x): p_0 = 1, p_1 = x, p_{k} = x*p_{k-1} + p_{k-2}
+    pa[0] = 1
+    pb[0] = 2
+    let mut k: i64 = 2
+    while k <= w {
+        pclear(pt, 0)
+        pxshift(pt, 0, pb, 0, 1)
+        pxorinto(pt, 0, pa, 0)
+        let tp: ptr<i64> = pa
+        pa = pb
+        pb = pt
+        pt = tp
+        k = k + 1
+    }
+    # pb now holds P, degree 199
+
+    # B = [[x+1, 1], [1, 0]]; entries at bases 0, 14, 28, 42
+    ma[0] = 3
+    ma[14] = 1
+    ma[28] = 1
+    pcopy(mb, 0, ma, 0)
+    pcopy(mb, 14, ma, 14)
+    pcopy(mb, 28, ma, 28)
+    pcopy(mb, 42, ma, 42)
+
+    # k = 1 and k = 2: h = f_k = 1, p_1(x+1) = x + 1
+    pcopy(ga, 0, pb, 0)
+    pclear(gb, 0)
+    gb[0] = 3
+    let d12: i64 = pgcddeg(ga, gb)
+    let e12: i64 = ((w * 1 - d12) % q + q) % q
+    let mut total: i64 = 2 * powmod2(e12, md) % md
+
+    # k = 3..199: M_k = M_{k-1} * M_{k-2}, f_k tracked mod q
+    let mut fib1: i64 = 1
+    let mut fib2: i64 = 1
+    k = 3
+    while k <= 199 {
+        matmul(mc, ma, mb, pb, t1, t2)
+        let fm: i64 = (fib1 + fib2) % q
+        let tm: ptr<i64> = mb
+        mb = ma
+        ma = mc
+        mc = tm
+        fib2 = fib1
+        fib1 = fm
+
+        pcopy(ga, 0, pb, 0)
+        pcopy(gb, 0, ma, 0)
+        let d: i64 = pgcddeg(ga, gb)
+        let e: i64 = ((w * fm - d) % q + q) % q
+        total = (total + powmod2(e, md)) % md
+        k = k + 1
+    }
+
+    printf("%lld\n", total)
+    return 0
+}

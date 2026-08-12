@@ -1,0 +1,13 @@
+# Project Euler 814
+# Mezzo-forte: count looking-direction assignments for 4n people on a circle
+# where exactly half scream. S(10^3) mod 998244353.
+# Native C helper for the transfer-matrix DP.
+
+extern {
+    function p814_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p814_native())
+    return 0
+}

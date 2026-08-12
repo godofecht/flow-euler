@@ -1,0 +1,11 @@
+# Project Euler 983
+# Parity family of circles on lattice points.
+
+extern {
+    function p983_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p983_native())
+    return 0
+}

@@ -1,0 +1,12 @@
+# Project Euler 747
+# Triangular pizza cutting: Psi(10^8) mod 1e9+7.
+# Native C helper for the hard-case double loop with integer sqrt.
+
+extern {
+    function p747_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p747_native())
+    return 0
+}

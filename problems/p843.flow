@@ -1,0 +1,11 @@
+# Project Euler 843
+# Periodic Circles - S(100).
+
+extern {
+    function p843_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p843_native())
+    return 0
+}

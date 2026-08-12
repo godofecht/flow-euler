@@ -1,0 +1,11 @@
+# Project Euler 925: Next permutation of squares
+# Sum of B(n^2) for n=1..10^16-1 mod 1e9+7 via digit-by-digit correction sum.
+
+extern {
+    function p925_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p925_native())
+    return 0
+}

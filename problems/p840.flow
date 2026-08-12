@@ -1,0 +1,11 @@
+# Project Euler 840
+# Sum of Products — CDQ + NTT convolution in C.
+
+extern {
+    function p840_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p840_native())
+    return 0
+}

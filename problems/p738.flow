@@ -1,0 +1,11 @@
+# Project Euler 738
+# Counting Ordered Factorisations: D(10^10, 10^10) mod 1e9+7.
+
+extern {
+    function p738_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p738_native())
+    return 0
+}

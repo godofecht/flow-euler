@@ -1,0 +1,8 @@
+extern {
+    function p884_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p884_native())
+    return 0
+}

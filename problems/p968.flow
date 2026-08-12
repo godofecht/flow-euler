@@ -1,0 +1,11 @@
+# Project Euler 968
+# Counting via determinants and modular arithmetic.
+
+extern {
+    function p968_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p968_native())
+    return 0
+}

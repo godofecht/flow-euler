@@ -1,0 +1,12 @@
+# Project Euler 797
+# Cyclogenic Polynomials: Q_{10^7}(2) mod 1e9+7.
+# Companion: problems/native/p797.c
+
+extern {
+    function p797_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p797_native())
+    return 0
+}

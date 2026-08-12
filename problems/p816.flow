@@ -1,0 +1,11 @@
+# Project Euler 816
+# Shortest distance between 2*10^6 points — closest pair in C.
+
+extern {
+    function p816_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.9f\n", p816_native())
+    return 0
+}

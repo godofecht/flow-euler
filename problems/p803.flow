@@ -1,0 +1,13 @@
+# Project Euler 803
+# Pseudorandom Sequence: find the minimum step at which the sequence
+# starting from the "PuzzleOne" seed first produces "LuckyText".
+# Native C helper for 48-bit LCG seed recovery and 2-adic discrete log.
+
+extern {
+    function p803_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p803_native())
+    return 0
+}

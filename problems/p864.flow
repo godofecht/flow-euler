@@ -1,0 +1,12 @@
+# Project Euler 864
+# Square + 1 = Squarefree: count squarefree x^2+1 for 1<=x<=n.
+# Companion: problems/native/p864.c
+
+extern {
+    function p864_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p864_native())
+    return 0
+}

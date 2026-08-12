@@ -1,0 +1,12 @@
+# Project Euler 935
+# Rolling Square — native C solver (Mobius inversion, Du Jiao sieve).
+# Companion: problems/native/p935.c
+
+extern {
+    function p935_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p935_native())
+    return 0
+}

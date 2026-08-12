@@ -1,0 +1,11 @@
+# Project Euler 987
+# Count disjoint straights from one deck, excluding straight flushes.
+
+extern {
+    function p987_print()
+}
+
+function main() -> i32 {
+    p987_print()
+    return 0
+}
