@@ -56,19 +56,26 @@ def transpile(src_path: Path, mode: str, out_path: Path) -> str:
     env = os.environ.copy()
     env["PYTHONPATH"] = FLOW_PY + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     env["FLOW_HOST"] = "python"
-    subprocess.run(cmd, env=env, capture_output=True, timeout=60)
+    result = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
     if out_path.exists():
         return out_path.read_text(errors="replace")
+    err = result.stderr.strip()
+    if err:
+        return f"(transpilation failed: {err[:200]})"
     return "(transpilation failed)"
 
 
 def run_problem(n: int, timeout: int) -> str:
     """Run a problem through scripts/run.sh and return the output."""
+    env = os.environ.copy()
+    env["FLOW_HOST"] = "python"
+    if "FLOW_REPO" not in env:
+        env["FLOW_REPO"] = str(Path.home() / "flow")
     try:
         result = subprocess.run(
             ["bash", str(ROOT / "scripts/run.sh"), str(n)],
             capture_output=True, text=True, timeout=timeout,
-            cwd=str(ROOT),
+            cwd=str(ROOT), env=env,
         )
         out = result.stdout.strip()
         for line in out.splitlines():
@@ -76,6 +83,9 @@ def run_problem(n: int, timeout: int) -> str:
                 parts = line.split(None, 1)
                 if len(parts) == 2:
                     return parts[1]
+        err = result.stderr.strip()
+        if err:
+            return f"(no output: {err[:200]})"
         return out.splitlines()[-1] if out else "(no output)"
     except subprocess.TimeoutExpired:
         return "(timeout)"

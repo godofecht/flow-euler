@@ -35,9 +35,9 @@ jobs:
 
       - name: Generate site
         env:
-          FLOW_REPO: ${{ github.workspace }}/flow
           FLOW_HOST: python
         run: |
+          export FLOW_REPO="$HOME/flow"
           python3 scripts/gen-site.py --out site --timeout 30
 
       - name: Upload artifact
