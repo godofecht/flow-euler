@@ -1,0 +1,140 @@
+# Project Euler 715: Sextuplet Norms
+#
+# f(k)/(k^2 phi(k)) is multiplicative with value p^(3(e-1)) * (p^3 - chi4(p))
+# at p^e, where chi4 is the nonprincipal character mod 4 (count solutions of
+# a rank-6 quadratic form mod p). Its Dirichlet series is zeta(s-3)/L(s,chi4),
+# so g = Id^3 * (mu.chi4) and G(n) = sum_d mu(d)chi4(d) * S3(floor(n/d)) with
+# S3(m) = (m(m+1)/2)^2. Compute M(x) = sum_{d<=x} mu(d)chi4(d) by a linear
+# sieve up to K = 4*10^7 plus the Mertens-style recursion from
+# (mu.chi4)*chi4 = epsilon, then sum over quotient blocks. O(n^(2/3)) total.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# C(t) = sum_{d<=t} chi4(d), period 4 pattern 1,1,0,0
+function cfun(t: i64) -> i64 {
+    let r: i64 = t % 4
+    if r == 1 || r == 2 {
+        return 1
+    }
+    return 0
+}
+
+function main() -> i32 {
+    let n: i64 = 1000000000000
+    let kk: i64 = 40000000
+    let md: i64 = 1000000007
+    let inv2: i64 = 500000004
+
+    # linear sieve for mu up to kk
+    let comp: ptr<i8> = calloc(kk + 1, 1)
+    let mu: ptr<i8> = calloc(kk + 1, 1)
+    let primes: ptr<i32> = calloc(2500000, 4)
+    mu[1] = 1
+    let mut np: i64 = 0
+    let mut i: i64 = 2
+    while i <= kk {
+        if comp[i] == 0 {
+            primes[np] = i as i32
+            np = np + 1
+            mu[i] = 0 - 1
+        }
+        let mut j: i64 = 0
+        while j < np {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > kk {
+                break
+            }
+            comp[ip] = 1
+            if i % p == 0 {
+                mu[ip] = 0
+                break
+            }
+            mu[ip] = 0 - mu[i]
+            j = j + 1
+        }
+        i = i + 1
+    }
+    free(comp)
+    free(primes)
+
+    # prefix sums of h(d) = mu(d) * chi4(d)
+    let msmall: ptr<i32> = calloc(kk + 1, 4)
+    let mut acc: i64 = 0
+    i = 1
+    while i <= kk {
+        if i % 2 == 1 {
+            let m: i64 = mu[i] as i64
+            if i % 4 == 1 {
+                acc = acc + m
+            } else {
+                acc = acc - m
+            }
+        }
+        msmall[i] = acc as i32
+        i = i + 1
+    }
+    free(mu)
+
+    # M(n/ii) for ii = 1..imax via M(x) = 1 - sum_{d>=2} chi4(d) M(x/d)
+    let imax: i64 = n / kk
+    let mbig: ptr<i64> = calloc(imax + 2, 8)
+    let mut ii: i64 = imax
+    while ii >= 1 {
+        let x: i64 = n / ii
+        if x <= kk {
+            mbig[ii] = msmall[x] as i64
+        } else {
+            let mut s: i64 = 1
+            let mut d: i64 = 2
+            while d <= x {
+                let q: i64 = x / d
+                let d2: i64 = x / q
+                let w: i64 = cfun(d2) - cfun(d - 1)
+                if w != 0 {
+                    if q <= kk {
+                        s = s - w * (msmall[q] as i64)
+                    } else {
+                        s = s - w * mbig[ii * d]
+                    }
+                }
+                d = d2 + 1
+            }
+            mbig[ii] = s
+        }
+        ii = ii - 1
+    }
+
+    # G(n) = sum over quotient blocks of (M(hi) - M(lo-1)) * S3(q) mod md
+    let mut total: i64 = 0
+    let mut prev: i64 = 0
+    let mut lo: i64 = 1
+    while lo <= n {
+        let q: i64 = n / lo
+        let hi: i64 = n / q
+        let mut m2: i64 = 0
+        if hi <= kk {
+            m2 = msmall[hi] as i64
+        } else {
+            m2 = mbig[n / hi]
+        }
+        let mut w: i64 = (m2 - prev) % md
+        if w < 0 {
+            w = w + md
+        }
+        let a: i64 = q % md
+        let b: i64 = (q + 1) % md
+        let s1: i64 = a * b % md * inv2 % md
+        let s3: i64 = s1 * s1 % md
+        total = (total + w * s3) % md
+        prev = m2
+        lo = hi + 1
+    }
+    free(msmall)
+    free(mbig)
+    printf("%lld\n", total)
+    return 0
+}

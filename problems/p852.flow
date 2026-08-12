@@ -1,0 +1,11 @@
+# Project Euler 852
+# Coins in a Box - S(50) rounded to 6 decimals.
+
+extern {
+    function p852_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.6f\n", p852_native())
+    return 0
+}

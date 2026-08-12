@@ -1,0 +1,12 @@
+# Project Euler 949
+# DP with convolution — native C solver.
+# Companion: problems/native/p949.c
+
+extern {
+    function p949_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p949_native())
+    return 0
+}

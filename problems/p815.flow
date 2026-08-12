@@ -1,0 +1,11 @@
+# Project Euler 815
+# Group by Value — expected maximum piles (native C, float answer).
+
+extern {
+    function p815_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.8f\n", p815_native())
+    return 0
+}

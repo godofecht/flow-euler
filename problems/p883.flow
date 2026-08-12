@@ -1,0 +1,12 @@
+# Project Euler 883
+# Remarkable Triangles: count triangles on the hexagonal lattice with
+# lattice-point incenter and inradius <= 10^6.
+
+extern {
+    function p883_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p883_native())
+    return 0
+}

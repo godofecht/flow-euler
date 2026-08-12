@@ -1,0 +1,11 @@
+# Project Euler 895
+# Gold & Silver Coin Game II: G(9898) mod 989898989.
+
+extern {
+    function p895_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p895_native())
+    return 0
+}

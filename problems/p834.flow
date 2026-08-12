@@ -1,0 +1,12 @@
+# Project Euler 834
+# Add and Divide - U(1234567).
+# Real solver in native/p834.c.
+
+extern {
+    function p834_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p834_native())
+    return 0
+}

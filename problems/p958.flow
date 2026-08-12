@@ -1,0 +1,11 @@
+# Project Euler 958
+# Euclid's Labour - meet-in-the-middle on Stern-Brocot tree.
+
+extern {
+    function p958_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p958_native())
+    return 0
+}

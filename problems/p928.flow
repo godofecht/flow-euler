@@ -1,0 +1,12 @@
+# Project Euler 928
+# Cribbage — native C solver.
+# Companion: problems/native/p928.c
+
+extern {
+    function p928_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p928_native())
+    return 0
+}

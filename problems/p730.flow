@@ -1,0 +1,104 @@
+# Project Euler 730
+# Shifted Pythagorean Triples: S(100, 10^8) where P_k(n) counts primitive
+# triples p^2 + q^2 + k = r^2 with 1 <= p <= q <= r and p + q + r <= n.
+# Method: the Barning matrices preserve p^2 + q^2 - r^2 and gcd, so for each
+# k the solutions form ternary trees over a finite set of small roots (a root
+# has no positive perimeter-reducing parent: alpha = p+2q-2r, beta = 2p+q-2r,
+# root iff alpha == 0 or beta == 0 or both negative). Scan roots with
+# gcd(p,q,r) = 1, DFS each tree pruning on perimeter, count mirror trees once
+# and double; unordered count per k is (ordered + [p == q nodes]) / 2.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+# Count subtree nodes with perimeter <= n; ctr[0] = total, ctr[1] = p == q.
+function dfs(p: i64, q: i64, r: i64, n: i64, ctr: ptr<i64>) -> void {
+    ctr[0] = ctr[0] + 1
+    if p == q {
+        ctr[1] = ctr[1] + 1
+    }
+    let pm1: i64 = 5 * (p - q) + 7 * r
+    if pm1 <= n {
+        let a: i64 = 2 * (p - q + r)
+        dfs(a - p, a + q, a + r, n, ctr)
+    }
+    let pm2: i64 = 5 * (p + q) + 7 * r
+    if pm2 <= n {
+        let t: i64 = 2 * (p + q + r)
+        dfs(t - p, t - q, t + r, n, ctr)
+    }
+    let pm3: i64 = 5 * (q - p) + 7 * r
+    if pm3 <= n {
+        let b: i64 = 2 * (q - p + r)
+        dfs(b + p, b - q, b + r, n, ctr)
+    }
+    return
+}
+
+function main() -> i32 {
+    let n: i64 = 100000000
+    let kmax: i64 = 100
+    let bmax: i64 = 600
+    let ord: ptr<i64> = calloc(kmax + 1, 8) as ptr<i64>
+    let eqc: ptr<i64> = calloc(kmax + 1, 8) as ptr<i64>
+    let ctr: ptr<i64> = calloc(2, 8) as ptr<i64>
+
+    # Roots have small coordinates (max seen 198 for k <= 100); scan p <= q.
+    for p in 1..(bmax + 1) {
+        let mut r: i64 = 1
+        for q in p..(bmax + 1) {
+            let s: i64 = p * p + q * q
+            while r * r < s {
+                r = r + 1
+            }
+            let mut rr: i64 = r
+            while rr * rr - s <= kmax {
+                let k: i64 = rr * rr - s
+                let alpha: i64 = p + 2 * q - 2 * rr
+                let beta: i64 = 2 * p + q - 2 * rr
+                let mut isroot: i64 = 0
+                if alpha == 0 || beta == 0 {
+                    isroot = 1
+                }
+                if alpha < 0 && beta < 0 {
+                    isroot = 1
+                }
+                if isroot == 1 && gcd(gcd(p, q), rr) == 1 && p + q + rr <= n {
+                    ctr[0] = 0
+                    ctr[1] = 0
+                    dfs(p, q, rr, n, ctr)
+                    if p < q {
+                        ord[k] = ord[k] + 2 * ctr[0]
+                    } else {
+                        ord[k] = ord[k] + ctr[0]
+                        eqc[k] = eqc[k] + ctr[1]
+                    }
+                }
+                rr = rr + 1
+            }
+        }
+    }
+
+    let mut ans: i64 = 0
+    for k in 0..(kmax + 1) {
+        ans = ans + (ord[k] + eqc[k]) / 2
+    }
+    printf("%lld\n", ans)
+    free(ord as ptr<void>)
+    free(eqc as ptr<void>)
+    free(ctr as ptr<void>)
+    return 0
+}

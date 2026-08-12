@@ -1,0 +1,11 @@
+# Project Euler 979
+# Hyperbolic frog on {7,3} heptagon tiling: F(20).
+
+extern {
+    function p979_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p979_native())
+    return 0
+}

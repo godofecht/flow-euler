@@ -1,0 +1,8 @@
+extern {
+    function p913_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p913_native())
+    return 0
+}

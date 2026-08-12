@@ -1,0 +1,8 @@
+extern {
+    function p874_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p874_native())
+    return 0
+}

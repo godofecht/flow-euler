@@ -1,0 +1,11 @@
+# Project Euler 915
+# Giant GCDs: T(10^8) mod 123456789.
+
+extern {
+    function p915_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p915_native())
+    return 0
+}

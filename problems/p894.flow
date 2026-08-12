@@ -1,0 +1,11 @@
+# Project Euler 894
+# Spiral of Circles: total area of curvilinear triangles in a self-similar spiral.
+
+extern {
+    function p894_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.10f\n", p894_native())
+    return 0
+}

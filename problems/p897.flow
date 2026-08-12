@@ -1,0 +1,8 @@
+extern {
+    function p897_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.9f\n", p897_native())
+    return 0
+}

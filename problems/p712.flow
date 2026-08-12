@@ -1,0 +1,96 @@
+# Project Euler 712: Exponent Difference
+# S(N) = sum over pairs (n, m) <= N of sum_p |nu_p(n) - nu_p(m)|.
+# Per prime p the class counts are c_r = N/p^r - N/p^(r+1); the contribution
+# is sum_{r<s} 2 c_r c_s (s - r). Primes up to sqrt(N) are handled directly;
+# larger primes have exponent 0 or 1 and are grouped by q = N/p using a
+# Lucy_Hedgehog prime counting sieve. N = 10^12, answer mod 1e9+7.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function main() -> i32 {
+    let N: i64 = 1000000000000
+    let r: i64 = 1000000
+
+    # Lucy_Hedgehog: small[i] = pi(i), large[i] = pi(N / i)
+    let small: ptr<i64> = calloc(r + 1, 8)
+    let large: ptr<i64> = calloc(r + 1, 8)
+    for i in 1..(r + 1) {
+        small[i] = i - 1
+        large[i] = N / i - 1
+    }
+
+    for p in 2..(r + 1) {
+        if small[p] > small[p - 1] {
+            let sp: i64 = small[p - 1]
+            let p2: i64 = p * p
+            let mut imax: i64 = N / p2
+            if imax > r { imax = r }
+            for i in 1..(imax + 1) {
+                let d: i64 = i * p
+                if d <= r {
+                    large[i] = large[i] - (large[d] - sp)
+                } else {
+                    large[i] = large[i] - (small[N / d] - sp)
+                }
+            }
+            let mut j: i64 = r
+            while j >= p2 {
+                small[j] = small[j] - (small[j / p] - sp)
+                j = j - 1
+            }
+        }
+    }
+
+    let mut total: i64 = 0
+    let cs: ptr<i64> = calloc(64, 8)
+
+    # Small primes p <= sqrt(N): full exponent distribution
+    for p in 2..(r + 1) {
+        if small[p] > small[p - 1] {
+            let mut k: i64 = 0
+            let mut pk: i64 = 1
+            while pk <= N {
+                cs[k] = N / pk - N / (pk * p)
+                k = k + 1
+                pk = pk * p
+            }
+            for a in 0..k {
+                for b in (a + 1)..k {
+                    let mut t: i128 = (cs[a] as i128) * (cs[b] as i128) % (MOD as i128)
+                    t = t * ((2 * (b - a)) as i128) % (MOD as i128)
+                    total = (total + t as i64) % MOD
+                }
+            }
+        }
+    }
+
+    # Large primes p in (sqrt(N), N]: exponent 0 or 1, contribution 2*q*(N-q)
+    # per prime where q = N / p. Group primes by q via the pi tables.
+    let mut prev: i64 = small[r]
+    let mut plo: i64 = r + 1
+    while plo <= N {
+        let q: i64 = N / plo
+        let phi: i64 = N / q
+        let cp: i64 = large[q]
+        let cnt: i64 = cp - prev
+        if cnt > 0 {
+            let mut t: i128 = ((2 * q) as i128) * ((N - q) as i128) % (MOD as i128)
+            t = t * (cnt as i128) % (MOD as i128)
+            total = (total + t as i64) % MOD
+        }
+        prev = cp
+        plo = phi + 1
+    }
+
+    printf("%lld\n", total)
+
+    free(cs)
+    free(large)
+    free(small)
+    return 0
+}

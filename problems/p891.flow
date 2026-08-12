@@ -1,0 +1,11 @@
+# Project Euler 891
+# Ambiguous Clock — count indistinguishable hand configurations.
+
+extern {
+    function p891_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p891_native())
+    return 0
+}

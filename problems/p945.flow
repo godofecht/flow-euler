@@ -1,0 +1,12 @@
+# Project Euler 945
+# XOR-Equation C — GF(2) polynomial arithmetic (native).
+# Companion: problems/native/p945.c
+
+extern {
+    function p945_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p945_native())
+    return 0
+}

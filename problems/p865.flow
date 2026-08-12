@@ -1,0 +1,11 @@
+# Project Euler 865
+# Triplicate Numbers - T(10^4) mod 998244353.
+
+extern {
+    function p865_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p865_native())
+    return 0
+}

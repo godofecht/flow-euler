@@ -1,0 +1,11 @@
+# Project Euler 886
+# Coprime Permutations: P(34) mod 83456729.
+
+extern {
+    function p886_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p886_native())
+    return 0
+}

@@ -1,0 +1,11 @@
+# Project Euler 875
+# Quadruple Congruence: Q(12345678) mod 1001961001.
+
+extern {
+    function p875_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p875_native())
+    return 0
+}

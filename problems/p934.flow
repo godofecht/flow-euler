@@ -1,0 +1,12 @@
+# Project Euler 934
+# Unlucky Primes — CRT residue construction (native).
+# Companion: problems/native/p934.c
+
+extern {
+    function p934_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p934_native())
+    return 0
+}

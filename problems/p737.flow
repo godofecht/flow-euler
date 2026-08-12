@@ -1,0 +1,71 @@
+# Project Euler 737: Coin Loops
+# Coins of radius 1 touch a vertical line, each resting on the one below,
+# and the stack must stay balanced. Build the stack from the top down: the
+# centre of mass of the top m coins (mean of m unit vectors around the line)
+# must lie within distance 1 of the next coin's centre, so the next coin can
+# advance at most acos(rho/2) past the CoM direction, where rho = |W|/m.
+# Greedily take that maximum each step (verified optimal against a nonlinear
+# solver on small stacks; reproduces the given values 31, 154, 6947).
+# All angles are kept O(1): the bottom coin's geometric angle is psi - delta,
+# and the total winding is accumulated with Kahan compensation to avoid the
+# systematic drift a large unwrapped angle accumulator suffers over 7.6e8
+# steps. Stop at the first coin count whose winding exceeds 2*pi*2020.
+
+extern {
+    function sqrt(x: f64) -> f64
+    function atan2(y: f64, x: f64) -> f64
+    function acos(x: f64) -> f64
+    function cos(x: f64) -> f64
+    function sin(x: f64) -> f64
+    function fmod(x: f64, y: f64) -> f64
+}
+
+function main() -> i32 {
+    let pi: f64 = 3.14159265358979323846
+    let twopi: f64 = 2.0 * pi
+    let target: f64 = twopi * 2020.0
+
+    let mut b: f64 = 0.0
+    let mut wx: f64 = 1.0
+    let mut wy: f64 = 0.0
+    let mut wxc: f64 = 0.0
+    let mut wyc: f64 = 0.0
+    let mut span: f64 = 0.0
+    let mut spanc: f64 = 0.0
+    let mut m: i64 = 1
+
+    while span <= target {
+        let rho: f64 = sqrt(wx * wx + wy * wy) / (m as f64)
+        let psi: f64 = atan2(wy, wx)
+        let delta: f64 = acos(rho / 2.0)
+        let mut theta: f64 = fmod(b - psi + delta, twopi)
+        if theta < 0.0 {
+            theta = theta + twopi
+        }
+
+        let ys: f64 = theta - spanc
+        let ts: f64 = span + ys
+        spanc = (ts - span) - ys
+        span = ts
+
+        b = psi - delta
+        if b <= 0.0 - pi {
+            b = b + twopi
+        }
+
+        let yx: f64 = cos(b) - wxc
+        let tx: f64 = wx + yx
+        wxc = (tx - wx) - yx
+        wx = tx
+
+        let yy: f64 = sin(b) - wyc
+        let ty: f64 = wy + yy
+        wyc = (ty - wy) - yy
+        wy = ty
+
+        m = m + 1
+    }
+
+    printf("%lld\n", m)
+    return 0
+}

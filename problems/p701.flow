@@ -1,0 +1,310 @@
+# Project Euler 701: Random connected area
+# Expected maximum connected black area in a 7x7 grid where each unit cell is
+# black with probability 1/2. Cell-by-cell frontier DP: each state stores the
+# frontier's canonical component labels (at most 4 live components on a width-7
+# frontier), the exact size of every live component, and the largest size among
+# components already closed off. States pack into one i64 key held in an
+# open-addressing hash table with exact integer configuration counts.
+# Answer = sum(max_area * count) / 2^49.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Open-addressing insert. Keys are stored as key+1 so 0 means empty.
+function insert(k: ptr<i64>, v: ptr<i64>, key: i64, cnt: i64) -> void {
+    let mut i: i64 = key % 4194301
+    let mut done: i64 = 0
+    while done == 0 {
+        if k[i] == 0 {
+            k[i] = key + 1
+            v[i] = cnt
+            done = 1
+        } else {
+            if k[i] == key + 1 {
+                v[i] = v[i] + cnt
+                done = 1
+            } else {
+                i = i + 1
+                if i == 4194304 {
+                    i = 0
+                }
+            }
+        }
+    }
+}
+
+# Canonicalise labels by first appearance, normalise the dead maximum,
+# pack the state into a key and add it to table B.
+function canon_insert(g: ptr<i64>, t: ptr<i64>, nc: i64, d: i64,
+                      mp: ptr<i64>, t2: ptr<i64>,
+                      kb: ptr<i64>, vb: ptr<i64>, cnt: i64) -> void {
+    let mut l: i64 = 0
+    while l <= 7 {
+        mp[l] = 0
+        l = l + 1
+    }
+    let mut nxt: i64 = 0
+    let mut j: i64 = 0
+    while j < 7 {
+        let lab: i64 = g[j]
+        if lab > 0 {
+            if mp[lab] == 0 {
+                nxt = nxt + 1
+                mp[lab] = nxt
+            }
+            g[j] = mp[lab]
+        }
+        j = j + 1
+    }
+    let mut i: i64 = 0
+    while i < 4 {
+        t2[i] = 0
+        i = i + 1
+    }
+    l = 1
+    while l <= nc {
+        t2[mp[l] - 1] = t[l - 1]
+        l = l + 1
+    }
+    let mut maxlive: i64 = 0
+    i = 0
+    while i < 4 {
+        if t2[i] > maxlive {
+            maxlive = t2[i]
+        }
+        i = i + 1
+    }
+    # A live component only grows until it dies, so a dead maximum that does
+    # not exceed the current best live size can never decide the answer.
+    let mut dd: i64 = d
+    if dd <= maxlive {
+        dd = 0
+    }
+    let mut labs: i64 = 0
+    j = 6
+    while j >= 0 {
+        labs = labs * 8 + g[j]
+        j = j - 1
+    }
+    let mut sz: i64 = 0
+    i = 3
+    while i >= 0 {
+        sz = sz * 64 + t2[i]
+        i = i - 1
+    }
+    let key: i64 = (labs * 16777216 + sz) * 64 + dd
+    insert(kb, vb, key, cnt)
+}
+
+function solve(w: i64, h: i64) -> f64 {
+    let cap: i64 = 4194304
+    let mut ka: ptr<i64> = calloc(cap, 8)
+    let mut va: ptr<i64> = calloc(cap, 8)
+    let mut kb: ptr<i64> = calloc(cap, 8)
+    let mut vb: ptr<i64> = calloc(cap, 8)
+    let f: ptr<i64> = calloc(8, 8)
+    let s: ptr<i64> = calloc(8, 8)
+    let g: ptr<i64> = calloc(8, 8)
+    let t: ptr<i64> = calloc(8, 8)
+    let mp: ptr<i64> = calloc(8, 8)
+    let t2: ptr<i64> = calloc(8, 8)
+
+    insert(ka, va, 0, 1)
+
+    let cells: i64 = w * h
+    for idx in 0..cells {
+        let c: i64 = idx % w
+        let mut slot: i64 = 0
+        while slot < cap {
+            kb[slot] = 0
+            slot = slot + 1
+        }
+        slot = 0
+        while slot < cap {
+            if ka[slot] != 0 {
+                let key: i64 = ka[slot] - 1
+                let cnt: i64 = va[slot]
+                let d: i64 = key % 64
+                let mut rest: i64 = key / 64
+                let mut nc: i64 = 0
+                let mut i: i64 = 0
+                while i < 4 {
+                    s[i] = rest % 64
+                    if s[i] > 0 {
+                        nc = nc + 1
+                    }
+                    rest = rest / 64
+                    i = i + 1
+                }
+                let mut j: i64 = 0
+                while j < 7 {
+                    f[j] = rest % 8
+                    rest = rest / 8
+                    j = j + 1
+                }
+                let up: i64 = f[c]
+                let mut left: i64 = 0
+                if c > 0 {
+                    left = f[c - 1]
+                }
+
+                # Transition 1: current cell white.
+                j = 0
+                while j < 7 {
+                    g[j] = f[j]
+                    j = j + 1
+                }
+                g[c] = 0
+                i = 0
+                while i < 4 {
+                    t[i] = s[i]
+                    i = i + 1
+                }
+                let mut d2: i64 = d
+                let mut nc2: i64 = nc
+                if up > 0 {
+                    let mut found: i64 = 0
+                    j = 0
+                    while j < 7 {
+                        if g[j] == up {
+                            found = 1
+                        }
+                        j = j + 1
+                    }
+                    if found == 0 {
+                        # Component up left the frontier: it is finished.
+                        if t[up - 1] > d2 {
+                            d2 = t[up - 1]
+                        }
+                        i = up - 1
+                        while i < 3 {
+                            t[i] = t[i + 1]
+                            i = i + 1
+                        }
+                        t[3] = 0
+                        j = 0
+                        while j < 7 {
+                            if g[j] > up {
+                                g[j] = g[j] - 1
+                            }
+                            j = j + 1
+                        }
+                        nc2 = nc2 - 1
+                    }
+                }
+                canon_insert(g, t, nc2, d2, mp, t2, kb, vb, cnt)
+
+                # Transition 2: current cell black.
+                j = 0
+                while j < 7 {
+                    g[j] = f[j]
+                    j = j + 1
+                }
+                i = 0
+                while i < 4 {
+                    t[i] = s[i]
+                    i = i + 1
+                }
+                nc2 = nc
+                if up == 0 && left == 0 {
+                    nc2 = nc2 + 1
+                    t[nc2 - 1] = 1
+                    g[c] = nc2
+                } else {
+                    if up > 0 && left > 0 && up != left {
+                        # Merge the two neighbouring components.
+                        let mut l1: i64 = up
+                        let mut l2: i64 = left
+                        if l1 > l2 {
+                            l1 = left
+                            l2 = up
+                        }
+                        t[l1 - 1] = t[l1 - 1] + t[l2 - 1] + 1
+                        i = l2 - 1
+                        while i < 3 {
+                            t[i] = t[i + 1]
+                            i = i + 1
+                        }
+                        t[3] = 0
+                        j = 0
+                        while j < 7 {
+                            if g[j] == l2 {
+                                g[j] = l1
+                            } else {
+                                if g[j] > l2 {
+                                    g[j] = g[j] - 1
+                                }
+                            }
+                            j = j + 1
+                        }
+                        g[c] = l1
+                        nc2 = nc2 - 1
+                    } else {
+                        let mut lab: i64 = up
+                        if lab == 0 {
+                            lab = left
+                        }
+                        t[lab - 1] = t[lab - 1] + 1
+                        g[c] = lab
+                    }
+                }
+                canon_insert(g, t, nc2, d, mp, t2, kb, vb, cnt)
+            }
+            slot = slot + 1
+        }
+        let tk: ptr<i64> = ka
+        ka = kb
+        kb = tk
+        let tv: ptr<i64> = va
+        va = vb
+        vb = tv
+    }
+
+    let mut total: i64 = 0
+    let mut slot2: i64 = 0
+    while slot2 < cap {
+        if ka[slot2] != 0 {
+            let key: i64 = ka[slot2] - 1
+            let cnt: i64 = va[slot2]
+            let mut best: i64 = key % 64
+            let mut rest: i64 = key / 64
+            let mut i: i64 = 0
+            while i < 4 {
+                let sz: i64 = rest % 64
+                if sz > best {
+                    best = sz
+                }
+                rest = rest / 64
+                i = i + 1
+            }
+            total = total + best * cnt
+        }
+        slot2 = slot2 + 1
+    }
+
+    let mut denom: f64 = 1.0
+    let mut e: i64 = 0
+    while e < cells {
+        denom = denom * 2.0
+        e = e + 1
+    }
+
+    free(ka)
+    free(va)
+    free(kb)
+    free(vb)
+    free(f)
+    free(s)
+    free(g)
+    free(t)
+    free(mp)
+    free(t2)
+    return (total as f64) / denom
+}
+
+function main() -> i32 {
+    printf("%.8f\n", solve(7, 7))
+    return 0
+}

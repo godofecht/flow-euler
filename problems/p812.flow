@@ -1,0 +1,11 @@
+# Project Euler 812
+# Dynamical Polynomials — NTT-based polynomial exp/ln (native C).
+
+extern {
+    function p812_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p812_native())
+    return 0
+}

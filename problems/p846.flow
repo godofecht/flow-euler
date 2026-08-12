@@ -1,0 +1,11 @@
+# Project Euler 846
+# Magic Bracelets - F(10^6).
+
+extern {
+    function p846_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p846_native())
+    return 0
+}

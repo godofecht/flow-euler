@@ -1,0 +1,8 @@
+extern {
+    function p910_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p910_native())
+    return 0
+}

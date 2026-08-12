@@ -1,0 +1,106 @@
+# Project Euler 736
+# Paths to equality: r(x,y) = (x+1, 2y), s(x,y) = (2x, y+1). Starting from
+# (45,90), find the final value of the unique path to equality of smallest
+# odd length (coordinates unequal at every point before the last).
+#
+# Method: a word with R r-ops and S s-ops, written as m_0 r's, s, m_1 r's,
+# s, ..., s, m_S r's, gives
+#   x_final = 45*2^S + sum_j m_j * 2^(S-j)
+#   y_final = 90*2^R + sum_{j=1..S} 2^(R - (m_0+...+m_{j-1}))
+# Odd path length n = R+S+1 forces R+S even, and writing the equality as
+# (45+A)*2^S = (90+B)*2^R with A = sum m_j 2^-j <= R and B <= S shows:
+# R-S >= 2 needs R >= 136 (n >= 271), R-S <= -2 needs S >= 91 (n >= 181),
+# so the minimum comes from R = S, where x_final = y_final becomes
+#   sum_j m_j * 2^(S-j) - sum_j 2^(m_{j}+...+m_S ... ) = 45*2^S
+# i.e. X - Y = 45*2^S. A depth-first search over the compositions m_0..m_S
+# with interval pruning finds the smallest S with a valid word (checking the
+# no-early-equality condition by simulation). The same search with R = S-1
+# reproduces the stated example: length 10, final value 1476. First odd
+# solution: S = R = 48, length 97, unique.
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Simulate the word given by gaps m[0..S] (R = S), verify coordinates stay
+# unequal until the final point and equal there. Returns final value or -1.
+function check(m: ptr<i64>, S: i64) -> i64 {
+    let mut x: i64 = 45
+    let mut y: i64 = 90
+    let total: i64 = 2 * S
+    let mut done: i64 = 0
+    for j in 0..S+1 {
+        for t in 0..m[j] {
+            x = x + 1
+            y = y * 2
+            done = done + 1
+            if done < total && x == y {
+                return -1
+            }
+        }
+        if j < S {
+            x = x * 2
+            y = y + 1
+            done = done + 1
+            if done < total && x == y {
+                return -1
+            }
+        }
+    }
+    if x == y {
+        return x
+    }
+    return -1
+}
+
+# DFS over gap counts m[j], j = 0..S, with R = S r-ops in total.
+# diff = (partial X) - (partial Y); need diff == target at the end.
+# The y-term added when placing m_j is 2^(remaining r's after this gap).
+function dfs(j: i64, rem: i64, diff: i64, S: i64, target: i64,
+             m: ptr<i64>, p2: ptr<i64>) -> i64 {
+    if j == S {
+        m[S] = rem
+        if diff + rem == target {
+            return check(m, S)
+        }
+        return -1
+    }
+    let w: i64 = p2[S - j]
+    let t: i64 = S - j - 1
+    for mj in 0..rem+1 {
+        let rem2: i64 = rem - mj
+        let nd: i64 = diff + mj * w - p2[rem2]
+        # Remaining X in [rem2, rem2*2^(S-j-1)], remaining Y in [t, t*2^rem2]
+        let lo: i64 = nd + rem2 - t * p2[rem2]
+        let hi: i64 = nd + rem2 * p2[S - j - 1] - t
+        if lo <= target && target <= hi {
+            m[j] = mj
+            let v: i64 = dfs(j + 1, rem2, nd, S, target, m, p2)
+            if v >= 0 {
+                return v
+            }
+        }
+    }
+    return -1
+}
+
+function main() -> i32 {
+    let p2: ptr<i64> = calloc(64, 8)
+    p2[0] = 1
+    for i in 1..54 {
+        p2[i] = p2[i - 1] * 2
+    }
+    let m: ptr<i64> = calloc(64, 8)
+    let mut ans: i64 = -1
+    let mut S: i64 = 1
+    while S <= 52 && ans < 0 {
+        let target: i64 = 45 * p2[S]
+        ans = dfs(0, S, 0, S, target, m, p2)
+        S = S + 1
+    }
+    printf("%lld\n", ans)
+    free(m)
+    free(p2)
+    return 0
+}

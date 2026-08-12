@@ -1,0 +1,12 @@
+# Project Euler 929
+# Odd-Run Compositions — native C solver (FFT-based polynomial inversion).
+# Companion: problems/native/p929.c
+
+extern {
+    function p929_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p929_native())
+    return 0
+}

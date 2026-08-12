@@ -1,0 +1,11 @@
+# Project Euler 995
+# S(p) product over primes < 20000, needs MPFR for large exponent.
+
+extern {
+    function p995_print()
+}
+
+function main() -> i32 {
+    p995_print()
+    return 0
+}

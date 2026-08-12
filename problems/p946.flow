@@ -1,0 +1,12 @@
+# Project Euler 946
+# Continued Fraction Fraction — native C solver (FST + binary lifting).
+# Companion: problems/native/p946.c
+
+extern {
+    function p946_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p946_native())
+    return 0
+}

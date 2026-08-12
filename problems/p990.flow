@@ -1,0 +1,11 @@
+# Project Euler 990
+# Digit equations - DP over decimal columns with signed carry.
+
+extern {
+    function p990_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p990_native())
+    return 0
+}

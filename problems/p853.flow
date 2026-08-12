@@ -1,0 +1,11 @@
+# Project Euler 853
+# Pisano Periods - sum of n <= 10^9 with pi(n) = 120.
+
+extern {
+    function p853_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p853_native())
+    return 0
+}

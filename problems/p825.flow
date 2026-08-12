@@ -1,0 +1,12 @@
+# Project Euler 825
+# Chasing Game - T(10^14) rounded to 8 decimal places.
+# Real solver in native/p825.c.
+
+extern {
+    function p825_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.8f\n", p825_native())
+    return 0
+}

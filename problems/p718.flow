@@ -1,0 +1,85 @@
+# Project Euler 718: Unreachable Numbers
+# n = 17^p*a + 19^p*b + 23^p*c with a,b,c >= 1 is reachable iff
+# n - s lies in the numerical semigroup S = <17^p, 19^p, 23^p>,
+# where s = 17^p + 19^p + 23^p. So G(p) = sum(1..s-1) plus, for each
+# gap m of S, the value s + m. Gaps come from the Apery set of S
+# modulo x = 17^p, computed with the Bocker-Liptak round-robin
+# algorithm: one cyclic relaxation pass per remaining generator
+# (valid here since the generators are pairwise coprime).
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function ipow(b: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    for i in 0..e {
+        r = r * b
+    }
+    return r
+}
+
+function solve(p: i64, m: i64) -> i64 {
+    let x: i64 = ipow(17, p)
+    let y: i64 = ipow(19, p)
+    let z: i64 = ipow(23, p)
+
+    # ap[r] = smallest element of S congruent to r mod x
+    let ap: ptr<i64> = calloc(x, 8)
+    if ap == null {
+        return -1
+    }
+    let inf: i64 = 4000000000000000000
+    for i in 1..x {
+        ap[i] = inf
+    }
+    ap[0] = 0
+
+    # Round-robin pass for generator y, then z. Start each cycle at
+    # residue 0, whose value 0 is the global minimum.
+    let mut r: i64 = 0
+    for i in 0..x {
+        let nr: i64 = (r + y) % x
+        let cand: i64 = ap[r] + y
+        if cand < ap[nr] {
+            ap[nr] = cand
+        }
+        r = nr
+    }
+    r = 0
+    for i in 0..x {
+        let nr: i64 = (r + z) % x
+        let cand: i64 = ap[r] + z
+        if cand < ap[nr] {
+            ap[nr] = cand
+        }
+        r = nr
+    }
+
+    # Sum unreachable values modulo m. All n in 1..s-1 are unreachable,
+    # then one unreachable value s + gap per gap of S. Residue class rr
+    # contributes gaps rr, rr + x, ..., ap[rr] - x.
+    let s: i64 = x + y + z
+    let mut total: i64 = (s % m) * ((s - 1) % m) % m
+    let inv2: i64 = (m + 1) / 2
+    total = total * inv2 % m
+    for rr in 0..x {
+        let k: i64 = (ap[rr] - rr) / x
+        if k > 0 {
+            let tri: i64 = k * (k - 1) / 2
+            let big: i128 = ((x as i128) * (tri as i128)) % (m as i128)
+            let mut term: i64 = ((k % m) * (s % m)) % m
+            term = (term + ((k % m) * (rr % m)) % m) % m
+            term = (term + (big as i64)) % m
+            total = (total + term) % m
+        }
+    }
+    free(ap)
+    return total
+}
+
+function main() -> i32 {
+    printf("%lld\n", solve(6, 1000000007))
+    return 0
+}

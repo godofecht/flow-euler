@@ -1,0 +1,11 @@
+# Project Euler 991
+# Equation a/(b+c) + b/(c+a) + c/(a+c) = 4
+
+extern {
+    function p991_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p991_native())
+    return 0
+}

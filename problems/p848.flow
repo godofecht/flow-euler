@@ -1,0 +1,11 @@
+# Project Euler 848
+# Guessing with Sets - sum of p(7^i, 5^j) for i,j=0..20, rounded to 8 decimals.
+
+extern {
+    function p848_native() -> f64
+}
+
+function main() -> i32 {
+    printf("%.8f\n", p848_native())
+    return 0
+}

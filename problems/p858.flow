@@ -1,0 +1,11 @@
+# Project Euler 858
+# LCM - G(800) mod 1e9+7.
+
+extern {
+    function p858_native() -> i64
+}
+
+function main() -> i32 {
+    printf("%lld\n", p858_native())
+    return 0
+}
