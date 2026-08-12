@@ -10,31 +10,52 @@ const P: i64 = 137
 const SMAX: i64 = 12
 const CAP: i64 = 65536
 
-function modpow(b0: i64, e0: i64, mod: i64) -> i64 {
-    let mut r: i64 = 1
-    let mut b: i64 = b0 % mod
+function mulmod(a: i128, b: i128, mod: i128) -> i128 {
+    let mut result: i128 = 0
+    let mut x: i128 = a % mod
+    if x < 0 { x = x + mod }
+    let mut y: i128 = b % mod
+    if y < 0 { y = y + mod }
+    while y > 0 {
+        if (y & 1) != 0 {
+            result = result + x
+            if result >= mod { result = result - mod }
+        }
+        x = x + x
+        if x >= mod { x = x - mod }
+        y = y >> 1
+    }
+    return result
+}
+
+function modpow(b0: i128, e0: i64, mod: i128) -> i128 {
+    let mut r: i128 = 1
+    let mut b: i128 = b0 % mod
+    if b < 0 { b = b + mod }
     let mut e: i64 = e0
     while e > 0 {
-        if (e & 1) != 0 { r = ((r as i128) * (b as i128) % (mod as i128)) as i64 }
-        b = ((b as i128) * (b as i128) % (mod as i128)) as i64
+        if (e & 1) != 0 { r = mulmod(r, b, mod) }
+        b = mulmod(b, b, mod)
         e = e >> 1
     }
     return r
 }
 
-function inv_mod(a0: i64, mod: i64) -> i64 {
-    let mut a: i64 = a0 % mod
+function inv_mod(a0: i128, mod: i128) -> i128 {
+    let mut a: i128 = a0 % mod
     if a < 0 { a = a + mod }
-    let mut t: i64 = 0
-    let mut newt: i64 = 1
-    let mut r: i64 = mod
-    let mut newr: i64 = a
+    let mut t: i128 = 0
+    let mut newt: i128 = 1
+    let mut r: i128 = mod
+    let mut newr: i128 = a
     while newr != 0 {
-        let q: i64 = r / newr
-        let tt: i64 = newt
-        newt = t - q * newt
+        let q: i128 = r / newr
+        let tt: i128 = newt
+        let prod: i128 = mulmod(q, newt, mod)
+        newt = t - prod
+        if newt < 0 { newt = newt + mod }
         t = tt
-        let rr: i64 = newr
+        let rr: i128 = newr
         newr = r - q * newr
         r = rr
     }
@@ -43,7 +64,7 @@ function inv_mod(a0: i64, mod: i64) -> i64 {
     return t
 }
 
-function ipow_mod(b: i64, e: i64) -> i64 {
+function ipow_mod(b: i64, e: i64) -> i128 {
     let mut r: i128 = 1 as i128
     let mut base: i128 = b as i128
     let mut exp: i64 = e
@@ -52,7 +73,7 @@ function ipow_mod(b: i64, e: i64) -> i64 {
         base = base * base
         exp = exp >> 1
     }
-    return r as i64
+    return r
 }
 
 function hslot(k: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
@@ -66,14 +87,14 @@ function hslot(k: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
 }
 
 function pow_sum(m: i64, q: i64, s: i64,
-                 binom: ptr<i64>, prefix: ptr<i64>, digit: ptr<i64>,
-                 pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>) -> i64 {
+                 binom: ptr<i64>, prefix: ptr<i128>, digit: ptr<i128>,
+                 pk: ptr<i64>, pv: ptr<i128>, pu: ptr<i8>) -> i128 {
     if q <= 0 { return 0 }
     let key: i64 = m * 100000 + q * 100 + s
     let slot: i64 = hslot(key, pk, pu)
     if pu[slot] == 1 { return pv[slot] }
-    let modv: i64 = ipow_mod(P, s)
-    let mut res: i64 = 0
+    let modv: i128 = ipow_mod(P, s)
+    let mut res: i128 = 0
     if q <= P {
         res = prefix[q * (SMAX + 1) + m] % modv
     } else {
@@ -81,20 +102,24 @@ function pow_sum(m: i64, q: i64, s: i64,
         let R: i64 = q % P
         let mut t: i64 = 0
         while t <= m {
-            let term: i128 = (binom[m * (SMAX + 1) + t] as i128)
-                * (modpow(P, t, modv) as i128)
-                * (pow_sum(t, Q, s, binom, prefix, digit, pk, pv, pu) as i128)
-                * (digit[m - t] as i128)
-            res = (res + (term % (modv as i128)) as i64) % modv
+            let term: i128 = mulmod(mulmod(mulmod(
+                binom[m * (SMAX + 1) + t] as i128,
+                modpow(P as i128, t, modv), modv),
+                pow_sum(t, Q, s, binom, prefix, digit, pk, pv, pu), modv),
+                digit[m - t], modv)
+            res = res + term
+            if res >= modv { res = res - modv }
             t = t + 1
         }
-        let base: i64 = (Q * P) % modv
+        let base: i128 = ((Q as i128) * (P as i128)) % modv
         t = 0
         while t <= m {
-            let term: i128 = (binom[m * (SMAX + 1) + t] as i128)
-                * (modpow(base, t, modv) as i128)
-                * (prefix[R * (SMAX + 1) + (m - t)] as i128)
-            res = (res + (term % (modv as i128)) as i64) % modv
+            let term: i128 = mulmod(mulmod(
+                binom[m * (SMAX + 1) + t] as i128,
+                modpow(base, t, modv), modv),
+                prefix[R * (SMAX + 1) + (m - t)], modv)
+            res = res + term
+            if res >= modv { res = res - modv }
             t = t + 1
         }
     }
@@ -104,16 +129,17 @@ function pow_sum(m: i64, q: i64, s: i64,
     return res
 }
 
-function get_cm(s: i64, m: i64, ck: ptr<i64>, cv: ptr<i64>, cu: ptr<i8>) -> i64 {
+function get_cm(s: i64, m: i64, ck: ptr<i64>, cv: ptr<i128>, cu: ptr<i8>) -> i128 {
     let key: i64 = s * 100 + m
     let slot: i64 = hslot(key, ck, cu)
     if cu[slot] == 1 { return cv[slot] }
-    let modv: i64 = ipow_mod(P, s)
-    let mut sm: i64 = 0
+    let modv: i128 = ipow_mod(P, s)
+    let mut sm: i128 = 0
     let mut j: i64 = 1
     while j < P {
-        let invj: i64 = inv_mod(j, modv)
-        sm = (sm + modpow(invj, m + 1, modv)) % modv
+        let invj: i128 = inv_mod(j as i128, modv)
+        sm = sm + modpow(invj, m + 1, modv)
+        if sm >= modv { sm = sm - modv }
         j = j + 1
     }
     cu[slot] = 1
@@ -123,26 +149,27 @@ function get_cm(s: i64, m: i64, ck: ptr<i64>, cv: ptr<i64>, cu: ptr<i8>) -> i64 
 }
 
 function unit_inverse_sum(N: i64, s: i64,
-                          binom: ptr<i64>, prefix: ptr<i64>, digit: ptr<i64>,
-                          pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>,
-                          ck: ptr<i64>, cv: ptr<i64>, cu: ptr<i8>,
-                          uk: ptr<i64>, uv: ptr<i64>, uu: ptr<i8>) -> i64 {
+                          binom: ptr<i64>, prefix: ptr<i128>, digit: ptr<i128>,
+                          pk: ptr<i64>, pv: ptr<i128>, pu: ptr<i8>,
+                          ck: ptr<i64>, cv: ptr<i128>, cu: ptr<i8>,
+                          uk: ptr<i64>, uv: ptr<i128>, uu: ptr<i8>) -> i128 {
     if N <= 0 { return 0 }
     let key: i64 = N * 20 + s
     let slot: i64 = hslot(key % CAP, uk, uu)
     if uu[slot] == 1 && uk[slot] == key { return uv[slot] }
-    let modv: i64 = ipow_mod(P, s)
+    let modv: i128 = ipow_mod(P, s)
     let q: i64 = N / P
     let r: i64 = N % P
-    let mut total: i64 = 0
+    let mut total: i128 = 0
     if q > 0 {
         let mut m: i64 = 0
         while m < s {
-            let Sm: i64 = pow_sum(m, q, s, binom, prefix, digit, pk, pv, pu)
-            let mut term: i64 = ((modpow(P, m, modv) as i128) * (Sm as i128) % (modv as i128)) as i64
-            term = ((term as i128) * (get_cm(s, m, ck, cv, cu) as i128) % (modv as i128)) as i64
-            if (m & 1) != 0 { term = (modv - term) % modv }
-            total = (total + term) % modv
+            let Sm: i128 = pow_sum(m, q, s, binom, prefix, digit, pk, pv, pu)
+            let mut term: i128 = mulmod(modpow(P as i128, m, modv), Sm, modv)
+            term = mulmod(term, get_cm(s, m, ck, cv, cu), modv)
+            if (m & 1) != 0 { term = modv - term; if term >= modv { term = 0 } }
+            total = total + term
+            if total >= modv { total = total - modv }
             m = m + 1
         }
     }
@@ -150,7 +177,8 @@ function unit_inverse_sum(N: i64, s: i64,
     let mut j: i64 = 1
     while j <= r {
         if j % P != 0 {
-            total = (total + inv_mod(base + j, modv)) % modv
+            total = total + inv_mod((base + j) as i128, modv)
+            if total >= modv { total = total - modv }
         }
         j = j + 1
     }
@@ -161,23 +189,24 @@ function unit_inverse_sum(N: i64, s: i64,
 }
 
 function V_val(e: i64, m: i64, mp: i64,
-               binom: ptr<i64>, prefix: ptr<i64>, digit: ptr<i64>,
-               pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>,
-               ck: ptr<i64>, cv: ptr<i64>, cu: ptr<i8>,
-               uk: ptr<i64>, uv: ptr<i64>, uu: ptr<i8>,
-               vk: ptr<i64>, vv: ptr<i64>, vu: ptr<i8>) -> i64 {
+               binom: ptr<i64>, prefix: ptr<i128>, digit: ptr<i128>,
+               pk: ptr<i64>, pv: ptr<i128>, pu: ptr<i8>,
+               ck: ptr<i64>, cv: ptr<i128>, cu: ptr<i8>,
+               uk: ptr<i64>, uv: ptr<i128>, uu: ptr<i8>,
+               vk: ptr<i64>, vv: ptr<i128>, vu: ptr<i8>) -> i128 {
     let key: i64 = e * 1000000000000000 + m * 1000 + mp
     let slot: i64 = hslot(key % CAP, vk, vu)
     if vu[slot] == 1 && vk[slot] == key { return vv[slot] }
-    let modv: i64 = ipow_mod(P, mp)
-    let mut val: i64 = 0
-    let mut div: i64 = 1
+    let modv: i128 = ipow_mod(P, mp)
+    let mut val: i128 = 0
+    let mut div: i128 = 1
     let mut t: i64 = 1
     while t <= e {
-        let coeff: i64 = ipow_mod(P, e - t)
-        let N: i64 = m / div
-        val = (val + coeff * unit_inverse_sum(N, mp, binom, prefix, digit, pk, pv, pu, ck, cv, cu, uk, uv, uu)) % modv
-        div = div * P
+        let coeff: i128 = ipow_mod(P, e - t)
+        let N: i64 = ((m as i128) / div) as i64
+        val = val + mulmod(coeff, unit_inverse_sum(N, mp, binom, prefix, digit, pk, pv, pu, ck, cv, cu, uk, uv, uu), modv)
+        if val >= modv { val = val - modv }
+        div = div * (P as i128)
         t = t + 1
     }
     vu[slot] = 1
@@ -188,8 +217,8 @@ function V_val(e: i64, m: i64, mp: i64,
 
 function main() -> i32 {
     let binom: ptr<i64> = calloc((SMAX + 1) * (SMAX + 1), 8)
-    let prefix: ptr<i64> = calloc((P + 1) * (SMAX + 1), 8)
-    let digit: ptr<i64> = calloc(SMAX + 1, 8)
+    let prefix: ptr<i128> = calloc((P + 1) * (SMAX + 1), 16)
+    let digit: ptr<i128> = calloc(SMAX + 1, 16)
     let ha_cnt: ptr<i64> = calloc(P, 8)
     let ha_dig: ptr<i64> = calloc(P * P, 8)
     if binom == null || prefix == null || digit == null || ha_cnt == null || ha_dig == null { return 1 }
@@ -224,7 +253,7 @@ function main() -> i32 {
     if invs == null || ha == null { return 1 }
     let mut a: i64 = 1
     while a < P {
-        invs[a] = inv_mod(a, P)
+        invs[a] = inv_mod(a as i128, P as i128) as i64
         a = a + 1
     }
     let mut s: i64 = 0
@@ -244,16 +273,16 @@ function main() -> i32 {
         a = a + 1
     }
     let pk: ptr<i64> = calloc(CAP, 8)
-    let pv: ptr<i64> = calloc(CAP, 8)
+    let pv: ptr<i128> = calloc(CAP, 16)
     let pu: ptr<i8> = calloc(CAP, 1)
     let ck: ptr<i64> = calloc(CAP, 8)
-    let cv: ptr<i64> = calloc(CAP, 8)
+    let cv: ptr<i128> = calloc(CAP, 16)
     let cu: ptr<i8> = calloc(CAP, 1)
     let uk: ptr<i64> = calloc(CAP, 8)
-    let uv: ptr<i64> = calloc(CAP, 8)
+    let uv: ptr<i128> = calloc(CAP, 16)
     let uu: ptr<i8> = calloc(CAP, 1)
     let vk: ptr<i64> = calloc(CAP, 8)
-    let vv: ptr<i64> = calloc(CAP, 8)
+    let vv: ptr<i128> = calloc(CAP, 16)
     let vu: ptr<i8> = calloc(CAP, 1)
     let A: ptr<i64> = calloc(4096, 8)
     let An: ptr<i64> = calloc(1, 8)
@@ -283,9 +312,9 @@ function main() -> i32 {
         i = 0
         while i < An[0] {
             let q: i64 = A[i]
-            let val: i64 = V_val(e, q, e + 1, binom, prefix, digit, pk, pv, pu, ck, cv, cu, uk, uv, uu, vk, vv, vu)
-            let pe: i64 = ipow_mod(P, e)
-            let d: i64 = (val / pe) % P
+            let val: i128 = V_val(e, q, e + 1, binom, prefix, digit, pk, pv, pu, ck, cv, cu, uk, uv, uu, vk, vv, vu)
+            let pe: i128 = ipow_mod(P, e)
+            let d: i64 = ((val / pe) % (P as i128)) as i64
             let target: i64 = (P - d) % P
             let mut j: i64 = 0
             while j < ha_cnt[target] {

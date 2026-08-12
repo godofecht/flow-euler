@@ -27,7 +27,7 @@ function main() -> i32 {
     for p in 2..(r + 1) {
         if small[p] > small[p - 1] {
             let sp: i64 = small[p - 1]
-            let p2: i64 = p * p
+            let p2: i64 = (p as i64) * (p as i64)
             let mut imax: i64 = N / p2
             if imax > r { imax = r }
             for i in 1..(imax + 1) {

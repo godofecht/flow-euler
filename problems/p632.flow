@@ -210,7 +210,7 @@ function main() -> i32 {
         if mu[d] != 0 {
             let r: i64 = omega[d] as i64
             if r <= kmax {
-                S[r] = S[r] + N / (d * d)
+                S[r] = S[r] + N / ((d as i64) * (d as i64))
             }
         }
     }

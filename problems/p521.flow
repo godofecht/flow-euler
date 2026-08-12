@@ -12,7 +12,15 @@ const MOD: i64 = 1000000000
 
 function initial_sum(x: i64) -> i64 {
     if x < 2 { return 0 }
-    return (x * (x + 1) / 2 - 1) % MOD
+    # x*(x+1) overflows i64 for x ~ 10^12, so divide the even factor first.
+    let mut a: i64 = x
+    let mut b: i64 = x + 1
+    if a % 2 == 0 {
+        a = a / 2
+    } else {
+        b = b / 2
+    }
+    return (a % MOD * (b % MOD) % MOD - 1 + MOD) % MOD
 }
 
 function main() -> i32 {

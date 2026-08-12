@@ -19,7 +19,7 @@ function main() -> i32 {
     for i in 0..(root + 1) { spf[i] = i }
     for i in 2..(isqrt(root) + 1) {
         if spf[i] == i {
-            let mut j: i64 = i * i
+            let mut j: i64 = (i as i64) * (i as i64)
             while j <= root {
                 if spf[j] == j { spf[j] = i }
                 j = j + i
@@ -71,7 +71,7 @@ function main() -> i32 {
     # Lucy sieve: for each prime p up to sqrt(N)
     for p in 2..(root + 1) {
         if spf[p] != p { continue }
-        let p2: i64 = p * p
+        let p2: i64 = (p as i64) * (p as i64)
         if p2 > N { break }
 
         # k = upper_bound(p2) = number of vals >= p2

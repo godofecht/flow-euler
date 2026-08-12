@@ -63,18 +63,3 @@
 989  slow-30s
 994  slow-41s
 
-# CI-only failures (wrong answer on macos-14 runner, pass locally):
-521  ci-mismatch
-538  ci-mismatch
-541  ci-mismatch
-543  ci-mismatch
-544  ci-mismatch
-550  ci-mismatch
-611  ci-mismatch
-632  ci-mismatch
-636  ci-mismatch
-638  ci-mismatch
-639  ci-mismatch
-642  ci-mismatch
-652  ci-mismatch
-712  ci-mismatch

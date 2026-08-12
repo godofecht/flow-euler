@@ -96,7 +96,7 @@ function main() -> i32 {
         if is_comp[i] == 0 {
             primes[m] = i
             m = m + 1
-            let mut j: i64 = i * i
+            let mut j: i64 = (i as i64) * (i as i64)
             while j <= limit {
                 is_comp[j] = 1
                 j = j + i

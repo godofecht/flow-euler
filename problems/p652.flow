@@ -44,13 +44,13 @@ function primitive_count(x: i64, mu: ptr<i64>) -> i64 {
     let mut K: i64 = 0
     let mut tmp: i64 = x
     while tmp > 1 { K = K + 1; tmp = tmp / 2 }
-    let mut s: i64 = 0
+    let mut s: i128 = 0
     for d in 1..(K + 1) {
         let md: i64 = mu[d]
         if md == 0 { continue }
-        s = s + md * (kth_root(x, d) - 1)
+        s = s + (md as i128) * ((kth_root(x, d) - 1) as i128)
     }
-    return s
+    return s as i64
 }
 
 function main() -> i32 {
@@ -96,7 +96,7 @@ function main() -> i32 {
         }
     }
     let mut phisum: i64 = 0
-    for i in 1..(L + 2) {
+    for i in 1..(L + 1) {
         phisum = phisum + phi[i]
     }
 
@@ -122,30 +122,30 @@ function main() -> i32 {
     }
 
     # T = total ordered primitive pairs with gcd(exp(m),exp(n)) = 1
-    let mut T: i64 = 0
+    let mut T: i128 = 0
     for e in 1..(L + 1) {
         let ce: i64 = count[e]
         if ce == 0 { continue }
         for f in 1..(L + 1) {
             if gcd(e, f) == 1 {
-                T = T + ce * count[f]
+                T = (T + (ce as i128) * (count[f] as i128)) % (MOD as i128)
             }
         }
     }
 
     # S = pairs where m,n share same primitive root, gcd(exponents)=1
-    let mut S: i64 = 0
+    let mut S: i128 = 0
     for k in 1..(L + 1) {
         let num_roots: i64 = P[k] - P[k + 1]
         # coprime_pairs_upto_k = 2 * phisum[k] - 1
         let mut ps: i64 = 0
         for i in 1..(k + 1) { ps = ps + phi[i] }
         let coprime_pairs: i64 = 2 * ps - 1
-        S = S + num_roots * coprime_pairs
+        S = (S + (num_roots as i128) * (coprime_pairs as i128)) % (MOD as i128)
     }
 
-    let irrational: i64 = T - S
-    let ans: i64 = ((rational + irrational) % MOD + MOD) % MOD
+    let irrational: i128 = ((T - S) % (MOD as i128) + (MOD as i128)) % (MOD as i128)
+    let ans: i64 = ((rational as i128 + irrational) % (MOD as i128)) as i64
     printf("%09lld\n", ans)
 
     free(count)

@@ -131,7 +131,7 @@ function main() -> i32 {
         if is_comp[i] == 0 {
             g_primes[g_nprimes] = i
             g_nprimes = g_nprimes + 1
-            let mut j: i64 = i * i
+            let mut j: i64 = (i as i64) * (i as i64)
             while j <= g_root {
                 is_comp[j] = 1
                 j = j + i
@@ -143,7 +143,7 @@ function main() -> i32 {
     # Min_25 sieve: for each prime p, update prime_sums
     for pi in 0..g_nprimes {
         let p: i64 = g_primes[pi]
-        let p2: i64 = p * p
+        let p2: i64 = (p as i64) * (p as i64)
         if p2 > g_N { break }
 
         # Find limit: number of vals >= p2

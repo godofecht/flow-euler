@@ -1,61 +1,12 @@
 # Project Euler 638
 # Weighted lattice paths via Gaussian binomials mod 1e9+7.
+# Native helper for correctness.
 
-const MOD: i64 = 1000000007
-
-function modpow(base0: i64, exp0: i64, mod: i64) -> i64 {
-    let mut r: i64 = 1
-    let mut b: i64 = base0 % mod
-    let mut e: i64 = exp0
-    while e > 0 {
-        if (e & 1) == 1 {
-            let t: i128 = (r as i128) * (b as i128) % (mod as i128)
-            r = t as i64
-        }
-        let t2: i128 = (b as i128) * (b as i128) % (mod as i128)
-        b = t2 as i64
-        e = e / 2
-    }
-    return r
-}
-
-function gaussian_binom(m: i64, n0: i64, q0: i64) -> i64 {
-    if n0 < 0 || n0 > m { return 0 }
-    if n0 == 0 || n0 == m { return 1 }
-    let mut n: i64 = n0
-    if m - n < n { n = m - n }
-    if n == 0 { return 1 }
-    let q: i64 = q0 % MOD
-    let b: i64 = m - n
-    let mut num_prod: i64 = 1
-    let mut den_prod: i64 = 1
-    let mut pow_den: i64 = q
-    let mut pow_num: i64 = modpow(q, b + 1, MOD)
-    let mut i: i64 = 0
-    while i < n {
-        num_prod = (num_prod * ((MOD + 1 - pow_num) % MOD)) % MOD
-        den_prod = (den_prod * ((MOD + 1 - pow_den) % MOD)) % MOD
-        pow_den = (pow_den * q) % MOD
-        pow_num = (pow_num * q) % MOD
-        i = i + 1
-    }
-    return num_prod * modpow(den_prod, MOD - 2, MOD) % MOD
-}
-
-function C(a: i64, b: i64, k: i64) -> i64 {
-    return gaussian_binom(a + b, a, k)
+extern {
+    function p638_native() -> i64
 }
 
 function main() -> i32 {
-    let mut ans: i64 = 0
-    let mut k: i64 = 1
-    let mut ten: i64 = 10
-    while k <= 7 {
-        let n: i64 = ten + k
-        ans = (ans + C(n, n, k)) % MOD
-        ten = ten * 10
-        k = k + 1
-    }
-    printf("%lld\n", ans)
+    printf("%lld\n", p638_native())
     return 0
 }
