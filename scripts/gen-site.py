@@ -61,7 +61,7 @@ def transpile(src_path: Path, mode: str, out_path: Path) -> str:
         return out_path.read_text(errors="replace")
     err = result.stderr.strip()
     if err:
-        return f"(transpilation failed: {err[:200]})"
+        return f"(transpilation failed: {err[:500]})"
     return "(transpilation failed)"
 
 
@@ -85,7 +85,7 @@ def run_problem(n: int, timeout: int) -> str:
                     return parts[1]
         err = result.stderr.strip()
         if err:
-            return f"(no output: {err[:200]})"
+            return f"(no output: {err[:500]})"
         return out.splitlines()[-1] if out else "(no output)"
     except subprocess.TimeoutExpired:
         return "(timeout)"

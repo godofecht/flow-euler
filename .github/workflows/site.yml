@@ -30,6 +30,9 @@ jobs:
         run: |
           git clone https://github.com/flooooooooooow/flow.git "$HOME/flow"
 
+      - name: Install Python dependencies
+        run: python3 -m pip install numpy
+
       - name: Install native dependencies
         run: brew install gmp mpfr
 
