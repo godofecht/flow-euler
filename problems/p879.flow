@@ -1,8 +1,154 @@
+# Project Euler 879
+# Touch-screen Password: count distinct passwords on an n x n grid.
+# Bitmask DP: dp[cur][mask] = number of non-empty continuations.
+
 extern {
-    function p879_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, v: i32, n: i64) -> ptr<void>
+}
+
+function popcount(x: i32) -> i32 {
+    let mut c: i32 = 0
+    let mut v: i32 = x
+    while v != 0 {
+        c = c + 1
+        v = v & (v - 1)
+    }
+    return c
+}
+
+function ctz(x: i32) -> i32 {
+    let mut v: i32 = x
+    let mut c: i32 = 0
+    while (v & 1) == 0 {
+        c = c + 1
+        v = v >> 1
+    }
+    return c
+}
+
+function gcd_i(a0: i32, b0: i32) -> i32 {
+    let mut a: i32 = a0
+    let mut b: i32 = b0
+    while b != 0 {
+        let t: i32 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function iabs(x: i32) -> i32 {
+    if x < 0 {
+        return -x
+    }
+    return x
+}
+
+function count_passwords(n: i32) -> i64 {
+    let N: i32 = n * n
+    if N < 2 {
+        return 0
+    }
+
+    let between: ptr<i32> = calloc(256, 4)
+    if between == null {
+        return 0
+    }
+
+    # precompute_between
+    for a in 0..N {
+        let xa: i32 = a % n
+        let ya: i32 = a / n
+        for b in 0..N {
+            if a == b {
+                continue
+            }
+            let xb: i32 = b % n
+            let yb: i32 = b / n
+            let dx: i32 = xb - xa
+            let dy: i32 = yb - ya
+            let g: i32 = gcd_i(iabs(dx), iabs(dy))
+            if g <= 1 {
+                continue
+            }
+            let sx: i32 = dx / g
+            let sy: i32 = dy / g
+            let mut mask: i32 = 0
+            for k in 1..g {
+                let x: i32 = xa + sx * k
+                let y: i32 = ya + sy * k
+                mask = mask | (1 << (y * n + x))
+            }
+            between[a * 16 + b] = mask
+        }
+    }
+
+    let all_mask: i32 = (1 << N) - 1
+    let masksz: i64 = 65536
+
+    # dp flat array: dp[cur * 65536 + mask]
+    let dp: ptr<i64> = calloc((N as i64) * masksz, 8)
+    if dp == null {
+        return 0
+    }
+
+    # buckets by popcount
+    let buckets: ptr<i32> = calloc(17 * 65536, 4)
+    let bucket_count: ptr<i32> = calloc(17, 4)
+    if buckets == null || bucket_count == null {
+        return 0
+    }
+    for mask in 0..(1 << N) {
+        let pc: i32 = popcount(mask)
+        buckets[pc * 65536 + bucket_count[pc]] = mask
+        bucket_count[pc] = bucket_count[pc] + 1
+    }
+
+    for k in 1..(N + 1) {
+        let kk: i32 = N + 1 - k
+        for bi in 0..bucket_count[kk] {
+            let mask: i32 = buckets[kk * 65536 + bi]
+            let remaining: i32 = all_mask ^ mask
+            if remaining == 0 {
+                continue
+            }
+            let mut m: i32 = mask
+            while m != 0 {
+                let lsb: i32 = m & (-m)
+                let cur: i32 = ctz(lsb)
+                m = m ^ lsb
+
+                let mut total: i64 = 0
+                let mut rem: i32 = remaining
+                while rem != 0 {
+                    let bit: i32 = rem & (-rem)
+                    let nxt: i32 = ctz(bit)
+                    rem = rem ^ bit
+
+                    if (between[cur * 16 + nxt] & remaining) == 0 {
+                        total = total + 1 + dp[(nxt as i64) * masksz + ((mask | bit) as i64)]
+                    }
+                }
+                dp[(cur as i64) * masksz + (mask as i64)] = total
+            }
+        }
+    }
+
+    let mut total_passwords: i64 = 0
+    for start in 0..N {
+        total_passwords = total_passwords + dp[(start as i64) * masksz + ((1 << start) as i64)]
+    }
+
+    free(dp)
+    free(buckets)
+    free(bucket_count)
+    free(between)
+    return total_passwords
 }
 
 function main() -> i32 {
-    printf("%lld\n", p879_native())
+    printf("%lld\n", count_passwords(4))
     return 0
 }

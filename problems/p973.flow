@@ -1,11 +1,101 @@
 # Project Euler 973
-# Real solver in problems/native/p973.c (linked by scripts/run.sh).
+# Computed via S_k_value and X(n) with modular arithmetic mod 10^9+7.
 
 extern {
-    function pe973_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const INV2: i64 = 500000004
+const N: i64 = 10000
+
+function mod(x: i64) -> i64 {
+    let mut r: i64 = x % MOD
+    if r < 0 { r = r + MOD }
+    return r
+}
+
+function powmod(base0: i64, exp0: i64, m: i64) -> i64 {
+    let mut result: i64 = 1 % m
+    let mut base: i64 = base0 % m
+    if base < 0 { base = base + m }
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            result = ((result as i128) * (base as i128) % (m as i128)) as i64
+        }
+        base = ((base as i128) * (base as i128) % (m as i128)) as i64
+        exp = exp >> 1
+    }
+    return result
+}
+
+function S_k_value(n: i64, k: i64) -> i64 {
+    if k == 0 {
+        if n == 0 { return 1 }
+        return mod(0 - powmod(MOD - 2, n - 1, MOD))
+    }
+    let B: i64 = 1 << k
+    let period: i64 = B << 1
+    let per_mask: i64 = period - 1
+    let S: ptr<i64> = calloc(n + 1, 8)
+    let P: ptr<i64> = calloc(n + 1, 8)
+    S[0] = 1
+    P[0] = 1
+    let mut nn: i64 = 1
+    while nn <= n {
+        let mut val: i64 = 0
+        let mut s: i64 = 1
+        while s <= nn {
+            let p: i64 = s & per_mask
+            let mut sign: i64 = 1
+            let mut e: i64 = 0
+            if p < B {
+                sign = 1
+                e = s + (B - p) - 1
+            } else {
+                sign = -1
+                e = s + (period - p) - 1
+            }
+            if e > nn { e = nn }
+            let t_lo: i64 = nn - e
+            let t_hi: i64 = nn - s
+            let mut sum_range: i64 = 0
+            if t_lo == 0 {
+                sum_range = P[t_hi]
+            } else {
+                sum_range = P[t_hi] - P[t_lo - 1]
+            }
+            val = val + sign * sum_range
+            s = e + 1
+        }
+        S[nn] = mod(val)
+        P[nn] = mod(P[nn - 1] + S[nn])
+        nn = nn + 1
+    }
+    let result: i64 = S[n]
+    free(S)
+    free(P)
+    return result
+}
+
+function X(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let P: i64 = powmod(2, n - 1, MOD)
+    let mut total: i64 = 0
+    let mut k: i64 = 0
+    while k < 14 {
+        let Sk: i64 = S_k_value(n, k)
+        let Ak: i64 = mod(((P - Sk) % MOD) * INV2 % MOD)
+        total = (total + powmod(2, k, MOD) * Ak) % MOD
+        k = k + 1
+    }
+    total = mod(total - (n & 1))
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe973_answer())
+    printf("%lld\n", X(N))
     return 0
 }

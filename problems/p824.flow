@@ -1,13 +1,151 @@
 # Project Euler 824
 # Chess Sliders on a cylindrical board.
 # L(10^9, 10^15) mod (10^7+19)^2.
-# Real solver in native/p824.c.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p824_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const P: i64 = 10000019
+const MOD: i64 = 100000380000361
+
+let mut invp: ptr<i32> = null
+let mut fac: ptr<i64> = null
+let mut H: ptr<i32> = null
+let mut w: i64 = 0
+
+function mulmod(a: i64, b: i64, m: i64) -> i64 {
+    let r: i128 = ((a as i128) * (b as i128)) % (m as i128)
+    return r as i64
+}
+
+function inv_mod_p2(a0: i64) -> i64 {
+    let a: i64 = a0 % MOD
+    let r: i64 = a % P
+    let x: i64 = invp[r] as i64
+    let ax: i64 = mulmod(a, x, MOD)
+    let term: i64 = (2 + MOD - ax) % MOD
+    return mulmod(x, term, MOD)
+}
+
+function Fpow(u: i64) -> i64 {
+    let um: i64 = u % P
+    let a1: i64 = um * P
+    let a2: i64 = mulmod(a1, w, MOD)
+    let mut tmp: i64 = (1 + MOD - a2) % MOD
+    if u % 2 == 1 { tmp = (MOD - tmp) % MOD }
+    return tmp
+}
+
+function unit_factorial(n0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut res: i64 = 1
+    while n != 0 {
+        let u: i64 = n / P
+        let v: i64 = n % P
+        res = mulmod(res, fac[v], MOD)
+        let corr: i64 = (u % P) * (H[v] as i64) % P
+        res = mulmod(res, 1 + corr * P, MOD)
+        res = mulmod(res, Fpow(u), MOD)
+        n = u
+    }
+    return res
+}
+
+function vp_fact(n: i64) -> i64 {
+    let q: i64 = n / P
+    return q + q / P
+}
+
+function binom_mod_p2(n: i64, k: i64) -> i64 {
+    if k > n { return 0 }
+    let nk: i64 = n - k
+    let e: i64 = vp_fact(n) - vp_fact(k) - vp_fact(nk)
+    if e >= 2 { return 0 }
+    let un: i64 = unit_factorial(n)
+    let uk: i64 = unit_factorial(k)
+    let unk: i64 = unit_factorial(nk)
+    let mut val: i64 = mulmod(un, inv_mod_p2(uk), MOD)
+    val = mulmod(val, inv_mod_p2(unk), MOD)
+    if e == 1 { val = mulmod(val, P, MOD) }
+    return val
+}
+
+function coeff_alpha_power(M: i64, d: i64) -> i64 {
+    if d == 0 { return 1 }
+    let B: i64 = binom_mod_p2(M - d - 1, d - 1)
+    let val: i64 = mulmod(M % MOD, inv_mod_p2(d % MOD), MOD)
+    return mulmod(val, B, MOD)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p824_native())
+    invp = calloc(P, 4) as ptr<i32>
+    H = calloc(P, 4) as ptr<i32>
+    fac = malloc(P * 8) as ptr<i64>
+    if invp == null || fac == null || H == null {
+        return 1
+    }
+
+    # Inverses mod p
+    invp[1] = 1
+    let mut i: i64 = 2
+    while i < P {
+        invp[i] = ((P - (P / i) * (invp[P % i] as i64) % P) % P) as i32
+        i = i + 1
+    }
+
+    # Factorial mod p^2 for 0..p-1
+    let mut f: i64 = 1
+    fac[0] = 1
+    let mut i2: i64 = 1
+    while i2 < P {
+        f = mulmod(f, i2, MOD)
+        fac[i2] = f
+        i2 = i2 + 1
+    }
+
+    # Harmonic numbers H[v] = sum_{i<=v} 1/i mod p
+    let mut h: i32 = 0
+    let mut i3: i64 = 1
+    while i3 < P {
+        h = ((h as i64 + invp[i3] as i64) % P) as i32
+        H[i3] = h
+        i3 = i3 + 1
+    }
+
+    # Wilson quotient: (p-1)! = -1 + p*w (mod p^2)
+    let F: i64 = fac[P - 1]
+    w = ((F + 1) / P) % P
+
+    # Main computation
+    let N: i64 = 1000000000
+    let K: i64 = 1000000000000000
+    let t_max: i64 = K / N
+
+    let mut comb: i64 = 1
+    let mut ans: i64 = 0
+    let mut d: i64 = K
+    let mut M: i64 = N * N
+
+    let mut t: i64 = 0
+    while t <= t_max {
+        if t != 0 {
+            comb = mulmod(comb, (N - t + 1) % MOD, MOD)
+            comb = mulmod(comb, inv_mod_p2(t), MOD)
+        }
+        ans = (ans + mulmod(comb, coeff_alpha_power(M, d), MOD)) % MOD
+        d = d - N
+        M = M - 2 * N
+        t = t + 1
+    }
+
+    free(invp as ptr<void>)
+    free(fac as ptr<void>)
+    free(H as ptr<void>)
+
+    printf("%lld\n", ans)
     return 0
 }

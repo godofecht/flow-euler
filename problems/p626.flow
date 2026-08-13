@@ -2,10 +2,238 @@
 # Counting binary matrices up to row/col perm/flip; c(20) mod 1001001011.
 
 extern {
-    function pe626_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, v: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1001001011
+const N: i32 = 20
+
+# Global partition info (flat arrays, max 2000 partitions).
+let mut ninfos: i32 = 0
+let mut g_lens: ptr<i32> = null as ptr<i32>
+let mut g_mults: ptr<i32> = null as ptr<i32>
+let mut g_ntypes: ptr<i32> = null as ptr<i32>
+let mut g_kcycles: ptr<i32> = null as ptr<i32>
+let mut g_tmin: ptr<i32> = null as ptr<i32>
+let mut g_prefix_lt: ptr<i32> = null as ptr<i32>
+let mut g_count_mod: ptr<i64> = null as ptr<i64>
+let mut g_part_buf: ptr<i32> = null as ptr<i32>
+let mut g_fact: ptr<i64> = null as ptr<i64>
+let mut g_invfact: ptr<i64> = null as ptr<i64>
+let mut g_inv_int: ptr<i64> = null as ptr<i64>
+
+function mod_pow(a0: i64, e0: i64) -> i64 {
+    let mut r: i64 = 1 % MOD
+    let mut a: i64 = a0 % MOD
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = ((r as i128) * (a as i128) % (MOD as i128)) as i64
+        }
+        a = ((a as i128) * (a as i128) % (MOD as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function gcd_i(a0: i32, b0: i32) -> i32 {
+    let mut a: i32 = a0
+    let mut b: i32 = b0
+    while b != 0 {
+        let t: i32 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function v2(x0: i32) -> i32 {
+    let mut x: i32 = x0
+    let mut c: i32 = 0
+    while (x & 1) == 0 {
+        x = x >> 1
+        c = c + 1
+    }
+    return c
+}
+
+function emit_partition(p: ptr<i32>, len: i32, tmax: i32) {
+    let counts: ptr<i32> = calloc(21, 4)
+    for i in 0..21 {
+        counts[i] = 0
+    }
+    for i in 0..len {
+        counts[p[i]] = counts[p[i]] + 1
+    }
+
+    let idx: i32 = ninfos
+    ninfos = ninfos + 1
+
+    g_ntypes[idx] = 0
+    g_kcycles[idx] = len
+    g_tmin[idx] = 100
+
+    for L in 1..(N + 1) {
+        if counts[L] != 0 {
+            let nt: i32 = g_ntypes[idx]
+            g_lens[idx * 20 + nt] = L
+            g_mults[idx * 20 + nt] = counts[L]
+            g_ntypes[idx] = nt + 1
+            let t: i32 = v2(L)
+            if t < g_tmin[idx] {
+                g_tmin[idx] = t
+            }
+        }
+    }
+
+    let count_v2: ptr<i32> = calloc(8, 4)
+    for i in 0..8 {
+        count_v2[i] = 0
+    }
+    for L in 1..(N + 1) {
+        if counts[L] != 0 {
+            count_v2[v2(L)] = count_v2[v2(L)] + counts[L]
+        }
+    }
+
+    let mut s: i32 = 0
+    for t in 0..(tmax + 2) {
+        g_prefix_lt[idx * 8 + t] = 0
+    }
+    for t in 0..(tmax + 1) {
+        s = s + count_v2[t]
+        g_prefix_lt[idx * 8 + t + 1] = s
+    }
+
+    let mut cm: i64 = g_fact[N]
+    for L in 1..(N + 1) {
+        if counts[L] != 0 {
+            let mult: i32 = counts[L]
+            cm = ((cm as i128) * (mod_pow(g_inv_int[L], (mult as i64)) as i128) % (MOD as i128)) as i64
+            cm = ((cm as i128) * (g_invfact[mult] as i128) % (MOD as i128)) as i64
+        }
+    }
+    g_count_mod[idx] = cm
+
+    free(count_v2)
+    free(counts)
+}
+
+function gen_partitions(rem: i32, maxp: i32, depth: i32, tmax: i32) {
+    if rem == 0 {
+        emit_partition(g_part_buf, depth, tmax)
+        return
+    }
+    let mut first: i32 = maxp
+    if maxp > rem {
+        first = rem
+    }
+    while first >= 1 {
+        g_part_buf[depth] = first
+        gen_partitions(rem - first, first, depth + 1, tmax)
+        first = first - 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe626_answer())
+    # Allocate global arrays
+    g_fact = calloc(21, 8)
+    g_invfact = calloc(21, 8)
+    g_inv_int = calloc(21, 8)
+    g_lens = calloc(2000 * 20, 4)
+    g_mults = calloc(2000 * 20, 4)
+    g_ntypes = calloc(2000, 4)
+    g_kcycles = calloc(2000, 4)
+    g_tmin = calloc(2000, 4)
+    g_prefix_lt = calloc(2000 * 8, 4)
+    g_count_mod = calloc(2000, 8)
+    g_part_buf = calloc(20, 4)
+
+    g_fact[0] = 1
+    for i in 1..(N + 1) {
+        g_fact[i] = ((g_fact[i - 1] as i128) * (i as i128) % (MOD as i128)) as i64
+    }
+    g_invfact[N] = mod_pow(g_fact[N], MOD - 2)
+    let mut i: i32 = N
+    while i > 0 {
+        g_invfact[i - 1] = ((g_invfact[i] as i128) * (i as i128) % (MOD as i128)) as i64
+        i = i - 1
+    }
+    for j in 1..(N + 1) {
+        g_inv_int[j] = mod_pow((j as i64), MOD - 2)
+    }
+
+    let mut tmax: i32 = 0
+    let mut pp: i32 = 1
+    while pp * 2 <= N {
+        tmax = tmax + 1
+        pp = pp * 2
+    }
+
+    ninfos = 0
+    gen_partitions(N, N, 0, tmax)
+
+    # gcd_tab
+    let gcd_tab: ptr<i32> = calloc(21 * 21, 4)
+    for a in 1..(N + 1) {
+        for b in 1..(N + 1) {
+            gcd_tab[a * 21 + b] = gcd_i(a, b)
+        }
+    }
+
+    # pow2
+    let pow2: ptr<i64> = calloc(401, 8)
+    pow2[0] = 1
+    for j in 1..(N * N + 2) {
+        pow2[j] = (pow2[j - 1] * 2) % MOD
+    }
+
+    let mut total: i64 = 0
+    for ii in 0..ninfos {
+        for jj in 0..ninfos {
+            let mut cycles: i32 = 0
+            for a in 0..g_ntypes[ii] {
+                for b in 0..g_ntypes[jj] {
+                    cycles = cycles + g_mults[ii * 20 + a] * g_mults[jj * 20 + b] * gcd_tab[g_lens[ii * 20 + a] * 21 + g_lens[jj * 20 + b]]
+                }
+            }
+            let mut d: i32 = 0
+            if g_tmin[ii] < g_tmin[jj] {
+                d = g_prefix_lt[ii * 8 + g_tmin[jj]]
+            } else {
+                if g_tmin[jj] < g_tmin[ii] {
+                    d = g_prefix_lt[jj * 8 + g_tmin[ii]]
+                } else {
+                    d = 1
+                }
+            }
+            let e: i32 = cycles - g_kcycles[ii] - g_kcycles[jj] + d
+            let mut term: i64 = ((g_count_mod[ii] as i128) * (g_count_mod[jj] as i128) % (MOD as i128)) as i64
+            term = ((term as i128) * (pow2[e] as i128) % (MOD as i128)) as i64
+            total = (total + term) % MOD
+        }
+    }
+
+    let inv_fact_n: i64 = mod_pow(g_fact[N], MOD - 2)
+    let inv_den: i64 = ((inv_fact_n as i128) * (inv_fact_n as i128) % (MOD as i128)) as i64
+    let result: i64 = ((total as i128) * (inv_den as i128) % (MOD as i128)) as i64
+
+    printf("%lld\n", result)
+
+    free(pow2)
+    free(gcd_tab)
+    free(g_part_buf)
+    free(g_count_mod)
+    free(g_prefix_lt)
+    free(g_tmin)
+    free(g_kcycles)
+    free(g_ntypes)
+    free(g_mults)
+    free(g_lens)
+    free(g_inv_int)
+    free(g_invfact)
+    free(g_fact)
     return 0
 }

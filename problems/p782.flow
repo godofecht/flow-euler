@@ -1,11 +1,238 @@
 # Project Euler 782
 # Distinct Rows and Columns -- C(10^4).
+# Pure Flow port of the native C helper. qsort is replaced by a heapsort.
 
 extern {
-    function p782_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+# Count k in [0..n^2] achievable with complexity <= 3.
+function count_le_3(n: i32) -> i64 {
+    let n2: i64 = (n as i64) * (n as i64)
+    let half: i64 = n2 / 2
+    let seen: ptr<i8> = calloc(half + 1, 1)
+
+    # Orbit 1: k = x*y, 0 <= x <= y <= n.
+    let mut y: i32 = 1
+    while y <= n {
+        let mut x: i32 = 0
+        while x <= y {
+            let mut k: i64 = (x as i64) * (y as i64)
+            if k > half {
+                k = n2 - k
+            }
+            seen[k] = 1
+            x = x + 1
+        }
+        y = y + 1
+    }
+    seen[0] = 1
+
+    # Orbit 2: k = v^2 - d^2, 0 <= d <= v <= n.
+    let mut v: i32 = 0
+    while v <= n {
+        let vv: i64 = (v as i64) * (v as i64)
+        let mut d: i32 = 0
+        while d <= v {
+            let mut k: i64 = vv - (d as i64) * (d as i64)
+            if k > half {
+                k = n2 - k
+            }
+            if k >= 0 && k <= half {
+                seen[k] = 1
+            }
+            d = d + 1
+        }
+        v = v + 1
+    }
+
+    # q[b] = 2*b*(n-b) for b = 0..floor(n/2).
+    let bmax_global: i32 = n / 2
+    let q: ptr<i64> = malloc(((bmax_global + 1) as i64) * 8)
+    let mut cur: i64 = 0
+    let mut delta: i64 = 2 * ((n - 1) as i64)
+    let mut b: i32 = 0
+    while b < bmax_global {
+        q[b] = cur
+        cur = cur + delta
+        delta = delta - 4
+        b = b + 1
+    }
+    q[bmax_global] = cur
+
+    # Orbits 3/4/5/6: depend on s = a+b and ab = a(s-a).
+    let mut s: i32 = 0
+    while s <= n {
+        let c: i32 = n - s
+        let c2: i64 = (c as i64) * (c as i64)
+        let c2n: i64 = (c as i64) * (2 * (n as i64) - (c as i64))
+        let cs: i64 = (c as i64) * (s as i64)
+
+        if s % 2 == 0 {
+            let v2: i32 = s / 2
+            let base: i64 = (v2 as i64) * (v2 as i64)
+            let mut d: i32 = 0
+            while d <= v2 {
+                let ab: i64 = base - (d as i64) * (d as i64)
+                let two_ab: i64 = ab << 1
+                let mut k: i64 = c2 + two_ab
+                if k > half { k = n2 - k }
+                seen[k] = 1
+                k = c2n + two_ab
+                if k > half { k = n2 - k }
+                seen[k] = 1
+                k = cs + ab
+                if k > half { k = n2 - k }
+                seen[k] = 1
+                k = (cs + ab) << 1
+                if k > half { k = n2 - k }
+                seen[k] = 1
+                d = d + 1
+            }
+        } else {
+            let v2: i32 = s / 2
+            let base: i64 = (v2 as i64) * ((v2 + 1) as i64)
+            let mut pr: i64 = 0
+            let mut step: i64 = 2
+            let mut d: i32 = 0
+            while d <= v2 {
+                let ab: i64 = base - pr
+                let two_ab: i64 = ab << 1
+                let mut k: i64 = c2 + two_ab
+                if k > half { k = n2 - k }
+                seen[k] = 1
+                k = c2n + two_ab
+                if k > half { k = n2 - k }
+                seen[k] = 1
+                k = cs + ab
+                if k > half { k = n2 - k }
+                seen[k] = 1
+                k = (cs + ab) << 1
+                if k > half { k = n2 - k }
+                seen[k] = 1
+                pr = pr + step
+                step = step + 2
+                d = d + 1
+            }
+        }
+        s = s + 1
+    }
+
+    # Orbit 7: k = c^2 + 2*b*(n-b), 0 <= b <= min(n-c, n/2).
+    let mut c: i32 = 0
+    while c <= n {
+        let c2: i64 = (c as i64) * (c as i64)
+        let mut bmax: i32 = n - c
+        if bmax > bmax_global {
+            bmax = bmax_global
+        }
+        let mut b: i32 = 0
+        while b <= bmax {
+            let mut k: i64 = c2 + q[b]
+            if k > half { k = n2 - k }
+            seen[k] = 1
+            b = b + 1
+        }
+        c = c + 1
+    }
+
+    let mut cnt: i64 = 0
+    let mut i: i64 = 0
+    while i <= half {
+        cnt = cnt + (seen[i] as i64)
+        i = i + 1
+    }
+    let mut result: i64 = 2 * cnt
+    if n2 % 2 == 0 {
+        result = 2 * cnt - (seen[half] as i64)
+    }
+    free(seen)
+    free(q)
+    return result
+}
+
+# Heapsort on ptr<i64> of length m.
+function sift_down(a: ptr<i64>, start: i32, end: i32) {
+    let mut root: i32 = start
+    while 2 * root + 1 <= end {
+        let mut child: i32 = 2 * root + 1
+        if child + 1 <= end {
+            if a[child + 1] > a[child] {
+                child = child + 1
+            }
+        }
+        if a[child] > a[root] {
+            let tmp: i64 = a[root]
+            a[root] = a[child]
+            a[child] = tmp
+            root = child
+        } else {
+            return
+        }
+    }
+}
+
+function heapsort_i64(a: ptr<i64>, m: i32) {
+    let mut start: i32 = (m - 2) / 2
+    while start >= 0 {
+        sift_down(a, start, m - 1)
+        start = start - 1
+    }
+    let mut end: i32 = m - 1
+    while end > 0 {
+        let tmp: i64 = a[0]
+        a[0] = a[end]
+        a[end] = tmp
+        end = end - 1
+        sift_down(a, 0, end)
+    }
+}
+
+# Count k in [0..n^2] whose minimum complexity is exactly 2.
+function count_eq_2(n: i32) -> i64 {
+    let n2: i64 = (n as i64) * (n as i64)
+    let vals: ptr<i64> = malloc((4 * ((n + 1) as i64)) * 8)
+    let mut m: i32 = 0
+    let mut a: i32 = 0
+    while a <= n {
+        let a2: i64 = (a as i64) * (a as i64)
+        let t: i64 = 2 * (a as i64) * ((n - a) as i64)
+        vals[m] = a2
+        m = m + 1
+        vals[m] = n2 - a2
+        m = m + 1
+        vals[m] = t
+        m = m + 1
+        vals[m] = n2 - t
+        m = m + 1
+        a = a + 1
+    }
+    heapsort_i64(vals, m)
+    let mut cnt: i64 = 0
+    let mut i: i32 = 0
+    while i < m {
+        if vals[i] == 0 || vals[i] == n2 {
+            i = i + 1
+        } else {
+            if i == 0 || vals[i] != vals[i - 1] {
+                cnt = cnt + 1
+            }
+            i = i + 1
+        }
+    }
+    free(vals)
+    return cnt
 }
 
 function main() -> i32 {
-    printf("%lld\n", p782_native())
+    let n: i32 = 10000
+    let n2: i64 = (n as i64) * (n as i64)
+    let total: i64 = n2 + 1
+    let s3: i64 = count_le_3(n)
+    let n4: i64 = total - s3
+    let n2cnt: i64 = count_eq_2(n)
+    printf("%lld\n", 3 * total - 4 - n2cnt + n4)
     return 0
 }

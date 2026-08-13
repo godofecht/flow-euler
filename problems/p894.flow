@@ -1,11 +1,159 @@
 # Project Euler 894
-# Spiral of Circles: total area of curvilinear triangles in a self-similar spiral.
+# Spiral of Circles: Newton solve for (s, theta) then compute total curvilinear triangle area.
 
 extern {
-    function p894_native() -> f64
+    function pow(x: f64, y: f64) -> f64
+    function cos(x: f64) -> f64
+    function acos(x: f64) -> f64
+    function sqrt(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+const PI: f64 = 3.14159265358979323846
+
+struct F2 {
+    f1: f64
+    f2: f64
+}
+
+function clampd(x: f64, lo: f64, hi: f64) -> f64 {
+    if x < lo { return lo }
+    if x > hi { return hi }
+    return x
+}
+
+function fmax_f64(a: f64, b: f64) -> f64 {
+    if a > b { return a }
+    return b
+}
+
+function is_finite(x: f64) -> bool {
+    return x == x && (x - x) == 0.0
+}
+
+function h_func(s: f64, theta: f64, n: i32) -> f64 {
+    let sn: f64 = pow(s, n as f64)
+    let num: f64 = 1.0 + sn * sn - 2.0 * sn * cos((n as f64) * theta)
+    let den: f64 = (1.0 + sn) * (1.0 + sn)
+    return num / den
+}
+
+function f_func(s: f64, theta: f64) -> F2 {
+    let h1: f64 = h_func(s, theta, 1)
+    return F2 { f1: h1 - h_func(s, theta, 7), f2: h1 - h_func(s, theta, 8) }
+}
+
+function objective(s: f64, theta: f64) -> f64 {
+    let r: F2 = f_func(s, theta)
+    return r.f1 * r.f1 + r.f2 * r.f2
+}
+
+function find_initial_guess() -> F2 {
+    let mut best_s: f64 = 0.9
+    let mut best_t: f64 = 0.8
+    let mut best_val: f64 = 1e300
+    let mut s: f64 = 0.75
+    while s <= 0.99 + 1e-12 {
+        let mut theta: f64 = 0.05
+        while theta <= PI - 0.05 + 1e-12 {
+            let val: f64 = objective(s, theta)
+            if val < best_val {
+                best_val = val
+                best_s = s
+                best_t = theta
+            }
+            theta = theta + 0.01
+        }
+        s = s + 0.002
+    }
+    return F2 { f1: best_s, f2: best_t }
+}
+
+function newton_solve(s0: f64, t0: f64) -> F2 {
+    let mut s: f64 = s0
+    let mut theta: f64 = t0
+    for iter in 0..60 {
+        let r: F2 = f_func(s, theta)
+        if fmax_f64(fabs(r.f1), fabs(r.f2)) < 1e-15 {
+            return F2 { f1: s, f2: theta }
+        }
+        let ds: f64 = 1e-8
+        let dt: f64 = 1e-8
+        let rsp: F2 = f_func(s + ds, theta)
+        let rsm: F2 = f_func(s - ds, theta)
+        let rtp: F2 = f_func(s, theta + dt)
+        let rtm: F2 = f_func(s, theta - dt)
+
+        let a: f64 = (rsp.f1 - rsm.f1) / (2.0 * ds)
+        let b: f64 = (rtp.f1 - rtm.f1) / (2.0 * dt)
+        let c: f64 = (rsp.f2 - rsm.f2) / (2.0 * ds)
+        let d: f64 = (rtp.f2 - rtm.f2) / (2.0 * dt)
+
+        let det: f64 = a * d - b * c
+        if det == 0.0 || !is_finite(det) {
+            s = s * 0.999
+            theta = theta * 0.999
+            continue
+        }
+
+        let delta_s: f64 = (d * r.f1 - b * r.f2) / det
+        let delta_t: f64 = (-c * r.f1 + a * r.f2) / det
+
+        let cur_obj: f64 = r.f1 * r.f1 + r.f2 * r.f2
+        let mut step: f64 = 1.0
+        let mut improved: bool = false
+        for ls in 0..40 {
+            let ns: f64 = s - step * delta_s
+            let nt: f64 = theta - step * delta_t
+            if !(0.0 < ns && ns < 1.0 && 0.0 < nt && nt < PI) {
+                step = step * 0.5
+                continue
+            }
+            let nobj: f64 = objective(ns, nt)
+            if nobj < cur_obj {
+                s = ns
+                theta = nt
+                improved = true
+                break
+            }
+            step = step * 0.5
+        }
+        if !improved { break }
+    }
+    return F2 { f1: s, f2: theta }
+}
+
+function curvilinear_triangle_area(r1: f64, r2: f64, r3: f64) -> f64 {
+    let a: f64 = r2 + r3
+    let b: f64 = r1 + r3
+    let c: f64 = r1 + r2
+    let p: f64 = 0.5 * (a + b + c)
+    let mut tri_sq: f64 = p * (p - a) * (p - b) * (p - c)
+    if tri_sq < 0.0 { tri_sq = 0.0 }
+    let tri_area: f64 = sqrt(tri_sq)
+
+    let cos1: f64 = (b * b + c * c - a * a) / (2.0 * b * c)
+    let cos2: f64 = (a * a + c * c - b * b) / (2.0 * a * c)
+    let cos3: f64 = (a * a + b * b - c * c) / (2.0 * a * b)
+    let ang1: f64 = acos(clampd(cos1, -1.0, 1.0))
+    let ang2: f64 = acos(clampd(cos2, -1.0, 1.0))
+    let ang3: f64 = acos(clampd(cos3, -1.0, 1.0))
+
+    let sectors: f64 = 0.5 * (r1 * r1 * ang1 + r2 * r2 * ang2 + r3 * r3 * ang3)
+    return tri_area - sectors
 }
 
 function main() -> i32 {
-    printf("%.10f\n", p894_native())
+    let init: F2 = find_initial_guess()
+    let sol: F2 = newton_solve(init.f1, init.f2)
+
+    let s: f64 = sol.f1
+    let theta: f64 = sol.f2
+    let s7: f64 = pow(s, 7.0)
+    let s8: f64 = s7 * s
+    let a0: f64 = curvilinear_triangle_area(1.0, s, s8)
+    let b0: f64 = curvilinear_triangle_area(1.0, s7, s8)
+    let total: f64 = (a0 + b0) / (1.0 - s * s)
+    printf("%.10f\n", total)
     return 0
 }

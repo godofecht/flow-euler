@@ -1,12 +1,168 @@
 # Project Euler 945
-# XOR-Equation C — GF(2) polynomial arithmetic (native).
-# Companion: problems/native/p945.c
+# XOR-Equation C: count pairs 0<=a<=b<=N where (a XOR-product b) has no even-position bits.
+# Uses GF(2) polynomial arithmetic and digit DP.
 
 extern {
-    function p945_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# 16-bit compaction lookup tables
+let mut even16: ptr<i64> = null as ptr<i64>
+let mut odd16: ptr<i64> = null as ptr<i64>
+
+function clz64(x: i64) -> i32 {
+    if x == 0 { return 64 }
+    if x < 0 { return 0 }
+    let mut n: i32 = 0
+    let mut v: i64 = x
+    while v != 0 {
+        v = v >> 1
+        n = n + 1
+    }
+    return 64 - n
+}
+
+function build_tables() -> void {
+    even16 = calloc(65536, 8)
+    odd16 = calloc(65536, 8)
+    for x in 0..65536 {
+        let mut e: i64 = 0
+        let mut o: i64 = 0
+        for i in 0..8 {
+            let b: i64 = 1 << (2 * i)
+            if ((x as i64) & b) != 0 { e = e | (1 << i) }
+            if ((x as i64) & (b << 1)) != 0 { o = o | (1 << i) }
+        }
+        even16[x] = e
+        odd16[x] = o
+    }
+}
+
+# Split x into (E, O) where E = even-position bits compacted, O = odd-position bits compacted.
+function split_u(x: i64, E: ptr<i64>, O: ptr<i64>) -> void {
+    let mut e: i64 = 0
+    let mut o: i64 = 0
+    let mut shift: i32 = 0
+    let mut val: i64 = x
+    while val != 0 {
+        let chunk: i64 = val & 0xFFFF
+        e = e | (even16[chunk] << shift)
+        o = o | (odd16[chunk] << shift)
+        val = val >> 16
+        if val < 0 { val = val & 0xFFFFFFFFFFFF }
+        shift = shift + 8
+    }
+    E[0] = e
+    O[0] = o
+}
+
+# Polynomial remainder a mod b over GF(2)
+function gf2_mod(a: i64, b: i64) -> i64 {
+    if b == 0 { return a }
+    let db: i32 = 63 - clz64(b)
+    let mut val: i64 = a
+    while val != 0 {
+        let da: i32 = 63 - clz64(val)
+        if da < db { break }
+        val = val ^ (b << (da - db))
+    }
+    return val
+}
+
+# Polynomial GCD over GF(2)
+function gf2_gcd(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = gf2_mod(x, y)
+        x = y
+        y = t
+    }
+    return x
+}
+
+# Ordered solution count for [0, 2^bits - 1]
+function ordered_full(bits: i32) -> i64 {
+    let mut sign: i64 = 1
+    if (bits & 1) != 0 { sign = -1 }
+    let num: i64 = (1 << (bits + 1)) * (3 * (bits as i64) + 4) + sign
+    return num / 9
+}
+
+# For b = 2^k + y, count a in [0, 2^k - 1] satisfying the condition
+function count_a_for_upper(k: i32, y: i64) -> i64 {
+    let m: i32 = k / 2
+    let Y0: ptr<i64> = calloc(1, 8)
+    let Y1: ptr<i64> = calloc(1, 8)
+    split_u(y, Y0, Y1)
+
+    let result: i64 = 0
+    if (k & 1) == 0 {
+        # k even: k = 2m
+        if Y1[0] == 0 {
+            result = 1 << m
+        } else {
+            let P: i64 = Y0[0] ^ (1 << m)
+            let g: i64 = gf2_gcd(P, Y1[0] << 1)
+            result = 1 << (63 - clz64(g))
+        }
+    } else {
+        # k odd: k = 2m+1
+        if Y0[0] == 0 {
+            result = 1 << (m + 1)
+        } else {
+            let uQ: i64 = ((1 << m) ^ Y1[0]) << 1
+            let g: i64 = gf2_gcd(Y0[0], uQ)
+            result = 1 << (63 - clz64(g))
+        }
+    }
+
+    free(Y0)
+    free(Y1)
+    return result
+}
+
+# Ordered count of pairs (a,b) with 0<=a,b<=N
+function ordered_S(N: i64) -> i64 {
+    if N < 0 { return 0 }
+    if N == 0 { return 1 }
+
+    let bits: i32 = 64 - clz64(N)
+    let all_ones: i64 = (1 << bits) - 1
+    if N == all_ones {
+        return ordered_full(bits)
+    }
+
+    let k: i32 = bits - 1
+    let M: i64 = 1 << k
+    let r: i64 = N - M
+
+    let base: i64 = ordered_full(k)
+    let mut cross: i64 = 0
+    let mut y: i64 = 0
+    while y <= r {
+        cross = cross + count_a_for_upper(k, y)
+        y = y + 1
+    }
+
+    return base + 2 * cross
 }
 
 function main() -> i32 {
-    printf("%lld\n", p945_native())
+    build_tables()
+
+    let mut N: i64 = 1
+    let mut i: i32 = 0
+    while i < 7 {
+        N = N * 10
+        i = i + 1
+    }
+
+    let s: i64 = ordered_S(N)
+    printf("%lld\n", (s + 1) / 2)
+
+    free(even16)
+    free(odd16)
     return 0
 }

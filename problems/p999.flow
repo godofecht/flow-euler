@@ -1,12 +1,136 @@
 # Project Euler 999
-# Rescaled elliptic divisibility sequence: a_{10^18+3} mod 1234567891.
-# Native C helper for the O(log n) EDS doubling recurrence.
+# Rescaled elliptic divisibility sequence: a_n mod 1234567891.
+# Uses the doubling recurrence for the EDS block (W_{n-3}..W_{n+4})
+# in O(log n), then rescales by INV_TWO^(n^2/4).
 
 extern {
-    function p999_native() -> i64
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1234567891
+const INV_TWO: i64 = 617283946
+
+function norm(x: i64) -> i64 {
+    let mut r: i64 = x % MOD
+    if r < 0 { r = r + MOD }
+    return r
+}
+
+function mod_mul(a: i64, b: i64) -> i64 {
+    return ((norm(a) as i128) * norm(b) % MOD) as i64
+}
+
+function mod_sub(a: i64, b: i64) -> i64 {
+    let mut r: i64 = norm(a) - norm(b)
+    if r < 0 { r = r + MOD }
+    return r
+}
+
+function mod_pow_generic(base: i64, exp: i128) -> i64 {
+    let mut b: i64 = norm(base)
+    let mut result: i64 = 1
+    let mut e: i128 = exp
+    while e > 0 {
+        if (e & 1) != 0 {
+            result = mod_mul(result, b)
+        }
+        b = mod_mul(b, b)
+        e = e >> 1
+    }
+    return result
+}
+
+function small_w(index: i64) -> i64 {
+    if index < 0 { return norm(-small_w(-index)) }
+    if index == 0 { return norm(0) }
+    if index == 1 { return norm(1) }
+    if index == 2 { return norm(2) }
+    if index == 3 { return norm(-4) }
+    if index == 4 { return norm(-32) }
+    if index == 5 { return norm(-192) }
+    if index == 6 { return norm(3584) }
+    if index == 7 { return norm(77824) }
+    return norm(262144)
+}
+
+# W_{2*index - 1} from terms around W_index.
+function odd_val(s: ptr<i64>, start: i64, index: i64) -> i64 {
+    let a: i64 = s[index + 1 - start]
+    let b: i64 = mod_pow_generic(s[index - 1 - start], 3 as i128)
+    let c: i64 = s[index - 2 - start]
+    let d: i64 = mod_pow_generic(s[index - start], 3 as i128)
+    return mod_sub(mod_mul(a, b), mod_mul(c, d))
+}
+
+# W_{2*index}; division is only by the fixed W_2 = 2.
+function even_val(s: ptr<i64>, start: i64, index: i64) -> i64 {
+    let a: i64 = s[index - start]
+    let p1: i64 = mod_pow_generic(s[index - 1 - start], 2 as i128)
+    let c2: i64 = s[index + 2 - start]
+    let p2: i64 = mod_pow_generic(s[index + 1 - start], 2 as i128)
+    let e2: i64 = s[index - 2 - start]
+    let inner: i64 = mod_sub(mod_mul(c2, p1), mod_mul(e2, p2))
+    return mod_mul(mod_mul(a, INV_TWO), inner)
+}
+
+# Return (W_{n-3}, ..., W_{n+4}) mod MOD as a malloc'd ptr<i64> of size 8.
+function eds_block(n: i64) -> ptr<i64> {
+    let r: ptr<i64> = malloc(64) as ptr<i64>
+    if n <= 4 {
+        for i in 0..8 {
+            r[i] = small_w(n - 3 + (i as i64))
+        }
+        return r
+    }
+    let middle: i64 = n / 2
+    let s: ptr<i64> = eds_block(middle)
+    let start: i64 = middle - 3
+    if n % 2 == 0 {
+        r[0] = odd_val(s, start, middle - 1)
+        r[1] = even_val(s, start, middle - 1)
+        r[2] = odd_val(s, start, middle)
+        r[3] = even_val(s, start, middle)
+        r[4] = odd_val(s, start, middle + 1)
+        r[5] = even_val(s, start, middle + 1)
+        r[6] = odd_val(s, start, middle + 2)
+        r[7] = even_val(s, start, middle + 2)
+    } else {
+        r[0] = even_val(s, start, middle - 1)
+        r[1] = odd_val(s, start, middle)
+        r[2] = even_val(s, start, middle)
+        r[3] = odd_val(s, start, middle + 1)
+        r[4] = even_val(s, start, middle + 1)
+        r[5] = odd_val(s, start, middle + 2)
+        r[6] = even_val(s, start, middle + 2)
+        r[7] = odd_val(s, start, middle + 3)
+    }
+    free(s as ptr<void>)
+    return r
+}
+
+function w_mod(n: i64) -> i64 {
+    if n < 0 { return norm(-w_mod(-n)) }
+    let blk: ptr<i64> = eds_block(n)
+    let result: i64 = blk[3]
+    free(blk as ptr<void>)
+    return result
+}
+
+function a_mod(n: i64) -> i64 {
+    let rem: i64 = n % 4
+    let mut sign: i64 = -1
+    if rem == 1 || rem == 2 { sign = 1 }
+    let nn: i128 = (n as i128) * (n as i128)
+    let exp: i128 = nn / 4
+    let inverse_scale: i64 = mod_pow_generic(INV_TWO, exp)
+    let w: i64 = w_mod(n)
+    let sw: i64 = norm(sign * w)
+    return mod_mul(sw, inverse_scale)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p999_native())
+    let result: i64 = a_mod(1000000000000000003)
+    printf("%lld\n", result)
     return 0
 }

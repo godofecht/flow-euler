@@ -1,11 +1,137 @@
 # Project Euler 756: Approximating a Sum
-# Real solver in problems/native/p756.c (linked by scripts/run.sh).
+#
+# Computes E(Delta | phi(k), n, m) exactly (no simulation) for
+# n = 12345678, m = 12345, where f(k) = phi(k) (Euler's totient).
+#
+# S  = sum_{k=1..n} f(k)
+# S* = sum_{i=1..m} f(X_i) (X_i - X_{i-1})   for a random increasing m-tuple
+# Delta = S - S*
+#
+# E(Delta) = sum_{k=1..n-m} f(k) * C(n-k, m) / C(n, m)
+# with weights updated by recurrence w_{k+1} = w_k * (n-k-m)/(n-k).
+#
+# A rigorous tail bound truncates the sum so only the necessary initial
+# part is computed, keeping the totient sieve small.
 
 extern {
-    function p756_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Euler's linear sieve: phi[k] = totient(k) for 0 <= k <= n.
+function totients_up_to(n: i64) -> ptr<i32> {
+    let phi: ptr<i32> = calloc(n + 1, 4)
+    if phi == null {
+        return null
+    }
+    if n >= 1 {
+        phi[1] = 1
+    }
+
+    # primes list — generous cap (number of primes <= n is well under n).
+    let primes: ptr<i32> = calloc(n + 1, 4)
+    let mut count: i64 = 0
+
+    let mut i: i64 = 2
+    while i <= n {
+        if phi[i] == 0 {
+            # i is prime
+            primes[count] = (i as i32)
+            count = count + 1
+            phi[i] = ((i - 1) as i32)
+        }
+        let mut j: i64 = 0
+        while j < count {
+            let p: i64 = (primes[j] as i64)
+            let ip: i64 = i * p
+            if ip > n {
+                break
+            }
+            if i % p == 0 {
+                phi[ip] = (phi[i] as i64) * p
+                break
+            } else {
+                phi[ip] = (phi[i] as i64) * (p - 1)
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    free(primes)
+    return phi
+}
+
+# Find a safe truncation index K (<= n-m) such that the remaining tail
+# contribution is provably < eps. Uses phi(k) <= k <= n and non-increasing
+# weights: sum_{k>K} phi(k) w_k <= n * (n-m-K) * w_{K+1}.
+function cutoff_index(n: i64, m: i64, eps: f64) -> i64 {
+    let limit: i64 = n - m
+    if limit <= 0 {
+        return 0
+    }
+
+    let mut w: f64 = ((n - m) as f64) / (n as f64)
+    let mut k: i64 = 1
+    while k <= limit {
+        let remaining: i64 = limit - k
+        let nk: i64 = n - k
+        let mut w_next: f64
+        if nk <= m {
+            w_next = 0.0
+        } else {
+            w_next = w * ((nk - m) as f64) / (nk as f64)
+        }
+        if (n as f64) * (remaining as f64) * w_next < eps {
+            return k
+        }
+        w = w_next
+        k = k + 1
+    }
+    return limit
+}
+
+function expected_error_for_phi(n: i64, m: i64) -> f64 {
+    let limit: i64 = n - m
+    if limit <= 0 {
+        return 0.0
+    }
+
+    let mut upto: i64 = cutoff_index(n, m, 5e-8)
+    if upto > limit {
+        upto = limit
+    }
+
+    let phi: ptr<i32> = totients_up_to(upto)
+
+    let mut w: f64 = ((n - m) as f64) / (n as f64)
+    let mut total: f64 = 0.0
+    let mut c: f64 = 0.0
+
+    let mut k: i64 = 1
+    while k <= upto {
+        let x: f64 = ((phi[k]) as f64) * w
+        # Kahan compensated summation
+        let y: f64 = x - c
+        let t: f64 = total + y
+        c = (t - total) - y
+        total = t
+
+        let nk: i64 = n - k
+        if nk <= m {
+            break
+        }
+        w = w * ((nk - m) as f64) / (nk as f64)
+        k = k + 1
+    }
+
+    free(phi)
+    return total
 }
 
 function main() -> i32 {
-    printf("%.6f\n", p756_native())
+    let n: i64 = 12345678
+    let m: i64 = 12345
+    printf("%.6f\n", expected_error_for_phi(n, m))
     return 0
 }

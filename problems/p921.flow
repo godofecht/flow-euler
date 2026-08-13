@@ -1,11 +1,147 @@
-# Project Euler 921
-# Golden Recurrence.
+# Project Euler 921 - Golden Recurrence
+# S(1618034) mod 398874989
+# Pure Flow port of native/p921.c.
 
-extern {
-    function p921_native() -> i64
+const MOD: i64 = 398874989
+const TARGET_M: i64 = 1618034
+
+function powmod(a0: i64, b: i64, m: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut a: i64 = a0 % m
+    if a < 0 { a = a + m }
+    while b > 0 {
+        if b % 2 == 1 {
+            r = (((r as i128) * (a as i128)) % (m as i128)) as i64
+        }
+        a = (((a as i128) * (a as i128)) % (m as i128)) as i64
+        b = b / 2
+    }
+    return r
+}
+
+function legendre(a: i64, p: i64) -> i64 {
+    return powmod(a, (p - 1) / 2, p)
+}
+
+function sqrt_mod_prime(n0: i64, p: i64) -> i64 {
+    let n: i64 = n0 % p
+    if n < 0 { n = n + p }
+    if n == 0 { return 0 }
+    if p == 2 { return n }
+    if legendre(n, p) != 1 { return -1 }
+    if p % 4 == 3 { return powmod(n, (p + 1) / 4, p) }
+    let mut q: i64 = p - 1
+    let mut s: i64 = 0
+    while q % 2 == 0 {
+        q = q / 2
+        s = s + 1
+    }
+    let mut z: i64 = 2
+    while legendre(z, p) != p - 1 {
+        z = z + 1
+    }
+    let c: i64 = powmod(z, q, p)
+    let mut x: i64 = powmod(n, (q + 1) / 2, p)
+    let mut t: i64 = powmod(n, q, p)
+    let mut m: i64 = s
+    while t != 1 {
+        let mut t2: i64 = t
+        let mut i: i64 = 1
+        while i < m {
+            t2 = (((t2 as i128) * (t2 as i128)) % (p as i128)) as i64
+            if t2 == 1 { break }
+            i = i + 1
+        }
+        let b: i64 = powmod(c, 1 << (m - i - 1), p)
+        x = (((x as i128) * (b as i128)) % (p as i128)) as i64
+        let bb: i64 = (((b as i128) * (b as i128)) % (p as i128)) as i64
+        t = (((t as i128) * (bb as i128)) % (p as i128)) as i64
+        c = bb
+        m = i
+    }
+    return x
 }
 
 function main() -> i32 {
-    printf("%lld\n", p921_native())
+    let p: i64 = MOD
+    let exp_mod: i64 = p - 1
+    let inv2: i64 = powmod(2, p - 2, p)
+
+    let mut r: i64 = sqrt_mod_prime(5, p)
+    let mut inv_r: i64 = powmod(r, p - 2, p)
+
+    let mut phi: i64 = ((((1 + r) as i128) * (inv2 as i128)) % (p as i128)) as i64
+    let mut g: i64 = (((phi as i128) * (phi as i128)) % (p as i128)) as i64
+    g = (((g as i128) * (phi as i128)) % (p as i128)) as i64
+
+    # Check orientation: F_3 should be 2
+    let mut u: i64 = g
+    let mut uinv: i64 = powmod(u, p - 2, p)
+    let mut f3: i64 = ((((u + uinv) % p) as i128) * (inv_r as i128) % (p as i128)) as i64
+    if f3 != 2 {
+        r = (p - r) % p
+        inv_r = powmod(r, p - 2, p)
+        phi = ((((1 + r) as i128) * (inv2 as i128)) % (p as i128)) as i64
+        g = (((phi as i128) * (phi as i128)) % (p as i128)) as i64
+        g = (((g as i128) * (phi as i128)) % (p as i128)) as i64
+        u = g
+        uinv = powmod(u, p - 2, p)
+    }
+
+    let inv32: i64 = powmod(32, p - 2, p)
+
+    # Process i=2: E_1 = E_2 = 5
+    let mut e_im2: i64 = 5 % exp_mod
+    let mut e_im1: i64 = 5 % exp_mod
+
+    let mut total: i64 = 0
+
+    # i=2
+    let mut e: i64 = e_im1
+    u = powmod(g, e, p)
+    uinv = powmod(u, p - 2, p)
+    let mut f: i64 = ((((u + uinv) % p) as i128) * (inv_r as i128) % (p as i128)) as i64
+    let mut l: i64 = (u - uinv) % p
+    if l < 0 { l = l + p }
+    let f2: i64 = (((f as i128) * (f as i128)) % (p as i128)) as i64
+    let f4: i64 = (((f2 as i128) * (f2 as i128)) % (p as i128)) as i64
+    let f5: i64 = (((f4 as i128) * (f as i128)) % (p as i128)) as i64
+    let l2: i64 = (((l as i128) * (l as i128)) % (p as i128)) as i64
+    let l4: i64 = (((l2 as i128) * (l2 as i128)) % (p as i128)) as i64
+    let l5: i64 = (((l4 as i128) * (l as i128)) % (p as i128)) as i64
+    let mut term: i64 = (f5 + l5) % p
+    term = (((term as i128) * (inv32 as i128)) % (p as i128)) as i64
+    total = term
+
+    # i=3..m
+    let mut i: i64 = 3
+    while i <= TARGET_M {
+        e = (((e_im1 as i128) * (e_im2 as i128)) % (exp_mod as i128)) as i64
+        e_im2 = e_im1
+        e_im1 = e
+
+        u = powmod(g, e, p)
+        uinv = powmod(u, p - 2, p)
+
+        f = ((((u + uinv) % p) as i128) * (inv_r as i128) % (p as i128)) as i64
+        l = (u - uinv) % p
+        if l < 0 { l = l + p }
+
+        let f2b: i64 = (((f as i128) * (f as i128)) % (p as i128)) as i64
+        let f4b: i64 = (((f2b as i128) * (f2b as i128)) % (p as i128)) as i64
+        let f5b: i64 = (((f4b as i128) * (f as i128)) % (p as i128)) as i64
+        let l2b: i64 = (((l as i128) * (l as i128)) % (p as i128)) as i64
+        let l4b: i64 = (((l2b as i128) * (l2b as i128)) % (p as i128)) as i64
+        let l5b: i64 = (((l4b as i128) * (l as i128)) % (p as i128)) as i64
+
+        term = (f5b + l5b) % p
+        term = (((term as i128) * (inv32 as i128)) % (p as i128)) as i64
+
+        total = total + term
+        if total >= p { total = total - p }
+        i = i + 1
+    }
+
+    printf("%lld\n", total)
     return 0
 }

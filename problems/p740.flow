@@ -1,11 +1,210 @@
 # Project Euler 740
 # Secret Santa: probability the last person gets at least one of their own slips.
+# State DP: (u1, u2, k) where u1/u2 are unprocessed non-last people with 1/2 slips,
+# k = last person's slips remaining (0..2).
 
 extern {
-    function p740_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const N: i32 = 100
+const MAXU: i32 = 102
+const MAXK: i32 = 3
+const STATE_SIZE: i32 = 31212
+
+function sidx(u1: i32, u2: i32, k: i32) -> i32 {
+    return (u1 * MAXU + u2) * MAXK + k
+}
+
+function q(n: i32) -> f64 {
+    if n < 2 { return 0.0 }
+    if n == 2 { return 1.0 }
+
+    let mut cur: ptr<f64> = calloc((STATE_SIZE as i64), 8) as ptr<f64>
+    let mut nxt: ptr<f64> = calloc((STATE_SIZE as i64), 8) as ptr<f64>
+
+    cur[sidx(0, n - 1, 2)] = 1.0
+
+    let mut t: i32 = 0
+    while t < n - 1 {
+        let m: i32 = (n - 1) - t
+        let T_total: i32 = 2 * n - 2 * t
+
+        memset(nxt as ptr<void>, 0, (STATE_SIZE as i64) * 8)
+
+        let mut u1: i32 = 0
+        while u1 <= m {
+            let mut u2: i32 = 0
+            while u2 <= m - u1 {
+                let u0: i32 = m - u1 - u2
+                let mut k: i32 = 0
+                while k <= 2 {
+                    let prob: f64 = cur[sidx(u1, u2, k)]
+                    if prob == 0.0 {
+                        k = k + 1
+                        continue
+                    }
+
+                    let sp: i32 = T_total - u1 - 2 * u2 - k
+                    if sp < 0 {
+                        k = k + 1
+                        continue
+                    }
+
+                    let mut s: i32 = 0
+                    while s <= 2 {
+                        let mut cnt: i32 = u2
+                        if s == 0 { cnt = u0 }
+                        else { if s == 1 { cnt = u1 } }
+                        if cnt == 0 {
+                            s = s + 1
+                            continue
+                        }
+                        let p_actor: f64 = prob * ((cnt as f64) / (m as f64))
+
+                        let mut uu1: i32 = u1
+                        let mut uu2: i32 = u2
+                        if s == 1 { uu1 = uu1 - 1 }
+                        else { if s == 2 { uu2 = uu2 - 1 } }
+
+                        let C1: i32 = T_total - s
+                        let invC1: f64 = 1.0 / (C1 as f64)
+                        let C2: i32 = (T_total - 1) - s
+                        let invC2: f64 = 1.0 / (C2 as f64)
+
+                        # First draw: last-person slip
+                        if k > 0 {
+                            let p1: f64 = (k as f64) * invC1
+                            let a: i32 = uu1
+                            let b: i32 = uu2
+                            let kk: i32 = k - 1
+                            let ss: i32 = sp
+                            if kk > 0 {
+                                let idx: i32 = sidx(a, b, kk - 1)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((kk as f64) * invC2)
+                            }
+                            if a > 0 {
+                                let idx: i32 = sidx(a - 1, b, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((a as f64) * invC2)
+                            }
+                            if b > 0 {
+                                let idx: i32 = sidx(a + 1, b - 1, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * (2.0 * (b as f64) * invC2)
+                            }
+                            if ss > 0 {
+                                let idx: i32 = sidx(a, b, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((ss as f64) * invC2)
+                            }
+                        }
+
+                        # First draw: unprocessed(1)
+                        if uu1 > 0 {
+                            let p1: f64 = (uu1 as f64) * invC1
+                            let a: i32 = uu1 - 1
+                            let b: i32 = uu2
+                            let kk: i32 = k
+                            let ss: i32 = sp
+                            if kk > 0 {
+                                let idx: i32 = sidx(a, b, kk - 1)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((kk as f64) * invC2)
+                            }
+                            if a > 0 {
+                                let idx: i32 = sidx(a - 1, b, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((a as f64) * invC2)
+                            }
+                            if b > 0 {
+                                let idx: i32 = sidx(a + 1, b - 1, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * (2.0 * (b as f64) * invC2)
+                            }
+                            if ss > 0 {
+                                let idx: i32 = sidx(a, b, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((ss as f64) * invC2)
+                            }
+                        }
+
+                        # First draw: unprocessed(2)
+                        if uu2 > 0 {
+                            let p1: f64 = 2.0 * (uu2 as f64) * invC1
+                            let a: i32 = uu1 + 1
+                            let b: i32 = uu2 - 1
+                            let kk: i32 = k
+                            let ss: i32 = sp
+                            if kk > 0 {
+                                let idx: i32 = sidx(a, b, kk - 1)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((kk as f64) * invC2)
+                            }
+                            if a > 0 {
+                                let idx: i32 = sidx(a - 1, b, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((a as f64) * invC2)
+                            }
+                            if b > 0 {
+                                let idx: i32 = sidx(a + 1, b - 1, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * (2.0 * (b as f64) * invC2)
+                            }
+                            if ss > 0 {
+                                let idx: i32 = sidx(a, b, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((ss as f64) * invC2)
+                            }
+                        }
+
+                        # First draw: processed pool
+                        if sp > 0 {
+                            let p1: f64 = (sp as f64) * invC1
+                            let a: i32 = uu1
+                            let b: i32 = uu2
+                            let kk: i32 = k
+                            let ss: i32 = sp - 1
+                            if kk > 0 {
+                                let idx: i32 = sidx(a, b, kk - 1)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((kk as f64) * invC2)
+                            }
+                            if a > 0 {
+                                let idx: i32 = sidx(a - 1, b, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((a as f64) * invC2)
+                            }
+                            if b > 0 {
+                                let idx: i32 = sidx(a + 1, b - 1, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * (2.0 * (b as f64) * invC2)
+                            }
+                            if ss > 0 {
+                                let idx: i32 = sidx(a, b, kk)
+                                nxt[idx] = nxt[idx] + p_actor * p1 * ((ss as f64) * invC2)
+                            }
+                        }
+
+                        s = s + 1
+                    }
+                    k = k + 1
+                }
+                u2 = u2 + 1
+            }
+            u1 = u1 + 1
+        }
+
+        let tmp: ptr<f64> = cur
+        cur = nxt
+        nxt = tmp
+
+        t = t + 1
+    }
+
+    # After n-1 people, only 2 slips remain. Fail iff k > 0.
+    let mut ans: f64 = 0.0
+    let mut i: i32 = 0
+    while i < STATE_SIZE {
+        let k: i32 = i % MAXK
+        if k > 0 { ans = ans + cur[i] }
+        i = i + 1
+    }
+
+    free(cur as ptr<void>)
+    free(nxt as ptr<void>)
+    return ans
 }
 
 function main() -> i32 {
-    printf("%.10f\n", p740_native())
+    printf("%.10f\n", q(100))
     return 0
 }

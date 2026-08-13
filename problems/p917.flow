@@ -1,11 +1,157 @@
 # Project Euler 917
-# Path sum in a structured matrix.
+# N x N matrix M[i,j] = a_i + b_j, path sum from (1,1) to (N,N) with Right/Down.
+# A(N) = sum(a_i) + sum(b_j) + D(N), where D(N) is shortest path in grid graph.
+# Only lower convex hull vertices matter. We compute hulls of (i, a_i) and (i, b_i),
+# then DP on compressed grid.
 
 extern {
-    function p917_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 998388889
+const S1: i64 = 102022661
+const N: i64 = 10000000
+
+function cross(x1: i128, y1: i128, x2: i128, y2: i128, x3: i128, y3: i128) -> i128 {
+    return (x2 - x1) * (y3 - y2) - (y2 - y1) * (x3 - x2)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p917_native())
+    let mut s: i64 = S1
+    let mut sum_a: i128 = 0 as i128
+    let mut sum_b: i128 = 0 as i128
+
+    let mut ax: ptr<i64> = malloc(8192)
+    let mut ay: ptr<i64> = malloc(8192)
+    let mut bx: ptr<i64> = malloc(8192)
+    let mut by: ptr<i64> = malloc(8192)
+    let mut asz: i32 = 0
+    let mut bsz: i32 = 0
+    let mut acap: i32 = 1024
+    let mut bcap: i32 = 1024
+
+    let mut i: i64 = 1
+    while i <= N {
+        let a: i64 = s
+        s = (s * s) % MOD
+        let b: i64 = s
+        s = (s * s) % MOD
+
+        sum_a = sum_a + (a as i128)
+        sum_b = sum_b + (b as i128)
+
+        # Update lower hull for (i, a)
+        while asz >= 2 {
+            let cr: i128 = cross(
+                (ax[(asz - 2) as i64] as i128), (ay[(asz - 2) as i64] as i128),
+                (ax[(asz - 1) as i64] as i128), (ay[(asz - 1) as i64] as i128),
+                (i as i128), (a as i128))
+            if cr <= (0 as i128) {
+                asz = asz - 1
+            } else {
+                break
+            }
+        }
+        if asz >= acap {
+            let new_acap: i32 = acap * 2
+            let new_ax: ptr<i64> = malloc((new_acap as i64) * 8)
+            let new_ay: ptr<i64> = malloc((new_acap as i64) * 8)
+            memcpy(new_ax, ax, (acap as i64) * 8)
+            memcpy(new_ay, ay, (acap as i64) * 8)
+            free(ax)
+            free(ay)
+            ax = new_ax
+            ay = new_ay
+            acap = new_acap
+        }
+        ax[asz as i64] = i
+        ay[asz as i64] = a
+        asz = asz + 1
+
+        # Update lower hull for (i, b)
+        while bsz >= 2 {
+            let cr: i128 = cross(
+                (bx[(bsz - 2) as i64] as i128), (by[(bsz - 2) as i64] as i128),
+                (bx[(bsz - 1) as i64] as i128), (by[(bsz - 1) as i64] as i128),
+                (i as i128), (b as i128))
+            if cr <= (0 as i128) {
+                bsz = bsz - 1
+            } else {
+                break
+            }
+        }
+        if bsz >= bcap {
+            let new_bcap: i32 = bcap * 2
+            let new_bx: ptr<i64> = malloc((new_bcap as i64) * 8)
+            let new_by: ptr<i64> = malloc((new_bcap as i64) * 8)
+            memcpy(new_bx, bx, (bcap as i64) * 8)
+            memcpy(new_by, by, (bcap as i64) * 8)
+            free(bx)
+            free(by)
+            bx = new_bx
+            by = new_by
+            bcap = new_bcap
+        }
+        bx[bsz as i64] = i
+        by[bsz as i64] = b
+        bsz = bsz + 1
+
+        i = i + 1
+    }
+
+    # DP on compressed grid
+    let R: i32 = asz
+    let C: i32 = bsz
+    let mut dp: ptr<i128> = malloc((C as i64) * 16)
+    let mut ndp: ptr<i128> = malloc((C as i64) * 16)
+
+    dp[0] = 0 as i128
+    let a0: i64 = ay[0]
+    let mut j: i32 = 1
+    while j < C {
+        dp[j as i64] = dp[(j - 1) as i64] + (a0 as i128) * ((bx[j as i64] - bx[(j - 1) as i64]) as i128)
+        j = j + 1
+    }
+
+    let mut i2: i32 = 1
+    while i2 < R {
+        let dr: i128 = ((ax[i2 as i64] - ax[(i2 - 1) as i64]) as i128)
+        ndp[0] = dp[0] + (by[0] as i128) * dr
+
+        let ai: i64 = ay[i2 as i64]
+        let mut j2: i32 = 1
+        while j2 < C {
+            let down: i128 = dp[j2 as i64] + (by[j2 as i64] as i128) * dr
+            let dc: i128 = ((bx[j2 as i64] - bx[(j2 - 1) as i64]) as i128)
+            let right: i128 = ndp[(j2 - 1) as i64] + (ai as i128) * dc
+            if down < right {
+                ndp[j2 as i64] = down
+            } else {
+                ndp[j2 as i64] = right
+            }
+            j2 = j2 + 1
+        }
+        # swap dp and ndp
+        let tmp: ptr<i128> = dp
+        dp = ndp
+        ndp = tmp
+
+        i2 = i2 + 1
+    }
+
+    let D: i128 = dp[(C - 1) as i64]
+    let result: i128 = sum_a + sum_b + D
+
+    free(dp)
+    free(ndp)
+    free(ax)
+    free(ay)
+    free(bx)
+    free(by)
+
+    printf("%lld\n", result as i64)
     return 0
 }

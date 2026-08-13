@@ -1,11 +1,281 @@
 # Project Euler 766
 # Sliding Block Puzzle: BFS over reachable configurations of a 6x5 board.
+# State encoding: 14 pieces x 5 bits = 70 bits, stored in i128.
 
 extern {
-    function p766_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const W: i32 = 6
+const H: i32 = 5
+const NCELLS: i32 = 30
+const NTYPES: i32 = 6
+const HCAP: i64 = 8388608
+
+let mut g_k: ptr<i32> = null
+let mut g_noffs: ptr<i32> = null
+let mut g_offs: ptr<i32> = null
+let mut g_mask_at: ptr<i32> = null
+let mut g_limits: ptr<i32> = null
+let mut g_valid: ptr<i32> = null
+let mut g_shift0: ptr<i32> = null
+let mut g_seg_bits: ptr<i32> = null
+let mut g_seg_mask: ptr<i128> = null
+
+function init_types() -> void {
+    g_k = calloc(NTYPES, 4) as ptr<i32>
+    g_noffs = calloc(NTYPES, 4) as ptr<i32>
+    g_offs = calloc(NTYPES * 4 * 2, 4) as ptr<i32>
+    g_mask_at = calloc(NTYPES * NCELLS, 4) as ptr<i32>
+    g_limits = calloc(NTYPES * NCELLS * 4, 4) as ptr<i32>
+    g_valid = calloc(NTYPES * NCELLS, 4) as ptr<i32>
+    g_shift0 = calloc(NTYPES, 4) as ptr<i32>
+    g_seg_bits = calloc(NTYPES, 4) as ptr<i32>
+    g_seg_mask = calloc(NTYPES, 16) as ptr<i128>
+
+    let offs_tbl: array<i32, 48> = [
+        0, 0, 0, 1, 1, 0, 0, 0,
+        0, 1, 1, 0, 1, 1, 0, 0,
+        0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 1, 1, 1,
+        0, 0, 1, 0, 0, 0, 0, 0
+    ]
+    let noffs_tbl: array<i32, 6> = [3, 3, 2, 1, 4, 2]
+    let count_tbl: array<i32, 6> = [2, 2, 2, 6, 1, 1]
+
+    let mut start: i32 = 0
+    let mut t: i32 = 0
+    while t < NTYPES {
+        g_k[t] = count_tbl[t]
+        g_noffs[t] = noffs_tbl[t]
+        let mut i: i32 = 0
+        while i < g_noffs[t] {
+            g_offs[t * 8 + i * 2] = offs_tbl[t * 8 + i * 2]
+            g_offs[t * 8 + i * 2 + 1] = offs_tbl[t * 8 + i * 2 + 1]
+            i = i + 1
+        }
+
+        let mut pos: i32 = 0
+        while pos < NCELLS {
+            let x: i32 = pos % W
+            let y: i32 = pos / W
+            let mut m: i32 = 0
+            let mut ok: i32 = 1
+            i = 0
+            while i < g_noffs[t] {
+                let xx: i32 = x + g_offs[t * 8 + i * 2]
+                let yy: i32 = y + g_offs[t * 8 + i * 2 + 1]
+                if xx < 0 || xx >= W || yy < 0 || yy >= H {
+                    ok = 0
+                    break
+                }
+                m = m | (1 << (yy * W + xx))
+                i = i + 1
+            }
+            g_valid[t * NCELLS + pos] = ok
+            if ok != 0 {
+                g_mask_at[t * NCELLS + pos] = m
+                let mut mu: i32 = W
+                let mut md: i32 = W
+                let mut ml: i32 = W
+                let mut mr: i32 = W
+                i = 0
+                while i < g_noffs[t] {
+                    let dy: i32 = g_offs[t * 8 + i * 2 + 1]
+                    let dx: i32 = g_offs[t * 8 + i * 2]
+                    if y + dy < mu { mu = y + dy }
+                    if (H - 1) - (y + dy) < md { md = (H - 1) - (y + dy) }
+                    if x + dx < ml { ml = x + dx }
+                    if (W - 1) - (x + dx) < mr { mr = (W - 1) - (x + dx) }
+                    i = i + 1
+                }
+                g_limits[t * NCELLS * 4 + pos * 4] = mu
+                g_limits[t * NCELLS * 4 + pos * 4 + 1] = md
+                g_limits[t * NCELLS * 4 + pos * 4 + 2] = ml
+                g_limits[t * NCELLS * 4 + pos * 4 + 3] = mr
+            }
+            pos = pos + 1
+        }
+
+        g_shift0[t] = start * 5
+        g_seg_bits[t] = g_k[t] * 5
+        let mut mask: i128 = 0
+        i = 0
+        while i < g_seg_bits[t] {
+            mask = mask | ((1 as i128) << (g_shift0[t] + i))
+            i = i + 1
+        }
+        g_seg_mask[t] = mask
+        start = start + g_k[t]
+        t = t + 1
+    }
+}
+
+function hash128(x: i128) -> i64 {
+    let lo: i64 = x as i64
+    let hi: i64 = (x >> 64) as i64
+    let h: i64 = lo ^ (hi + 1)
+    h = h ^ (h >> 32)
+    return h
 }
 
 function main() -> i32 {
-    printf("%lld\n", p766_native())
+    init_types()
+
+    let deltas: array<i32, 4> = [-6, 6, -1, 1]
+    let init_pos: array<i32, 36> = [
+        1, 4, 0, 0, 0, 0,
+        2, 22, 0, 0, 0, 0,
+        11, 16, 0, 0, 0, 0,
+        12, 13, 18, 19, 24, 25,
+        14, 0, 0, 0, 0, 0,
+        26, 0, 0, 0, 0, 0
+    ]
+
+    let mut state0: i128 = 0
+    let mut t: i32 = 0
+    while t < NTYPES {
+        let mut seg: i128 = 0
+        let mut i: i32 = 0
+        while i < g_k[t] {
+            seg = seg | ((init_pos[t * 6 + i] as i128) << (5 * i))
+            i = i + 1
+        }
+        state0 = state0 | (seg << g_shift0[t])
+        t = t + 1
+    }
+
+    let keys: ptr<i128> = calloc(HCAP, 16) as ptr<i128>
+    let occ_flag: ptr<i8> = calloc(HCAP, 1) as ptr<i8>
+    let hmask: i64 = HCAP - 1
+    let queue: ptr<i128> = malloc(HCAP * 16) as ptr<i128>
+    let mut qhead: i64 = 0
+    let mut qtail: i64 = 0
+
+    let mut hi: i64 = hash128(state0) & hmask
+    while occ_flag[hi] != 0 { hi = (hi + 1) & hmask }
+    keys[hi] = state0
+    occ_flag[hi] = 1
+    queue[qtail] = state0
+    qtail = qtail + 1
+
+    let mut count: i64 = 1
+
+    let decoded: ptr<i32> = malloc(36 * 4) as ptr<i32>
+    let pl: ptr<i32> = malloc(24) as ptr<i32>
+    let all_ones: i128 = (0 - 1) as i128
+
+    while qhead < qtail {
+        let s: i128 = queue[qhead]
+        qhead = qhead + 1
+
+        let mut occ: i32 = 0
+        t = 0
+        while t < NTYPES {
+            let seg: i128 = (s & g_seg_mask[t]) >> g_shift0[t]
+            let mut i: i32 = 0
+            while i < g_k[t] {
+                decoded[t * 6 + i] = ((seg >> (5 * i)) & 31) as i32
+                occ = occ | g_mask_at[t * NCELLS + decoded[t * 6 + i]]
+                i = i + 1
+            }
+            t = t + 1
+        }
+
+        t = 0
+        while t < NTYPES {
+            let k: i32 = g_k[t]
+            let mut j: i32 = 0
+            while j < k {
+                let pos: i32 = decoded[t * 6 + j]
+                let m_old: i32 = g_mask_at[t * NCELLS + pos]
+                let occ_wo: i32 = occ ^ m_old
+
+                let mut d: i32 = 0
+                while d < 4 {
+                    let limit: i32 = g_limits[t * NCELLS * 4 + pos * 4 + d]
+                    if limit > 0 {
+                        let mut step: i32 = 1
+                        let mut blocked: bool = false
+                        while step <= limit && !blocked {
+                            let new_pos: i32 = pos + deltas[d] * step
+                            let new_mask: i32 = g_mask_at[t * NCELLS + new_pos]
+                            if (new_mask & occ_wo) != 0 {
+                                blocked = true
+                            } else {
+                                let mut i: i32 = 0
+                                while i < k {
+                                    pl[i] = decoded[t * 6 + i]
+                                    i = i + 1
+                                }
+                                pl[j] = new_pos
+                                let mut idx: i32 = j
+                                while idx > 0 && pl[idx] < pl[idx - 1] {
+                                    let tmp: i32 = pl[idx]
+                                    pl[idx] = pl[idx - 1]
+                                    pl[idx - 1] = tmp
+                                    idx = idx - 1
+                                }
+                                while idx < k - 1 && pl[idx] > pl[idx + 1] {
+                                    let tmp: i32 = pl[idx]
+                                    pl[idx] = pl[idx + 1]
+                                    pl[idx + 1] = tmp
+                                    idx = idx + 1
+                                }
+
+                                let mut new_seg: i128 = 0
+                                i = 0
+                                while i < k {
+                                    new_seg = new_seg | ((pl[i] as i128) << (5 * i))
+                                    i = i + 1
+                                }
+                                let new_state: i128 = (s & (all_ones ^ g_seg_mask[t])) | (new_seg << g_shift0[t])
+
+                                let mut hidx: i64 = hash128(new_state) & hmask
+                                let mut found: i32 = 0
+                                while occ_flag[hidx] != 0 {
+                                    if keys[hidx] == new_state {
+                                        found = 1
+                                        break
+                                    }
+                                    hidx = (hidx + 1) & hmask
+                                }
+                                if found == 0 {
+                                    keys[hidx] = new_state
+                                    occ_flag[hidx] = 1
+                                    count = count + 1
+                                    queue[qtail] = new_state
+                                    qtail = qtail + 1
+                                }
+                            }
+                            step = step + 1
+                        }
+                    }
+                    d = d + 1
+                }
+                j = j + 1
+            }
+            t = t + 1
+        }
+    }
+
+    printf("%lld\n", count)
+    free(decoded)
+    free(pl)
+    free(keys)
+    free(occ_flag)
+    free(queue)
+    free(g_k)
+    free(g_noffs)
+    free(g_offs)
+    free(g_mask_at)
+    free(g_limits)
+    free(g_valid)
+    free(g_shift0)
+    free(g_seg_bits)
+    free(g_seg_mask)
     return 0
 }

@@ -1,162 +1,176 @@
 # Project Euler 269
 # Z(10^16): polynomials with an integer root.
+# Inclusion-exclusion over integer roots -1 through -9.
+# State contains up to nine signed bytes, encoded as an i128 key.
 
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-    function p269_native() -> i64
 }
 
-function encode_state(c: ptr<i64>, m: i64) -> i64 {
-    let mut key: i64 = 0
+const CAP: i64 = 200003
+
+function hash_key(key: i128) -> i64 {
+    let mut h: i64 = (key % (CAP as i128)) as i64
+    if h < 0 { h = h + CAP }
+    return h
+}
+
+function find_slot(keys: ptr<i128>, used: ptr<i8>, key: i128) -> i64 {
+    let mut h: i64 = hash_key(key)
+    while used[h] != 0 {
+        if keys[h] == key { return h }
+        h = h + 1
+        if h == CAP { h = 0 }
+    }
+    return h
+}
+
+function map_add(keys: ptr<i128>, vals: ptr<i64>, used: ptr<i8>, key: i128, value: i64) -> void {
+    let h: i64 = find_slot(keys, used, key)
+    if used[h] == 0 {
+        used[h] = 1
+        keys[h] = key
+        vals[h] = value
+    } else {
+        vals[h] = vals[h] + value
+    }
+}
+
+function encode(coeffs: ptr<i64>, m: i64) -> i128 {
+    let mut key: i128 = 0
     let mut i: i64 = 0
     while i < m {
-        key = (key << 8) | (c[i] + 128)
+        let byte: i128 = ((coeffs[i] + 128) & 255) as i128
+        key = (key << 8) | byte
         i = i + 1
     }
     return key
 }
 
-function decode_state(key0: i64, c: ptr<i64>, m: i64) -> void {
-    let mut key: i64 = key0
+function decode(key0: i128, coeffs: ptr<i64>, m: i64) -> void {
+    let mut key: i128 = key0
     let mut i: i64 = m - 1
     while i >= 0 {
-        c[i] = (key & 255) - 128
+        coeffs[i] = ((key & (255 as i128)) as i64) - 128
         key = key >> 8
         i = i - 1
     }
 }
 
-function map_find(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64) -> i64 {
-    let mut h: i64 = key % cap
-    if h < 0 { h = -h }
-    while used[h] != 0 {
-        if keys[h] == key { return h }
-        h = h + 1
-        if h == cap { h = 0 }
-    }
-    return h
-}
+function count_for(roots: ptr<i64>, m: i64, length: i64) -> i64 {
+    let a_keys: ptr<i128> = calloc(CAP, 16)
+    let a_vals: ptr<i64> = calloc(CAP, 8)
+    let a_used: ptr<i8> = calloc(CAP, 1)
+    let b_keys: ptr<i128> = calloc(CAP, 16)
+    let b_vals: ptr<i64> = calloc(CAP, 8)
+    let b_used: ptr<i8> = calloc(CAP, 1)
 
-function map_add(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, add: i64) -> void {
-    let h: i64 = map_find(keys, vals, used, cap, key)
-    if used[h] == 0 {
-        used[h] = 1
-        keys[h] = key
-        vals[h] = add
-    } else {
-        vals[h] = vals[h] + add
-    }
-}
+    let mut cur_keys: ptr<i128> = a_keys
+    let mut cur_vals: ptr<i64> = a_vals
+    let mut cur_used: ptr<i8> = a_used
+    let mut nxt_keys: ptr<i128> = b_keys
+    let mut nxt_vals: ptr<i64> = b_vals
+    let mut nxt_used: ptr<i8> = b_used
 
-function count_for(ks: ptr<i64>, m: i64, length: i64) -> i64 {
-    let CAP: i64 = 200003
-    let keys: ptr<i64> = calloc(CAP, 8)
-    let vals: ptr<i64> = calloc(CAP, 8)
-    let used: ptr<i8> = calloc(CAP, 1)
-    let nkeys: ptr<i64> = calloc(CAP, 8)
-    let nvals: ptr<i64> = calloc(CAP, 8)
-    let nused: ptr<i8> = calloc(CAP, 1)
-    let carr: ptr<i64> = calloc(9, 8)
+    let coeffs: ptr<i64> = calloc(9, 8)
     let narr: ptr<i64> = calloc(9, 8)
 
-    let start: i64 = encode_state(carr, m)
-    map_add(keys, vals, used, CAP, start, 1)
+    let zero: i128 = encode(coeffs, m)
+    map_add(cur_keys, cur_vals, cur_used, zero, 1)
 
     let mut pos: i64 = 0
     while pos < length {
-        # clear nused
-        let mut hi: i64 = 0
-        while hi < CAP {
-            nused[hi] = 0
-            nvals[hi] = 0
-            hi = hi + 1
+        # clear next map
+        let mut ci: i64 = 0
+        while ci < CAP {
+            nxt_used[ci] = 0
+            ci = ci + 1
         }
-        let dlo: i64 = 0
-        let dhi: i64 = 9
-        if length == 1 {
-            dlo = 1
-        } elif pos == 0 || pos == length - 1 {
-            dlo = 1
+        let mut lo: i64 = 0
+        if pos == 0 || pos == length - 1 {
+            lo = 1
         }
-        hi = 0
-        while hi < CAP {
-            if used[hi] != 0 {
-                decode_state(keys[hi], carr, m)
-                let ways: i64 = vals[hi]
-                let mut d: i64 = dlo
-                while d <= dhi {
+        let mut h: i64 = 0
+        while h < CAP {
+            if cur_used[h] != 0 {
+                decode(cur_keys[h], coeffs, m)
+                let ways: i64 = cur_vals[h]
+                let mut d: i64 = lo
+                while d <= 9 {
                     let mut ok: bool = true
                     let mut j: i64 = 0
                     while j < m {
-                        let s: i64 = carr[j] + d
-                        if s % ks[j] != 0 {
+                        let s: i64 = coeffs[j] + d
+                        if s % roots[j] != 0 {
                             ok = false
                             break
                         }
-                        narr[j] = 0 - (s / ks[j])
+                        narr[j] = 0 - (s / roots[j])
                         j = j + 1
                     }
                     if ok {
-                        let nk: i64 = encode_state(narr, m)
-                        map_add(nkeys, nvals, nused, CAP, nk, ways)
+                        let nk: i128 = encode(narr, m)
+                        map_add(nxt_keys, nxt_vals, nxt_used, nk, ways)
                     }
                     d = d + 1
                 }
             }
-            hi = hi + 1
+            h = h + 1
         }
-        # swap
-        hi = 0
-        while hi < CAP {
-            used[hi] = nused[hi]
-            keys[hi] = nkeys[hi]
-            vals[hi] = nvals[hi]
-            hi = hi + 1
-        }
+        # swap cur and nxt
+        let tk: ptr<i128> = cur_keys
+        cur_keys = nxt_keys
+        nxt_keys = tk
+        let tv: ptr<i64> = cur_vals
+        cur_vals = nxt_vals
+        nxt_vals = tv
+        let tu: ptr<i8> = cur_used
+        cur_used = nxt_used
+        nxt_used = tu
         pos = pos + 1
     }
-    let h: i64 = map_find(keys, vals, used, CAP, start)
-    let ans: i64 = 0
-    if used[h] != 0 && keys[h] == start {
-        ans = vals[h]
+
+    let h: i64 = find_slot(cur_keys, cur_used, zero)
+    let mut answer: i64 = 0
+    if cur_used[h] != 0 {
+        answer = cur_vals[h]
     }
-    free(keys); free(vals); free(used); free(nkeys); free(nvals); free(nused); free(carr); free(narr)
-    return ans
+
+    free(a_keys); free(a_vals); free(a_used)
+    free(b_keys); free(b_vals); free(b_used)
+    free(coeffs); free(narr)
+    return answer
 }
 
 function main() -> i32 {
-    # Nine simultaneous root constraints require 72 bits of state.  The
-    # native helper uses an unsigned 128-bit state key (Flow i64 is too small).
-    printf("%lld\n", p269_native())
-    return 0
-    let root0: i64 = 1000000000000000
-    let mut union_count: i64 = 0
-    let ks: ptr<i64> = calloc(9, 8)
-    let mut mask: i64 = 1
+    let base: i64 = 1000000000000000
+    let mut total: i64 = 0
+    let roots: ptr<i64> = calloc(9, 8)
     let one: i64 = 1
+    let mut mask: i64 = 1
     while mask < (one << 9) {
         let mut m: i64 = 0
         let mut i: i64 = 0
         while i < 9 {
             if (mask & (one << i)) != 0 {
-                ks[m] = i + 1
+                roots[m] = i + 1
                 m = m + 1
             }
             i = i + 1
         }
-        let sign: i64 = 1
-        if m % 2 == 0 { sign = -1 }
-        let mut subset_total: i64 = 0
+        let mut sgn: i64 = 1
+        if m % 2 == 0 { sgn = -1 }
+        let mut subtotal: i64 = 0
         let mut L: i64 = 1
         while L <= 16 {
-            subset_total = subset_total + count_for(ks, m, L)
+            subtotal = subtotal + count_for(roots, m, L)
             L = L + 1
         }
-        union_count = union_count + sign * subset_total
+        total = total + sgn * subtotal
         mask = mask + 1
     }
-    printf("%lld\n", root0 + union_count)
-    free(ks)
+    printf("%lld\n", base + total)
+    free(roots)
     return 0
 }

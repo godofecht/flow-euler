@@ -1,11 +1,290 @@
 # Project Euler 619
 # Square subsets: GF(2) rank of squarefree kernels on [1e6,1234567].
+# Pure Flow port of the native C helper. __builtin_ctzll is replaced by a
+# Flow clz/ctz helper. MOD = 1e9+7 so i64 products are safe.
+
+import euler.nt { mod_pow }
+
+const MOD: i64 = 1000000007
+const PIVCAP: i32 = 1048576
 
 extern {
-    function pe619_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+}
+
+function ctzll(x: i64) -> i32 {
+    if x == 0 {
+        return 64
+    }
+    let mut n: i32 = 0
+    let mut v: i64 = x
+    while v % 2 == 0 {
+        n = n + 1
+        v = v / 2
+    }
+    return n
+}
+
+# Small-basis state (parallel arrays for the 3-word masks).
+let mut g_basis_w0: ptr<i64> = null
+let mut g_basis_w1: ptr<i64> = null
+let mut g_basis_w2: ptr<i64> = null
+let mut g_basis_used: ptr<i8> = null
+let mut g_rank_small: i32 = 0
+
+function mask_any(w0: i64, w1: i64, w2: i64) -> i32 {
+    if (w0 | w1 | w2) != 0 {
+        return 1
+    }
+    return 0
+}
+
+function mask_lsb(w0: i64, w1: i64, w2: i64) -> i32 {
+    if w0 != 0 {
+        return ctzll(w0)
+    }
+    if w1 != 0 {
+        return 64 + ctzll(w1)
+    }
+    if w2 != 0 {
+        return 128 + ctzll(w2)
+    }
+    return -1
+}
+
+function mask_setbit(w0: i64, w1: i64, w2: i64, bit: i32) -> i64 {
+    if bit < 64 {
+        return w0 | ((1 as i64) << bit)
+    }
+    if bit < 128 {
+        return w1 | ((1 as i64) << (bit - 64))
+    }
+    return w2 | ((1 as i64) << (bit - 128))
+}
+
+function add_small_vector(v0: i64, v1: i64, v2: i64) {
+    let mut w0: i64 = v0
+    let mut w1: i64 = v1
+    let mut w2: i64 = v2
+    while mask_any(w0, w1, w2) != 0 {
+        let lb: i32 = mask_lsb(w0, w1, w2)
+        if lb < 0 {
+            return
+        }
+        if g_basis_used[lb] != 0 {
+            w0 = w0 ^ g_basis_w0[lb]
+            w1 = w1 ^ g_basis_w1[lb]
+            w2 = w2 ^ g_basis_w2[lb]
+        } else {
+            g_basis_w0[lb] = w0
+            g_basis_w1[lb] = w1
+            g_basis_w2[lb] = w2
+            g_basis_used[lb] = 1
+            g_rank_small = g_rank_small + 1
+            return
+        }
+    }
+}
+
+# Pivot hash table (open addressing, power-of-two cap).
+let mut g_pivot_p: ptr<i32> = null
+let mut g_pivot_w0: ptr<i64> = null
+let mut g_pivot_w1: ptr<i64> = null
+let mut g_pivot_w2: ptr<i64> = null
+let mut g_pused: ptr<i8> = null
+let mut g_pivot_count: i32 = 0
+
+function hash_index(p: i32) -> i32 {
+    let prod: i64 = (p as i64) * 11400714819323198485
+    let shifted: i64 = (prod >> 44) & ((PIVCAP as i64) - 1)
+    return (shifted as i32)
+}
+
+function pivot_get(p: i32, out_w0: ptr<i64>, out_w1: ptr<i64>, out_w2: ptr<i64>) -> i32 {
+    let mut i: i32 = hash_index(p)
+    while g_pused[i] != 0 {
+        if g_pivot_p[i] == p {
+            out_w0[0] = g_pivot_w0[i]
+            out_w1[0] = g_pivot_w1[i]
+            out_w2[0] = g_pivot_w2[i]
+            return 1
+        }
+        i = (i + 1) & (PIVCAP - 1)
+    }
+    return 0
+}
+
+function pivot_set(p: i32, w0: i64, w1: i64, w2: i64) {
+    let mut i: i32 = hash_index(p)
+    while g_pused[i] != 0 {
+        if g_pivot_p[i] == p {
+            g_pivot_w0[i] = w0
+            g_pivot_w1[i] = w1
+            g_pivot_w2[i] = w2
+            return
+        }
+        i = (i + 1) & (PIVCAP - 1)
+    }
+    g_pused[i] = 1
+    g_pivot_p[i] = p
+    g_pivot_w0[i] = w0
+    g_pivot_w1[i] = w1
+    g_pivot_w2[i] = w2
+    g_pivot_count = g_pivot_count + 1
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe619_answer())
+    let a: i32 = 1000000
+    let b: i32 = 1234567
+    let m: i32 = b - a + 1
+    let T: i32 = (sqrt((b as f64))) as i32
+    let is_prime: ptr<i8> = calloc((T + 1) as i64, 1)
+    let small_primes: ptr<i32> = calloc((T + 1) as i64, 4)
+    let mut spc: i32 = 0
+    let mut ii: i32 = 0
+    while ii <= T {
+        is_prime[ii] = 1
+        ii = ii + 1
+    }
+    is_prime[0] = 0
+    is_prime[1] = 0
+    let mut i: i32 = 2
+    while (i as i64) * (i as i64) <= (T as i64) {
+        if is_prime[i] != 0 {
+            let mut j: i32 = i * i
+            while j <= T {
+                is_prime[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut i2: i32 = 2
+    while i2 <= T {
+        if is_prime[i2] != 0 {
+            small_primes[spc] = i2
+            spc = spc + 1
+        }
+        i2 = i2 + 1
+    }
+    let small_bit_idx: ptr<i32> = calloc((T + 1) as i64, 4)
+    let mut i3: i32 = 0
+    while i3 < spc {
+        small_bit_idx[small_primes[i3]] = i3
+        i3 = i3 + 1
+    }
+
+    # Linear sieve for smallest prime factor up to b.
+    let spf: ptr<i32> = calloc(((b + 1) as i64), 4)
+    let primes: ptr<i32> = calloc(((b / 5 + 10) as i64), 4)
+    let mut pc: i32 = 0
+    let mut i4: i32 = 2
+    while i4 <= b {
+        if spf[i4] == 0 {
+            spf[i4] = i4
+            primes[pc] = i4
+            pc = pc + 1
+        }
+        let mut j: i32 = 0
+        while j < pc {
+            let v: i64 = (i4 as i64) * (primes[j] as i64)
+            if v > (b as i64) {
+                break
+            }
+            spf[(v as i32)] = primes[j]
+            if primes[j] == spf[i4] {
+                break
+            }
+            j = j + 1
+        }
+        i4 = i4 + 1
+    }
+
+    g_basis_w0 = calloc((spc + 1) as i64, 8)
+    g_basis_w1 = calloc((spc + 1) as i64, 8)
+    g_basis_w2 = calloc((spc + 1) as i64, 8)
+    g_basis_used = calloc((spc + 1) as i64, 1)
+    g_rank_small = 0
+    g_pivot_p = calloc(PIVCAP as i64, 4)
+    g_pivot_w0 = calloc(PIVCAP as i64, 8)
+    g_pivot_w1 = calloc(PIVCAP as i64, 8)
+    g_pivot_w2 = calloc(PIVCAP as i64, 8)
+    g_pused = calloc(PIVCAP as i64, 1)
+    g_pivot_count = 0
+
+    let mut n: i32 = a
+    while n <= b {
+        let mut x: i32 = n
+        let mut sm0: i64 = 0
+        let mut sm1: i64 = 0
+        let mut sm2: i64 = 0
+        let mut big_prime: i32 = 0
+        while x > 1 {
+            let p: i32 = spf[x]
+            let mut e: i32 = 0
+            while x % p == 0 {
+                x = x / p
+                e = e + 1
+            }
+            if e % 2 == 1 {
+                if p <= T {
+                    let bit: i32 = small_bit_idx[p]
+                    if bit < 64 {
+                        sm0 = sm0 | ((1 as i64) << bit)
+                    } else {
+                        if bit < 128 {
+                            sm1 = sm1 | ((1 as i64) << (bit - 64))
+                        } else {
+                            sm2 = sm2 | ((1 as i64) << (bit - 128))
+                        }
+                    }
+                } else {
+                    big_prime = p
+                }
+            }
+        }
+        if big_prime == 0 {
+            add_small_vector(sm0, sm1, sm2)
+        } else {
+            let pw0: ptr<i64> = malloc(8)
+            let pw1: ptr<i64> = malloc(8)
+            let pw2: ptr<i64> = malloc(8)
+            let found: i32 = pivot_get(big_prime, pw0, pw1, pw2)
+            if found == 0 {
+                pivot_set(big_prime, sm0, sm1, sm2)
+            } else {
+                add_small_vector(pw0[0] ^ sm0, pw1[0] ^ sm1, pw2[0] ^ sm2)
+            }
+            free(pw0)
+            free(pw1)
+            free(pw2)
+        }
+        n = n + 1
+    }
+
+    let rank: i32 = g_pivot_count + g_rank_small
+    let mut ans: i64 = mod_pow(2, (m - rank) as i64, MOD) - 1
+    if ans < 0 {
+        ans = ans + MOD
+    }
+    printf("%lld\n", ans)
+
+    free(is_prime)
+    free(small_primes)
+    free(small_bit_idx)
+    free(spf)
+    free(primes)
+    free(g_basis_w0)
+    free(g_basis_w1)
+    free(g_basis_w2)
+    free(g_basis_used)
+    free(g_pivot_p)
+    free(g_pivot_w0)
+    free(g_pivot_w1)
+    free(g_pivot_w2)
+    free(g_pused)
     return 0
 }

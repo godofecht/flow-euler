@@ -1,12 +1,200 @@
-# Project Euler 825
-# Chasing Game - T(10^14) rounded to 8 decimal places.
-# Real solver in native/p825.c.
+# Project Euler 825 - Chasing Game
+# Computes T(10^14) rounded to 8 decimal places.
+# Pure Flow port of native/p825.c.
 
 extern {
-    function p825_native() -> f64
+    function sqrt(x: f64) -> f64
+    function log(x: f64) -> f64
+    function fabs(x: f64) -> f64
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function dpow(base: f64, exp: i64) -> f64 {
+    let mut result: f64 = 1.0
+    let mut b: f64 = base
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            result = result * b
+        }
+        b = b * b
+        e = e / 2
+    }
+    return result
+}
+
+function digamma(x0: f64) -> f64 {
+    let mut x: f64 = x0
+    let mut res: f64 = 0.0
+    while x < 8.0 {
+        res = res - 1.0 / x
+        x = x + 1.0
+    }
+    let inv: f64 = 1.0 / x
+    let inv2: f64 = inv * inv
+    res = res + log(x) - 0.5 * inv
+    let mut t: f64 = inv2
+    res = res - t / 12.0
+    t = t * inv2
+    res = res + t / 120.0
+    t = t * inv2
+    res = res - t / 252.0
+    t = t * inv2
+    res = res + t / 240.0
+    t = t * inv2
+    res = res - t / 132.0
+    t = t * inv2
+    res = res + t * (691.0 / 32760.0)
+    return res
+}
+
+# Gauss elimination on 4x4 augmented matrix (4 rows, 5 cols).
+# mat is a flat array of 20 doubles (row-major, 4 cols + 1 RHS).
+function gauss_solve_4x4(mat: ptr<f64>, sol: ptr<f64>) -> void {
+    let mut c: i64 = 0
+    while c < 4 {
+        let mut piv: i64 = c
+        let mut r: i64 = c + 1
+        while r < 4 {
+            if fabs(mat[r * 5 + c]) > fabs(mat[piv * 5 + c]) {
+                piv = r
+            }
+            r = r + 1
+        }
+        if piv != c {
+            let mut j: i64 = 0
+            while j < 5 {
+                let tmp: f64 = mat[c * 5 + j]
+                mat[c * 5 + j] = mat[piv * 5 + j]
+                mat[piv * 5 + j] = tmp
+                j = j + 1
+            }
+        }
+        let pv: f64 = mat[c * 5 + c]
+        let mut j: i64 = c
+        while j < 5 {
+            mat[c * 5 + j] = mat[c * 5 + j] / pv
+            j = j + 1
+        }
+        let mut r2: i64 = 0
+        while r2 < 4 {
+            if r2 == c {
+                r2 = r2 + 1
+                continue
+            }
+            let f: f64 = mat[r2 * 5 + c]
+            if f == 0.0 {
+                r2 = r2 + 1
+                continue
+            }
+            let mut j2: i64 = c
+            while j2 < 5 {
+                mat[r2 * 5 + j2] = mat[r2 * 5 + j2] - f * mat[c * 5 + j2]
+                j2 = j2 + 1
+            }
+            r2 = r2 + 1
+        }
+        c = c + 1
+    }
+    let mut i: i64 = 0
+    while i < 4 {
+        sol[i] = mat[i * 5 + 4]
+        i = i + 1
+    }
+}
+
+function S_fast_float(n: i64) -> f64 {
+    if n < 2 { return 0.0 }
+    if n == 2 {
+        return 7.0 / 11.0
+    }
+    let L: i64 = 2 * n
+    let q: f64 = -2.0 + sqrt(3.0)
+
+    # row(y) = [1, y, q^y, q^(L-y)]
+    # for y = 2,3,4,5,L-2,L-1
+    let row: ptr<f64> = malloc(24 * 8)
+    let ys: ptr<i64> = malloc(6 * 8)
+    ys[0] = 2
+    ys[1] = 3
+    ys[2] = 4
+    ys[3] = 5
+    ys[4] = L - 2
+    ys[5] = L - 1
+    let mut i: i64 = 0
+    while i < 6 {
+        let y: i64 = ys[i]
+        row[i * 4 + 0] = 1.0
+        row[i * 4 + 1] = y as f64
+        row[i * 4 + 2] = dpow(q, y)
+        row[i * 4 + 3] = dpow(q, L - y)
+        i = i + 1
+    }
+
+    # indices: row(2)=0, row(3)=1, row(4)=2, row(5)=3, row(L-2)=4, row(L-1)=5
+    let mat: ptr<f64> = malloc(20 * 8)
+    # Eq1: g(2) + (1/3) g(L-1) = 1
+    let mut j: i64 = 0
+    while j < 4 {
+        mat[0 * 5 + j] = row[0 * 4 + j] + (1.0 / 3.0) * row[5 * 4 + j]
+        j = j + 1
+    }
+    mat[0 * 5 + 4] = 1.0
+    # Eq2: g(3) + (1/3) g(L-2) + (1/3) g(L-1) = 1
+    j = 0
+    while j < 4 {
+        mat[1 * 5 + j] = row[1 * 4 + j] + (1.0 / 3.0) * row[4 * 4 + j] + (1.0 / 3.0) * row[5 * 4 + j]
+        j = j + 1
+    }
+    mat[1 * 5 + 4] = 1.0
+    # Eq3: g(L-1) + (1/3)g(2) + (1/3)g(3) + (1/3)g(4) = 1
+    j = 0
+    while j < 4 {
+        mat[2 * 5 + j] = row[5 * 4 + j] + (1.0 / 3.0) * row[0 * 4 + j] + (1.0 / 3.0) * row[1 * 4 + j] + (1.0 / 3.0) * row[2 * 4 + j]
+        j = j + 1
+    }
+    mat[2 * 5 + 4] = 1.0
+    # Eq4: g(L-2) + (1/3)g(3) + (1/3)g(4) + (1/3)g(5) = 1
+    j = 0
+    while j < 4 {
+        mat[3 * 5 + j] = row[4 * 4 + j] + (1.0 / 3.0) * row[1 * 4 + j] + (1.0 / 3.0) * row[2 * 4 + j] + (1.0 / 3.0) * row[3 * 4 + j]
+        j = j + 1
+    }
+    mat[3 * 5 + 4] = 1.0
+
+    let sol: ptr<f64> = malloc(4 * 8)
+    gauss_solve_4x4(mat, sol)
+    let A: f64 = sol[0]
+    let B: f64 = sol[1]
+    let C: f64 = sol[2]
+    let E: f64 = sol[3]
+
+    let gn: f64 = A + B * (n as f64) + C * dpow(q, n) + E * dpow(q, L - n)
+    free(row)
+    free(ys)
+    free(mat)
+    free(sol)
+    return 2.0 * gn - 1.0
+}
+
+function correction_constant() -> f64 {
+    let c: f64 = (3.0 - sqrt(3.0)) / 6.0
+    let mut acc: f64 = 0.0
+    let mut n: i64 = 2
+    while n <= 60 {
+        acc = acc + S_fast_float(n) - 1.0 / ((n - 1) as f64 + c)
+        n = n + 1
+    }
+    return acc
 }
 
 function main() -> i32 {
-    printf("%.8f\n", p825_native())
+    let c: f64 = (3.0 - sqrt(3.0)) / 6.0
+    let K: f64 = correction_constant()
+    let N: f64 = 1e14
+    let shs: f64 = digamma(N + c) - digamma(1.0 + c)
+    let ans: f64 = shs + K
+    printf("%.8f\n", ans)
     return 0
 }

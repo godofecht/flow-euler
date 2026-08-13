@@ -1,11 +1,138 @@
 # Project Euler 753
-# Fermat Equation — native C solver.
+# Fermat Equation: sum over primes p < 6,000,000 of F(p),
+# where F(p) counts ordered triples (a,b,c) with 1<=a,b,c<p and a^3+b^3=c^3 (mod p).
 
 extern {
-    function p753_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memset(s: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+}
+
+function isqrt_ll(n: i64) -> i32 {
+    if n <= 0 { return 0 }
+    let mut r: i32 = (sqrt(n as f64)) as i32
+    while (r as i64) * (r as i64) > n {
+        r = r - 1
+    }
+    while ((r + 1) as i64) * ((r + 1) as i64) <= n {
+        r = r + 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%lld\n", p753_native())
+    let limit_exclusive: i32 = 6000000
+    let max_p: i32 = limit_exclusive - 1
+
+    # Odd-only sieve: sieve_odd[i] is 1 iff (2*i+1) is prime (i>=1).
+    let size: i32 = (max_p / 2) + 1
+    let sieve_odd: ptr<i8> = calloc(size as i64, 1)
+    memset(sieve_odd as ptr<void>, 1, size as i64)
+    sieve_odd[0] = 0
+
+    let r: i32 = isqrt_ll(max_p as i64)
+    let mut i: i32 = 1
+    while i <= r / 2 {
+        if sieve_odd[i] != 0 {
+            let p: i32 = 2 * i + 1
+            let start: i32 = (p * p) / 2
+            let mut j: i32 = start
+            while j < size {
+                sieve_odd[j] = 0
+                j = j + p
+            }
+        }
+        i = i + 1
+    }
+
+    # Count primes
+    let mut cnt: i32 = 1
+    let mut ii: i32 = 1
+    while ii < size {
+        if sieve_odd[ii] != 0 {
+            cnt = cnt + 1
+        }
+        ii = ii + 1
+    }
+
+    # Build primes list
+    let primes_list: ptr<i32> = malloc((cnt as i64) * 4)
+    let mut nprimes: i32 = 0
+    primes_list[nprimes] = 2
+    nprimes = nprimes + 1
+    let mut iii: i32 = 1
+    while iii < size {
+        if sieve_odd[iii] != 0 {
+            primes_list[nprimes] = 2 * iii + 1
+            nprimes = nprimes + 1
+        }
+        iii = iii + 1
+    }
+    if nprimes > 0 && primes_list[nprimes - 1] > max_p {
+        nprimes = nprimes - 1
+    }
+
+    # Build u_by_p for primes p = 1 (mod 3) with 4p = u^2 + 27v^2
+    let n: i32 = max_p
+    let n4: i64 = 4 * (n as i64)
+    let vmax: i32 = isqrt_ll(n4 / 27)
+    let u_by_p: ptr<i32> = calloc((n + 1) as i64, 4)
+
+    let mut v: i32 = 1
+    while v <= vmax {
+        let base: i64 = 27 * (v as i64) * (v as i64)
+        let umax: i32 = isqrt_ll(n4 - base)
+        let mut u: i32 = v & 1
+        while u <= umax {
+            let p: i64 = ((u as i64) * (u as i64) + base) >> 2
+            if p <= (n as i64) && (p % 3 == 1) {
+                if p != 2 && (p & 1) != 0 {
+                    if sieve_odd[(p >> 1) as i32] != 0 {
+                        if u_by_p[p as i32] == 0 {
+                            u_by_p[p as i32] = u
+                        }
+                    }
+                }
+            }
+            u = u + 2
+        }
+        v = v + 1
+    }
+
+    # Compute total
+    let mut total: i64 = 0
+    let mut idx: i32 = 0
+    while idx < nprimes {
+        let p: i32 = primes_list[idx]
+        if p >= limit_exclusive {
+            break
+        }
+        if p == 3 {
+            total = total + 2
+        } else {
+            if p % 3 == 2 {
+                total = total + ((p as i64) - 1) * ((p as i64) - 2)
+            } else {
+                let u: i32 = u_by_p[p]
+                let mut ap: i32 = 0
+                if u % 3 == 2 {
+                    ap = u
+                } else {
+                    ap = -u
+                }
+                total = total + ((p as i64) - 1) * ((p as i64) - (ap as i64) - 8)
+            }
+        }
+        idx = idx + 1
+    }
+
+    printf("%lld\n", total)
+
+    free(sieve_odd as ptr<void>)
+    free(primes_list as ptr<void>)
+    free(u_by_p as ptr<void>)
+
     return 0
 }

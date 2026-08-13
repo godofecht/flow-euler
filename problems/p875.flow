@@ -1,11 +1,160 @@
 # Project Euler 875
 # Quadruple Congruence: Q(12345678) mod 1001961001.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p875_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1001961001
+const TARGET_N: i64 = 12345678
+
+let mut spf: ptr<i32> = null
+let mut primes: ptr<i32> = null
+let mut nprimes: i32 = 0
+let mut f_arr: ptr<i32> = null
+
+function mulmod(a: i64, b: i64, m: i64) -> i64 {
+    let r: i128 = ((a as i128) * (b as i128)) % (m as i128)
+    return r as i64
+}
+
+function powmod(a0: i64, e0: i64, m: i64) -> i64 {
+    let mut r: i64 = 1 % m
+    let mut a: i64 = a0 % m
+    let mut e: i64 = e0
+    while e > 0 {
+        if e % 2 == 1 { r = mulmod(r, a, m) }
+        a = mulmod(a, a, m)
+        e = e / 2
+    }
+    return r
+}
+
+function q_prime_power_mod(p: i64, k: i32, mod: i64) -> i64 {
+    if p == 2 {
+        if k == 1 { return 128 % mod }
+        let r: i64 = 8 % mod
+        let mut g: i64 = 0
+        let mut cur: i64 = 1
+        let mut i: i32 = 0
+        while i < k - 1 {
+            g = g + cur
+            if g >= mod { g = g - mod }
+            cur = mulmod(cur, r, mod)
+            i = i + 1
+        }
+        let term1: i64 = powmod(2, 7 * (k as i64), mod)
+        let term2: i64 = mulmod(powmod(2, 4 * (k as i64) + 3, mod), g, mod)
+        return (term1 + term2) % mod
+    }
+    # Odd prime
+    if k == 1 {
+        let p2: i64 = mulmod(p, p, mod)
+        let p3: i64 = mulmod(p2, p, mod)
+        let p4: i64 = mulmod(p2, p2, mod)
+        let p7: i64 = mulmod(p4, p3, mod)
+        return (p7 + p4 + mod - p3) % mod
+    }
+    let r: i64 = powmod(p, 3, mod)
+    let mut g: i64 = 0
+    let mut cur: i64 = 1
+    let mut i: i32 = 0
+    while i < k {
+        g = g + cur
+        if g >= mod { g = g - mod }
+        cur = mulmod(cur, r, mod)
+        i = i + 1
+    }
+    let term1: i64 = powmod(p, 7 * (k as i64), mod)
+    let termp: i64 = powmod(p, 4 * (k as i64) - 1, mod)
+    let term2: i64 = mulmod(mulmod((p - 1) % mod, termp, mod), g, mod)
+    return (term1 + term2) % mod
+}
+
+function smallest_prime_factors(n: i64) -> void {
+    spf = calloc(n + 1, 4) as ptr<i32>
+    primes = malloc((n + 1) * 4) as ptr<i32>
+    nprimes = 0
+    spf[1] = 1
+
+    let mut i: i64 = 2
+    while i <= n {
+        if spf[i] == 0 {
+            spf[i] = i as i32
+            primes[nprimes] = i as i32
+            nprimes = nprimes + 1
+        }
+        let si: i64 = spf[i] as i64
+        let mut j: i32 = 0
+        while j < nprimes {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > n { break }
+            spf[ip] = p as i32
+            if p == si { break }
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function compute_Q(N: i64, mod: i64) -> i64 {
+    smallest_prime_factors(N)
+
+    f_arr = calloc(N + 1, 4) as ptr<i32>
+    f_arr[1] = 1
+    let mut total: i64 = 1 % mod
+
+    let mut n: i64 = 2
+    while n <= N {
+        let p: i64 = spf[n] as i64
+        let m: i64 = n / p
+        let val: i64 = 0
+
+        if (spf[m] as i64) != p {
+            let qp: i64 = 0
+            if m == 1 {
+                qp = q_prime_power_mod(p, 1, mod)
+            } else {
+                qp = f_arr[p] as i64
+            }
+            val = mulmod(f_arr[m] as i64, qp, mod)
+        } else {
+            let mut ppow: i64 = p * p
+            let mut k: i32 = 2
+            let mut mm: i64 = m / p
+            while mm > 1 && (spf[mm] as i64) == p {
+                ppow = ppow * p
+                k = k + 1
+                mm = mm / p
+            }
+            let rest: i64 = mm
+            let qp: i64 = 0
+            if rest == 1 {
+                qp = q_prime_power_mod(p, k, mod)
+            } else {
+                qp = f_arr[ppow] as i64
+            }
+            val = mulmod(f_arr[rest] as i64, qp, mod)
+        }
+
+        f_arr[n] = val as i32
+        total = total + val
+        if total >= mod { total = total - mod }
+        n = n + 1
+    }
+
+    free(spf as ptr<void>)
+    free(primes as ptr<void>)
+    free(f_arr as ptr<void>)
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p875_native())
+    printf("%lld\n", compute_Q(TARGET_N, MOD))
     return 0
 }

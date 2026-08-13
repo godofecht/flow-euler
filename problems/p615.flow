@@ -1,11 +1,181 @@
 # Project Euler 615
 # Numbers with a given number of prime factors: 10^6-th omega=10^6 number mod.
+# Search for numbers with at least `threshold` prime factors (with repetition)
+# whose value is at most 3^threshold. When count >= 10^6, collect, sort, and
+# take the 10^6-th value.
 
 extern {
-    function pe615_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function log(x: f64) -> f64
+}
+
+const MOD: i64 = 123454321
+const TARGET_RANK: i64 = 1000000
+const TARGET_OMEGA: i64 = 1000000
+
+let mut g_primes: ptr<i64> = null
+let mut g_pc: i64 = 0
+let mut g_prime_logs: ptr<f64> = null
+let mut g_log3: f64 = 0.0
+
+let mut g_values: ptr<i64> = null
+let mut g_vcount: i64 = 0
+let mut g_vcap: i64 = 0
+let mut g_count_only: i64 = 0
+let mut g_collect_flag: bool = false
+let mut g_limit_i: i64 = 0
+let mut g_log_limit: f64 = 0.0
+let mut g_threshold: i64 = 0
+
+function search(start_index: i64, product: i64, used: i64, log_product: f64) -> void {
+    if used >= g_threshold {
+        g_count_only = g_count_only + 1
+        if g_collect_flag {
+            if g_vcount < g_vcap {
+                g_values[g_vcount] = product
+                g_vcount = g_vcount + 1
+            }
+        }
+    }
+    let remaining: i64 = g_threshold - used
+    let mut index: i64 = start_index
+    while index < g_pc {
+        let prime: i64 = g_primes[index]
+        if product > g_limit_i / prime { break }
+        let next_product: i64 = product * prime
+        if remaining > 0 && log_product + (remaining as f64) * g_prime_logs[index] > g_log_limit + 1e-12 {
+            break
+        }
+        search(index, next_product, used + 1, log_product + g_prime_logs[index])
+        index = index + 1
+    }
+}
+
+function values_count(threshold: i64, collect: bool) -> i64 {
+    g_threshold = threshold
+    let mut limit_i: i64 = 1
+    let mut i: i64 = 0
+    while i < threshold {
+        limit_i = limit_i * 3
+        i = i + 1
+    }
+    g_limit_i = limit_i
+    g_log_limit = (threshold as f64) * g_log3
+    g_collect_flag = collect
+    g_count_only = 0
+    g_vcount = 0
+    search(0, 1, 0, 0.0)
+    return g_count_only
+}
+
+function heapsort_i64(arr: ptr<i64>, n: i64) -> void {
+    let mut start: i64 = n / 2
+    while start > 0 {
+        start = start - 1
+        let mut root: i64 = start
+        while 2 * root + 1 < n {
+            let child: i64 = 2 * root + 1
+            let mut swap_idx: i64 = root
+            if arr[swap_idx] < arr[child] { swap_idx = child }
+            if child + 1 < n {
+                if arr[swap_idx] < arr[child + 1] { swap_idx = child + 1 }
+            }
+            if swap_idx == root { break }
+            let tmp: i64 = arr[root]
+            arr[root] = arr[swap_idx]
+            arr[swap_idx] = tmp
+            root = swap_idx
+        }
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let tmp: i64 = arr[0]
+        arr[0] = arr[end]
+        arr[end] = tmp
+        let mut root: i64 = 0
+        while 2 * root + 1 < end {
+            let child: i64 = 2 * root + 1
+            let mut swap_idx: i64 = root
+            if arr[swap_idx] < arr[child] { swap_idx = child }
+            if child + 1 < end {
+                if arr[swap_idx] < arr[child + 1] { swap_idx = child + 1 }
+            }
+            if swap_idx == root { break }
+            let tmp2: i64 = arr[root]
+            arr[root] = arr[swap_idx]
+            arr[swap_idx] = tmp2
+            root = swap_idx
+        }
+        end = end - 1
+    }
+}
+
+function mod_pow(a0: i64, e0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut a: i64 = a0 % MOD
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (a as i128) % (MOD as i128)) as i64
+        }
+        a = ((a as i128) * (a as i128) % (MOD as i128)) as i64
+        e = e >> 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe615_answer())
+    let lim: i64 = 300000
+    let sieve: ptr<i8> = calloc(lim + 1, 1)
+    g_primes = calloc(lim, 8)
+    g_pc = 0
+    let mut i: i64 = 2
+    while i <= lim {
+        if sieve[i] == 0 {
+            g_primes[g_pc] = i
+            g_pc = g_pc + 1
+            if i * i <= lim {
+                let mut j: i64 = i * i
+                while j <= lim {
+                    sieve[j] = 1
+                    j = j + i
+                }
+            }
+        }
+        i = i + 1
+    }
+    g_prime_logs = calloc(g_pc, 8)
+    let mut pi: i64 = 0
+    while pi < g_pc {
+        g_prime_logs[pi] = log((g_primes[pi] as f64))
+        pi = pi + 1
+    }
+    g_log3 = log(3.0)
+
+    let mut threshold: i64 = 1
+    let mut value: i64 = 0
+    let mut found: bool = false
+    while !found {
+        threshold = threshold + 1
+        let cnt: i64 = values_count(threshold, false)
+        if cnt >= TARGET_RANK {
+            g_values = malloc(cnt * 8)
+            g_vcap = cnt
+            let cnt2: i64 = values_count(threshold, true)
+            heapsort_i64(g_values, g_vcount)
+            value = g_values[TARGET_RANK - 1]
+            found = true
+        }
+    }
+
+    let ans: i64 = (((value % MOD) as i128) * (mod_pow(2, TARGET_OMEGA - threshold) as i128) % (MOD as i128)) as i64
+    printf("%lld\n", ans)
+
+    free(sieve)
+    free(g_primes)
+    free(g_prime_logs)
+    free(g_values)
     return 0
 }

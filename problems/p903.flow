@@ -1,8 +1,171 @@
+# Project Euler 903: Total Permutation Powers
+# Compute Q(n) mod 1e9+7 for n = 10^6.
+# Uses Mobius sieve, harmonic numbers, and modular arithmetic.
+# Pure Flow port of native/p903.c.
+
 extern {
-    function p903_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+
+function mod_pow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % mod
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            result = result * b % mod
+        }
+        b = b * b % mod
+        e = e / 2
+    }
+    return result
 }
 
 function main() -> i32 {
-    printf("%lld\n", p903_native())
+    let n: i64 = 1000000
+
+    # Modular inverses inv[1..n]
+    let inv: ptr<i64> = malloc((n + 1) * 8)
+    inv[1] = 1
+    let mut i: i64 = 2
+    while i <= n {
+        inv[i] = MOD - (MOD / i) * inv[MOD % i] % MOD
+        i = i + 1
+    }
+
+    # Harmonic numbers H[k] = sum_{i=1..k} inv[i]
+    let H: ptr<i64> = malloc((n + 1) * 8)
+    let mut s: i64 = 0
+    i = 1
+    while i <= n {
+        s = s + inv[i]
+        if s >= MOD { s = s - MOD }
+        H[i] = s
+        i = i + 1
+    }
+
+    # Mobius function via linear sieve
+    let mu: ptr<i8> = calloc(n + 1, 1)
+    let primes: ptr<i64> = malloc(n * 8)
+    let mut prime_count: i64 = 0
+    let is_comp: ptr<i8> = calloc(n + 1, 1)
+
+    mu[1] = 1
+    i = 2
+    while i <= n {
+        if is_comp[i] == 0 {
+            primes[prime_count] = i
+            prime_count = prime_count + 1
+            mu[i] = -1
+        }
+        let mut j: i64 = 0
+        while j < prime_count {
+            let p: i64 = primes[j]
+            let v: i64 = i * p
+            if v > n { break }
+            is_comp[v] = 1
+            if i % p == 0 {
+                mu[v] = 0
+                break
+            }
+            mu[v] = -mu[i]
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    # Compute F[s] = sum_{d|s} mu(d)/d * H[s/d - 1] by convolution over multiples
+    let F: ptr<i64> = calloc(n + 1, 8)
+    let mut d: i64 = 1
+    while d <= n {
+        if mu[d] != 0 {
+            let c: i64 = 0
+            if mu[d] == 1 {
+                c = inv[d]
+            } else {
+                c = MOD - inv[d]
+            }
+            let mut m: i64 = 1
+            let mut s2: i64 = d
+            while s2 <= n {
+                F[s2] = (F[s2] + c * H[m - 1]) % MOD
+                m = m + 1
+                s2 = s2 + d
+            }
+        }
+        d = d + 1
+    }
+
+    # S = sum_{s=2..n} H[floor(n/s)] * 2*F[s]/s
+    let mut S: i64 = 0
+    let mut s2: i64 = 2
+    while s2 <= n {
+        let mut term: i64 = H[n / s2] * ((2 * F[s2]) % MOD) % MOD
+        term = term * inv[s2] % MOD
+        S = (S + term) % MOD
+        s2 = s2 + 1
+    }
+
+    # alpha = (n - H[n] + S) / (n * (n-1))
+    let num_alpha: i64 = ((n % MOD - H[n] + S) % MOD + MOD) % MOD
+    let alpha: i64 = num_alpha * inv[n] % MOD * inv[n - 1] % MOD
+
+    # beta = H[n/2] / (2*n*(n-1))
+    let denom_beta: i64 = (2 * n % MOD) * (n - 1) % MOD
+    let beta: i64 = H[n / 2] * mod_pow(denom_beta, MOD - 2, MOD) % MOD
+
+    # p = H[n] / n
+    let p: i64 = H[n] * inv[n] % MOD
+    # q = (1 - p) / (n-1)
+    let q: i64 = ((1 - p) % MOD + MOD) % MOD * inv[n - 1] % MOD
+
+    let inv_n2: i64 = inv[n - 2]
+    let inv_n3: i64 = inv[n - 3]
+
+    # a = (p - alpha) / (n-2)
+    let a: i64 = ((p - alpha) % MOD + MOD) % MOD * inv_n2 % MOD
+    # b = (q - beta) / (n-2)
+    let b: i64 = ((q - beta) % MOD + MOD) % MOD * inv_n2 % MOD
+    # eta = (q - a - b) / (n-3)
+    let eta: i64 = ((q - a - b) % MOD + MOD) % MOD * inv_n3 % MOD
+
+    # C0 = beta + (n-3)*b + (n-1)*a + eta * (n-2)(n-3)/2
+    let bconst: i64 = ((n - 2) * (n - 3) / 2) % MOD
+    let mut C0: i64 = (beta + (n - 3) % MOD * b % MOD + (n - 1) % MOD * a % MOD + eta * bconst % MOD) % MOD
+    C0 = (C0 % MOD + MOD) % MOD
+    let slope: i64 = ((b - a) % MOD + MOD) % MOD
+
+    let inv2: i64 = (MOD + 1) / 2
+
+    # S1 = sum_{m=1..n-1} m! * m
+    # S2 = sum_{m=1..n-1} m! * m*(m+1)/2
+    let mut fact: i64 = 1
+    let mut S1: i64 = 0
+    let mut S2: i64 = 0
+    let mut m: i64 = 1
+    while m < n {
+        fact = fact * m % MOD
+        S1 = (S1 + fact * m) % MOD
+        S2 = (S2 + fact * m % MOD * (m + 1) % MOD * inv2) % MOD
+        m = m + 1
+    }
+
+    let fact_n: i64 = fact * n % MOD
+    let mut E_rank: i64 = (1 + C0 * S1 % MOD + slope * S2 % MOD) % MOD
+    E_rank = (E_rank % MOD + MOD) % MOD
+
+    let ans: i64 = fact_n * fact_n % MOD * E_rank % MOD
+
+    printf("%lld\n", ans)
+    free(inv)
+    free(H)
+    free(mu)
+    free(primes)
+    free(is_comp)
+    free(F)
     return 0
 }

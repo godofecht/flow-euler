@@ -1,11 +1,227 @@
 # Project Euler 741
 # Binary Grid Colouring: g(7^7) + g(8^8) mod 1e9+7.
+# Pure Flow port of the native C solver.
 
-extern {
-    function p741_native() -> i64
+const MOD: i64 = 1000000007
+const INV2: i64 = 500000004
+const INV8: i64 = 125000001
+
+function mm(a: i64, b: i64) -> i64 {
+    let r: i128 = ((a as i128) * (b as i128)) % (MOD as i128)
+    return r as i64
+}
+
+function mpow(a0: i64, e0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut a: i64 = a0 % MOD
+    if a < 0 { a = a + MOD }
+    let mut e: i64 = e0
+    while e > 0 {
+        if e % 2 == 1 { r = mm(r, a) }
+        a = mm(a, a)
+        e = e / 2
+    }
+    return r
+}
+
+function madd(a: i64, b: i64) -> i64 {
+    let mut r: i64 = a + b
+    if r >= MOD { r = r - MOD }
+    return r
+}
+
+function msub(a: i64, b: i64) -> i64 {
+    let mut r: i64 = a - b
+    if r < 0 { r = r + MOD }
+    return r
+}
+
+# Returns f(n), diag_fix(n), n! mod MOD via out-parameters.
+function f_diag_fact(n: i64, f_out: ptr<i64>, diag_out: ptr<i64>, fact_out: ptr<i64>) -> void {
+    if n == 0 {
+        f_out[0] = 1
+        diag_out[0] = 1
+        fact_out[0] = 1
+        return
+    }
+
+    let mut fact: i64 = 1
+    let mut h_im2: i64 = 1
+    let mut h_im1: i64 = 0
+
+    let mut d0: i64 = 0
+    let mut d1: i64 = 0
+    let mut d2: i64 = 0
+    let mut d3: i64 = 0
+    if n <= 3 {
+        d0 = 0
+        d1 = 0
+        d2 = 0
+        d3 = 0
+    } else {
+        d0 = 1
+        d1 = 0
+        d2 = 1
+        d3 = 4
+    }
+
+    let mut i: i64 = 1
+    while i <= n {
+        fact = mm(fact, i % MOD)
+
+        if i >= 2 {
+            let k: i64 = i - 1
+            let h_i: i64 = madd(mm(k % MOD, h_im1), mm(mm(k % MOD, INV2), h_im2))
+            h_im2 = h_im1
+            h_im1 = h_i
+        }
+
+        if n >= 4 {
+            if i >= 4 {
+                let k: i64 = i - 1
+                let term1: i64 = mm((2 * k) % MOD, d3)
+                let term2: i64 = mm(mm(k % MOD, (k - 2) % MOD), d2)
+                let term3: i64 = mm(mm(mm(k % MOD, (k - 1) % MOD), (k - 2) % MOD), d0)
+                let newv: i64 = msub(msub(term1, term2), mm(term3, INV2))
+                d0 = d1
+                d1 = d2
+                d2 = d3
+                d3 = newv
+            }
+        }
+
+        i = i + 1
+    }
+
+    f_out[0] = mm(fact, h_im1)
+
+    let mut diag: i64 = 0
+    if n == 0 {
+        diag = 1
+    } else {
+        if n == 1 {
+            diag = 0
+        } else {
+            if n == 2 {
+                diag = 1
+            } else {
+                if n == 3 {
+                    diag = 4
+                } else {
+                    diag = d3
+                }
+            }
+        }
+    }
+    diag_out[0] = diag
+    fact_out[0] = fact
+}
+
+function fix_axis_reflection(n: i64, fact_n: i64) -> i64 {
+    if n % 2 == 1 { return 0 }
+    return mm(fact_n, mpow(INV2, n / 2))
+}
+
+function fix_rotation_90(n: i64) -> i64 {
+    if n % 2 == 1 { return 0 }
+    let m: i64 = n / 2
+    if m == 0 { return 1 }
+    if m == 1 { return 1 }
+    if m == 2 { return 2 }
+
+    let mut b0: i64 = 1
+    let mut b1: i64 = 1
+    let mut b2: i64 = 2
+    let mut i: i64 = 2
+    while i < m {
+        let val: i64 = msub(madd(mm((2 * i + 1) % MOD, b2),
+                                 mm((2 * i % MOD) * ((i - 1) % MOD) % MOD, b0)),
+                            mm(i % MOD, b1))
+        b0 = b1
+        b1 = b2
+        b2 = val
+        i = i + 1
+    }
+    return b2
+}
+
+function fix_rotation_180(n: i64) -> i64 {
+    if n == 0 { return 1 }
+
+    if n % 2 == 0 {
+        let m: i64 = n / 2
+        if m == 0 { return 1 }
+        if m == 1 { return 1 }
+        let mut j_prev: i64 = 1
+        let mut j_curr: i64 = 1
+        let mut fact: i64 = 1
+        let mut i: i64 = 1
+        while i < m {
+            fact = mm(fact, i % MOD)
+            let j_next: i64 = madd(mm((4 * i + 1) % MOD, j_curr),
+                                   mm((4 * i) % MOD, j_prev))
+            j_prev = j_curr
+            j_curr = j_next
+            i = i + 1
+        }
+        let fact_m: i64 = mm(fact, m % MOD)
+        return mm(fact_m, j_curr)
+    }
+
+    # odd n = 2m+1
+    let m: i64 = (n - 1) / 2
+    if m == 0 { return 0 }
+    let mut fact: i64 = 1
+    let mut t: i64 = 0
+    let mut j_prev: i64 = 1
+    let mut j_curr: i64 = 1
+    let mut i: i64 = 1
+    while i <= m {
+        fact = mm(fact, i % MOD)
+        t = madd(mm((4 * i) % MOD, t), mm((2 * i) % MOD, j_prev))
+        if i < m {
+            let j_next: i64 = madd(mm((4 * i + 1) % MOD, j_curr),
+                                   mm((4 * i) % MOD, j_prev))
+            j_prev = j_curr
+            j_curr = j_next
+        }
+        i = i + 1
+    }
+    return mm(fact, t)
+}
+
+function g(n: i64) -> i64 {
+    let buf: array<i64, 3> = [0, 0, 0]
+    f_diag_fact(n, &buf[0], &buf[1], &buf[2])
+    let f_n: i64 = buf[0]
+    let diag: i64 = buf[1]
+    let fact_n: i64 = buf[2]
+    let axis: i64 = fix_axis_reflection(n, fact_n)
+    let r180: i64 = fix_rotation_180(n)
+    let r90: i64 = fix_rotation_90(n)
+
+    let mut total: i64 = f_n
+    total = madd(total, r180)
+    total = madd(total, mm(2, r90))
+    total = madd(total, mm(2, axis))
+    total = madd(total, mm(2, diag))
+    return mm(total, INV8)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p741_native())
+    let mut n1: i64 = 1
+    let mut i: i32 = 0
+    while i < 7 {
+        n1 = n1 * 7
+        i = i + 1
+    }
+    let mut n2: i64 = 1
+    let mut j: i32 = 0
+    while j < 8 {
+        n2 = n2 * 8
+        j = j + 1
+    }
+    let ans: i64 = madd(g(n1), g(n2))
+    printf("%lld\n", ans)
     return 0
 }

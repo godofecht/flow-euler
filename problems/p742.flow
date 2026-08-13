@@ -1,11 +1,293 @@
 # Project Euler 742
-# Minimum Area of a Convex Grid Polygon — native C solver.
+# Minimum Area of a Convex Grid Polygon.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p742_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+let mut g_pa: ptr<i32> = null
+let mut g_pb: ptr<i32> = null
+let mut g_npairs: i32 = 0
+let mut g_pair_cap: i32 = 0
+
+function gcd(a0: i32, b0: i32) -> i32 {
+    let mut a: i32 = a0
+    let mut b: i32 = b0
+    while b != 0 {
+        let t: i32 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function primitive_pairs(limit: i32) -> void {
+    if g_pair_cap < limit * limit {
+        free(g_pa as ptr<void>)
+        free(g_pb as ptr<void>)
+        g_pair_cap = limit * limit
+        g_pa = malloc((g_pair_cap as i64) * 4) as ptr<i32>
+        g_pb = malloc((g_pair_cap as i64) * 4) as ptr<i32>
+    }
+    g_npairs = 0
+    let mut a: i32 = 1
+    while a <= limit {
+        let mut b: i32 = 1
+        while b <= limit {
+            if gcd(a, b) == 1 {
+                g_pa[g_npairs] = a
+                g_pb[g_npairs] = b
+                g_npairs = g_npairs + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+}
+
+# Max-heap comparison: true if (w,tie1,a,b) > (w2,t2,a2,b2)
+function heap_gt(w: f64, tie1: i32, a: i32, b: i32, w2: f64, t2: i32, a2: i32, b2: i32) -> bool {
+    if w > w2 { return true }
+    if w < w2 { return false }
+    if tie1 > t2 { return true }
+    if tie1 < t2 { return false }
+    if a > a2 { return true }
+    if a < a2 { return false }
+    if b > b2 { return true }
+    return false
+}
+
+# Select k pairs minimizing a^2 + t*b^2 with tie-break on a+b then a then b.
+# Uses a max-heap of size k. Writes results to out_a, out_b.
+function n_smallest(out_a: ptr<i32>, out_b: ptr<i32>, k: i32, t: f64) -> void {
+    let hw: ptr<f64> = malloc((k as i64) * 8) as ptr<f64>
+    let htie1: ptr<i32> = malloc((k as i64) * 4) as ptr<i32>
+    let ha: ptr<i32> = malloc((k as i64) * 4) as ptr<i32>
+    let hb: ptr<i32> = malloc((k as i64) * 4) as ptr<i32>
+    let mut hs: i32 = 0
+
+    let mut idx: i32 = 0
+    while idx < g_npairs {
+        let a: i32 = g_pa[idx]
+        let b: i32 = g_pb[idx]
+        let w: f64 = (a as f64) * (a as f64) + t * (b as f64) * (b as f64)
+        let tie1: i32 = a + b
+
+        if hs < k {
+            let mut i: i32 = hs
+            hs = hs + 1
+            hw[i] = w
+            htie1[i] = tie1
+            ha[i] = a
+            hb[i] = b
+            while i > 0 {
+                let p: i32 = (i - 1) / 2
+                if heap_gt(hw[i], htie1[i], ha[i], hb[i], hw[p], htie1[p], ha[p], hb[p]) {
+                    let tmp_w: f64 = hw[p]
+                    hw[p] = hw[i]
+                    hw[i] = tmp_w
+                    let tmp_t: i32 = htie1[p]
+                    htie1[p] = htie1[i]
+                    htie1[i] = tmp_t
+                    let tmp_a: i32 = ha[p]
+                    ha[p] = ha[i]
+                    ha[i] = tmp_a
+                    let tmp_b: i32 = hb[p]
+                    hb[p] = hb[i]
+                    hb[i] = tmp_b
+                    i = p
+                } else {
+                    break
+                }
+            }
+        } else {
+            let better: bool = heap_gt(hw[0], htie1[0], ha[0], hb[0], w, tie1, a, b)
+            if better {
+                hw[0] = w
+                htie1[0] = tie1
+                ha[0] = a
+                hb[0] = b
+                let mut i: i32 = 0
+                while true {
+                    let l: i32 = 2 * i + 1
+                    let r: i32 = 2 * i + 2
+                    let mut largest: i32 = i
+                    if l < hs {
+                        if heap_gt(hw[l], htie1[l], ha[l], hb[l], hw[largest], htie1[largest], ha[largest], hb[largest]) {
+                            largest = l
+                        }
+                    }
+                    if r < hs {
+                        if heap_gt(hw[r], htie1[r], ha[r], hb[r], hw[largest], htie1[largest], ha[largest], hb[largest]) {
+                            largest = r
+                        }
+                    }
+                    if largest != i {
+                        let tmp_w: f64 = hw[i]
+                        hw[i] = hw[largest]
+                        hw[largest] = tmp_w
+                        let tmp_t: i32 = htie1[i]
+                        htie1[i] = htie1[largest]
+                        htie1[largest] = tmp_t
+                        let tmp_a: i32 = ha[i]
+                        ha[i] = ha[largest]
+                        ha[largest] = tmp_a
+                        let tmp_b: i32 = hb[i]
+                        hb[i] = hb[largest]
+                        hb[largest] = tmp_b
+                        i = largest
+                    } else {
+                        break
+                    }
+                }
+            }
+        }
+        idx = idx + 1
+    }
+
+    let mut i: i32 = 0
+    while i < k {
+        out_a[i] = ha[i]
+        out_b[i] = hb[i]
+        i = i + 1
+    }
+    free(hw as ptr<void>)
+    free(htie1 as ptr<void>)
+    free(ha as ptr<void>)
+    free(hb as ptr<void>)
+}
+
+# Insertion sort by slope b/a ascending, then a, then b.
+function sort_by_slope(ia: ptr<i32>, ib: ptr<i32>, k: i32) -> void {
+    let mut i: i32 = 1
+    while i < k {
+        let mut j: i32 = i
+        while j > 0 {
+            let sa: f64 = (ib[j - 1] as f64) / (ia[j - 1] as f64)
+            let sb: f64 = (ib[j] as f64) / (ia[j] as f64)
+            let swap: bool = false
+            if sa > sb {
+                swap = true
+            } else {
+                if sa == sb {
+                    if ia[j - 1] > ia[j] {
+                        swap = true
+                    } else {
+                        if ia[j - 1] == ia[j] {
+                            if ib[j - 1] > ib[j] {
+                                swap = true
+                            }
+                        }
+                    }
+                }
+            }
+            if swap {
+                let ta: i32 = ia[j - 1]
+                ia[j - 1] = ia[j]
+                ia[j] = ta
+                let tb: i32 = ib[j - 1]
+                ib[j - 1] = ib[j]
+                ib[j] = tb
+            } else {
+                break
+            }
+            j = j - 1
+        }
+        i = i + 1
+    }
+}
+
+function area_from_half_edges(ha: ptr<i32>, hb: ptr<i32>, m: i32) -> i64 {
+    let mut px: i64 = 0
+    let mut py: i64 = 0
+    let mut area: i64 = 0
+    let mut i: i32 = 0
+    while i < m {
+        area = area + px * (hb[i] as i64) - py * (ha[i] as i64)
+        px = px + (ha[i] as i64)
+        py = py + (hb[i] as i64)
+        i = i + 1
+    }
+    return area
+}
+
+function polygon_area_from_interior(ia: ptr<i32>, ib: ptr<i32>, k: i32) -> i64 {
+    sort_by_slope(ia, ib, k)
+    let m: i32 = 1 + k + 1 + k
+    let ha: ptr<i32> = malloc((m as i64) * 4) as ptr<i32>
+    let hb: ptr<i32> = malloc((m as i64) * 4) as ptr<i32>
+    let mut idx: i32 = 0
+    ha[idx] = 1
+    hb[idx] = 0
+    idx = idx + 1
+    let mut i: i32 = 0
+    while i < k {
+        ha[idx] = ia[i]
+        hb[idx] = ib[i]
+        idx = idx + 1
+        i = i + 1
+    }
+    ha[idx] = 0
+    hb[idx] = 1
+    idx = idx + 1
+    let mut j: i32 = k - 1
+    while j >= 0 {
+        ha[idx] = -ia[j]
+        hb[idx] = ib[j]
+        idx = idx + 1
+        j = j - 1
+    }
+    let area: i64 = area_from_half_edges(ha, hb, m)
+    free(ha as ptr<void>)
+    free(hb as ptr<void>)
+    return area
+}
+
+function compute_A(N: i32) -> i64 {
+    if N < 4 || N % 4 != 0 { return 0 }
+    let k: i32 = (N - 4) / 4
+    if k == 0 { return 1 }
+
+    let mut limit: i32 = 40
+    primitive_pairs(limit)
+
+    let mut best_area: i64 = -1
+    let ca: ptr<i32> = malloc((k as i64) * 4) as ptr<i32>
+    let cb: ptr<i32> = malloc((k as i64) * 4) as ptr<i32>
+
+    let mut tn: i32 = 1
+    while tn <= 1000 {
+        let t: f64 = (tn as f64) / 1000.0
+
+        while true {
+            n_smallest(ca, cb, k, t)
+            let mut max_a: i32 = 0
+            let mut max_b: i32 = 0
+            let mut i: i32 = 0
+            while i < k {
+                if ca[i] > max_a { max_a = ca[i] }
+                if cb[i] > max_b { max_b = cb[i] }
+                i = i + 1
+            }
+            if max_a < limit && max_b < limit { break }
+            limit = limit * 2
+            primitive_pairs(limit)
+        }
+
+        let area: i64 = polygon_area_from_interior(ca, cb, k)
+        if best_area == -1 || area < best_area { best_area = area }
+        tn = tn + 1
+    }
+
+    free(ca as ptr<void>)
+    free(cb as ptr<void>)
+    return best_area
 }
 
 function main() -> i32 {
-    printf("%lld\n", p742_native())
+    printf("%lld\n", compute_A(1000))
     return 0
 }

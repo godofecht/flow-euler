@@ -2,10 +2,279 @@
 # Product of Gauss Factorials: product of GF(n) for 1<=n<=10^8, mod 1e9+7.
 
 extern {
-    function p754_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+const EXP_MOD: i64 = 1000000006
+const LIMIT: i64 = 100000000
+
+function mm(a: i64, b: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (MOD as i128)) as i64
+}
+
+function mpow(base0: i64, exp0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut base: i64 = base0 % MOD
+    if base < 0 { base = base + MOD }
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 { r = mm(r, base) }
+        base = mm(base, base)
+        exp = exp >> 1
+    }
+    return r
+}
+
+# Heapsort for i64 arrays
+function heapsort_i64(arr: ptr<i64>, n: i64) -> void {
+    let mut start: i64 = n / 2
+    while start > 0 {
+        start = start - 1
+        let mut root: i64 = start
+        while 2 * root + 1 < n {
+            let child: i64 = 2 * root + 1
+            let mut swap_idx: i64 = root
+            if arr[swap_idx] < arr[child] { swap_idx = child }
+            if child + 1 < n {
+                if arr[swap_idx] < arr[child + 1] { swap_idx = child + 1 }
+            }
+            if swap_idx == root { break }
+            let tmp: i64 = arr[root]
+            arr[root] = arr[swap_idx]
+            arr[swap_idx] = tmp
+            root = swap_idx
+        }
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let tmp: i64 = arr[0]
+        arr[0] = arr[end]
+        arr[end] = tmp
+        let mut root: i64 = 0
+        while 2 * root + 1 < end {
+            let child: i64 = 2 * root + 1
+            let mut swap_idx: i64 = root
+            if arr[swap_idx] < arr[child] { swap_idx = child }
+            if child + 1 < end {
+                if arr[swap_idx] < arr[child + 1] { swap_idx = child + 1 }
+            }
+            if swap_idx == root { break }
+            let tmp2: i64 = arr[root]
+            arr[root] = arr[swap_idx]
+            arr[swap_idx] = tmp2
+            root = swap_idx
+        }
+        end = end - 1
+    }
+}
+
+# Global superfactorial table
+let mut sf_keys: ptr<i64> = null
+let mut sf_vals: ptr<i64> = null
+let mut sf_count: i64 = 0
+
+function sf_lookup(key: i64) -> i64 {
+    let mut lo: i64 = 0
+    let hi: i64 = sf_count
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if sf_keys[mid] < key { lo = mid + 1 }
+        else { hi = mid }
+    }
+    if lo < sf_count && sf_keys[lo] == key { return sf_vals[lo] }
+    return 1
+}
+
+function compute_superfactorials(keys: ptr<i64>, nkeys0: i64) -> void {
+    heapsort_i64(keys, nkeys0)
+    let mut unique: i64 = 0
+    let mut i: i64 = 0
+    while i < nkeys0 {
+        if i == 0 || keys[i] != keys[i - 1] {
+            keys[unique] = keys[i]
+            unique = unique + 1
+        }
+        i = i + 1
+    }
+    let nkeys: i64 = unique
+
+    sf_keys = malloc(nkeys * 8) as ptr<i64>
+    sf_vals = malloc(nkeys * 8) as ptr<i64>
+    sf_count = 0
+
+    let mut pos: i64 = 0
+    if nkeys > 0 && keys[0] == 0 {
+        sf_keys[0] = 0
+        sf_vals[0] = 1
+        sf_count = 1
+        pos = 1
+    }
+
+    let stop: i64 = if nkeys > 0 { keys[nkeys - 1] } else { 0 }
+    let mut factorial: i64 = 1
+    let mut superfactorial: i64 = 1
+    let mut x: i64 = 1
+    while x <= stop {
+        factorial = mm(factorial, x % MOD)
+        superfactorial = mm(superfactorial, factorial)
+        while pos < nkeys && keys[pos] == x {
+            sf_keys[sf_count] = x
+            sf_vals[sf_count] = superfactorial
+            sf_count = sf_count + 1
+            pos = pos + 1
+        }
+        x = x + 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p754_native())
+    let mu: ptr<i8> = calloc(LIMIT + 1, 1) as ptr<i8>
+    let comp: ptr<i8> = calloc(LIMIT + 1, 1) as ptr<i8>
+    let primes: ptr<i32> = malloc(6000000 * 4) as ptr<i32>
+    let mut pc: i64 = 0
+
+    let mut agg_cap: i64 = 65536
+    let mut agg_q: ptr<i64> = malloc(agg_cap * 8) as ptr<i64>
+    let mut agg_pos_prod: ptr<i64> = malloc(agg_cap * 8) as ptr<i64>
+    let mut agg_neg_prod: ptr<i64> = malloc(agg_cap * 8) as ptr<i64>
+    let mut agg_mu_sum: ptr<i64> = malloc(agg_cap * 8) as ptr<i64>
+    let mut agg_n: i64 = 0
+
+    agg_q[0] = LIMIT
+    agg_pos_prod[0] = 1
+    agg_neg_prod[0] = 1
+    agg_mu_sum[0] = 1
+    agg_n = 1
+
+    mu[1] = 1
+
+    let mut lo: i64 = 2
+    if lo <= LIMIT {
+        let mut q: i64 = LIMIT / lo
+        let mut hi: i64 = LIMIT / q
+        let mut pos_prod: i64 = 1
+        let mut neg_prod: i64 = 1
+        let mut mu_sum: i64 = 0
+
+        let mut x: i64 = 2
+        let mut done: bool = false
+        while x <= LIMIT && !done {
+            let mux: i8 = if comp[x] == 0 { 2 } else { mu[x] }
+            if comp[x] == 0 {
+                primes[pc] = x as i32
+                pc = pc + 1
+                mu[x] = 2
+            }
+
+            if mux == 1 {
+                pos_prod = mm(pos_prod, x % MOD)
+                mu_sum = mu_sum + 1
+            } else {
+                if mux == 2 {
+                    neg_prod = mm(neg_prod, x % MOD)
+                    mu_sum = mu_sum - 1
+                }
+            }
+
+            let mut i: i64 = 0
+            while i < pc {
+                let p: i32 = primes[i]
+                let y: i64 = x * (p as i64)
+                if y > LIMIT { break }
+                comp[y] = 1
+                if x % (p as i64) == 0 { break }
+                if mux == 1 { mu[y] = 2 }
+                else { if mux == 2 { mu[y] = 1 } }
+                i = i + 1
+            }
+
+            if x == hi {
+                if agg_n >= agg_cap {
+                    let new_cap: i64 = agg_cap * 2
+                    let nq: ptr<i64> = malloc(new_cap * 8) as ptr<i64>
+                    let npp: ptr<i64> = malloc(new_cap * 8) as ptr<i64>
+                    let nnp: ptr<i64> = malloc(new_cap * 8) as ptr<i64>
+                    let nms: ptr<i64> = malloc(new_cap * 8) as ptr<i64>
+                    let mut ci: i64 = 0
+                    while ci < agg_n {
+                        nq[ci] = agg_q[ci]
+                        npp[ci] = agg_pos_prod[ci]
+                        nnp[ci] = agg_neg_prod[ci]
+                        nms[ci] = agg_mu_sum[ci]
+                        ci = ci + 1
+                    }
+                    free(agg_q)
+                    free(agg_pos_prod)
+                    free(agg_neg_prod)
+                    free(agg_mu_sum)
+                    agg_q = nq
+                    agg_pos_prod = npp
+                    agg_neg_prod = nnp
+                    agg_mu_sum = nms
+                    agg_cap = new_cap
+                }
+                agg_q[agg_n] = q
+                agg_pos_prod[agg_n] = pos_prod
+                agg_neg_prod[agg_n] = neg_prod
+                agg_mu_sum[agg_n] = mu_sum
+                agg_n = agg_n + 1
+
+                lo = hi + 1
+                if lo > LIMIT { done = true }
+                else {
+                    q = LIMIT / lo
+                    hi = LIMIT / q
+                    pos_prod = 1
+                    neg_prod = 1
+                    mu_sum = 0
+                }
+            }
+            x = x + 1
+        }
+    }
+
+    free(mu)
+    free(comp)
+    free(primes)
+
+    let keys: ptr<i64> = malloc(agg_n * 8) as ptr<i64>
+    let mut i: i64 = 0
+    while i < agg_n {
+        keys[i] = agg_q[i] - 1
+        i = i + 1
+    }
+    compute_superfactorials(keys, agg_n)
+    free(keys)
+
+    let mut result: i64 = 1
+    i = 0
+    while i < agg_n {
+        let aq: i64 = agg_q[i]
+        let exponent: i64 = (aq * (aq - 1) / 2) % EXP_MOD
+        if exponent != 0 {
+            result = mm(result, mpow(agg_pos_prod[i], exponent))
+            let neg_exp: i64 = (EXP_MOD - exponent) % EXP_MOD
+            if neg_exp != 0 {
+                result = mm(result, mpow(agg_neg_prod[i], neg_exp))
+            }
+        }
+        let sf_power: i64 = ((agg_mu_sum[i] % EXP_MOD) + EXP_MOD) % EXP_MOD
+        if sf_power != 0 {
+            let sf: i64 = sf_lookup(agg_q[i] - 1)
+            result = mm(result, mpow(sf, sf_power))
+        }
+        i = i + 1
+    }
+
+    free(agg_q)
+    free(agg_pos_prod)
+    free(agg_neg_prod)
+    free(agg_mu_sum)
+    free(sf_keys)
+    free(sf_vals)
+    printf("%lld\n", result)
     return 0
 }

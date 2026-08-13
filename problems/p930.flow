@@ -1,11 +1,124 @@
-# Project Euler 930
-# The Gathering — native C solver (double, special scientific format).
-# Companion: problems/native/p930.c
+# Project Euler 930: The Gathering
+# Compute G(12, 12) = sum_{n=2..12} sum_{m=2..12} F(n, m)
+# where F(n, m) = sum_{k != 0} 1/(1 - lambda_k)
+# and lambda_k are eigenvalues of the random walk on (Z_n)^(m-1).
+#
+# The eigenvalues are parametrized by frequency vectors k in (Z_n)^(m-1).
+# We enumerate compositions of d = m-1 into n parts (counts of each residue),
+# computing sum_cos and sum_mod, with multinomial multiplicity.
+#
+# Output in scientific notation with 12 decimal places, no '+' in exponent.
 
 extern {
-    function p930_native() -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function cos(x: f64) -> f64
+}
+
+# Global state for F(n, m) computation.
+let mut g_n: i32 = 0
+let mut g_d: i32 = 0
+let mut g_cos_table: ptr<f64> = null as ptr<f64>
+let mut g_kah_total: f64 = 0.0
+let mut g_kah_c: f64 = 0.0
+let mut g_binom: ptr<i32> = null as ptr<i32>
+
+function init_binom() {
+    for n in 0..12 {
+        g_binom[n * 12 + 0] = 1
+        for k in 1..(n + 1) {
+            let mut val: i32 = g_binom[(n - 1) * 12 + k - 1]
+            if k <= n - 1 {
+                val = val + g_binom[(n - 1) * 12 + k]
+            }
+            g_binom[n * 12 + k] = val
+        }
+    }
+}
+
+function rec(r: i32, remaining: i32, mult: i32, sum_cos: f64, sum_mod: i32, any_nonzero: bool) {
+    if r == g_n - 1 {
+        let cnt: i32 = remaining
+        let sum_cos2: f64 = sum_cos + (cnt as f64) * g_cos_table[r]
+        let sum_mod2: i32 = (sum_mod + cnt * r) % g_n
+        let any2: bool = any_nonzero || (cnt > 0 && r != 0)
+        if !any2 {
+            return
+        }
+        let lam: f64 = (sum_cos2 + g_cos_table[sum_mod2]) / ((g_d + 1) as f64)
+        let term: f64 = (mult as f64) / (1.0 - lam)
+        # Kahan add
+        let y: f64 = term - g_kah_c
+        let t: f64 = g_kah_total + y
+        g_kah_c = (t - g_kah_total) - y
+        g_kah_total = t
+        return
+    }
+
+    let cr: f64 = g_cos_table[r]
+    for cnt in 0..(remaining + 1) {
+        let new_mult: i32 = mult * g_binom[remaining * 12 + cnt]
+        let new_sum_cos: f64 = sum_cos + (cnt as f64) * cr
+        let new_sum_mod: i32 = (sum_mod + cnt * r) % g_n
+        let new_any: bool = any_nonzero || (cnt > 0 && r != 0)
+        rec(r + 1, remaining - cnt, new_mult, new_sum_cos, new_sum_mod, new_any)
+    }
+}
+
+function F(n: i32, m: i32) -> f64 {
+    let d: i32 = m - 1
+    g_n = n
+    g_d = d
+    g_kah_total = 0.0
+    g_kah_c = 0.0
+
+    let PI: f64 = 3.14159265358979323846
+    for r in 0..n {
+        g_cos_table[r] = cos(2.0 * PI * (r as f64) / (n as f64))
+    }
+
+    rec(0, d, 1, 0.0, 0, false)
+    return g_kah_total
 }
 
 function main() -> i32 {
-    return p930_native()
+    g_binom = calloc(144, 4)
+    g_cos_table = calloc(16, 8)
+    if g_binom == null || g_cos_table == null {
+        return 1
+    }
+
+    init_binom()
+
+    # G(12, 12) with Kahan summation.
+    let mut kah_total: f64 = 0.0
+    let mut kah_c: f64 = 0.0
+    for n in 2..13 {
+        for m in 2..13 {
+            let val: f64 = F(n, m)
+            let y: f64 = val - kah_c
+            let t: f64 = kah_total + y
+            kah_c = (t - kah_total) - y
+            kah_total = t
+        }
+    }
+
+    let ans: f64 = kah_total
+
+    # Format as %.12e without '+' in exponent.
+    let mut mant: f64 = ans
+    let mut ex: i64 = 0
+    while mant >= 10.0 {
+        mant = mant / 10.0
+        ex = ex + 1
+    }
+    while mant < 1.0 && mant > 0.0 {
+        mant = mant * 10.0
+        ex = ex - 1
+    }
+    printf("%.12fe%lld\n", mant, ex)
+
+    free(g_cos_table)
+    free(g_binom)
+    return 0
 }

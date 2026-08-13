@@ -1,12 +1,174 @@
 # Project Euler 732
 # Standing on the Shoulders of Trolls - Q(1000).
-# Native C helper in problems/native/p732.c (linked by scripts/run.sh).
+# Generates trolls from r[i] = (5^i mod 1e9+7) mod 101 + 50, then solves
+# a 0/1 knapsack-over-time scheduling problem (earliest-deadline-first DP).
 
 extern {
-    function p732_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# Integer square root for non-negative i64.
+function isqrt_ll(x: i64) -> i64 {
+    if x < 0 {
+        return 0
+    }
+    if x < 2 {
+        return x
+    }
+    let mut x0: i64 = x
+    let mut x1: i64 = (x0 + 1) / 2
+    while x1 < x0 {
+        x0 = x1
+        x1 = (x0 + x / x0) / 2
+    }
+    return x0
+}
+
+# ceil(s / sqrt(2)) exactly: smallest y with 2*y^2 >= s^2.
+function ceil_div_sqrt2(s: i64) -> i64 {
+    let a: i64 = s * s
+    return isqrt_ll((a - 1) / 2) + 1
+}
+
+# Heapsort jobs by deadline (ascending).
+function sift_down(d: ptr<i64>, p: ptr<i64>, prof: ptr<i64>, start: i32, end: i32) {
+    let mut root: i32 = start
+    while 2 * root + 1 <= end {
+        let mut child: i32 = 2 * root + 1
+        if child + 1 <= end {
+            if d[child] < d[child + 1] {
+                child = child + 1
+            }
+        }
+        if d[root] < d[child] {
+            let td: i64 = d[root]
+            d[root] = d[child]
+            d[child] = td
+            let tp: i64 = p[root]
+            p[root] = p[child]
+            p[child] = tp
+            let tq: i64 = prof[root]
+            prof[root] = prof[child]
+            prof[child] = tq
+            root = child
+        } else {
+            return
+        }
+    }
+}
+
+function heap_sort(d: ptr<i64>, p: ptr<i64>, prof: ptr<i64>, n: i32) {
+    let mut start: i32 = (n - 2) / 2
+    while start >= 0 {
+        sift_down(d, p, prof, start, n - 1)
+        start = start - 1
+    }
+    let mut end: i32 = n - 1
+    while end > 0 {
+        let td: i64 = d[0]
+        d[0] = d[end]
+        d[end] = td
+        let tp: i64 = p[0]
+        p[0] = p[end]
+        p[end] = tp
+        let tq: i64 = prof[0]
+        prof[0] = prof[end]
+        prof[end] = tq
+        end = end - 1
+        sift_down(d, p, prof, 0, end)
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p732_native())
+    let n: i32 = 1000
+    let total_r: i32 = 3 * n
+
+    # Generate r[0..3n-1].
+    let r: ptr<i64> = calloc((total_r as i64), 8)
+    if r == null {
+        return 1
+    }
+    let mut p: i64 = 1
+    for i in 0..total_r {
+        r[i] = (p % 101) + 50
+        p = (p * 5) % 1000000007
+    }
+
+    let mut total_h: i64 = 0
+    for k in 0..n {
+        total_h = total_h + r[3 * k]
+    }
+
+    let y: i64 = ceil_div_sqrt2(total_h)
+    let base: i64 = total_h - y
+
+    # Build jobs.
+    let jd: ptr<i64> = calloc((n as i64), 8)
+    let jp: ptr<i64> = calloc((n as i64), 8)
+    let jq: ptr<i64> = calloc((n as i64), 8)
+    if jd == null || jp == null || jq == null {
+        return 1
+    }
+    let mut njobs: i32 = 0
+    let mut max_d: i64 = 0
+    for k in 0..n {
+        let h: i64 = r[3 * k]
+        let l: i64 = r[3 * k + 1]
+        let q: i64 = r[3 * k + 2]
+        let d: i64 = base + l + h
+        if h <= d {
+            jd[njobs] = d
+            jp[njobs] = h
+            jq[njobs] = q
+            njobs = njobs + 1
+            if d > max_d {
+                max_d = d
+            }
+        }
+    }
+
+    heap_sort(jd, jp, jq, njobs)
+
+    # 0/1 knapsack DP over time. dp[t] = max profit with total time exactly t.
+    let sz: i64 = max_d + 1
+    let dp: ptr<i64> = calloc(sz, 8)
+    if dp == null {
+        return 1
+    }
+    for i in 0..sz {
+        dp[i] = -1
+    }
+    dp[0] = 0
+
+    for j in 0..njobs {
+        let d: i64 = jd[j]
+        let pp: i64 = jp[j]
+        let profit: i64 = jq[j]
+        let mut t: i64 = d
+        while t >= pp {
+            if dp[t - pp] != -1 {
+                let cand: i64 = dp[t - pp] + profit
+                if cand > dp[t] {
+                    dp[t] = cand
+                }
+            }
+            t = t - 1
+        }
+    }
+
+    let mut best: i64 = 0
+    for i in 0..sz {
+        if dp[i] > best {
+            best = dp[i]
+        }
+    }
+
+    printf("%lld\n", best)
+    free(dp)
+    free(jq)
+    free(jp)
+    free(jd)
+    free(r)
     return 0
 }

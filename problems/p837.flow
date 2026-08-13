@@ -1,13 +1,178 @@
 # Project Euler 837
 # Amidakuji: count 3-line identity permutations with m,n rungs.
 # a(123456789, 987654321) mod 1234567891.
-# Native C helper for modular arithmetic with batch inversion.
+# Pure Flow port of the native C helper (modular arithmetic with batch
+# inversion). MOD^2 < 9.2e18 so i64 products are safe.
+
+import euler.nt { mod_pow }
+
+const MOD: i64 = 1234567891
+
+function mulmod(a0: i64, b0: i64) -> i64 {
+    let a: i64 = a0 % MOD
+    let b: i64 = b0 % MOD
+    return a * b % MOD
+}
+
+# Batch-invert consecutive integers start, start+1, ..., start+length-1 mod p.
+function invert_consecutive(start: i64, length: i64, out: ptr<i64>) {
+    if length <= 0 {
+        return
+    }
+    let pref: ptr<i64> = malloc(length * 8)
+    let mut acc: i64 = 1
+    for i in 0..length {
+        acc = acc * ((start + i) % MOD) % MOD
+        pref[i] = acc
+    }
+    let mut inv_acc: i64 = mod_pow(pref[length - 1], MOD - 2, MOD)
+    let mut i: i64 = length - 1
+    while i >= 0 {
+        let prev: i64 = 1
+        if i != 0 {
+            prev = pref[i - 1]
+        }
+        out[i] = inv_acc * prev % MOD
+        inv_acc = inv_acc * ((start + i) % MOD) % MOD
+        i = i - 1
+    }
+    free(pref)
+}
+
+# Batch-invert a list of values mod p.
+function invert_list(vals: ptr<i64>, n: i64, out: ptr<i64>) {
+    if n == 0 {
+        return
+    }
+    let pref: ptr<i64> = malloc(n * 8)
+    let mut acc: i64 = 1
+    for i in 0..n {
+        acc = acc * vals[i] % MOD
+        pref[i] = acc
+    }
+    let mut inv_acc: i64 = mod_pow(pref[n - 1], MOD - 2, MOD)
+    let mut i: i64 = n - 1
+    while i >= 0 {
+        let prev: i64 = 1
+        if i != 0 {
+            prev = pref[i - 1]
+        }
+        out[i] = inv_acc * prev % MOD
+        inv_acc = inv_acc * vals[i] % MOD
+        i = i - 1
+    }
+    free(pref)
+}
+
+# C(n,k) mod prime, product formula with batch inversion.
+function binom_mod(n: i64, k: i64) -> i64 {
+    if k < 0 || k > n {
+        return 0
+    }
+    let mut kk: i64 = k
+    if kk > n - kk {
+        kk = n - kk
+    }
+    if kk == 0 {
+        return 1
+    }
+    let base: i64 = n - kk
+    let mut res: i64 = 1
+    let mut start: i64 = 1
+    let block: i64 = 200000
+    let invs: ptr<i64> = malloc(block * 8)
+    while start <= kk {
+        let mut length: i64 = block
+        if length > kk - start + 1 {
+            length = kk - start + 1
+        }
+        invert_consecutive(start, length, invs)
+        let b: i64 = base + start
+        for i in 0..length {
+            res = res * ((b + i) % MOD) % MOD
+            res = res * invs[i] % MOD
+        }
+        start = start + length
+    }
+    free(invs)
+    return res
+}
+
+function amidakuji_count_mod(m: i64, n: i64) -> i64 {
+    let L: i64 = m + n
+    if L % 2 == 1 {
+        return 0
+    }
+
+    let t: i64 = L / 2
+    let mut k: i64 = m % 2
+    let limit: i64 = m
+    if n < m {
+        limit = n
+    }
+
+    let mut layout: i64 = 0
+    if k == 0 {
+        layout = binom_mod(t, m / 2)
+    } else {
+        layout = (t % MOD) * binom_mod(t - 1, (m - 1) / 2) % MOD
+    }
+
+    let inv3: i64 = mod_pow(3, MOD - 2, MOD)
+    let mut pow2: i64 = 1
+    if k != 0 {
+        pow2 = 2
+    }
+    let mut sign: i64 = 1
+    if k != 0 {
+        sign = MOD - 1
+    }
+
+    let mut total: i64 = 0
+    let block: i64 = 200000
+    let nums: ptr<i64> = malloc(block * 8)
+    let dens: ptr<i64> = malloc(block * 8)
+    let inv_dens: ptr<i64> = malloc(block * 8)
+
+    while k <= limit {
+        let mut steps: i64 = block
+        let avail: i64 = ((limit - k) / 2) + 1
+        if steps > avail {
+            steps = avail
+        }
+
+        let mut kk: i64 = k
+        for i in 0..steps {
+            nums[i] = ((m - kk) % MOD) * ((n - kk) % MOD) % MOD
+            dens[i] = ((4 * (kk + 1)) % MOD) * ((kk + 2) % MOD) % MOD
+            kk = kk + 2
+        }
+
+        invert_list(dens, steps, inv_dens)
+
+        for i in 0..steps {
+            let orientations: i64 = ((pow2 + 2 * sign) % MOD) * inv3 % MOD
+            total = (total + layout * orientations % MOD) % MOD
+            layout = layout * nums[i] % MOD * inv_dens[i] % MOD
+            pow2 = pow2 * 4 % MOD
+        }
+
+        k = k + 2 * steps
+    }
+
+    free(nums)
+    free(dens)
+    free(inv_dens)
+    return total
+}
 
 extern {
-    function p837_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
 }
 
 function main() -> i32 {
-    printf("%lld\n", p837_native())
+    printf("%lld\n", amidakuji_count_mod(123456789, 987654321))
     return 0
 }

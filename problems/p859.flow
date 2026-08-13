@@ -1,12 +1,99 @@
 # Project Euler 859
 # Cookie Game: count unordered pile partitions of 300 where Even wins.
-# Real solver in problems/native/p859.c (linked by scripts/run.sh).
+# Each pile is a cold combinatorial game whose value g(n) is an integer.
+# Even (Right) wins iff total value <= 0.
 
 extern {
-    function p859_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
 }
 
 function main() -> i32 {
-    printf("%lld\n", p859_native())
+    let n: i64 = 300
+
+    # g[k]: combinatorial game value of a single pile of size k.
+    let g: ptr<i64> = calloc(n + 1, 8)
+    g[0] = 0
+    let mut k: i64 = 1
+    while k <= n {
+        if (k & 1) != 0 {
+            # k = 2m + 1: Left moves to two piles of size m.
+            let m: i64 = k >> 1
+            let option: i64 = 2 * g[m]
+            if option < 0 {
+                g[k] = 0
+            } else {
+                g[k] = option + 1
+            }
+        } else {
+            # k = 2m: Right moves to two piles of size m - 1.
+            let m: i64 = k >> 1
+            let option: i64 = 2 * g[m - 1]
+            if option > 0 {
+                g[k] = 0
+            } else {
+                g[k] = option - 1
+            }
+        }
+        k = k + 1
+    }
+
+    # Value range for the full position: [-n/2, n].
+    let v_min: i64 = 0 - (n / 2)
+    let v_max: i64 = n
+    let width: i64 = v_max - v_min + 1
+    let offset: i64 = 0 - v_min
+
+    # dp[cookies * width + vi] = #partitions of `cookies` with total value
+    # mapped to index vi.
+    let dp: ptr<i64> = calloc((n + 1) * width, 8)
+    dp[offset] = 1
+
+    let mut size: i64 = 1
+    while size <= n {
+        let dv: i64 = g[size]
+        if dv >= 0 {
+            let d: i64 = dv
+            let mut cookies: i64 = size
+            while cookies <= n {
+                let src_base: i64 = (cookies - size) * width
+                let dst_base: i64 = cookies * width
+                let mut vi: i64 = d
+                while vi < width {
+                    dp[dst_base + vi] = dp[dst_base + vi] + dp[src_base + vi - d]
+                    vi = vi + 1
+                }
+                cookies = cookies + 1
+            }
+        } else {
+            let shift: i64 = 0 - dv
+            let limit: i64 = width - shift
+            let mut cookies: i64 = size
+            while cookies <= n {
+                let src_base: i64 = (cookies - size) * width
+                let dst_base: i64 = cookies * width
+                let mut vi: i64 = 0
+                while vi < limit {
+                    dp[dst_base + vi] = dp[dst_base + vi] + dp[src_base + vi + shift]
+                    vi = vi + 1
+                }
+                cookies = cookies + 1
+            }
+        }
+        size = size + 1
+    }
+
+    # Sum counts with total value <= 0 (indices 0..offset).
+    let mut total: i64 = 0
+    let row_base: i64 = n * width
+    let mut vi: i64 = 0
+    while vi <= offset {
+        total = total + dp[row_base + vi]
+        vi = vi + 1
+    }
+
+    printf("%lld\n", total)
+    free(g)
+    free(dp)
     return 0
 }

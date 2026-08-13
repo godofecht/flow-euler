@@ -1,13 +1,156 @@
 # Project Euler 981
-# Counts equivalence classes of words over {x,y,z} with cube counts,
-# weighted by canonical-product sign and q-multinomial at q=-1, mod 888888883.
-# Native C helper for the factorial precomputation and triple loop.
+# Counts equivalence classes of words over {x,y,z} with cube counts
+# (X,Y,Z) where X,Y,Z are cubes below 88^3, weighted by the
+# canonical-product sign and q-multinomial at q=-1, summed mod 888888883.
+# Pure Flow port of the native C helper. MOD^2 < 7.9e17 so i64 is safe.
+
+import euler.nt { mod_pow }
+
+const MOD: i64 = 888888883
 
 extern {
-    function p981_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
 }
 
 function main() -> i32 {
-    printf("%lld\n", p981_native())
+    let NC: i32 = 88
+    let cubes: ptr<i64> = malloc((NC as i64) * 8)
+    let mut i: i32 = 0
+    while i < NC {
+        let ii: i64 = (i as i64)
+        cubes[i] = ii * ii * ii
+        i = i + 1
+    }
+
+    let max_n: i64 = 3 * cubes[NC - 1]
+
+    # factorials and inverse factorials mod MOD
+    let fact: ptr<i64> = malloc((max_n + 1) * 8)
+    let invfact: ptr<i64> = malloc((max_n + 1) * 8)
+
+    fact[0] = 1 % MOD
+    let mut i1: i64 = 1
+    while i1 <= max_n {
+        fact[i1] = fact[i1 - 1] * (i1 % MOD) % MOD
+        i1 = i1 + 1
+    }
+    invfact[max_n] = mod_pow(fact[max_n], MOD - 2, MOD)
+    let mut i2: i64 = max_n
+    while i2 >= 1 {
+        invfact[i2 - 1] = invfact[i2] * (i2 % MOD) % MOD
+        i2 = i2 - 1
+    }
+
+    let inv2: i64 = (MOD + 1) / 2
+
+    # per-cube helpers
+    let halves: ptr<i64> = malloc((NC as i64) * 8)
+    let invf: ptr<i64> = malloc((NC as i64) * 8)
+    let par: ptr<i32> = malloc((NC as i64) * 4)
+    let mut i3: i32 = 0
+    while i3 < NC {
+        halves[i3] = cubes[i3] >> 1
+        invf[i3] = invfact[cubes[i3]]
+        par[i3] = i3 % 2
+        i3 = i3 + 1
+    }
+
+    let mut total_sum: i64 = 0
+
+    let mut ai: i32 = 0
+    while ai < NC {
+        let X: i64 = cubes[ai]
+        let hx: i64 = halves[ai]
+        let invX: i64 = invf[ai]
+        let px: i32 = par[ai]
+        let mut bj: i32 = 0
+        while bj < NC {
+            let Y: i64 = cubes[bj]
+            let hy: i64 = halves[bj]
+            let invY: i64 = invf[bj]
+            let py: i32 = par[bj]
+            if px != py {
+                bj = bj + 1
+            } else {
+                let mut ck: i32 = 0
+                while ck < NC {
+                    if py != par[ck] {
+                        ck = ck + 1
+                    } else {
+                        let Z: i64 = cubes[ck]
+                        let hz: i64 = halves[ck]
+                        let invZ: i64 = invf[ck]
+
+                        let n: i64 = X + Y + Z
+
+                        # T = multinomial(n; X,Y,Z) mod MOD
+                        let mut T: i64 = fact[n]
+                        T = T * invX % MOD
+                        T = T * invY % MOD
+                        T = T * invZ % MOD
+
+                        # D = (E - O) = q-multinomial at q=-1
+                        let mut D: i64 = 0
+                        if n % 2 == 0 && X % 2 == 1 {
+                            D = 0
+                        } else {
+                            let d1n: i64 = n >> 1
+                            let mut D1: i64 = 0
+                            if hx < 0 || hx > d1n {
+                                D1 = 0
+                            } else {
+                                D1 = fact[d1n] * invfact[hx] % MOD * invfact[d1n - hx] % MOD
+                            }
+                            let n2: i64 = n - X
+                            if n2 % 2 == 0 && Y % 2 == 1 {
+                                D = 0
+                            } else {
+                                let d2n: i64 = n2 >> 1
+                                let mut D2: i64 = 0
+                                if hy < 0 || hy > d2n {
+                                    D2 = 0
+                                } else {
+                                    D2 = fact[d2n] * invfact[hy] % MOD * invfact[d2n - hy] % MOD
+                                }
+                                D = D1 * D2 % MOD
+                            }
+                        }
+
+                        # sign: +1 if (hx+hy+hz) even else -1
+                        let mut Nmod: i64 = 0
+                        if (hx + hy + hz) % 2 == 0 {
+                            Nmod = (T + D) % MOD
+                        } else {
+                            Nmod = (T - D) % MOD
+                            if Nmod < 0 {
+                                Nmod = Nmod + MOD
+                            }
+                        }
+
+                        Nmod = Nmod * inv2 % MOD
+                        total_sum = total_sum + Nmod
+                        if total_sum >= MOD {
+                            total_sum = total_sum - MOD
+                        }
+                        ck = ck + 1
+                    }
+                }
+                bj = bj + 1
+            }
+        }
+        ai = ai + 1
+    }
+
+    let answer: i64 = total_sum % MOD
+    printf("%lld\n", answer)
+
+    free(cubes)
+    free(fact)
+    free(invfact)
+    free(halves)
+    free(invf)
+    free(par)
     return 0
 }

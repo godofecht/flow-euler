@@ -1,12 +1,219 @@
 # Project Euler 673
 # Beds and Desks: count permutations commuting with two involutions.
-# Native C helper for graph component analysis.
+# Build graph from B/D edges, find connected components, classify, compute automorphism count.
 
 extern {
-    function p673_native() -> i64
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 999999937
+const MAXN: i32 = 501
+
+function mod_pow(base: i64, exp: i64, m: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = base % m
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = r * b % m
+        }
+        b = b * b % m
+        e = e >> 1
+    }
+    return r
+}
+
+# Parse a file of "a,b" pairs into an involution array.
+function parse_file(path: string, inv: ptr<i32>) -> void {
+    let f: ptr<void> = fopen(path, "r")
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        # Skip non-digit characters until we find the first digit
+        while c >= 0 && (c < 48 || c > 57) {
+            c = fgetc(f)
+        }
+        if c < 0 { break }
+        # Parse first number a
+        let mut a: i32 = 0
+        while c >= 48 && c <= 57 {
+            a = a * 10 + (c - 48)
+            c = fgetc(f)
+        }
+        # Skip non-digit characters until second number
+        while c >= 0 && (c < 48 || c > 57) {
+            c = fgetc(f)
+        }
+        if c < 0 { break }
+        # Parse second number b
+        let mut b: i32 = 0
+        while c >= 48 && c <= 57 {
+            b = b * 10 + (c - 48)
+            c = fgetc(f)
+        }
+        if a > 0 && b > 0 {
+            inv[a] = b
+            inv[b] = a
+        }
+    }
+    fclose(f)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p673_native())
+    let n: i32 = 500
+
+    let B: ptr<i32> = calloc((MAXN as i64), 4) as ptr<i32>
+    let D: ptr<i32> = calloc((MAXN as i64), 4) as ptr<i32>
+    let visited: ptr<i32> = calloc((MAXN as i64), 4) as ptr<i32>
+    let stack_arr: ptr<i32> = calloc((MAXN as i64), 4) as ptr<i32>
+    let comp: ptr<i32> = calloc((MAXN as i64), 4) as ptr<i32>
+    let fact: ptr<i64> = calloc((MAXN as i64), 8) as ptr<i64>
+
+    let mut i: i32 = 0
+    while i <= n {
+        B[i] = i
+        D[i] = i
+        visited[i] = 0
+        i = i + 1
+    }
+
+    parse_file("data/p673_beds.txt", B)
+    parse_file("data/p673_desks.txt", D)
+
+    fact[0] = 1
+    let mut fi: i32 = 1
+    while fi <= n {
+        fact[fi] = fact[fi - 1] * (fi as i64) % MOD
+        fi = fi + 1
+    }
+
+    # Component type arrays
+    let tc_cycle: ptr<i32> = calloc((MAXN as i64), 4) as ptr<i32>
+    let tc_k: ptr<i32> = calloc((MAXN as i64), 4) as ptr<i32>
+    let tc_color: ptr<i32> = calloc((MAXN as i64), 4) as ptr<i32>
+    let tc_count: ptr<i32> = calloc((MAXN as i64), 4) as ptr<i32>
+    let tc_aut: ptr<i64> = calloc((MAXN as i64), 8) as ptr<i64>
+    let mut num_types: i32 = 0
+
+    let mut start: i32 = 1
+    while start <= n {
+        if visited[start] != 0 {
+            start = start + 1
+            continue
+        }
+
+        let mut sp: i32 = 0
+        let mut cp: i32 = 0
+        stack_arr[sp] = start
+        sp = sp + 1
+        visited[start] = 1
+
+        while sp > 0 {
+            sp = sp - 1
+            let v: i32 = stack_arr[sp]
+            comp[cp] = v
+            cp = cp + 1
+            let u1: i32 = B[v]
+            let u2: i32 = D[v]
+            if visited[u1] == 0 {
+                visited[u1] = 1
+                stack_arr[sp] = u1
+                sp = sp + 1
+            }
+            if visited[u2] == 0 {
+                visited[u2] = 1
+                stack_arr[sp] = u2
+                sp = sp + 1
+            }
+        }
+
+        let k: i32 = cp
+        let mut has_loop: bool = false
+        let mut ci: i32 = 0
+        while ci < cp {
+            let v: i32 = comp[ci]
+            if B[v] == v || D[v] == v {
+                has_loop = true
+                break
+            }
+            ci = ci + 1
+        }
+
+        let mut is_cycle: i32 = 0
+        if !has_loop { is_cycle = 1 }
+        let mut end_color: i32 = 0
+        let mut aut: i64 = 0
+
+        if is_cycle != 0 {
+            aut = k as i64
+        } else {
+            if k % 2 == 1 {
+                aut = 1
+            } else {
+                let mut ci2: i32 = 0
+                while ci2 < cp {
+                    let v: i32 = comp[ci2]
+                    if B[v] == v && D[v] != v {
+                        end_color = 1
+                        break
+                    }
+                    if D[v] == v && B[v] != v {
+                        end_color = 2
+                        break
+                    }
+                    ci2 = ci2 + 1
+                }
+                aut = 2
+            }
+        }
+
+        let mut found: i32 = -1
+        let mut t: i32 = 0
+        while t < num_types {
+            if tc_cycle[t] == is_cycle && tc_k[t] == k && tc_color[t] == end_color {
+                found = t
+                break
+            }
+            t = t + 1
+        }
+        if found >= 0 {
+            tc_count[found] = tc_count[found] + 1
+        } else {
+            tc_cycle[num_types] = is_cycle
+            tc_k[num_types] = k
+            tc_color[num_types] = end_color
+            tc_aut[num_types] = aut
+            tc_count[num_types] = 1
+            num_types = num_types + 1
+        }
+
+        start = start + 1
+    }
+
+    let mut answer: i64 = 1
+    let mut t: i32 = 0
+    while t < num_types {
+        answer = answer * mod_pow(tc_aut[t], (tc_count[t] as i64), MOD) % MOD
+        answer = answer * fact[tc_count[t]] % MOD
+        t = t + 1
+    }
+
+    printf("%lld\n", answer)
+
+    free(B as ptr<void>)
+    free(D as ptr<void>)
+    free(visited as ptr<void>)
+    free(stack_arr as ptr<void>)
+    free(comp as ptr<void>)
+    free(fact as ptr<void>)
+    free(tc_cycle as ptr<void>)
+    free(tc_k as ptr<void>)
+    free(tc_color as ptr<void>)
+    free(tc_count as ptr<void>)
+    free(tc_aut as ptr<void>)
+
     return 0
 }

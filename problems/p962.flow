@@ -1,11 +1,188 @@
 # Project Euler 962: Counting Triangles
-# count_triangles(10^6).
+# count_triangles(10^6) = 7259046
+# Counts triangles (a,b,c) with a<=b<=c<a+b and a+b+c<=limit such that
+# a^3*(a+b-c)*(a+b+c) / (b*(a+b)^2) is a perfect square.
+# Pure Flow port of native/p962.c.
 
 extern {
-    function p962_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+    function cbrt(x: f64) -> f64
+}
+
+function isqrt_i64(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut r: i64 = sqrt(n as f64) as i64
+    while r > 0 && r * r > n {
+        r = r - 1
+    }
+    while (r + 1) * (r + 1) <= n {
+        r = r + 1
+    }
+    return r
+}
+
+function isqrt_ceil_i64(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let r: i64 = isqrt_i64(n)
+    if r * r == n { return r }
+    return r + 1
+}
+
+function icbrt_floor(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = cbrt(n as f64) as i64
+    while (x + 1) * (x + 1) * (x + 1) <= n {
+        x = x + 1
+    }
+    while x * x * x > n {
+        x = x - 1
+    }
+    return x
+}
+
+function igcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function count_with_parity(lo0: i64, hi: i64, parity: i64) -> i64 {
+    let mut lo: i64 = lo0
+    if hi < lo { return 0 }
+    if lo % 2 != parity { lo = lo + 1 }
+    if lo > hi { return 0 }
+    return (hi - lo) / 2 + 1
+}
+
+# spf sieve: spf[i] = smallest prime factor of i
+function spf_sieve(limit: i64, spf: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i <= limit {
+        spf[i] = i
+        i = i + 1
+    }
+    let sq: i64 = sqrt(limit as f64) as i64
+    i = 2
+    while i <= sq {
+        if spf[i] == i {
+            let mut j: i64 = i * i
+            while j <= limit {
+                if spf[j] == j {
+                    spf[j] = i
+                }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+}
+
+# compute_squarefree: sf[n] = squarefree kernel of n
+function compute_squarefree(limit: i64, spf: ptr<i64>, sf: ptr<i64>) -> void {
+    sf[0] = 0
+    sf[1] = 1
+    let mut n: i64 = 2
+    while n <= limit {
+        let p: i64 = spf[n]
+        let m: i64 = n / p
+        if m % p == 0 {
+            sf[n] = sf[m / p]
+        } else {
+            sf[n] = p * sf[m]
+        }
+        n = n + 1
+    }
+}
+
+function count_triangles(limit: i64) -> i64 {
+    let k_limit: i64 = icbrt_floor(2 * limit * limit) + 2
+    let mut factor_limit: i64 = limit / 3 + 1
+    if k_limit + 1 > factor_limit {
+        factor_limit = k_limit + 1
+    }
+
+    let spf: ptr<i64> = malloc((factor_limit + 1) * 8)
+    spf_sieve(factor_limit, spf)
+    let squarefree: ptr<i64> = malloc((factor_limit + 1) * 8)
+    compute_squarefree(factor_limit, spf, squarefree)
+
+    let mut total: i64 = 0
+    let mut k: i64 = 2
+    while k <= k_limit {
+        let max_s: i64 = limit / k
+        if max_s == 0 { break }
+        let max_product: i64 = max_s * max_s
+        let mut v: i64 = (k + 1) / 2
+        while v < k {
+            if igcd(v, k) != 1 {
+                v = v + 1
+                continue
+            }
+            let u: i64 = k - v
+            let d: i64 = squarefree[u]
+            if v * d > max_product {
+                v = v + 1
+                continue
+            }
+
+            let r_limit: i64 = u * max_s / (u + 2 * v)
+            if r_limit <= 0 {
+                v = v + 1
+                continue
+            }
+
+            let common_dv: i64 = igcd(d, v)
+            let d_reduced: i64 = d / common_dv
+            let v_reduced: i64 = v / common_dv
+            let numerator: i64 = u + 2 * v
+
+            let mut r: i64 = 1
+            while r <= r_limit {
+                let common_rv: i64 = igcd(r, v_reduced)
+                let remaining_r: i64 = r / common_rv
+                let numerator_kernel: i64 = squarefree[remaining_r]
+                let common: i64 = igcd(d_reduced, numerator_kernel)
+                let base: i64 = (v_reduced / common_rv) * (d_reduced * numerator_kernel / (common * common))
+                if base > max_s {
+                    r = r + 1
+                    continue
+                }
+
+                let s_min: i64 = (numerator * r + u - 1) / u
+                let n_min: i64 = isqrt_ceil_i64((s_min + base - 1) / base)
+                let n_max: i64 = isqrt_i64(max_s / base)
+                if base % 2 == 1 {
+                    total = total + count_with_parity(n_min, n_max, r % 2)
+                } else {
+                    if r % 2 == 0 {
+                        let cnt: i64 = n_max - n_min + 1
+                        if cnt > 0 {
+                            total = total + cnt
+                        }
+                    }
+                }
+                r = r + 1
+            }
+            v = v + 1
+        }
+        k = k + 1
+    }
+
+    free(spf)
+    free(squarefree)
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p962_native())
+    let result: i64 = count_triangles(1000000)
+    printf("%lld\n", result)
     return 0
 }

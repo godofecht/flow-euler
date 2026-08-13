@@ -1,13 +1,131 @@
 # Project Euler 974
-# The 10^16-th number using only digits {1,3,5,7,9}, divisible by 21,
-# using all five digits, and ending in 5. The answer exceeds i64 so the
-# native helper prints it directly.
+# Count numbers using digits {1,3,5,7,9}, divisible by 21, using all five
+# digits, ending in 5. Find the 10^16-th such number (ordered by length then
+# lexicographically). The answer is a 29-digit string that exceeds i64.
 
 extern {
-    function p974_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MAXL: i64 = 201
+const ALL: i64 = 31
+const DP_SIZE: i64 = 135072
+
+let mut g_dp: ptr<i128> = null
+
+function dp_idx(pos: i64, m3: i64, m7: i64, mask: i64) -> i64 {
+    return pos * 672 + m3 * 224 + m7 * 32 + mask
+}
+
+function bit_of(d: i64) -> i64 {
+    if d == 1 { return 0 }
+    if d == 3 { return 1 }
+    if d == 5 { return 2 }
+    if d == 7 { return 3 }
+    return 4
+}
+
+function count_len(L: i64) -> i128 {
+    let mut zi: i64 = 0
+    while zi < DP_SIZE {
+        g_dp[zi] = 0
+        zi = zi + 1
+    }
+    g_dp[dp_idx(L, 0, 0, ALL)] = 1
+    let DIGITS: array<i64, 5> = [1, 3, 5, 7, 9]
+    let mut pos: i64 = L - 1
+    while pos >= 0 {
+        let mut nchoices: i64 = 5
+        if pos == L - 1 { nchoices = 1 }
+        let mut m3: i64 = 0
+        while m3 < 3 {
+            let mut m7: i64 = 0
+            while m7 < 7 {
+                let mut mask: i64 = 0
+                while mask < 32 {
+                    let mut total: i128 = 0
+                    let mut ci: i64 = 0
+                    while ci < nchoices {
+                        let mut d: i64 = 5
+                        if pos != L - 1 { d = DIGITS[ci] }
+                        let nm3: i64 = (m3 * 10 + d) % 3
+                        let nm7: i64 = (m7 * 10 + d) % 7
+                        let nmask: i64 = mask ^ (1 << bit_of(d))
+                        total = total + g_dp[dp_idx(pos + 1, nm3, nm7, nmask)]
+                        ci = ci + 1
+                    }
+                    g_dp[dp_idx(pos, m3, m7, mask)] = total
+                    mask = mask + 1
+                }
+                m7 = m7 + 1
+            }
+            m3 = m3 + 1
+        }
+        pos = pos - 1
+    }
+    return g_dp[dp_idx(0, 0, 0, 0)]
+}
+
+function unrank(L: i64, k0: i128, out: ptr<i8>) -> void {
+    let DIGITS: array<i64, 5> = [1, 3, 5, 7, 9]
+    let mut m3: i64 = 0
+    let mut m7: i64 = 0
+    let mut mask: i64 = 0
+    let mut k: i128 = k0
+    let mut pos: i64 = 0
+    while pos < L {
+        let mut nchoices: i64 = 5
+        if pos == L - 1 { nchoices = 1 }
+        let mut ci: i64 = 0
+        let mut found: bool = false
+        while ci < nchoices && !found {
+            let mut d: i64 = 5
+            if pos != L - 1 { d = DIGITS[ci] }
+            let nm3: i64 = (m3 * 10 + d) % 3
+            let nm7: i64 = (m7 * 10 + d) % 7
+            let nmask: i64 = mask ^ (1 << bit_of(d))
+            let cnt: i128 = g_dp[dp_idx(pos + 1, nm3, nm7, nmask)]
+            if k > cnt {
+                k = k - cnt
+            } else {
+                out[pos] = (48 + d) as i8
+                m3 = nm3
+                m7 = nm7
+                mask = nmask
+                found = true
+            }
+            ci = ci + 1
+        }
+        pos = pos + 1
+    }
+    out[L] = 0
 }
 
 function main() -> i32 {
-    let _r: i64 = p974_native()
+    g_dp = calloc(DP_SIZE, 16)
+    let mut n: i128 = 1
+    let mut i: i64 = 0
+    while i < 16 {
+        n = n * 10
+        i = i + 1
+    }
+    let mut cum: i128 = 0
+    let mut targetL: i64 = 0 - 1
+    let mut L: i64 = 1
+    while L <= 200 {
+        let c: i128 = count_len(L)
+        if cum + c >= n {
+            targetL = L
+            break
+        }
+        cum = cum + c
+        L = L + 2
+    }
+    let out: ptr<i8> = calloc(256, 1)
+    unrank(targetL, n - cum, out)
+    printf("%s\n", out)
+    free(out)
+    free(g_dp)
     return 0
 }

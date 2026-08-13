@@ -1,13 +1,391 @@
 # Project Euler 767
 # Window into a Matrix II: B(10^5, 10^16) mod 1e9+7.
-#
-# Heavy NTT-based convolution lives in the native C unit.
+# Uses 3-prime NTT convolution with CRT reconstruction.
 
 extern {
-    function p767_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+
+const P1: i64 = 998244353
+const P2: i64 = 1004535809
+const P3: i64 = 469762049
+
+let mut g_n: i64 = 0
+let mut g_rev: ptr<i32> = null
+let mut g_roots0: ptr<i64> = null
+let mut g_roots1: ptr<i64> = null
+let mut g_roots2: ptr<i64> = null
+let mut g_roots_inv0: ptr<i64> = null
+let mut g_roots_inv1: ptr<i64> = null
+let mut g_roots_inv2: ptr<i64> = null
+let mut g_inv_p1_mod_p2: i64 = 0
+let mut g_p1_mod_p3: i64 = 0
+let mut g_p12_mod_p3: i64 = 0
+let mut g_inv_p12_mod_p3: i64 = 0
+let mut g_p1_mod_mod: i64 = 0
+let mut g_p12_mod_mod: i64 = 0
+
+function mod_pow(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut a: i64 = a0 % mod
+    if a < 0 { a = a + mod }
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (a as i128) % (mod as i128)) as i64
+        }
+        a = ((a as i128) * (a as i128) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function ceil_pow2(x: i64) -> i64 {
+    let mut n: i64 = 1
+    while n < x { n = n << 1 }
+    return n
+}
+
+function ntt(a: ptr<i64>, n: i64, mod: i64, roots: ptr<i64>, roots_inv: ptr<i64>, rev: ptr<i32>, invert: i32) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        let j: i64 = rev[i] as i64
+        if i < j {
+            let t: i64 = a[i]
+            a[i] = a[j]
+            a[j] = t
+        }
+        i = i + 1
+    }
+
+    let r: ptr<i64> = if invert != 0 { roots_inv } else { roots }
+    let mut length: i64 = 2
+    while length <= n {
+        let half: i64 = length >> 1
+        let step: i64 = n / length
+        let mut i0: i64 = 0
+        while i0 < n {
+            let mut idx: i64 = 0
+            let mut j2: i64 = i0
+            while j2 < i0 + half {
+                let u: i64 = a[j2]
+                let v: i64 = ((a[j2 + half] as i128) * (r[idx] as i128) % (mod as i128)) as i64
+                let x: i64 = u + v
+                if x >= mod { x = x - mod }
+                let y: i64 = u - v
+                if y < 0 { y = y + mod }
+                a[j2] = x
+                a[j2 + half] = y
+                idx = idx + step
+                j2 = j2 + 1
+            }
+            i0 = i0 + length
+        }
+        length = length << 1
+    }
+
+    if invert != 0 {
+        let n_inv: i64 = mod_pow(n, mod - 2, mod)
+        let mut i3: i64 = 0
+        while i3 < n {
+            a[i3] = ((a[i3] as i128) * (n_inv as i128) % (mod as i128)) as i64
+            i3 = i3 + 1
+        }
+    }
+}
+
+function ctx_init(n: i64) -> void {
+    g_n = n
+    g_rev = malloc(n * 4) as ptr<i32>
+
+    let mut j: i32 = 0
+    let mut i: i64 = 1
+    while i < n {
+        let mut bit: i32 = (n >> 1) as i32
+        while (j & bit) != 0 {
+            j = j ^ bit
+            bit = bit >> 1
+        }
+        j = j ^ bit
+        g_rev[i] = j
+        i = i + 1
+    }
+    g_rev[0] = 0
+
+    let primes: array<i64, 3> = [P1, P2, P3]
+    let gs: array<i64, 3> = [3, 3, 3]
+
+    g_roots0 = malloc(n * 8) as ptr<i64>
+    g_roots_inv0 = malloc(n * 8) as ptr<i64>
+    g_roots1 = malloc(n * 8) as ptr<i64>
+    g_roots_inv1 = malloc(n * 8) as ptr<i64>
+    g_roots2 = malloc(n * 8) as ptr<i64>
+    g_roots_inv2 = malloc(n * 8) as ptr<i64>
+
+    let roots_arr: array<ptr<i64>, 3> = [g_roots0, g_roots1, g_roots2]
+    let roots_inv_arr: array<ptr<i64>, 3> = [g_roots_inv0, g_roots_inv1, g_roots_inv2]
+
+    let mut t: i32 = 0
+    while t < 3 {
+        let p: i64 = primes[t]
+        let g: i64 = gs[t]
+        let w: i64 = mod_pow(g, (p - 1) / n, p)
+        let w_inv: i64 = mod_pow(w, p - 2, p)
+        let roots: ptr<i64> = roots_arr[t]
+        let roots_inv: ptr<i64> = roots_inv_arr[t]
+        roots[0] = 1
+        roots_inv[0] = 1
+        let mut i2: i64 = 1
+        while i2 < n {
+            roots[i2] = ((roots[i2 - 1] as i128) * (w as i128) % (p as i128)) as i64
+            roots_inv[i2] = ((roots_inv[i2 - 1] as i128) * (w_inv as i128) % (p as i128)) as i64
+            i2 = i2 + 1
+        }
+        t = t + 1
+    }
+
+    g_inv_p1_mod_p2 = mod_pow(P1, P2 - 2, P2)
+    g_p1_mod_p3 = P1 % P3
+    g_p12_mod_p3 = ((P1 as i128) * (P2 as i128) % (P3 as i128)) as i64
+    g_inv_p12_mod_p3 = mod_pow(g_p12_mod_p3, P3 - 2, P3)
+    g_p1_mod_mod = P1 % MOD
+    g_p12_mod_mod = ((P1 as i128) * (P2 as i128) % (MOD as i128)) as i64
+}
+
+function ctx_free() -> void {
+    free(g_rev)
+    free(g_roots0)
+    free(g_roots_inv0)
+    free(g_roots1)
+    free(g_roots_inv1)
+    free(g_roots2)
+    free(g_roots_inv2)
+}
+
+function crt_reduce(out: ptr<i64>, c0: ptr<i64>, c1: ptr<i64>, c2: ptr<i64>, need: i64) -> void {
+    let mut i: i64 = 0
+    while i < need {
+        let r1: i64 = c0[i]
+        let r2: i64 = c1[i]
+        let r3: i64 = c2[i]
+        let t1: i64 = (((r2 - r1) % P2 + P2) % P2)
+        let t1m: i64 = ((t1 as i128) * (g_inv_p1_mod_p2 as i128) % (P2 as i128)) as i64
+        let x2_mod_p3: i64 = (r1 + ((g_p1_mod_p3 as i128) * (t1m as i128) % (P3 as i128)) as i64) % P3
+        let t2: i64 = (((r3 - x2_mod_p3) % P3 + P3) % P3)
+        let t2m: i64 = ((t2 as i128) * (g_inv_p12_mod_p3 as i128) % (P3 as i128)) as i64
+        let v: i64 = (r1 + ((g_p1_mod_mod as i128) * (t1m % MOD as i128) % (MOD as i128)) as i64
+                    + ((g_p12_mod_mod as i128) * (t2m % MOD as i128) % (MOD as i128)) as i64) % MOD
+        out[i] = v
+        i = i + 1
+    }
+}
+
+function convolution_mod(a: ptr<i64>, la: i64, b: ptr<i64>, lb: i64) -> ptr<i64> {
+    let need: i64 = la + lb - 1
+    let n: i64 = g_n
+
+    let primes: array<i64, 3> = [P1, P2, P3]
+    let roots_arr: array<ptr<i64>, 3> = [g_roots0, g_roots1, g_roots2]
+    let roots_inv_arr: array<ptr<i64>, 3> = [g_roots_inv0, g_roots_inv1, g_roots_inv2]
+
+    let c0: ptr<i64> = malloc(need * 8) as ptr<i64>
+    let c1: ptr<i64> = malloc(need * 8) as ptr<i64>
+    let c2: ptr<i64> = malloc(need * 8) as ptr<i64>
+    let convs: array<ptr<i64>, 3> = [c0, c1, c2]
+
+    let mut t: i32 = 0
+    while t < 3 {
+        let p: i64 = primes[t]
+        let fa: ptr<i64> = calloc(n, 8) as ptr<i64>
+        let fb: ptr<i64> = calloc(n, 8) as ptr<i64>
+        let mut i: i64 = 0
+        while i < la {
+            fa[i] = ((a[i] % p) + p) % p
+            i = i + 1
+        }
+        i = 0
+        while i < lb {
+            fb[i] = ((b[i] % p) + p) % p
+            i = i + 1
+        }
+        ntt(fa, n, p, roots_arr[t], roots_inv_arr[t], g_rev, 0)
+        ntt(fb, n, p, roots_arr[t], roots_inv_arr[t], g_rev, 0)
+        i = 0
+        while i < n {
+            fa[i] = ((fa[i] as i128) * (fb[i] as i128) % (p as i128)) as i64
+            i = i + 1
+        }
+        ntt(fa, n, p, roots_arr[t], roots_inv_arr[t], g_rev, 1)
+        memcpy(convs[t], fa, need * 8)
+        free(fa)
+        free(fb)
+        t = t + 1
+    }
+
+    let out: ptr<i64> = malloc(need * 8) as ptr<i64>
+    crt_reduce(out, c0, c1, c2, need)
+    free(c0)
+    free(c1)
+    free(c2)
+    return out
+}
+
+function convolution_square_mod(a: ptr<i64>, la: i64) -> ptr<i64> {
+    let need: i64 = 2 * la - 1
+    let n: i64 = g_n
+
+    let primes: array<i64, 3> = [P1, P2, P3]
+    let roots_arr: array<ptr<i64>, 3> = [g_roots0, g_roots1, g_roots2]
+    let roots_inv_arr: array<ptr<i64>, 3> = [g_roots_inv0, g_roots_inv1, g_roots_inv2]
+
+    let c0: ptr<i64> = malloc(need * 8) as ptr<i64>
+    let c1: ptr<i64> = malloc(need * 8) as ptr<i64>
+    let c2: ptr<i64> = malloc(need * 8) as ptr<i64>
+    let convs: array<ptr<i64>, 3> = [c0, c1, c2]
+
+    let mut t: i32 = 0
+    while t < 3 {
+        let p: i64 = primes[t]
+        let fa: ptr<i64> = calloc(n, 8) as ptr<i64>
+        let mut i: i64 = 0
+        while i < la {
+            fa[i] = ((a[i] % p) + p) % p
+            i = i + 1
+        }
+        ntt(fa, n, p, roots_arr[t], roots_inv_arr[t], g_rev, 0)
+        i = 0
+        while i < n {
+            fa[i] = ((fa[i] as i128) * (fa[i] as i128) % (p as i128)) as i64
+            i = i + 1
+        }
+        ntt(fa, n, p, roots_arr[t], roots_inv_arr[t], g_rev, 1)
+        memcpy(convs[t], fa, need * 8)
+        free(fa)
+        t = t + 1
+    }
+
+    let out: ptr<i64> = malloc(need * 8) as ptr<i64>
+    crt_reduce(out, c0, c1, c2, need)
+    free(c0)
+    free(c1)
+    free(c2)
+    return out
+}
+
+function pow16_mod(x: i64) -> i64 {
+    let x2: i64 = ((x as i128) * (x as i128) % (MOD as i128)) as i64
+    let x4: i64 = ((x2 as i128) * (x2 as i128) % (MOD as i128)) as i64
+    let x8: i64 = ((x4 as i128) * (x4 as i128) % (MOD as i128)) as i64
+    return ((x8 as i128) * (x8 as i128) % (MOD as i128)) as i64
 }
 
 function main() -> i32 {
-    printf("%lld\n", p767_native())
+    let k: i64 = 100000
+    let n: i64 = 10000000000000000
+    let m: i64 = n / k
+    let A: i64 = mod_pow(2, m % (MOD - 1), MOD)
+
+    let fact: ptr<i64> = malloc((k + 1) * 8) as ptr<i64>
+    let inv_fact: ptr<i64> = malloc((k + 1) * 8) as ptr<i64>
+    fact[0] = 1
+    let mut i: i64 = 1
+    while i <= k {
+        fact[i] = ((fact[i - 1] as i128) * (i as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+    inv_fact[k] = mod_pow(fact[k], MOD - 2, MOD)
+    i = k
+    while i >= 1 {
+        inv_fact[i - 1] = ((inv_fact[i] as i128) * (i as i128) % (MOD as i128)) as i64
+        i = i - 1
+    }
+
+    let fact16: ptr<i64> = malloc((k + 1) * 8) as ptr<i64>
+    let inv_fact16: ptr<i64> = malloc((k + 1) * 8) as ptr<i64>
+    i = 0
+    while i <= k {
+        fact16[i] = pow16_mod(fact[i])
+        inv_fact16[i] = pow16_mod(inv_fact[i])
+        i = i + 1
+    }
+
+    let need: i64 = 2 * (k + 1) - 1
+    let ntt_len: i64 = ceil_pow2(need)
+    ctx_init(ntt_len)
+
+    let conv_aa: ptr<i64> = convolution_square_mod(inv_fact16, k + 1)
+
+    let f: ptr<i64> = malloc((k + 1) * 8) as ptr<i64>
+    i = 0
+    while i <= k {
+        f[i] = ((fact16[i] as i128) * (conv_aa[i] as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+    free(conv_aa)
+
+    let fprime: ptr<i64> = malloc((k + 1) * 8) as ptr<i64>
+    i = 0
+    while i <= k {
+        fprime[i] = ((f[i] as i128) * (inv_fact[i] as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+
+    let neg2: i64 = MOD - 2
+    let b: ptr<i64> = malloc((k + 1) * 8) as ptr<i64>
+    let mut p: i64 = 1
+    i = 0
+    while i <= k {
+        b[i] = ((p as i128) * (inv_fact[i] as i128) % (MOD as i128)) as i64
+        p = ((p as i128) * (neg2 as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+
+    let conv_fb: ptr<i64> = convolution_mod(fprime, k + 1, b, k + 1)
+
+    let S: ptr<i64> = malloc((k + 1) * 8) as ptr<i64>
+    i = 0
+    while i <= k {
+        S[i] = ((conv_fb[i] as i128) * (fact[i] as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+    free(conv_fb)
+
+    let powA: ptr<i64> = malloc((k + 1) * 8) as ptr<i64>
+    powA[0] = 1
+    i = 1
+    while i <= k {
+        powA[i] = ((powA[i - 1] as i128) * (A as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+
+    let fk: i64 = fact[k]
+    let mut ans: i64 = 0
+    i = 0
+    while i <= k {
+        let comb: i64 = ((fk as i128) * (inv_fact[i] as i128) % (MOD as i128)) as i64
+        let comb2: i64 = ((comb as i128) * (inv_fact[k - i] as i128) % (MOD as i128)) as i64
+        let term: i64 = ((comb2 as i128) * (powA[i] as i128) % (MOD as i128)) as i64
+        let term2: i64 = ((term as i128) * (S[k - i] as i128) % (MOD as i128)) as i64
+        ans = (ans + term2) % MOD
+        i = i + 1
+    }
+
+    free(fact)
+    free(inv_fact)
+    free(fact16)
+    free(inv_fact16)
+    free(f)
+    free(fprime)
+    free(b)
+    free(S)
+    free(powA)
+    ctx_free()
+
+    printf("%lld\n", ans)
     return 0
 }

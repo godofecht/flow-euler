@@ -1,11 +1,105 @@
-# Project Euler 811
-# Bitwise Recursion — native C solver.
+# Project Euler 811: Bitwise Recursion
+# H(t, r) = A((2^t + 1)^r) mod 1000062031
+# with t = 10^14 + 31, r = 62.
 
 extern {
-    function p811_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000062031
+
+# Positions of 1-bits in (2^t + 1)^r using the binomial block method.
+# Assumes t >= max_binom_bitlen(r) so blocks don't overlap.
+# Returns positions in increasing order.
+function one_positions_via_binom(t: i64, r: i32, pos_out: ptr<i64>) -> i32 {
+    let mut cnt: i32 = 0
+    let mut c: i128 = 1 as i128
+    let mut k: i32 = 0
+    while k <= r {
+        let mut x: i128 = c
+        while x != (0 as i128) {
+            let lsb: i128 = x & ((0 as i128) - x)
+            let mut bit: i32 = 0
+            let mut tmp: i128 = lsb
+            while tmp > (1 as i128) {
+                tmp = tmp >> (1 as i128)
+                bit = bit + 1
+            }
+            pos_out[cnt] = (k as i64) * t + (bit as i64)
+            cnt = cnt + 1
+            x = x - lsb
+        }
+        if k < r {
+            c = c * ((r - k) as i128) / ((k + 1) as i128)
+        }
+        k = k + 1
+    }
+    return cnt
+}
+
+function powmod(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut b: i64 = base0 % mod
+    if b < 0 {
+        b = b + mod
+    }
+    let mut e: i64 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = (((r as i128) * (b as i128)) % (mod as i128)) as i64
+        }
+        b = (((b as i128) * (b as i128)) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+# Compute A(n) given positions of 1-bits in n (sorted increasing), mod MOD
+function A_from_positions(pos: ptr<i64>, m: i32, mod: i64) -> i64 {
+    if m == 0 {
+        return 0
+    }
+    if m == 1 {
+        return 1 % mod
+    }
+
+    let v: ptr<i64> = calloc((m as i64), 8)
+    v[0] = 1 % mod
+    let mut k: i32 = 1
+    while k < m {
+        v[k] = (5 * v[k - 1] + 3) % mod
+        k = k + 1
+    }
+
+    let mut ans: i64 = 1 % mod
+    let mut i: i32 = 0
+    while i < m - 1 {
+        let gap: i64 = pos[(m - 1 - i) as i64] - pos[(m - 1 - i - 1) as i64] - 1
+        if gap <= 0 {
+            i = i + 1
+            continue
+        }
+        let base: i64 = v[(i + 1) as i64]
+        ans = (ans * powmod(base, gap, mod)) % mod
+        i = i + 1
+    }
+
+    free(v)
+    return ans
 }
 
 function main() -> i32 {
-    printf("%lld\n", p811_native())
+    let t: i64 = 100000000000031
+    let r: i32 = 62
+
+    let maxbits: i32 = 4000
+    let pos: ptr<i64> = calloc((maxbits as i64), 8)
+    let npos: i32 = one_positions_via_binom(t, r, pos)
+
+    let result: i64 = A_from_positions(pos, npos, MOD)
+
+    free(pos)
+    printf("%lld\n", result)
     return 0
 }

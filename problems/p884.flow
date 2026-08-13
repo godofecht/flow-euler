@@ -1,8 +1,139 @@
+# Project Euler 884: Removing Cubes
+# Compute S(10^17) where D(n) is the number of steps obtained by repeatedly
+# subtracting the largest perfect cube not exceeding the current value.
+# Uses a cube-interval recurrence with memoization.
+
 extern {
-    function p884_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function pow(x: f64, y: f64) -> f64
+    function round(x: f64) -> f64
+}
+
+const MEMO_LIMIT: i64 = 5000000
+
+let mut base_pref: ptr<i64> = null
+let mut base_pref_len: i32 = 0
+let mut memo: ptr<i64> = null
+let mut memo_valid: ptr<i8> = null
+let mut delta_prefix: ptr<i64> = null
+let mut delta_prefix_len: i32 = 0
+
+function icbrt(n: i64) -> i64 {
+    if n <= 0 {
+        return 0
+    }
+    let d: f64 = (n as f64)
+    let mut x: i64 = (round(pow(d, 1.0 / 3.0)) as i64)
+    while (((x + 1) as i128) * ((x + 1) as i128) * ((x + 1) as i128)) <= (n as i128) {
+        x = x + 1
+    }
+    while ((x as i128) * (x as i128) * (x as i128)) > (n as i128) {
+        x = x - 1
+    }
+    return x
+}
+
+function d_greedy(n: i64) -> i64 {
+    let mut nn: i64 = n
+    let mut steps: i64 = 0
+    while nn > 0 {
+        let k: i64 = icbrt(nn)
+        nn = nn - k * k * k
+        steps = steps + 1
+    }
+    return steps
+}
+
+function build_base_prefix(limit: i32) -> void {
+    let d: ptr<i64> = calloc((limit as i64), 8)
+    let mut i: i32 = 0
+    while i < limit {
+        d[i] = d_greedy((i as i64))
+        i = i + 1
+    }
+    base_pref = calloc(((limit + 1) as i64), 8)
+    base_pref_len = limit + 1
+    let mut s: i64 = 0
+    i = 0
+    while i < limit {
+        s = s + d[i]
+        base_pref[(i + 1) as i64] = s
+        i = i + 1
+    }
+    free(d)
+}
+
+function F(N: i64) -> i64 {
+    if N <= 0 {
+        return 0
+    }
+    if N < (base_pref_len as i64) {
+        return base_pref[N]
+    }
+    if N <= MEMO_LIMIT {
+        let idx: i64 = N
+        if memo_valid[idx] != 0 {
+            return memo[idx]
+        }
+    }
+
+    let K: i64 = icbrt(N - 1)
+    let K3: i128 = (K as i128) * (K as i128) * (K as i128)
+    let L: i64 = (N - (K3 as i64))
+
+    let res: i64 = (N - 1) + delta_prefix[K - 1] + F(L)
+
+    if N <= MEMO_LIMIT {
+        let idx: i64 = N
+        memo[idx] = res
+        memo_valid[idx] = 1
+    }
+    return res
+}
+
+function compute_S(N: i64) -> i64 {
+    if N <= 1 {
+        return 0
+    }
+
+    let K_target: i64 = icbrt(N - 1)
+
+    let max_delta: i128 = (3 as i128) * (K_target as i128) * (K_target as i128) + (3 as i128) * (K_target as i128) + (1 as i128)
+    let K0_max: i64 = icbrt((max_delta - (1 as i128)) as i64)
+
+    delta_prefix = calloc((K0_max + 1), 8)
+    delta_prefix_len = (K0_max + 1) as i32
+
+    build_base_prefix(64)
+
+    memo = calloc((MEMO_LIMIT + 1), 8)
+    memo_valid = calloc((MEMO_LIMIT + 1), 1)
+
+    let mut total_F_delta: i64 = 0
+    let mut k: i64 = 1
+    while k < K_target {
+        let delta_k: i64 = 3 * k * k + 3 * k + 1
+        let f_delta: i64 = F(delta_k)
+        total_F_delta = total_F_delta + f_delta
+        if k <= K0_max {
+            delta_prefix[k] = total_F_delta
+        }
+        k = k + 1
+    }
+
+    let K3: i128 = (K_target as i128) * (K_target as i128) * (K_target as i128)
+    let L: i64 = (N - (K3 as i64))
+    let result: i64 = (N - 1) + total_F_delta + F(L)
+
+    free(base_pref)
+    free(delta_prefix)
+    free(memo)
+    free(memo_valid)
+    return result
 }
 
 function main() -> i32 {
-    printf("%lld\n", p884_native())
+    printf("%lld\n", compute_S(100000000000000000))
     return 0
 }

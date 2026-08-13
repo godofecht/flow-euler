@@ -1,11 +1,169 @@
-# Project Euler 852
-# Coins in a Box - S(50) rounded to 6 decimals.
+# Project Euler 852: Coins in a Box
+# S(50) rounded to 6 decimals.
+# Pure Flow port of native/p852.c.
 
 extern {
-    function p852_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
 }
 
+const MAX_FLIPS: i64 = 180
+const N_MAX: i64 = 50
+
+function stop_value(p: f64) -> f64 {
+    if p >= 0.5 {
+        return 70.0 * p - 50.0
+    }
+    return 20.0 - 70.0 * p
+}
+
+function gcd_int(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function compute_g_for_fraction(a: i64, b: i64, pow3: ptr<f64>, inv2: ptr<f64>) -> f64 {
+    if a <= 0 || a >= b { return 20.0 }
+
+    let p0: f64 = (a as f64) / (b as f64)
+    let odds0: f64 = p0 / (1.0 - p0)
+
+    let next_row: ptr<f64> = calloc(MAX_FLIPS + 2, 8)
+    let curr_row: ptr<f64> = calloc(MAX_FLIPS + 2, 8)
+
+    # Initialize at n = MAX_FLIPS with forced stop
+    let mut base: f64 = odds0 * inv2[MAX_FLIPS]
+    let mut h: i64 = 0
+    while h <= MAX_FLIPS {
+        let odds: f64 = base * pow3[h]
+        let p: f64 = odds / (1.0 + odds)
+        next_row[h] = stop_value(p)
+        h = h + 1
+    }
+
+    # Backward induction
+    let mut n: i64 = MAX_FLIPS - 1
+    while n >= 0 {
+        base = odds0 * inv2[n]
+        let mut h2: i64 = 0
+        while h2 <= n {
+            let odds: f64 = base * pow3[h2]
+            let p: f64 = odds / (1.0 + odds)
+            let stop_v: f64 = stop_value(p)
+            let qh: f64 = 0.5 + 0.25 * p
+            let cont_v: f64 = -1.0 + qh * next_row[h2 + 1] + (1.0 - qh) * next_row[h2]
+            if stop_v >= cont_v {
+                curr_row[h2] = stop_v
+            } else {
+                curr_row[h2] = cont_v
+            }
+            h2 = h2 + 1
+        }
+        # Copy curr_row into next_row
+        let mut i: i64 = 0
+        while i <= MAX_FLIPS + 1 {
+            next_row[i] = curr_row[i]
+            i = i + 1
+        }
+        n = n - 1
+    }
+
+    let result: f64 = next_row[0]
+    free(next_row)
+    free(curr_row)
+    return result
+}
+
+# g_cache as flat array: index (b, a) -> b * (max_b+1) + a
+# g_done as flat array of i8
 function main() -> i32 {
-    printf("%.6f\n", p852_native())
+    let n: i64 = N_MAX
+
+    # Precompute pow3 and inv2
+    let pow3: ptr<f64> = malloc((MAX_FLIPS + 1) * 8)
+    let inv2: ptr<f64> = malloc((MAX_FLIPS + 1) * 8)
+    pow3[0] = 1.0
+    inv2[0] = 1.0
+    let mut i: i64 = 1
+    while i <= MAX_FLIPS {
+        pow3[i] = pow3[i - 1] * 3.0
+        inv2[i] = inv2[i - 1] * 0.5
+        i = i + 1
+    }
+
+    # Collect all needed (a, b) fractions
+    # Max b = 2*n = 100. a ranges 0..b.
+    # Use flat arrays: g_cache_flat[b * stride + a], g_done_flat[b * stride + a]
+    let max_b: i64 = 2 * n
+    let stride: i64 = max_b + 1
+    let g_cache_flat: ptr<f64> = calloc((max_b + 1) * stride, 8)
+    let g_done_flat: ptr<i8> = calloc((max_b + 1) * stride, 1)
+
+    let mut u: i64 = 0
+    while u <= n {
+        let mut f: i64 = 0
+        while f <= n {
+            let total: i64 = u + f
+            if total == 0 {
+                f = f + 1
+                continue
+            }
+            let g: i64 = gcd_int(u, total)
+            let a: i64 = u / g
+            let bb: i64 = total / g
+            let idx: i64 = bb * stride + a
+            if g_done_flat[idx] == 0 {
+                g_cache_flat[idx] = compute_g_for_fraction(a, bb, pow3, inv2)
+                g_done_flat[idx] = 1
+            }
+            f = f + 1
+        }
+        u = u + 1
+    }
+
+    # V[u][f] as flat array: (n+1) * (n+1)
+    let V_flat: ptr<f64> = calloc((n + 1) * (n + 1), 8)
+
+    # Fill by increasing total = u+f
+    let mut total: i64 = 1
+    while total <= 2 * n {
+        let mut u_min: i64 = total - n
+        if u_min < 0 { u_min = 0 }
+        let mut u_max: i64 = n
+        if total < u_max { u_max = total }
+        let mut uu: i64 = u_min
+        while uu <= u_max {
+            let f: i64 = total - uu
+            let g: i64 = gcd_int(uu, total)
+            let immediate: f64 = g_cache_flat[(total / g) * stride + (uu / g)]
+            let mut exp_next: f64 = 0.0
+            if uu != 0 {
+                exp_next = exp_next + ((uu as f64) / (total as f64)) * V_flat[(uu - 1) * (n + 1) + f]
+            }
+            if f != 0 {
+                exp_next = exp_next + ((f as f64) / (total as f64)) * V_flat[uu * (n + 1) + (f - 1)]
+            }
+            V_flat[uu * (n + 1) + f] = immediate + exp_next
+            uu = uu + 1
+        }
+        total = total + 1
+    }
+
+    let ans: f64 = V_flat[n * (n + 1) + n]
+
+    free(g_cache_flat)
+    free(g_done_flat)
+    free(V_flat)
+    free(pow3)
+    free(inv2)
+
+    printf("%.6f\n", ans)
     return 0
 }

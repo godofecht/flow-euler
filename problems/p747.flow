@@ -1,12 +1,144 @@
 # Project Euler 747
 # Triangular pizza cutting: Psi(10^8) mod 1e9+7.
-# Native C helper for the hard-case double loop with integer sqrt.
 
 extern {
-    function p747_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function isqrt_i64(n: i64) -> i64 {
+    if n < 2 {
+        return n
+    }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+# Closed form for the "easy" prefix sum:
+# (m^3 + 15 m^2 - 52 m + 36) / 6  mod MOD   (m >= 3)
+function easy_prefix(m: i64) -> i64 {
+    if m < 3 {
+        return 0
+    }
+    let mm: i64 = MOD * 6
+    let m3: i64 = (((m as i128) * (m as i128) % (mm as i128)) * (m as i128) % (mm as i128)) as i64
+    let m2: i64 = ((m as i128) * (m as i128) % (mm as i128)) as i64
+    let num: i64 = (m3 + (15 * m2 % mm) + (mm - 52 * m % mm) + 36) % mm
+    return num / 6
+}
+
+# For fixed (x,y), compute n_min and whether 4D is a perfect square.
+# n_min = 2xy + x + y + 1 + ceil(2*sqrt(D)), D = x*y*(x+1)*(y+1).
+# ceil(2*sqrt(D)) = ceil(sqrt(4D)).  If 4D is a perfect square, sq=1.
+function min_n_and_square(x: i64, y: i64, sq: ptr<i32>) -> i64 {
+    let four_d: i64 = 4 * (x * (x + 1)) * (y * (y + 1))
+    let r: i64 = isqrt_i64(four_d)
+    if r * r == four_d {
+        sq[0] = 1
+        return 2 * x * y + x + y + 1 + r
+    }
+    sq[0] = 0
+    return 2 * x * y + x + y + 1 + (r + 1)
+}
+
+# Binary search for max y >= x with n_min(x,y) <= m.
+function y_max_for_x(m: i64, x: i64) -> i64 {
+    if 4 * x > m - 1 {
+        return x - 1
+    }
+    let mut hi: i64 = (m - 1) / (4 * x) + 2
+    if hi < x {
+        hi = x
+    }
+    let mut lo: i64 = x
+    let mut ok: i64 = x - 1
+    let sq: ptr<i32> = calloc(1, 4)
+    while lo <= hi {
+        let mid: i64 = (lo + hi) / 2
+        let n_min: i64 = min_n_and_square(x, mid, sq)
+        if n_min <= m {
+            ok = mid
+            lo = mid + 1
+        } else {
+            hi = mid - 1
+        }
+    }
+    free(sq)
+    return ok
+}
+
+function hard_prefix(m: i64) -> i64 {
+    if m < 3 {
+        return 0
+    }
+    let k: i64 = (m - 1) / 4
+    if k <= 0 {
+        return 0
+    }
+    let x_max: i64 = isqrt_i64(k)
+
+    let mut total: i64 = 0
+    let cutoff: i64 = MOD << 20
+
+    for x in 1..(x_max + 1) {
+        let ymax: i64 = y_max_for_x(m, x)
+        if ymax < x {
+            continue
+        }
+
+        let A: i64 = x * (x + 1)
+        let mut y: i64 = x
+        let mut yy1: i64 = y * (y + 1)
+        let mut two_xy: i64 = 2 * x * y
+
+        while y <= ymax {
+            let four_d: i64 = (A * yy1) << 2
+            let r: i64 = isqrt_i64(four_d)
+            let mut sqv: i32 = 0
+            if r * r == four_d {
+                sqv = 1
+            }
+            let mut ceil2: i64 = 0
+            if sqv != 0 {
+                ceil2 = r
+            } else {
+                ceil2 = r + 1
+            }
+            let n_min: i64 = two_xy + x + y + 1 + ceil2
+
+            if n_min <= m {
+                let cnt: i64 = 2 * (m - n_min + 1) - (sqv as i64)
+                let mut add: i64 = cnt
+                if x != y {
+                    add = cnt << 1
+                }
+                total = total + add
+                if total >= cutoff {
+                    total = total % MOD
+                }
+            }
+
+            yy1 = yy1 + ((y << 1) + 2)
+            y = y + 1
+            two_xy = two_xy + (x << 1)
+        }
+    }
+
+    return total % MOD
 }
 
 function main() -> i32 {
-    printf("%lld\n", p747_native())
+    let m: i64 = 100000000
+    let easy: i64 = easy_prefix(m)
+    let hard: i64 = hard_prefix(m)
+    let result: i64 = (easy + 3 * hard) % MOD
+    printf("%lld\n", result)
     return 0
 }

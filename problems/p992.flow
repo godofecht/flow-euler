@@ -29,8 +29,8 @@ function mod_inv(a: i64, mod: i64) -> i64 {
 }
 
 # Global combinatorics arrays
-let g_fact: ptr<i64> = null
-let g_inv_fact: ptr<i64> = null
+let mut g_fact: ptr<i64> = null
+let mut g_inv_fact: ptr<i64> = null
 
 function build_combinatorics(limit: i64, mod: i64) -> void {
     g_fact[0] = 1 % mod

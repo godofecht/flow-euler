@@ -1,11 +1,237 @@
 # Project Euler 752
-# Powers of 1 + sqrt(7) — native C solver.
+# Powers of 1 + sqrt(7).
+# Pure Flow port of the native C solver.
 
 extern {
-    function p752_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+let mut spf: ptr<i32> = null
+let mut primes: ptr<i32> = null
+let mut nprimes: i32 = 0
+let mut orders: ptr<i64> = null
+
+function smallest_prime_factors(limit: i32) -> void {
+    spf = calloc((limit + 1) as i64, 4) as ptr<i32>
+    primes = calloc((limit / 2 + 100) as i64, 4) as ptr<i32>
+    nprimes = 0
+
+    let mut i: i32 = 2
+    while i <= limit {
+        if spf[i] == 0 {
+            spf[i] = i
+            primes[nprimes] = i
+            nprimes = nprimes + 1
+        }
+        let mut j: i32 = 0
+        while j < nprimes {
+            let p: i32 = primes[j]
+            let val: i64 = (i as i64) * (p as i64)
+            if val > (limit as i64) { break }
+            if p > spf[i] { break }
+            spf[val as i32] = p
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function unique_prime_factors(n0: i32, out: ptr<i32>) -> i32 {
+    let mut n: i32 = n0
+    let mut cnt: i32 = 0
+    while n > 1 {
+        let p: i32 = spf[n]
+        out[cnt] = p
+        cnt = cnt + 1
+        while n % p == 0 {
+            n = n / p
+        }
+    }
+    return cnt
+}
+
+# (1 + sqrt(7))^exponent mod modulus, returns (a, b) via out-params.
+function quadratic_power(exponent0: i64, modulus: i64, ra: ptr<i64>, rb: ptr<i64>) -> void {
+    let mut res_a: i64 = 1
+    let mut res_b: i64 = 0
+    let mut base_a: i64 = 1
+    let mut base_b: i64 = 1
+    let mut exponent: i64 = exponent0
+
+    while exponent != 0 {
+        if exponent % 2 == 1 {
+            let na: i64 = (base_a * res_a + 7 * base_b * res_b) % modulus
+            let nb: i64 = (base_a * res_b + base_b * res_a) % modulus
+            res_a = na
+            res_b = nb
+        }
+        let na2: i64 = (base_a * base_a + 7 * base_b * base_b) % modulus
+        let nb2: i64 = (2 * base_a * base_b) % modulus
+        base_a = na2
+        base_b = nb2
+        exponent = exponent / 2
+    }
+    ra[0] = res_a
+    rb[0] = res_b
+}
+
+function llgcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function powmod(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    while exp != 0 {
+        if exp % 2 == 1 {
+            r = r * base % mod
+        }
+        base = base * base % mod
+        exp = exp / 2
+    }
+    return r
+}
+
+function prime_order(p: i32) -> i64 {
+    if p == 7 { return 7 }
+
+    let factors: array<i32, 128> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let extra: array<i32, 128> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let mut nf: i32 = 0
+    let mut order: i64 = 0
+
+    if powmod(7, ((p - 1) / 2) as i64, p as i64) == 1 {
+        order = (p - 1) as i64
+        nf = unique_prime_factors(p - 1, &factors[0])
+    } else {
+        order = (p - 1) as i64 * (p + 1) as i64
+        nf = unique_prime_factors(p - 1, &factors[0])
+        let ne: i32 = unique_prime_factors(p + 1, &extra[0])
+        let mut i: i32 = 0
+        while i < ne {
+            factors[nf] = extra[i]
+            nf = nf + 1
+            i = i + 1
+        }
+    }
+
+    # deduplicate factors
+    let mut i: i32 = 0
+    while i < nf {
+        let mut j: i32 = i + 1
+        while j < nf {
+            if factors[i] == factors[j] {
+                factors[j] = factors[nf - 1]
+                nf = nf - 1
+                j = j - 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let ra_buf: array<i64, 1> = [0]
+    let rb_buf: array<i64, 1> = [0]
+
+    let mut i2: i32 = 0
+    while i2 < nf {
+        let q: i64 = factors[i2] as i64
+        while order % q == 0 {
+            quadratic_power(order / q, p as i64, &ra_buf[0], &rb_buf[0])
+            if ra_buf[0] == 1 && rb_buf[0] == 0 {
+                order = order / q
+            } else {
+                break
+            }
+        }
+        i2 = i2 + 1
+    }
+    return order
+}
+
+function build_prime_power_orders(limit: i32) -> void {
+    orders = calloc((limit + 1) as i64, 8) as ptr<i64>
+
+    let ra_buf: array<i64, 1> = [0]
+    let rb_buf: array<i64, 1> = [0]
+
+    let mut pi: i32 = 0
+    while pi < nprimes {
+        let p: i32 = primes[pi]
+        if p > limit { break }
+        if p < 5 {
+            pi = pi + 1
+            continue
+        }
+
+        let order: i64 = prime_order(p)
+        let mut pp: i64 = p as i64
+        let mut lifted: i64 = order
+        orders[pp as i32] = lifted
+
+        while pp * (p as i64) <= (limit as i64) {
+            pp = pp * (p as i64)
+            quadratic_power(lifted, pp, &ra_buf[0], &rb_buf[0])
+            if !(ra_buf[0] == 1 && rb_buf[0] == 0) {
+                lifted = lifted * (p as i64)
+            }
+            orders[pp as i32] = lifted
+        }
+        pi = pi + 1
+    }
+}
+
+function G(limit: i32) -> i64 {
+    smallest_prime_factors(limit + 1)
+    build_prime_power_orders(limit)
+
+    let values: ptr<i64> = calloc((limit + 1) as i64, 8) as ptr<i64>
+    let mut total: i64 = 0
+
+    let mut n: i32 = 2
+    while n <= limit {
+        if n % 2 == 0 || n % 3 == 0 {
+            n = n + 1
+            continue
+        }
+
+        let p: i32 = spf[n]
+        let mut remaining: i32 = n
+        let mut pp: i64 = 1
+        while remaining % p == 0 {
+            remaining = remaining / p
+            pp = pp * (p as i64)
+        }
+
+        let prev: i64 = 0
+        if remaining > 1 {
+            prev = values[remaining]
+        } else {
+            prev = 1
+        }
+        let comp: i64 = orders[pp as i32]
+        let g: i64 = llgcd(prev, comp)
+        let val: i64 = prev / g * comp
+        values[n] = val
+        total = total + val
+        n = n + 1
+    }
+
+    free(values as ptr<void>)
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p752_native())
+    printf("%lld\n", G(1000000))
     return 0
 }

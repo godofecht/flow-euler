@@ -1,10 +1,152 @@
 # Project Euler 776: Digit Sum Division
+#
+# For n >= 1, let d(n) be the sum of decimal digits of n.
+# F(N) = sum_{n=1..N} n / d(n).
+#
+# A digit DP over the decimal representation of N groups every integer in
+# [0, N] by its digit sum s.  For each s we track the count of integers and
+# their sum.  F(N) = sum_{s>=1} (sum of integers with digit sum s) / s.
 
 extern {
-    function p776_print()
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function floor(x: f64) -> f64
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+}
+
+function zero_arr(a: ptr<f64>, n: i32) {
+    for i in 0..n {
+        a[i] = 0.0
+    }
 }
 
 function main() -> i32 {
-    p776_print()
+    # N = 1234567890123456789
+    let digits: ptr<i32> = calloc(19, 4)
+    digits[0] = 1
+    digits[1] = 2
+    digits[2] = 3
+    digits[3] = 4
+    digits[4] = 5
+    digits[5] = 6
+    digits[6] = 7
+    digits[7] = 8
+    digits[8] = 9
+    digits[9] = 0
+    digits[10] = 1
+    digits[11] = 2
+    digits[12] = 3
+    digits[13] = 4
+    digits[14] = 5
+    digits[15] = 6
+    digits[16] = 7
+    digits[17] = 8
+    digits[18] = 9
+
+    let L: i32 = 19
+    let max_sum: i32 = 9 * L
+
+    let cnt_tight: ptr<f64> = calloc(172, 8)
+    let sum_tight: ptr<f64> = calloc(172, 8)
+    let cnt_loose: ptr<f64> = calloc(172, 8)
+    let sum_loose: ptr<f64> = calloc(172, 8)
+    let ncnt_tight: ptr<f64> = calloc(172, 8)
+    let nsum_tight: ptr<f64> = calloc(172, 8)
+    let ncnt_loose: ptr<f64> = calloc(172, 8)
+    let nsum_loose: ptr<f64> = calloc(172, 8)
+
+    zero_arr(cnt_tight, 172)
+    zero_arr(sum_tight, 172)
+    zero_arr(cnt_loose, 172)
+    zero_arr(sum_loose, 172)
+    cnt_tight[0] = 1.0
+
+    for i in 0..L {
+        let lim: i32 = digits[i]
+
+        zero_arr(ncnt_tight, 172)
+        zero_arr(nsum_tight, 172)
+        zero_arr(ncnt_loose, 172)
+        zero_arr(nsum_loose, 172)
+
+        # Loose -> loose: next digit free (0..9).
+        for s in 0..(max_sum + 1) {
+            let c: f64 = cnt_loose[s]
+            if c == 0.0 {
+                continue
+            }
+            let v10: f64 = sum_loose[s] * 10.0
+            for d in 0..10 {
+                let ns: i32 = s + d
+                if ns > max_sum {
+                    break
+                }
+                ncnt_loose[ns] = ncnt_loose[ns] + c
+                nsum_loose[ns] = nsum_loose[ns] + v10 + c * (d as f64)
+            }
+        }
+
+        # Tight -> tight/loose: next digit restricted by lim.
+        for s in 0..(max_sum + 1) {
+            let c: f64 = cnt_tight[s]
+            if c == 0.0 {
+                continue
+            }
+            let v10: f64 = sum_tight[s] * 10.0
+            for d in 0..(lim + 1) {
+                let ns: i32 = s + d
+                if ns > max_sum {
+                    break
+                }
+                if d == lim {
+                    ncnt_tight[ns] = ncnt_tight[ns] + c
+                    nsum_tight[ns] = nsum_tight[ns] + v10 + c * (d as f64)
+                } else {
+                    ncnt_loose[ns] = ncnt_loose[ns] + c
+                    nsum_loose[ns] = nsum_loose[ns] + v10 + c * (d as f64)
+                }
+            }
+        }
+
+        for s in 0..172 {
+            cnt_tight[s] = ncnt_tight[s]
+            sum_tight[s] = nsum_tight[s]
+            cnt_loose[s] = ncnt_loose[s]
+            sum_loose[s] = nsum_loose[s]
+        }
+    }
+
+    # F(N) = sum_{s>=1} (sum_tight[s] + sum_loose[s]) / s.
+    let mut total: f64 = 0.0
+    for s in 1..(max_sum + 1) {
+        let sums: f64 = sum_tight[s] + sum_loose[s]
+        if sums != 0.0 {
+            total = total + sums / (s as f64)
+        }
+    }
+
+    # Format as %.12e without '+' in exponent.
+    let mut mant: f64 = total
+    let mut ex: i64 = 0
+    while mant >= 10.0 {
+        mant = mant / 10.0
+        ex = ex + 1
+    }
+    while mant < 1.0 && mant > 0.0 {
+        mant = mant * 10.0
+        ex = ex - 1
+    }
+    printf("%.12fe%lld\n", mant, ex)
+
+    free(nsum_loose)
+    free(ncnt_loose)
+    free(nsum_tight)
+    free(ncnt_tight)
+    free(sum_loose)
+    free(cnt_loose)
+    free(sum_tight)
+    free(cnt_tight)
+    free(digits)
     return 0
 }
