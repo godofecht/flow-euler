@@ -1,11 +1,133 @@
-# Project Euler 631
-# Counting permutations with bounded left-to-right maxima gaps; f(10^18,40).
+# Project Euler 631: Strictly Increasing Sequence
+# Count increasing sequences satisfying constraints, mod 1e9+7.
+# Uses open-addressing hash map with state (rem, lower, thr, cnt).
 
 extern {
-    function pe631_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(dst: ptr<void>, val: i32, n: i64) -> void
+}
+
+const MOD: i64 = 1000000007
+const HCAP: i64 = 1048576
+
+struct State {
+    rem: i32
+    lower: i32
+    thr: i32
+    cnt: i64
+}
+
+let mut ht: ptr<State> = null as ptr<State>
+let mut used: ptr<i8> = null as ptr<i8>
+
+function key_of(rem: i32, lower: i32, thr: i32) -> i64 {
+    let r: i64 = (rem as i64) & 0xFFFFFFFF
+    let l: i64 = (lower as i64) & 0xFFFFFFFF
+    let t: i64 = (thr as i64) & 0xFFFFFFFF
+    return (r << 42) | (l << 21) | t
+}
+
+function hclear() -> void {
+    memset(used as ptr<void>, 0, HCAP)
+}
+
+function hadd(rem: i32, lower: i32, thr: i32, cnt: i64) -> void {
+    let k: i64 = key_of(rem, lower, thr)
+    let mut i: i64 = (k * 11400714819323198485 as i64) >> (64 - 20)
+    i = i & (HCAP - 1)
+    while used[i] != 0 {
+        if ht[i].rem == rem && ht[i].lower == lower && ht[i].thr == thr {
+            ht[i].cnt = (ht[i].cnt + cnt) % MOD
+            return
+        }
+        i = (i + 1) & (HCAP - 1)
+    }
+    used[i] = 1
+    ht[i].rem = rem
+    ht[i].lower = lower
+    ht[i].thr = thr
+    ht[i].cnt = cnt % MOD
+}
+
+function hdump(out: ptr<State>) -> i32 {
+    let mut n: i32 = 0
+    let mut i: i64 = 0
+    while i < HCAP {
+        if used[i] != 0 {
+            out[n].rem = ht[i].rem
+            out[n].lower = ht[i].lower
+            out[n].thr = ht[i].thr
+            out[n].cnt = ht[i].cnt
+            n = n + 1
+        }
+        i = i + 1
+    }
+    return n
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe631_answer())
+    let n: i64 = 1000000000000000000
+    let m: i32 = 40
+
+    ht = calloc(HCAP, 24)
+    used = calloc(HCAP, 1)
+    let layer: ptr<State> = calloc(HCAP, 24)
+
+    hclear()
+    hadd(m, 0, 0, 1)
+    let mut ln: i32 = hdump(layer)
+    let mut total: i64 = 1
+    let explicit_limit: i32 = m + 2
+
+    let mut length: i32 = 1
+    while length <= explicit_limit {
+        hclear()
+        let mut i: i32 = 0
+        while i < ln {
+            let remaining: i32 = layer[i].rem
+            let lower: i32 = layer[i].lower
+            let threshold: i32 = layer[i].thr
+            let count: i64 = layer[i].cnt
+            let mut upper: i32 = remaining + 1
+            if upper > length { upper = length }
+            let mut inv: i32 = lower
+            while inv < upper {
+                let nrem: i32 = remaining - inv
+                let nlo: i32
+                let nthr: i32
+                if inv < threshold {
+                    hadd(nrem, inv + 1, threshold + 1, count)
+                } else {
+                    hadd(nrem, lower, inv, count)
+                }
+                inv = inv + 1
+            }
+            i = i + 1
+        }
+        ln = hdump(layer)
+        let mut sum: i64 = 0
+        i = 0
+        while i < ln {
+            sum = (sum + layer[i].cnt) % MOD
+            i = i + 1
+        }
+        total = (total + sum) % MOD
+        length = length + 1
+    }
+
+    let mut stable: i64 = 0
+    let mut i: i32 = 0
+    while i < ln {
+        stable = (stable + layer[i].cnt) % MOD
+        i = i + 1
+    }
+    let extra: i64 = (n - (m + 2) as i64) % MOD
+    total = (total + extra * stable) % MOD
+
+    printf("%lld\n", total)
+    free(ht as ptr<void>)
+    free(used as ptr<void>)
+    free(layer as ptr<void>)
     return 0
 }

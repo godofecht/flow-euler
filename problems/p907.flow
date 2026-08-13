@@ -1,8 +1,136 @@
+# Project Euler 907: Stacking Cups
+# S(n) satisfies an order-8 linear recurrence for n >= 10.
+# Compute S(10^7) mod 1e9+7 via matrix exponentiation.
+
 extern {
-    function p907_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(dst: ptr<void>, val: i32, n: i64) -> void
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> void
+}
+
+const MOD: i64 = 1000000007
+
+# S(1)..S(9)
+function small(n: i32) -> i64 {
+    if n == 1 { return 2 }
+    if n == 2 { return 2 }
+    if n == 3 { return 6 }
+    if n == 4 { return 12 }
+    if n == 5 { return 16 }
+    if n == 6 { return 22 }
+    if n == 7 { return 36 }
+    if n == 8 { return 58 }
+    return 82
+}
+
+# Recurrence coefficients
+function coeff(j: i32) -> i64 {
+    if j == 0 { return 2 }
+    if j == 1 { return -3 }
+    if j == 2 { return 5 }
+    if j == 3 { return -4 }
+    if j == 4 { return 4 }
+    if j == 5 { return -3 }
+    if j == 6 { return 1 }
+    return -1
+}
+
+function mat_mul(A: ptr<i64>, B: ptr<i64>, C: ptr<i64>) -> void {
+    let tmp: ptr<i64> = calloc(64, 8)
+    let mut i: i32 = 0
+    while i < 8 {
+        let mut j: i32 = 0
+        while j < 8 {
+            let mut s: i64 = 0
+            let mut k: i32 = 0
+            while k < 8 {
+                s = (s + A[i * 8 + k] * B[k * 8 + j]) % MOD
+                k = k + 1
+            }
+            tmp[i * 8 + j] = (s % MOD + MOD) % MOD
+            j = j + 1
+        }
+        i = i + 1
+    }
+    memcpy(C as ptr<void>, tmp as ptr<void>, 64 * 8)
+    free(tmp)
+}
+
+function mat_vec_mul(A: ptr<i64>, v: ptr<i64>, out: ptr<i64>) -> void {
+    let mut i: i32 = 0
+    while i < 8 {
+        let mut s: i64 = 0
+        let mut j: i32 = 0
+        while j < 8 {
+            s = (s + A[i * 8 + j] * v[j]) % MOD
+            j = j + 1
+        }
+        out[i] = (s % MOD + MOD) % MOD
+        i = i + 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p907_native())
+    let n: i64 = 10000000
+    if n <= 9 {
+        printf("%lld\n", small(n as i32) % MOD)
+        return 0
+    }
+
+    let M: ptr<i64> = calloc(64, 8)
+    memset(M as ptr<void>, 0, 64 * 8)
+    let mut j: i32 = 0
+    while j < 8 {
+        M[j] = (coeff(j) % MOD + MOD) % MOD
+        j = j + 1
+    }
+    let mut i: i32 = 1
+    while i < 8 {
+        M[i * 8 + i - 1] = 1
+        i = i + 1
+    }
+
+    let base: ptr<i64> = calloc(8, 8)
+    base[0] = small(9) % MOD
+    base[1] = small(8) % MOD
+    base[2] = small(7) % MOD
+    base[3] = small(6) % MOD
+    base[4] = small(5) % MOD
+    base[5] = small(4) % MOD
+    base[6] = small(3) % MOD
+    base[7] = small(2) % MOD
+
+    let result: ptr<i64> = calloc(64, 8)
+    memset(result as ptr<void>, 0, 64 * 8)
+    i = 0
+    while i < 8 {
+        result[i * 8 + i] = 1
+        i = i + 1
+    }
+
+    let base_pow: ptr<i64> = calloc(64, 8)
+    memcpy(base_pow as ptr<void>, M as ptr<void>, 64 * 8)
+
+    let mut e: i64 = n - 9
+    while e > 0 {
+        if (e & 1) != 0 {
+            mat_mul(result, base_pow, result)
+        }
+        e = e >> 1
+        if e > 0 {
+            mat_mul(base_pow, base_pow, base_pow)
+        }
+    }
+
+    let out: ptr<i64> = calloc(8, 8)
+    mat_vec_mul(result, base, out)
+    printf("%lld\n", out[0])
+
+    free(M)
+    free(base)
+    free(result)
+    free(base_pow)
+    free(out)
     return 0
 }

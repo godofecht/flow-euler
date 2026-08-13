@@ -1,11 +1,113 @@
-# Project Euler 951
-# A Game of Chance — real solver in problems/native/p951.c.
+# Project Euler 951: Unique Subsets
+# Count length 2n strings with n R, n B and no maximal run of length 2.
+# Answer = C(2n,n) - count_balanced_no_run2(n) for n=26.
 
 extern {
-    function p951_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(dst: ptr<void>, val: i32, n: i64) -> void
+}
+
+function comb(n: i32, k0: i32) -> i64 {
+    if k0 < 0 || k0 > n { return 0 }
+    let mut k: i32 = k0
+    if k > n - k { k = n - k }
+    let mut result: i64 = 1
+    let mut i: i32 = 0
+    while i < k {
+        result = result * (n - i) as i64 / (i + 1) as i64
+        i = i + 1
+    }
+    return result
+}
+
+function idx(r: i32, last: i32, rs: i32) -> i64 {
+    return (r as i64) * 6 + (last as i64) * 3 + (rs as i64)
+}
+
+function count_balanced_no_run2(n: i32) -> i64 {
+    if n <= 0 {
+        if n == 0 { return 1 }
+        return 0
+    }
+    let L: i32 = 2 * n
+    let R: i32 = n + 1
+    let sz: i64 = (R as i64) * 6
+    let mut dp: ptr<i64> = calloc(sz, 8)
+    let mut nw: ptr<i64> = calloc(sz, 8)
+
+    dp[idx(1, 0, 0)] = 1
+    dp[idx(0, 1, 0)] = 1
+
+    let mut pos: i32 = 1
+    while pos < L {
+        memset(nw as ptr<void>, 0, sz * 8)
+        let mut r: i32 = 0
+        while r <= n {
+            let b: i32 = pos - r
+            if b < 0 || b > n {
+                r = r + 1
+                continue
+            }
+            let mut last: i32 = 0
+            while last < 2 {
+                let mut rs: i32 = 0
+                while rs < 3 {
+                    let val: i64 = dp[idx(r, last, rs)]
+                    if val != 0 {
+                        let rscat: i32 = rs + 1
+
+                        if r + 1 <= n {
+                            if last == 0 {
+                                let mut nrs: i32 = rscat + 1
+                                if rscat >= 3 { nrs = 3 }
+                                nw[idx(r + 1, 0, nrs - 1)] = nw[idx(r + 1, 0, nrs - 1)] + val
+                            } else {
+                                if rscat != 2 {
+                                    nw[idx(r + 1, 0, 0)] = nw[idx(r + 1, 0, 0)] + val
+                                }
+                            }
+                        }
+                        if b + 1 <= n {
+                            if last == 1 {
+                                let mut nrs: i32 = rscat + 1
+                                if rscat >= 3 { nrs = 3 }
+                                nw[idx(r, 1, nrs - 1)] = nw[idx(r, 1, nrs - 1)] + val
+                            } else {
+                                if rscat != 2 {
+                                    nw[idx(r, 1, 0)] = nw[idx(r, 1, 0)] + val
+                                }
+                            }
+                        }
+                    }
+                    rs = rs + 1
+                }
+                last = last + 1
+            }
+            r = r + 1
+        }
+        let tmp: ptr<i64> = dp
+        dp = nw
+        nw = tmp
+        pos = pos + 1
+    }
+
+    let mut total: i64 = 0
+    let mut last: i32 = 0
+    while last < 2 {
+        total = total + dp[idx(n, last, 0)]
+        total = total + dp[idx(n, last, 2)]
+        last = last + 1
+    }
+    free(dp)
+    free(nw)
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p951_native())
+    let n: i32 = 26
+    let total: i64 = comb(2 * n, n)
+    let unfair: i64 = count_balanced_no_run2(n)
+    printf("%lld\n", total - unfair)
     return 0
 }

@@ -1,11 +1,122 @@
-# Project Euler 760
-# Sum over Bitwise Operators: G(10^18) mod 10^9+7.
+# Project Euler 760: Sum over Bitwise Operators
+# g(m,n) = (m xor n) + (m or n) + (m and n) = 2*(m|n).
+# G(N) = sum_{n=0..N} sum_{k=0..n} g(k, n-k) = 2 * sum of (a|b) over a+b<=N.
+# Digit DP over binary sum a+b enforcing S<=N with optional fixed bit forced to 0.
+
+const MOD: i64 = 1000000007
+
+function count_pairs_sum_leq(N: i64, fixed_bit: i32) -> i64 {
+    if N < 0 { return 0 }
+    let mut bits: i32 = 1
+    let mut t: i64 = N
+    while t > 1 {
+        t = t >> 1
+        bits = bits + 1
+    }
+
+    # dp[carry_next][less] - use flat arrays
+    let dp: ptr<i64> = calloc(4, 8)
+    let ndp: ptr<i64> = calloc(4, 8)
+    dp[0] = 1
+
+    let mut pos: i32 = bits - 1
+    while pos >= 0 {
+        let nbit: i32 = ((N >> pos) & 1) as i32
+        # Clear ndp
+        ndp[0] = 0
+        ndp[1] = 0
+        ndp[2] = 0
+        ndp[3] = 0
+
+        let mut carry_next: i32 = 0
+        while carry_next < 2 {
+            let mut less: i32 = 0
+            while less < 2 {
+                let ways: i64 = dp[carry_next * 2 + less]
+                if ways != 0 {
+                    let mut carry_cur: i32 = 0
+                    while carry_cur < 2 {
+                        let mut a_bit: i32 = 0
+                        while a_bit < 2 {
+                            let mut b_bit: i32 = 0
+                            while b_bit < 2 {
+                                if fixed_bit >= 0 && pos == fixed_bit && (a_bit | b_bit) != 0 {
+                                    b_bit = b_bit + 1
+                                    continue
+                                }
+
+                                let total: i32 = a_bit + b_bit + carry_cur
+                                if (total >> 1) != carry_next {
+                                    b_bit = b_bit + 1
+                                    continue
+                                }
+
+                                let s_bit: i32 = total & 1
+                                if less == 0 && s_bit > nbit {
+                                    b_bit = b_bit + 1
+                                    continue
+                                }
+
+                                let new_less: i32 = less | (if s_bit < nbit { 1 } else { 0 })
+                                let idx: i32 = carry_cur * 2 + new_less
+                                ndp[idx] = (ndp[idx] + ways) % MOD
+                                b_bit = b_bit + 1
+                            }
+                            a_bit = a_bit + 1
+                        }
+                        carry_cur = carry_cur + 1
+                    }
+                }
+                less = less + 1
+            }
+            carry_next = carry_next + 1
+        }
+
+        # Copy ndp to dp
+        dp[0] = ndp[0]
+        dp[1] = ndp[1]
+        dp[2] = ndp[2]
+        dp[3] = ndp[3]
+        pos = pos - 1
+    }
+
+    let result: i64 = (dp[0] + dp[1]) % MOD
+    free(dp)
+    free(ndp)
+    return result
+}
 
 extern {
-    function p760_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
 }
 
 function main() -> i32 {
-    printf("%lld\n", p760_native())
+    let N: i64 = 1000000000000000000
+
+    let inv2: i64 = (MOD + 1) / 2
+    let total_pairs: i64 = ((N + 1) % MOD) * ((N + 2) % MOD) % MOD
+    let total_pairs2: i64 = total_pairs * inv2 % MOD
+
+    let mut bits: i32 = 1
+    let mut t: i64 = N
+    while t > 1 {
+        t = t >> 1
+        bits = bits + 1
+    }
+
+    let mut pow2: i64 = 1
+    let mut sum_or: i64 = 0
+    let mut i: i32 = 0
+    while i < bits {
+        let both_zero: i64 = count_pairs_sum_leq(N, i)
+        let mut bit_is_one: i64 = (total_pairs2 - both_zero) % MOD
+        if bit_is_one < 0 { bit_is_one = bit_is_one + MOD }
+        sum_or = (sum_or + pow2 * bit_is_one) % MOD
+        pow2 = (pow2 * 2) % MOD
+        i = i + 1
+    }
+
+    printf("%lld\n", (2 * sum_or) % MOD)
     return 0
 }

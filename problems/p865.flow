@@ -1,11 +1,102 @@
-# Project Euler 865
-# Triplicate Numbers - T(10^4) mod 998244353.
+# Project Euler 865: Triplicate Numbers
+# T(10^4) mod 998244353.
 
 extern {
-    function p865_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
 }
 
+const MOD: i64 = 998244353
+const K: i64 = 10
+const MMAX: i64 = 3333
+
 function main() -> i32 {
-    printf("%lld\n", p865_native())
+    let mmax: i64 = MMAX
+    let dp0: ptr<i64> = calloc(mmax + 1, 8)
+    let dp1: ptr<i64> = calloc(mmax + 1, 8)
+    let f: ptr<i64> = calloc(mmax + 1, 8)
+    let mul: ptr<i64> = calloc(mmax + 1, 8)
+    let pref: ptr<i64> = calloc(mmax + 1, 8)
+
+    let k: i64 = K
+    let km1: i64 = K - 1
+    let twok: i64 = 2 * K
+    let twokm1: i64 = 2 * (K - 1)
+
+    dp0[1] = k
+    dp1[1] = km1
+    f[1] = km1
+    pref[1] = dp1[1]
+
+    let mut m: i64 = 2
+    while m <= mmax {
+        let mut f_m: i64 = km1 * f[m - 1] % MOD
+        let mut dp0_m: i64 = k * dp0[m - 1] % MOD
+        let mut dp1_m: i64 = k * dp1[m - 1] % MOD
+
+        let mut s: i64 = 2
+        while s <= m {
+            let p: i64 = m - s
+            let x: i64 = f[s - 1]
+
+            if p == 0 {
+                f_m = (f_m + twokm1 * x) % MOD
+                dp0_m = (dp0_m + twok * x) % MOD
+                dp1_m = (dp1_m + twokm1 * x) % MOD
+                if s >= 3 {
+                    let y: i64 = mul[s - 1]
+                    f_m = (f_m + km1 * y) % MOD
+                    dp0_m = (dp0_m + k * y) % MOD
+                    dp1_m = (dp1_m + km1 * y) % MOD
+                }
+            } else {
+                let fp: i64 = f[p]
+                let d0p: i64 = dp0[p]
+                let d1p: i64 = dp1[p]
+                f_m = (f_m + twokm1 * x % MOD * fp) % MOD
+                dp0_m = (dp0_m + twok * x % MOD * d0p) % MOD
+                dp1_m = (dp1_m + twok * x % MOD * d1p) % MOD
+                if s >= 3 {
+                    let y: i64 = mul[s - 1]
+                    f_m = (f_m + km1 * y % MOD * fp) % MOD
+                    dp0_m = (dp0_m + k * y % MOD * d0p) % MOD
+                    dp1_m = (dp1_m + k * y % MOD * d1p) % MOD
+                }
+            }
+
+            if (s & 63) == 0 {
+                f_m = f_m % MOD
+                dp0_m = dp0_m % MOD
+                dp1_m = dp1_m % MOD
+            }
+            s = s + 1
+        }
+
+        f_m = f_m % MOD
+        dp0_m = dp0_m % MOD
+        dp1_m = dp1_m % MOD
+
+        f[m] = f_m
+        dp0[m] = dp0_m
+        dp1[m] = dp1_m
+
+        let mut acc: i64 = 0
+        let mut a: i64 = 1
+        while a < m {
+            acc = (acc + f[a] * f[m - a] % MOD) % MOD
+            a = a + 1
+        }
+        mul[m] = acc
+
+        pref[m] = (pref[m - 1] + dp1[m]) % MOD
+        m = m + 1
+    }
+
+    printf("%lld\n", pref[mmax] % MOD)
+    free(dp0)
+    free(dp1)
+    free(f)
+    free(mul)
+    free(pref)
     return 0
 }
