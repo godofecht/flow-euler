@@ -1,12 +1,257 @@
 # Project Euler 939
-# Partisan Nim — partition DP (native).
-# Companion: problems/native/p939.c
+# Partisan Nim. E(N) mod 1234567891 for N=5000.
+# O(N^2) partition DP.
 
 extern {
-    function p939_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1234567891
+const N: i64 = 5000
+
+function solve() -> i64 {
+    # Triangular offsets: start[n] = n*(n+1)/2
+    let start: ptr<i64> = calloc(N + 1, 8)
+    start[0] = 0
+    let mut n_val: i64 = 1
+    while n_val <= N {
+        start[n_val] = start[n_val - 1] + n_val
+        n_val = n_val + 1
+    }
+
+    let total_entries: i64 = (N + 1) * (N + 2) / 2
+    let cnt0: ptr<i32> = calloc(total_entries, 4)
+    let cnt1: ptr<i32> = calloc(total_entries, 4)
+
+    # Empty partition of 0
+    cnt0[0] = 1
+
+    let mut prev0: ptr<i32> = calloc(N + 1, 4)
+    let mut prev1: ptr<i32> = calloc(N + 1, 4)
+    prev0[0] = 1
+
+    let mut cur0: ptr<i32> = malloc((N + 1) * 4)
+    let mut cur1: ptr<i32> = malloc((N + 1) * 4)
+
+    # Build partition stats
+    let mut k: i64 = 1
+    while k <= N {
+        memset(cur0, 0, (N + 1) * 4)
+        memset(cur1, 0, (N + 1) * 4)
+
+        if k % 2 == 0 {
+            # parity unchanged in (n-k, k) branch
+            let mut nn: i64 = k
+            while nn <= N {
+                let a0: i64 = prev1[nn - 1] as i64
+                let a1: i64 = prev0[nn - 1] as i64
+                let b0: i64 = cur0[nn - k] as i64
+                let b1: i64 = cur1[nn - k] as i64
+
+                let mut s0: i64 = a0 + b0
+                if s0 >= MOD {
+                    s0 = s0 - MOD
+                }
+                let mut s1: i64 = a1 + b1
+                if s1 >= MOD {
+                    s1 = s1 - MOD
+                }
+
+                cur0[nn] = s0 as i32
+                cur1[nn] = s1 as i32
+
+                let v: i64 = nn - k
+                let idx: i64 = start[nn] + v
+
+                let mut t: i64 = cnt0[idx] as i64 + s0
+                if t >= MOD {
+                    t = t - MOD
+                }
+                cnt0[idx] = t as i32
+
+                t = cnt1[idx] as i64 + s1
+                if t >= MOD {
+                    t = t - MOD
+                }
+                cnt1[idx] = t as i32
+
+                nn = nn + 1
+            }
+        } else {
+            # parity flips in (n-k, k) branch
+            let mut nn: i64 = k
+            while nn <= N {
+                let a0: i64 = prev1[nn - 1] as i64
+                let a1: i64 = prev0[nn - 1] as i64
+                let b0: i64 = cur1[nn - k] as i64
+                let b1: i64 = cur0[nn - k] as i64
+
+                let mut s0: i64 = a0 + b0
+                if s0 >= MOD {
+                    s0 = s0 - MOD
+                }
+                let mut s1: i64 = a1 + b1
+                if s1 >= MOD {
+                    s1 = s1 - MOD
+                }
+
+                cur0[nn] = s0 as i32
+                cur1[nn] = s1 as i32
+
+                let v: i64 = nn - k
+                let idx: i64 = start[nn] + v
+
+                let mut t: i64 = cnt0[idx] as i64 + s0
+                if t >= MOD {
+                    t = t - MOD
+                }
+                cnt0[idx] = t as i32
+
+                t = cnt1[idx] as i64 + s1
+                if t >= MOD {
+                    t = t - MOD
+                }
+                cnt1[idx] = t as i32
+
+                nn = nn + 1
+            }
+        }
+
+        # swap prev and cur
+        let tmp0: ptr<i32> = prev0
+        prev0 = cur0
+        cur0 = tmp0
+        let tmp1: ptr<i32> = prev1
+        prev1 = cur1
+        cur1 = tmp1
+
+        k = k + 1
+    }
+
+    free(prev0)
+    free(prev1)
+    free(cur0)
+    free(cur1)
+
+    # Compute E
+    let cum0: ptr<i64> = calloc(N + 1, 8)
+    let cum1: ptr<i64> = calloc(N + 1, 8)
+    let pref0: ptr<i64> = malloc((N + 1) * 8)
+    let pref1: ptr<i64> = malloc((N + 1) * 8)
+
+    let mut ans: i64 = 0
+
+    let mut m: i64 = 0
+    while m <= N {
+        let sb: i64 = start[m]
+
+        # Add distributions for total b = m into cumulative B-side counts
+        let mut v: i64 = 0
+        while v <= m {
+            let idx: i64 = sb + v
+
+            let x0: i64 = cnt0[idx] as i64
+            if x0 != 0 {
+                let mut s: i64 = cum0[v] + x0
+                if s >= MOD {
+                    s = s - MOD
+                }
+                cum0[v] = s
+            }
+
+            let x1: i64 = cnt1[idx] as i64
+            if x1 != 0 {
+                let mut s: i64 = cum1[v] + x1
+                if s >= MOD {
+                    s = s - MOD
+                }
+                cum1[v] = s
+            }
+
+            v = v + 1
+        }
+
+        let a: i64 = N - m
+        let sa: i64 = start[a]
+
+        # Build prefix sums up to v = a
+        let mut run: i64 = 0
+        v = 0
+        while v <= a {
+            run = run + cum0[v]
+            if run >= MOD {
+                run = run - MOD
+            }
+            pref0[v] = run
+            v = v + 1
+        }
+
+        run = 0
+        v = 0
+        while v <= a {
+            run = run + cum1[v]
+            if run >= MOD {
+                run = run - MOD
+            }
+            pref1[v] = run
+            v = v + 1
+        }
+
+        # Count A partitions of total a against all B partitions of total <= m
+        let mut vA: i64 = 0
+        while vA <= a {
+            let idxA: i64 = sa + vA
+            let a0: i64 = cnt0[idxA] as i64
+            let a1: i64 = cnt1[idxA] as i64
+
+            let x_same: i64 = vA - 1
+            let x_diff: i64 = vA - 2
+
+            if a0 != 0 {
+                let mut s: i64 = 0
+                if x_same >= 0 {
+                    s = s + pref0[x_same]
+                }
+                if x_diff >= 0 {
+                    s = s + pref1[x_diff]
+                }
+                s = s % MOD
+                ans = (ans + a0 * s) % MOD
+            }
+
+            if a1 != 0 {
+                let mut t: i64 = 0
+                if x_same >= 0 {
+                    t = t + pref1[x_same]
+                }
+                if x_diff >= 0 {
+                    t = t + pref0[x_diff]
+                }
+                t = t % MOD
+                ans = (ans + a1 * t) % MOD
+            }
+
+            vA = vA + 1
+        }
+
+        m = m + 1
+    }
+
+    free(cum0)
+    free(cum1)
+    free(pref0)
+    free(pref1)
+    free(cnt0)
+    free(cnt1)
+    free(start)
+
+    return ans
 }
 
 function main() -> i32 {
-    printf("%lld\n", p939_native())
+    printf("%lld\n", solve())
     return 0
 }

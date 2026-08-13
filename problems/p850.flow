@@ -1,11 +1,199 @@
 # Project Euler 850
-# Fractions of Powers — DFS over primes with totient weighting in C.
+# Fractions of Powers.
+# Ported from native C to pure Flow.
 
 extern {
-    function p850_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+const MOD: i64 = 977676779
+const MOD2: i64 = 2 * 977676779
+
+let mut g_N: i64 = 0
+let mut g_mod2: i64 = 0
+
+let mut g_primes: ptr<i32> = null
+let mut g_num_primes: i32 = 0
+
+let mut g_fp: ptr<i64> = null
+let mut g_fe: ptr<i32> = null
+let mut g_factors_count: i32 = 0
+
+let mut g_H_ge3: i64 = 0
+
+function odd_count_from(first: i64, limit: i64) -> i64 {
+    if first > limit { return 0 }
+    let mut f: i64 = first
+    if f % 2 == 0 { f = f + 1 }
+    if f > limit { return 0 }
+    return (limit - f) / 2 + 1
+}
+
+function imax(a: i64, b: i64) -> i64 {
+    if a > b { return a }
+    return b
+}
+
+function imin(a: i64, b: i64) -> i64 {
+    if a < b { return a }
+    return b
+}
+
+function isqrt_i64(n: i64) -> i64 {
+    if n < 0 { return 0 }
+    let mut r: i64 = (sqrt(n as f64)) as i64
+    while r > 0 && r * r > n {
+        r = r - 1
+    }
+    while (r + 1) * (r + 1) <= n {
+        r = r + 1
+    }
+    return r
+}
+
+function profile_contribution(d: i64, rad: i64, phi_mod: i64, max_exp: i32) -> i64 {
+    let mut tail_first: i64 = imax(3, (max_exp as i64) + 1)
+    if tail_first % 2 == 0 { tail_first = tail_first + 1 }
+
+    let oc: i64 = odd_count_from(tail_first, g_N) % g_mod2
+    let dr: i64 = g_N / (d * rad)
+    let mut total: i64 = (((oc as i128) * (dr as i128)) % (g_mod2 as i128)) as i64
+
+    let small_last: i64 = imin(g_N, tail_first - 2)
+    let limit: i64 = g_N / d
+    let mut k: i64 = 3
+    while k <= small_last {
+        let mut rho: i64 = 1
+        let denom: i64 = k - 1
+        let mut overflow: bool = false
+        let mut i: i32 = 0
+        while i < g_factors_count {
+            let p: i64 = g_fp[i]
+            let exponent: i32 = g_fe[i]
+            let e: i32 = (exponent + (denom as i32) - 1) / (denom as i32)
+            let mut p_power: i64 = 1
+            let mut j: i32 = 0
+            while j < e {
+                if p_power > limit / p {
+                    overflow = true
+                    break
+                }
+                p_power = p_power * p
+                j = j + 1
+            }
+            if overflow {
+                rho = limit + 1
+                break
+            }
+            if rho > limit / p_power {
+                rho = limit + 1
+                overflow = true
+                break
+            }
+            rho = rho * p_power
+            i = i + 1
+        }
+        if rho <= limit {
+            total = total + g_N / (d * rho)
+        }
+        k = k + 2
+    }
+    return (((phi_mod as i128) * ((total % g_mod2) as i128)) % (g_mod2 as i128)) as i64
+}
+
+function visit(start_idx: i32, d: i64, rad: i64, phi_mod: i64, max_exp: i32) -> void {
+    g_H_ge3 = (g_H_ge3 + profile_contribution(d, rad, phi_mod, max_exp)) % g_mod2
+
+    let mut i: i32 = start_idx
+    while i < g_num_primes {
+        let p: i64 = g_primes[i] as i64
+        if d * rad > g_N / (p * p) { break }
+
+        let next_rad: i64 = rad * p
+        let mut next_d: i64 = d * p
+        let mut phi_factor: i64 = p - 1
+        let mut exponent: i32 = 1
+        while next_d <= g_N / next_rad {
+            g_fp[g_factors_count] = p
+            g_fe[g_factors_count] = exponent
+            g_factors_count = g_factors_count + 1
+
+            let new_phi: i64 = (((phi_mod as i128) * ((phi_factor % g_mod2) as i128)) % (g_mod2 as i128)) as i64
+            let mut new_max: i32 = max_exp
+            if exponent > max_exp { new_max = exponent }
+            visit(i + 1, next_d, next_rad, new_phi, new_max)
+
+            g_factors_count = g_factors_count - 1
+            exponent = exponent + 1
+            next_d = next_d * p
+            phi_factor = phi_factor * p
+        }
+        i = i + 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p850_native())
+    g_N = 33557799775533
+    g_mod2 = MOD2
+    g_factors_count = 0
+    g_H_ge3 = 0
+
+    let sqrt_N: i64 = isqrt_i64(g_N)
+    let slimit: i64 = sqrt_N + 1
+
+    # Sieve primes up to sqrt_N
+    let sieve: ptr<i8> = calloc(slimit, 1)
+    let mut p: i64 = 2
+    while p * p <= sqrt_N {
+        if sieve[p] == 0 {
+            let mut m: i64 = p * p
+            while m <= sqrt_N {
+                sieve[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut count: i32 = 0
+    let mut pi: i64 = 2
+    while pi <= sqrt_N {
+        if sieve[pi] == 0 {
+            count = count + 1
+        }
+        pi = pi + 1
+    }
+    g_primes = calloc(count as i64, 4) as ptr<i32>
+    let mut idx: i32 = 0
+    pi = 2
+    while pi <= sqrt_N {
+        if sieve[pi] == 0 {
+            g_primes[idx] = pi as i32
+            idx = idx + 1
+        }
+        pi = pi + 1
+    }
+    g_num_primes = count
+    free(sieve)
+
+    g_fp = calloc(30, 8) as ptr<i64>
+    g_fe = calloc(30, 4) as ptr<i32>
+
+    visit(0, 1, 1, 1, 0)
+
+    let H1: i64 = g_N % g_mod2
+    let odd_count: i64 = (g_N + 1) / 2
+    let total_h: i64 = (H1 + g_H_ge3) % g_mod2
+    let sum_n: i64 = ((((g_N as i128) * ((g_N + 1) as i128)) / (2 as i128)) % (g_mod2 as i128)) as i64
+    let twoS_raw: i64 = ((((odd_count % g_mod2) as i128) * (sum_n as i128)) % (g_mod2 as i128)) as i64 - total_h
+    let mut twoS_mod: i64 = twoS_raw % g_mod2
+    if twoS_mod < 0 { twoS_mod = twoS_mod + g_mod2 }
+
+    printf("%lld\n", (twoS_mod / 2) % MOD)
+
+    free(g_primes)
+    free(g_fp)
+    free(g_fe)
     return 0
 }

@@ -1,12 +1,197 @@
 # Project Euler 986
 # Sum of G(c,d) for 1<=c,d<=160 via cellular automaton thresholds.
-# Native C helper for the simulation and summation.
+# Port of the C reference solver to pure Flow.
 
 extern {
-    function p986_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memset(p: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+function extinct_for_k1(n: i64, k: i64) -> i64 {
+    if k == 0 { return 1 }
+
+    let size: i64 = n + 1
+    let last: i64 = size - 1
+    let cells: ptr<i64> = calloc(size, 8) as ptr<i64>
+    cells[last] = k
+    let mut zero_count: i64 = last
+
+    while 1 != 0 {
+        let mut i: i64 = 0
+        while i < last {
+            let old: i64 = cells[i]
+            let nxt: i64 = (old + cells[i + 1]) >> 1
+            cells[i] = nxt
+            if old != 0 {
+                if nxt == 0 { zero_count = zero_count + 1 }
+            } else {
+                if nxt != 0 { zero_count = zero_count - 1 }
+            }
+            i = i + 1
+        }
+
+        let old2: i64 = cells[last]
+        let nxt2: i64 = (old2 + cells[0]) >> 1
+        cells[last] = nxt2
+        if old2 != 0 {
+            if nxt2 == 0 { zero_count = zero_count + 1 }
+        } else {
+            if nxt2 != 0 { zero_count = zero_count - 1 }
+        }
+
+        if zero_count == size {
+            free(cells as ptr<void>)
+            return 1
+        }
+        if zero_count == 0 {
+            free(cells as ptr<void>)
+            return 0
+        }
+    }
+    return 0
+}
+
+function threshold_k1_plain(n: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = 1
+    while extinct_for_k1(n, hi) != 0 {
+        lo = hi
+        hi = hi * 2
+    }
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if extinct_for_k1(n, mid) != 0 {
+            lo = mid
+        } else {
+            hi = mid
+        }
+    }
+    return lo
+}
+
+function predict_k1_from_previous(s: ptr<i64>, n: i64) -> i64 {
+    let a: i64 = s[n - 32]
+    let b: i64 = s[n - 24]
+    let c: i64 = s[n - 16]
+    let d: i64 = s[n - 8]
+    return d + (d - c) + (d - 2 * c + b) + (d - 3 * c + 3 * b - a)
+}
+
+function threshold_k1_with_guess(n: i64, guess: i64) -> i64 {
+    let mut lo: i64 = guess - 4096
+    if lo < 0 { lo = 0 }
+    let mut hi: i64 = guess + 4096
+
+    # while (lo > 0 && !extinct_for_k1(n, lo)) { hi = lo; lo /= 2; }
+    let mut done_lo: i64 = 0
+    while done_lo == 0 {
+        if lo == 0 {
+            done_lo = 1
+        } else {
+            if extinct_for_k1(n, lo) == 0 {
+                hi = lo
+                lo = lo / 2
+            } else {
+                done_lo = 1
+            }
+        }
+    }
+
+    while extinct_for_k1(n, hi) != 0 {
+        lo = hi
+        hi = hi * 2
+    }
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if extinct_for_k1(n, mid) != 0 {
+            lo = mid
+        } else {
+            hi = mid
+        }
+    }
+    return lo
+}
+
+function gcd_ll(a: i64, b: i64) -> i64 {
+    let mut aa: i64 = a
+    let mut bb: i64 = b
+    while bb != 0 {
+        let t: i64 = aa % bb
+        aa = bb
+        bb = t
+    }
+    return aa
+}
+
+function get_exception(c: i64) -> i64 {
+    # exc_c = {2,3,4,5,6,8,10}, exc_h = {3,5,7,11,13,21,31}
+    if c == 2 { return 3 }
+    if c == 3 { return 5 }
+    if c == 4 { return 7 }
+    if c == 5 { return 11 }
+    if c == 6 { return 13 }
+    if c == 8 { return 21 }
+    if c == 10 { return 31 }
+    return -1
 }
 
 function main() -> i32 {
-    printf("%lld\n", p986_native())
+    let limit: i64 = 160
+    let max_n: i64 = limit + (limit - 1) / 2
+
+    let s: ptr<i64> = calloc(max_n + 1, 8) as ptr<i64>
+
+    let mut n: i64 = 1
+    while n <= max_n {
+        if n < 33 {
+            s[n] = threshold_k1_plain(n)
+        } else {
+            let guess: i64 = predict_k1_from_previous(s, n)
+            s[n] = threshold_k1_with_guess(n, guess)
+        }
+        n = n + 1
+    }
+
+    let dim: i64 = limit + 1
+    let memo: ptr<i64> = malloc(dim * dim * 8) as ptr<i64>
+    # memset to -1 (all bytes 0xFF = -1 for i64)
+    memset(memo as ptr<void>, -1, dim * dim * 8)
+
+    let mut total: i64 = 0
+    let mut c: i64 = 1
+    while c <= limit {
+        let mut d: i64 = 1
+        while d <= limit {
+            let g: i64 = gcd_ll(c, d)
+            let cr: i64 = c / g
+            let dr: i64 = d / g
+            let slot_idx: i64 = cr * dim + dr
+            let mut val: i64 = memo[slot_idx]
+            if val < 0 {
+                let mut h: i64 = 0
+                if dr == 1 {
+                    let exc: i64 = get_exception(cr)
+                    if exc >= 0 {
+                        h = exc
+                    } else {
+                        h = s[dr + (cr - 1) / 2]
+                    }
+                } else {
+                    h = s[dr + (cr - 1) / 2]
+                }
+                val = 2 * h + 1
+                memo[slot_idx] = val
+            }
+            total = total + val
+            d = d + 1
+        }
+        c = c + 1
+    }
+
+    free(s as ptr<void>)
+    free(memo as ptr<void>)
+    printf("%lld\n", total)
     return 0
 }

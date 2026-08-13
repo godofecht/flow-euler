@@ -1,12 +1,318 @@
 # Project Euler 781
 # Feynman Diagrams: F(50000) mod 1e9+7.
-# Native C helper does the NTT-based power-series inversion.
+# Formal power series inversion using three-prime NTT convolution with CRT.
 
 extern {
-    function p781_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+const P1: i64 = 998244353
+const P2: i64 = 1004535809
+const P3: i64 = 469762049
+const G1: i64 = 3
+const G2: i64 = 3
+const G3: i64 = 3
+
+let mut INV_P1_MOD_P2: i64 = 0
+let mut P12_MOD_P3: i64 = 0
+let mut INV_P12_MOD_P3: i64 = 0
+let mut P1_MOD_P3: i64 = 0
+let mut P1_MOD_MOD: i64 = 0
+let mut P12_MOD_MOD: i64 = 0
+
+function pow_mod(a0: i64, e0: i64, m: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = a0 % m
+    let mut e: i64 = e0
+    if b < 0 {
+        b = b + m
+    }
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = r * b % m
+        }
+        b = b * b % m
+        e = e >> 1
+    }
+    return r
+}
+
+function ntt(a: ptr<i64>, n: i64, invert: i64, mod: i64, root: i64) -> void {
+    let mut lg: i64 = 0
+    while (1 << lg) < n {
+        lg = lg + 1
+    }
+    for i in 1..n {
+        let mut j: i64 = 0
+        let mut x: i64 = i
+        let mut b: i64 = 0
+        while b < lg {
+            j = (j << 1) | (x & 1)
+            x = x >> 1
+            b = b + 1
+        }
+        if i < j {
+            let t: i64 = a[i]
+            a[i] = a[j]
+            a[j] = t
+        }
+    }
+    let mut length: i64 = 2
+    while length <= n {
+        let mut wlen: i64 = pow_mod(root, (mod - 1) / length, mod)
+        if invert != 0 {
+            wlen = pow_mod(wlen, mod - 2, mod)
+        }
+        let half: i64 = length >> 1
+        let mut i: i64 = 0
+        while i < n {
+            let mut w: i64 = 1
+            for j in 0..half {
+                let u: i64 = a[i + j]
+                let v: i64 = a[i + j + half] * w % mod
+                let mut x: i64 = u + v
+                if x >= mod {
+                    x = x - mod
+                }
+                let mut y: i64 = u - v
+                if y < 0 {
+                    y = y + mod
+                }
+                a[i + j] = x
+                a[i + j + half] = y
+                w = w * wlen % mod
+            }
+            i = i + length
+        }
+        length = length << 1
+    }
+    if invert != 0 {
+        let n_inv: i64 = pow_mod(n, mod - 2, mod)
+        for i in 0..n {
+            a[i] = a[i] * n_inv % mod
+        }
+    }
+}
+
+function convolution_prime(a: ptr<i64>, an: i64, b: ptr<i64>, bn: i64, mod: i64, root: i64) -> ptr<i64> {
+    if an == 0 || bn == 0 {
+        return null
+    }
+    let need: i64 = an + bn - 1
+    let mut n: i64 = 1
+    while n < need {
+        n = n << 1
+    }
+    let fa: ptr<i64> = calloc(n, 8)
+    let fb: ptr<i64> = calloc(n, 8)
+    for i in 0..an {
+        fa[i] = a[i] % mod
+    }
+    for i in 0..bn {
+        fb[i] = b[i] % mod
+    }
+    ntt(fa, n, 0, mod, root)
+    ntt(fb, n, 0, mod, root)
+    for i in 0..n {
+        fa[i] = fa[i] * fb[i] % mod
+    }
+    ntt(fa, n, 1, mod, root)
+    free(fb)
+    return fa
+}
+
+function crt3_to_mod(r1: i64, r2: i64, r3: i64) -> i64 {
+    let mut t2: i64 = ((r2 - r1 % P2) % P2 + P2) % P2
+    t2 = t2 * INV_P1_MOD_P2 % P2
+    let x12_mod_p3: i64 = (r1 % P3 + P1_MOD_P3 * t2) % P3
+    let mut t3: i64 = ((r3 - x12_mod_p3) % P3 + P3) % P3
+    t3 = t3 * INV_P12_MOD_P3 % P3
+    let res: i64 = (r1 % MOD
+                    + P1_MOD_MOD * (t2 % MOD) % MOD
+                    + P12_MOD_MOD * (t3 % MOD) % MOD) % MOD
+    return res
+}
+
+function poly_mul(a: ptr<i64>, an: i64, b: ptr<i64>, bn: i64, limit: i64, res: ptr<i64>) -> void {
+    if an == 0 || bn == 0 {
+        return
+    }
+    let mut need: i64 = an + bn - 1
+    if need > limit {
+        need = limit
+    }
+    let mut ause: i64 = 0
+    if an < need {
+        ause = an
+    } else {
+        ause = need
+    }
+    let mut buse: i64 = 0
+    if bn < need {
+        buse = bn
+    } else {
+        buse = need
+    }
+
+    let a1: ptr<i64> = malloc(ause * 8)
+    let b1: ptr<i64> = malloc(buse * 8)
+    for i in 0..ause {
+        a1[i] = a[i] % P1
+    }
+    for i in 0..buse {
+        b1[i] = b[i] % P1
+    }
+    let c1: ptr<i64> = convolution_prime(a1, ause, b1, buse, P1, G1)
+    free(a1)
+    free(b1)
+
+    let a2: ptr<i64> = malloc(ause * 8)
+    let b2: ptr<i64> = malloc(buse * 8)
+    for i in 0..ause {
+        a2[i] = a[i] % P2
+    }
+    for i in 0..buse {
+        b2[i] = b[i] % P2
+    }
+    let c2: ptr<i64> = convolution_prime(a2, ause, b2, buse, P2, G2)
+    free(a2)
+    free(b2)
+
+    let a3: ptr<i64> = malloc(ause * 8)
+    let b3: ptr<i64> = malloc(buse * 8)
+    for i in 0..ause {
+        a3[i] = a[i] % P3
+    }
+    for i in 0..buse {
+        b3[i] = b[i] % P3
+    }
+    let c3: ptr<i64> = convolution_prime(a3, ause, b3, buse, P3, G3)
+    free(a3)
+    free(b3)
+
+    for i in 0..need {
+        res[i] = crt3_to_mod(c1[i], c2[i], c3[i])
+    }
+
+    free(c1)
+    free(c2)
+    free(c3)
+}
+
+function poly_inv(a: ptr<i64>, n: i64, inv: ptr<i64>) -> void {
+    inv[0] = pow_mod(a[0], MOD - 2, MOD)
+    let mut m: i64 = 1
+    let t: ptr<i64> = malloc(2 * n * 8)
+    let u: ptr<i64> = malloc(2 * n * 8)
+    let newinv: ptr<i64> = malloc(2 * n * 8)
+    while m < n {
+        let mut m2: i64 = 0
+        if 2 * m < n {
+            m2 = 2 * m
+        } else {
+            m2 = n
+        }
+        poly_mul(a, m2, inv, m, m2, t)
+        let mut u0: i64 = (2 - t[0]) % MOD
+        if u0 < 0 {
+            u0 = u0 + MOD
+        }
+        u[0] = u0
+        for i in 1..m2 {
+            u[i] = (MOD - t[i]) % MOD
+        }
+        poly_mul(inv, m, u, m2, m2, newinv)
+        for i in 0..m2 {
+            inv[i] = newinv[i]
+        }
+        m = m2
+    }
+    free(t)
+    free(u)
+    free(newinv)
+}
+
+function build_series(M: i64, A: ptr<i64>, B: ptr<i64>) -> void {
+    let N: i64 = 2 * M
+    let fact: ptr<i64> = malloc((N + 1) * 8)
+    let invfact: ptr<i64> = malloc((N + 1) * 8)
+    let S: ptr<i64> = malloc((N + 1) * 8)
+
+    fact[0] = 1
+    for i in 1..(N + 1) {
+        fact[i] = fact[i - 1] * i % MOD
+    }
+    invfact[N] = pow_mod(fact[N], MOD - 2, MOD)
+    let mut i: i64 = N
+    while i >= 1 {
+        invfact[i - 1] = invfact[i] * i % MOD
+        i = i - 1
+    }
+
+    let mut acc: i64 = 0
+    for r in 0..(N + 1) {
+        let mut term: i64 = invfact[r]
+        if (r & 1) != 0 {
+            term = MOD - term
+        }
+        acc = acc + term
+        if acc >= MOD {
+            acc = acc - MOD
+        }
+        S[r] = acc
+    }
+
+    let mut df: i64 = 1
+    for m in 0..(M + 1) {
+        if m > 0 {
+            df = df * (2 * m - 1) % MOD
+        }
+        let s2m: i64 = S[2 * m]
+        let mut s2m_1: i64 = 0
+        if 2 * m - 1 >= 0 {
+            s2m_1 = S[2 * m - 1]
+        }
+        let a_val: i64 = s2m
+        let b_val: i64 = ((2 * m + 1) * s2m + s2m_1) % MOD
+        A[m] = df * a_val % MOD
+        B[m] = df * b_val % MOD
+    }
+    free(fact)
+    free(invfact)
+    free(S)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p781_native())
+    INV_P1_MOD_P2 = pow_mod(P1, P2 - 2, P2)
+    P12_MOD_P3 = (P1 * P2) % P3
+    INV_P12_MOD_P3 = pow_mod(P12_MOD_P3, P3 - 2, P3)
+    P1_MOD_P3 = P1 % P3
+    P1_MOD_MOD = P1 % MOD
+    P12_MOD_MOD = (P1 % MOD) * (P2 % MOD) % MOD
+
+    let n: i64 = 50000
+    let M: i64 = n / 2
+
+    let A: ptr<i64> = malloc((M + 1) * 8)
+    let B: ptr<i64> = malloc((M + 1) * 8)
+    build_series(M, A, B)
+
+    let invA: ptr<i64> = malloc((M + 1) * 8)
+    poly_inv(A, M + 1, invA)
+
+    let G: ptr<i64> = malloc((M + 1) * 8)
+    poly_mul(B, M + 1, invA, M + 1, M + 1, G)
+
+    let ans: i64 = G[M] % MOD
+
+    free(A)
+    free(B)
+    free(invA)
+    free(G)
+
+    printf("%lld\n", ans)
     return 0
 }

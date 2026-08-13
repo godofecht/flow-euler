@@ -1,8 +1,313 @@
+# Project Euler 902: Permutation Powers
+# Compute P(100) mod 1e9+7.
+# Port of the C reference solver.
+
 extern {
-    function p902_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+import euler.nt { gcd, mod_pow }
+
+const MOD: i64 = 1000000007
+const A_VAL: i64 = 1000000007
+const MM: i64 = 100
+
+function inv_mod(a: i64, m: i64) -> i64 {
+    let mut x0: i64 = 1
+    let mut y0: i64 = 0
+    let mut x1: i64 = 0
+    let mut y1: i64 = 1
+    let mut aa: i64 = a % m
+    let mut bb: i64 = m
+    while bb != 0 {
+        let q: i64 = aa / bb
+        let r: i64 = aa - q * bb
+        aa = bb
+        bb = r
+        let tx: i64 = x0 - q * x1
+        x0 = x1
+        x1 = tx
+    }
+    if x0 < 0 {
+        x0 = x0 + m
+    }
+    if x0 >= m {
+        x0 = x0 % m
+    }
+    return x0
+}
+
+function lcm_upto_mod(m: i64) -> i64 {
+    let result: i64 = 1
+    let is_prime: ptr<i8> = calloc(m + 1, 1)
+    let mut i: i64 = 0
+    while i <= m {
+        is_prime[i] = 1
+        i = i + 1
+    }
+    is_prime[0] = 0
+    is_prime[1] = 0
+    i = 2
+    while i <= m {
+        if is_prime[i] == 1 {
+            let mut pk: i64 = 1
+            while pk * i <= m {
+                pk = pk * i
+            }
+            result = result * (pk % MOD) % MOD
+            let mut j: i64 = i * i
+            while j <= m {
+                is_prime[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    free(is_prime)
+    return result
+}
+
+# Insertion sort for a subarray: arr[offset..offset+len-1]
+function sort_sub(arr: ptr<i32>, offset: i64, len: i64) -> void {
+    let mut i: i64 = 1
+    while i < len {
+        let key: i32 = arr[offset + i]
+        let mut j: i64 = i
+        while j > 0 && arr[offset + j - 1] > key {
+            arr[offset + j] = arr[offset + j - 1]
+            j = j - 1
+        }
+        arr[offset + j] = key
+        i = i + 1
+    }
+}
+
+# lower_bound on subarray: first index where arr[offset+idx] >= val
+function lower_bound_sub(arr: ptr<i32>, offset: i64, len: i64, val: i32) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = len
+    while lo < hi {
+        let mid: i64 = (lo + hi) / 2
+        if arr[offset + mid] < val {
+            lo = mid + 1
+        } else {
+            hi = mid
+        }
+    }
+    return lo
 }
 
 function main() -> i32 {
-    printf("%lld\n", p902_native())
+    let m: i64 = MM
+    let n: i64 = m * (m + 1) / 2
+
+    # Precompute factorials mod MOD
+    let fact_n: ptr<i64> = calloc(n + 1, 8)
+    fact_n[0] = 1
+    fact_n[1] = 1
+    let mut i: i64 = 2
+    while i <= n {
+        fact_n[i] = fact_n[i - 1] * i % MOD
+        i = i + 1
+    }
+
+    # weights[i] = fact_n[n - i] for i = 1..n
+    let weights: ptr<i64> = calloc(n + 1, 8)
+    i = 1
+    while i <= n {
+        weights[i] = fact_n[n - i]
+        i = i + 1
+    }
+
+    # Build cycles: flat array, cycle_start[l] = l*(l-1)/2
+    let total_cycle_elems: i64 = m * (m + 1) / 2
+    let cycles_flat: ptr<i32> = calloc(total_cycle_elems + 1, 4)
+    let clen: ptr<i32> = calloc(n + 1, 4)
+    let coff: ptr<i32> = calloc(n + 1, 4)
+
+    let inva: i64 = inv_mod(A_VAL % n, n)
+
+    let mut l: i64 = 1
+    while l <= m {
+        let start: i64 = l * (l - 1) / 2 + 1
+        let cyc_start: i64 = l * (l - 1) / 2
+        let mut x: i64 = start
+        while x < start + l {
+            let t: i64 = (inva * ((x - 1) % n)) % n
+            if t == 0 {
+                cycles_flat[cyc_start + (x - start)] = n as i32
+            } else {
+                cycles_flat[cyc_start + (x - start)] = t as i32
+            }
+            x = x + 1
+        }
+        let mut idx: i64 = 0
+        while idx < l {
+            let elem: i64 = cycles_flat[cyc_start + idx] as i64
+            clen[elem] = l as i32
+            coff[elem] = idx as i32
+            idx = idx + 1
+        }
+        l = l + 1
+    }
+
+    # L mod MOD
+    let L_mod: i64 = lcm_upto_mod(m)
+
+    # Precompute gcd_tab, scale, comp (all flat)
+    let gcd_tab: ptr<i64> = calloc((MM + 1) * (MM + 1), 8)
+    let scale: ptr<i64> = calloc((MM + 1) * (MM + 1), 8)
+    let comp_flat: ptr<i32> = calloc((MM + 1) * (MM + 1) * MM, 4)
+
+    # Temporary buffers for building A_subs and B_sorted
+    let a_subs_buf: ptr<i32> = calloc(MM + 1, 4)
+    let b_sorted_buf: ptr<i32> = calloc(MM + 1, 4)
+    let a_off: ptr<i64> = calloc(MM + 1, 8)
+    let b_off: ptr<i64> = calloc(MM + 1, 8)
+    let a_cnt: ptr<i64> = calloc(MM + 1, 8)
+    let b_cnt: ptr<i64> = calloc(MM + 1, 8)
+
+    let mut a: i64 = 1
+    while a <= m {
+        let a_cyc_start: i64 = a * (a - 1) / 2
+        let mut b: i64 = 1
+        while b <= m {
+            let g: i64 = gcd(a, b)
+            gcd_tab[a * (MM + 1) + b] = g
+            let lcm_val: i64 = (a / g) * b
+            scale[a * (MM + 1) + b] = L_mod * mod_pow(lcm_val % MOD, MOD - 2, MOD) % MOD
+
+            let b_cyc_start: i64 = b * (b - 1) / 2
+
+            # Build a_subs and b_sorted for each residue class mod g
+            # Fill offsets and counts
+            let mut total_a: i64 = 0
+            let mut total_b: i64 = 0
+            let mut r: i64 = 0
+            while r < g {
+                a_off[r] = total_a
+                let mut ac: i64 = (a - r + g - 1) / g
+                if r >= a {
+                    ac = 0
+                }
+                a_cnt[r] = ac
+                total_a = total_a + ac
+
+                b_off[r] = total_b
+                let mut bc: i64 = (b - r + g - 1) / g
+                if r >= b {
+                    bc = 0
+                }
+                b_cnt[r] = bc
+                total_b = total_b + bc
+                r = r + 1
+            }
+
+            # Fill a_subs_buf and b_sorted_buf
+            r = 0
+            while r < g {
+                let mut cnt: i64 = 0
+                let mut idx2: i64 = r
+                while idx2 < a {
+                    a_subs_buf[a_off[r] + cnt] = cycles_flat[a_cyc_start + idx2]
+                    cnt = cnt + 1
+                    idx2 = idx2 + g
+                }
+                cnt = 0
+                idx2 = r
+                while idx2 < b {
+                    b_sorted_buf[b_off[r] + cnt] = cycles_flat[b_cyc_start + idx2]
+                    cnt = cnt + 1
+                    idx2 = idx2 + g
+                }
+                sort_sub(b_sorted_buf, b_off[r], b_cnt[r])
+                r = r + 1
+            }
+
+            # Compute smallcounts[d] for each d
+            let mut d: i64 = 0
+            while d < g {
+                let mut tot: i64 = 0
+                r = 0
+                while r < g {
+                    let s: i64 = ((r - d) % g + g) % g
+                    let bs_off: i64 = b_off[s]
+                    let bs_len: i64 = b_cnt[s]
+                    let mut idx2: i64 = 0
+                    while idx2 < a_cnt[r] {
+                        let aval: i32 = a_subs_buf[a_off[r] + idx2]
+                        tot = tot + lower_bound_sub(b_sorted_buf, bs_off, bs_len, aval)
+                        idx2 = idx2 + 1
+                    }
+                    r = r + 1
+                }
+                comp_flat[a * (MM + 1) * MM + b * MM + d] = tot as i32
+                d = d + 1
+            }
+
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    free(a_subs_buf)
+    free(b_sorted_buf)
+    free(a_off)
+    free(b_off)
+    free(a_cnt)
+    free(b_cnt)
+
+    # Sum of ranks over all exponents k mod L
+    let mut acc: i64 = 0
+    i = 1
+    while i < n {
+        let wi: i64 = weights[i]
+        let ai: i64 = clen[i] as i64
+        let offi: i64 = coff[i] as i64
+        let mut j: i64 = i + 1
+        while j <= n {
+            let aj: i64 = clen[j] as i64
+            let g: i64 = gcd_tab[ai * (MM + 1) + aj]
+            let mut d: i64 = 0
+            if g == 1 {
+                d = 0
+            } else {
+                d = ((offi - (coff[j] as i64)) % g + g) % g
+            }
+            let small: i64 = comp_flat[ai * (MM + 1) * MM + aj * MM + d] as i64
+            if small != 0 {
+                let cnt: i64 = scale[ai * (MM + 1) + aj] * small % MOD
+                acc = acc + wi * cnt
+                if acc >= 4611686018427387904 {
+                    acc = acc % MOD
+                }
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    acc = acc % MOD
+    let sum_ranks_mod: i64 = (L_mod + acc) % MOD
+
+    # m! mod MOD
+    let mut m_fact: i64 = 1
+    let mut k: i64 = 2
+    while k <= m {
+        m_fact = m_fact * k % MOD
+        k = k + 1
+    }
+
+    let ans: i64 = sum_ranks_mod * m_fact % MOD * mod_pow(L_mod, MOD - 2, MOD) % MOD
+    printf("%lld\n", ans)
+
+    free(fact_n)
+    free(weights)
+    free(cycles_flat)
+    free(clen)
+    free(coff)
+    free(gcd_tab)
+    free(scale)
+    free(comp_flat)
     return 0
 }

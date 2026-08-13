@@ -1,9 +1,352 @@
-# Wrapper for native C solver.
+# Project Euler 818
+# SET — F(12) = sum over 12-card subsets C of S(C)^4
+# where S(C) is the number of SETs (affine lines) in C.
+# Uses i128 for 81-bit masks and on-the-fly pair classification.
+
 extern {
-    function p818_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function popcount64(x: i64) -> i32 {
+    let mut count: i32 = 0
+    let mut v: i64 = x
+    while v != 0 {
+        count = count + 1
+        v = v & (v - 1)
+    }
+    return count
+}
+
+function popcount128(x: i128) -> i32 {
+    let lo: i64 = x as i64
+    let hi: i64 = (x >> 64) as i64
+    return popcount64(lo) + popcount64(hi)
+}
+
+function nCk(n: i32, k: i32) -> i64 {
+    if k < 0 || k > n { return 0 }
+    let mut kk: i32 = k
+    if kk > n - kk { kk = n - kk }
+    let mut r: i64 = 1
+    let mut i: i32 = 0
+    while i < kk {
+        r = r * ((n - i) as i64) / ((i + 1) as i64)
+        i = i + 1
+    }
+    return r
+}
+
+function vec_key(v0: i32, v1: i32, v2: i32, v3: i32) -> i32 {
+    return v0 + 3 * v1 + 9 * v2 + 27 * v3
+}
+
+function third_point(i: i32, j: i32, d0: ptr<i32>, d1: ptr<i32>, d2: ptr<i32>, d3: ptr<i32>) -> i32 {
+    let a0: i32 = (d0[i] + d0[j]) % 3
+    let a1: i32 = (d1[i] + d1[j]) % 3
+    let a2: i32 = (d2[i] + d2[j]) % 3
+    let a3: i32 = (d3[i] + d3[j]) % 3
+    let c0: i32 = (3 - a0) % 3
+    let c1: i32 = (3 - a1) % 3
+    let c2: i32 = (3 - a2) % 3
+    let c3: i32 = (3 - a3) % 3
+    return c0 + 3 * c1 + 9 * c2 + 27 * c3
+}
+
+struct Geometry {
+    line_masks: ptr<i128>
+    line_dirs: ptr<i32>
+    nlines: i32
+}
+
+function build_geometry() -> Geometry {
+    let d0: ptr<i32> = calloc(81, 4)
+    let d1: ptr<i32> = calloc(81, 4)
+    let d2: ptr<i32> = calloc(81, 4)
+    let d3: ptr<i32> = calloc(81, 4)
+
+    let mut pid: i32 = 0
+    while pid < 81 {
+        let mut x: i32 = pid
+        d0[pid] = x % 3; x = x / 3
+        d1[pid] = x % 3; x = x / 3
+        d2[pid] = x % 3; x = x / 3
+        d3[pid] = x % 3
+        pid = pid + 1
+    }
+
+    # Negation keys
+    let neg_key: ptr<i32> = calloc(81, 4)
+    let mut key: i32 = 0
+    while key < 81 {
+        let v0: i32 = (2 * (key % 3)) % 3
+        let v1: i32 = (2 * ((key / 3) % 3)) % 3
+        let v2: i32 = (2 * ((key / 9) % 3)) % 3
+        let v3: i32 = (2 * ((key / 27) % 3)) % 3
+        neg_key[key] = vec_key(v0, v1, v2, v3)
+        key = key + 1
+    }
+
+    # Direction index
+    let dir_index: ptr<i32> = calloc(81, 4)
+    let mut di: i32 = 0
+    while di < 81 {
+        dir_index[di] = -1
+        di = di + 1
+    }
+    let dirs: ptr<i32> = calloc(40, 4)
+    let mut ndirs: i32 = 0
+    key = 1
+    while key < 81 {
+        let canon: i32 = key
+        if neg_key[key] < canon { canon = neg_key[key] }
+        if dir_index[canon] == -1 {
+            dir_index[canon] = ndirs
+            dirs[ndirs] = canon
+            ndirs = ndirs + 1
+        }
+        key = key + 1
+    }
+
+    # Enumerate all triples from point pairs
+    let triples_a: ptr<i32> = calloc(3240, 4)
+    let triples_b: ptr<i32> = calloc(3240, 4)
+    let triples_c: ptr<i32> = calloc(3240, 4)
+    let mut ntriples: i32 = 0
+    let mut i: i32 = 0
+    while i < 81 {
+        let mut j: i32 = i + 1
+        while j < 81 {
+            let k: i32 = third_point(i, j, d0, d1, d2, d3)
+            if k == i || k == j {
+                j = j + 1
+                continue
+            }
+            # sort (i, j, k) into (a, b, c)
+            let mut a: i32 = i
+            let mut b: i32 = j
+            let mut c: i32 = k
+            if a > b { let t: i32 = a; a = b; b = t }
+            if b > c { let t: i32 = b; b = c; c = t }
+            if a > b { let t: i32 = a; a = b; b = t }
+            triples_a[ntriples] = a
+            triples_b[ntriples] = b
+            triples_c[ntriples] = c
+            ntriples = ntriples + 1
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    # Shell sort triples by (a, b, c)
+    let mut gap: i32 = ntriples / 2
+    while gap > 0 {
+        let mut i2: i32 = gap
+        while i2 < ntriples {
+            let ta: i32 = triples_a[i2]
+            let tb: i32 = triples_b[i2]
+            let tc: i32 = triples_c[i2]
+            let mut j2: i32 = i2
+            while j2 >= gap {
+                let pa: i32 = triples_a[j2 - gap]
+                let pb: i32 = triples_b[j2 - gap]
+                let pc: i32 = triples_c[j2 - gap]
+                let do_swap: bool = false
+                if pa > ta {
+                    do_swap = true
+                } else {
+                    if pa == ta {
+                        if pb > tb {
+                            do_swap = true
+                        } else {
+                            if pb == tb {
+                                if pc > tc { do_swap = true }
+                            }
+                        }
+                    }
+                }
+                if !do_swap { break }
+                triples_a[j2] = pa
+                triples_b[j2] = pb
+                triples_c[j2] = pc
+                j2 = j2 - gap
+            }
+            triples_a[j2] = ta
+            triples_b[j2] = tb
+            triples_c[j2] = tc
+            i2 = i2 + 1
+        }
+        gap = gap / 2
+    }
+
+    # Deduplicate
+    let mut unique: i32 = 0
+    let mut ti: i32 = 0
+    while ti < ntriples {
+        if ti == 0 || triples_a[ti] != triples_a[ti - 1] || triples_b[ti] != triples_b[ti - 1] || triples_c[ti] != triples_c[ti - 1] {
+            triples_a[unique] = triples_a[ti]
+            triples_b[unique] = triples_b[ti]
+            triples_c[unique] = triples_c[ti]
+            unique = unique + 1
+        }
+        ti = ti + 1
+    }
+    ntriples = unique
+
+    # Compute line masks and directions
+    let line_masks: ptr<i128> = calloc(ntriples as i64, 16)
+    let line_dirs: ptr<i32> = calloc(ntriples as i64, 4)
+
+    let mut idx: i32 = 0
+    while idx < ntriples {
+        let a: i32 = triples_a[idx]
+        let b: i32 = triples_b[idx]
+        let c: i32 = triples_c[idx]
+        line_masks[idx] = ((1 as i128) << a) | ((1 as i128) << b) | ((1 as i128) << c)
+
+        # Direction from a -> b
+        let v0: i32 = (d0[b] - d0[a] + 3) % 3
+        let v1: i32 = (d1[b] - d1[a] + 3) % 3
+        let v2: i32 = (d2[b] - d2[a] + 3) % 3
+        let v3: i32 = (d3[b] - d3[a] + 3) % 3
+        let dkey: i32 = vec_key(v0, v1, v2, v3)
+        if dkey == 0 {
+            let w0: i32 = (d0[c] - d0[a] + 3) % 3
+            let w1: i32 = (d1[c] - d1[a] + 3) % 3
+            let w2: i32 = (d2[c] - d2[a] + 3) % 3
+            let w3: i32 = (d3[c] - d3[a] + 3) % 3
+            dkey = vec_key(w0, w1, w2, w3)
+        }
+        let canon: i32 = dkey
+        if neg_key[dkey] < canon { canon = neg_key[dkey] }
+        line_dirs[idx] = dir_index[canon]
+
+        idx = idx + 1
+    }
+
+    free(d0); free(d1); free(d2); free(d3)
+    free(neg_key); free(dir_index); free(dirs)
+    free(triples_a); free(triples_b); free(triples_c)
+
+    return Geometry { line_masks: line_masks, line_dirs: line_dirs, nlines: ntriples }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p818_native())
+    let geo: Geometry = build_geometry()
+    let L: i32 = geo.nlines
+    let line_masks: ptr<i128> = geo.line_masks
+    let line_dirs: ptr<i32> = geo.line_dirs
+
+    # Class sizes: 0=same(3), 1=intersecting(5), 2=parallel disjoint(6), 3=skew(6)
+    let sizes: ptr<i32> = calloc(4, 4)
+    sizes[0] = 3; sizes[1] = 5; sizes[2] = 6; sizes[3] = 6
+
+    # Find reps and counts for each class
+    let reps: ptr<i128> = calloc(4, 16)
+    let counts: ptr<i64> = calloc(4, 8)
+    let found: ptr<i8> = calloc(4, 1)
+
+    let mut i: i32 = 0
+    while i < L {
+        let mi: i128 = line_masks[i]
+        let mut j: i32 = 0
+        while j < L {
+            let cls: i32 = 0
+            let mask: i128 = mi
+            if i != j {
+                let mj: i128 = line_masks[j]
+                mask = mi | mj
+                if (mi & mj) != (0 as i128) {
+                    cls = 1
+                } else {
+                    if line_dirs[i] == line_dirs[j] {
+                        cls = 2
+                    } else {
+                        cls = 3
+                    }
+                }
+            }
+            counts[cls] = counts[cls] + 1
+            if found[cls] == 0 {
+                reps[cls] = mask
+                found[cls] = 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    # Compute A_k
+    let A_k: ptr<i128> = calloc(13, 16)
+
+    let mut a: i32 = 0
+    while a < 4 {
+        let repA: i128 = reps[a]
+        let countA: i64 = counts[a]
+        let sizeA: i32 = sizes[a]
+
+        let mut b: i32 = 0
+        while b < 4 {
+            let sizeB: i32 = sizes[b]
+            let dist: ptr<i64> = calloc(7, 8)
+
+            let mut i2: i32 = 0
+            while i2 < L {
+                let mi: i128 = line_masks[i2]
+                let mut j2: i32 = 0
+                while j2 < L {
+                    let cls: i32 = 0
+                    let mask: i128 = mi
+                    if i2 != j2 {
+                        let mj: i128 = line_masks[j2]
+                        mask = mi | mj
+                        if (mi & mj) != (0 as i128) {
+                            cls = 1
+                        } else {
+                            if line_dirs[i2] == line_dirs[j2] {
+                                cls = 2
+                            } else {
+                                cls = 3
+                            }
+                        }
+                    }
+                    if cls == b {
+                        let r: i32 = popcount128(repA & mask)
+                        dist[r] = dist[r] + 1
+                    }
+                    j2 = j2 + 1
+                }
+                i2 = i2 + 1
+            }
+
+            let mut r: i32 = 0
+            while r <= 6 {
+                if dist[r] > 0 {
+                    let k: i32 = sizeA + sizeB - r
+                    A_k[k] = A_k[k] + (countA as i128) * (dist[r] as i128)
+                }
+                r = r + 1
+            }
+            free(dist)
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    # F(12) = sum A_k[k] * C(81-k, 12-k)
+    let mut tot: i128 = 0
+    let mut k: i32 = 0
+    while k <= 12 {
+        if A_k[k] != (0 as i128) {
+            tot = tot + A_k[k] * (nCk(81 - k, 12 - k) as i128)
+        }
+        k = k + 1
+    }
+
+    printf("%lld\n", tot as i64)
+
+    free(sizes); free(reps); free(counts); free(found)
+    free(A_k)
+    free(line_masks); free(line_dirs)
     return 0
 }

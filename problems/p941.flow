@@ -1,12 +1,309 @@
 # Project Euler 941
-# de Bruijn's Combination Lock — RankDB + radix sort (native).
-# Companion: problems/native/p941.c
+# de Bruijn's Combination Lock. RankDB + LSD radix sort.
+# F(10^7) mod 1234567891.
 
 extern {
-    function p941_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const ND: i64 = 12
+const KK: i64 = 10
+const STRIDE: i64 = 13
+const MOD_LCG: i64 = 1000000000000
+
+# Scratch arrays (reused across rank_db / T_func calls)
+let mut power_arr: ptr<i64> = null
+let mut t_neck: ptr<i32> = null
+let mut neck_rep: ptr<i32> = null
+let mut prev_arr: ptr<i32> = null
+let mut b_arr: ptr<i64> = null
+let mut suf_arr: ptr<i32> = null
+
+function init_tables() -> void {
+    power_arr = calloc(ND + 1, 8)
+    power_arr[0] = 1
+    let mut i: i64 = 1
+    while i <= ND {
+        power_arr[i] = power_arr[i - 1] * KK
+        i = i + 1
+    }
+    t_neck = calloc(ND + 1, 4)
+    neck_rep = calloc(ND + 1, 4)
+    prev_arr = calloc(ND + 1, 4)
+    b_arr = calloc(STRIDE * STRIDE, 8)
+    suf_arr = calloc(STRIDE * STRIDE, 4)
+}
+
+# Length of the longest Lyndon prefix of w[1..ND].
+function lyn(w: ptr<i32>) -> i64 {
+    let mut p: i64 = 1
+    let mut i: i64 = 2
+    while i <= ND {
+        if w[i] < w[i - p] {
+            return p
+        }
+        if w[i] > w[i - p] {
+            p = i
+        }
+        i = i + 1
+    }
+    return p
+}
+
+# True iff w[1..ND] is a necklace (lexicographically smallest rotation).
+function is_necklace(w: ptr<i32>) -> bool {
+    let mut p: i64 = 1
+    let mut i: i64 = 2
+    while i <= ND {
+        if w[i] < w[i - p] {
+            return false
+        }
+        if w[i] > w[i - p] {
+            p = i
+        }
+        i = i + 1
+    }
+    return (ND % p) == 0
+}
+
+# out[1..ND] = largest necklace <= w[1..ND].
+function largest_necklace(w: ptr<i32>, out: ptr<i32>) -> void {
+    let mut i: i64 = 1
+    while i <= ND {
+        out[i] = w[i]
+        i = i + 1
+    }
+    while !is_necklace(out) {
+        let p: i64 = lyn(out)
+        out[p] = out[p] - 1
+        let mut j: i64 = p + 1
+        while j <= ND {
+            out[j] = KK as i32
+            j = j + 1
+        }
+    }
+}
+
+# Number of strings whose necklace is <= w[1..ND].
+function t_func(w: ptr<i32>) -> i64 {
+    largest_necklace(w, t_neck)
+
+    b_arr[0] = 1
+    let mut t: i64 = 1
+    while t <= ND {
+        b_arr[t * STRIDE + t] = 0
+        let mut j: i64 = t - 1
+        while j >= 0 {
+            b_arr[t * STRIDE + j] = b_arr[t * STRIDE + j + 1] +
+                (KK - (t_neck[j + 1] as i64)) * b_arr[(t - j - 1) * STRIDE + 0]
+            j = j - 1
+        }
+        t = t + 1
+    }
+
+    let mut i: i64 = 2
+    while i <= ND {
+        let mut sv: i64 = i
+        let mut j: i64 = i
+        while j <= ND {
+            if t_neck[j] > t_neck[j - sv + 1] {
+                sv = j + 1
+            }
+            suf_arr[i * STRIDE + j] = (j - sv + 1) as i32
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let mut tot: i64 = lyn(t_neck)
+    t = 1
+    while t <= ND {
+        let b0: i64 = b_arr[(t - 1) * STRIDE + 0]
+        let mut j: i64 = 0
+        while j < ND {
+            if j + t <= ND {
+                tot = tot + b0 * ((t_neck[j + 1] as i64) - 1) * power_arr[ND - t - j]
+            } else {
+                let mut sfx: i64 = 0
+                if j >= ND - t + 2 {
+                    sfx = suf_arr[(ND - t + 2) * STRIDE + j] as i64
+                }
+                if (t_neck[j + 1] as i64) > (t_neck[sfx + 1] as i64) {
+                    tot = tot + b_arr[(ND - j + sfx) * STRIDE + sfx + 1] +
+                        ((t_neck[j + 1] as i64) - (t_neck[sfx + 1] as i64) - 1) *
+                        b_arr[(ND - j - 1) * STRIDE + 0]
+                }
+            }
+            j = j + 1
+        }
+        t = t + 1
+    }
+    return tot
+}
+
+# 1-based rank (start position) of w in the lex-smallest de Bruijn sequence.
+function rank_db(w: ptr<i32>) -> i64 {
+    # Wraparound case: w = KK^t 1^(ND-t) for t >= 1
+    let mut t: i64 = 0
+    while t < ND && (w[t + 1] as i64) == KK {
+        t = t + 1
+    }
+    let mut j: i64 = t
+    while j < ND && w[j + 1] == 1 {
+        j = j + 1
+    }
+    if t >= 1 && j == ND {
+        return power_arr[ND] - t + 1
+    }
+
+    # If w is already a necklace, done
+    if is_necklace(w) {
+        return 1 - lyn(w) + t_func(w)
+    }
+
+    # Find the necklace representative by rotation
+    let mut i: i64 = 1
+    while i <= ND {
+        neck_rep[i] = w[i]
+        i = i + 1
+    }
+    let mut s: i64 = 0
+    while !is_necklace(neck_rep) {
+        s = s + 1
+        i = 1
+        while i <= ND {
+            let j2: i64 = i + s
+            if j2 <= ND {
+                neck_rep[i] = w[j2]
+            } else {
+                neck_rep[i] = w[j2 - ND]
+            }
+            i = i + 1
+        }
+    }
+
+    # neck_rep is now a necklace (not a wraparound case)
+    let lyn_nr: i64 = lyn(neck_rep)
+    if s != t {
+        return 1 + t_func(neck_rep) - s
+    }
+    if lyn_nr < ND {
+        return 1 - lyn_nr + t_func(neck_rep) - s
+    }
+
+    # Adjust suffix to 1s, move to previous necklace
+    i = ND - s + 1
+    while i <= ND {
+        neck_rep[i] = 1
+        i = i + 1
+    }
+    largest_necklace(neck_rep, prev_arr)
+    return 1 + t_func(prev_arr) - s
+}
+
+# Convert a 12-digit integer to symbols 1..10 in w[1..12].
+function int_to_word12(x: i64, w: ptr<i32>) -> void {
+    let hi: i64 = x / 100000000
+    let mid: i64 = (x / 10000) % 10000
+    let lo: i64 = x % 10000
+    w[1] = (hi / 1000 + 1) as i32
+    w[2] = ((hi / 100) % 10 + 1) as i32
+    w[3] = ((hi / 10) % 10 + 1) as i32
+    w[4] = (hi % 10 + 1) as i32
+    w[5] = (mid / 1000 + 1) as i32
+    w[6] = ((mid / 100) % 10 + 1) as i32
+    w[7] = ((mid / 10) % 10 + 1) as i32
+    w[8] = (mid % 10 + 1) as i32
+    w[9] = (lo / 1000 + 1) as i32
+    w[10] = ((lo / 100) % 10 + 1) as i32
+    w[11] = ((lo / 10) % 10 + 1) as i32
+    w[12] = (lo % 10 + 1) as i32
+}
+
+function compute_F_mod(N: i64, mod_val: i64) -> i64 {
+    let keys: ptr<i64> = malloc(N * 8)
+    let vals: ptr<i64> = malloc(N * 8)
+    let tmp_k: ptr<i64> = malloc(N * 8)
+    let tmp_v: ptr<i64> = malloc(N * 8)
+
+    let w: ptr<i32> = calloc(ND + 1, 4)
+
+    let mut a: i64 = 0
+    let mut i: i64 = 0
+    while i < N {
+        a = (920461 * a + 800217387569) % MOD_LCG
+        int_to_word12(a, w)
+        keys[i] = rank_db(w)
+        vals[i] = a
+        i = i + 1
+    }
+
+    # LSD radix sort (3 passes of 16 bits)
+    let counts: ptr<i32> = calloc(65536, 4)
+    let mut sk: ptr<i64> = keys
+    let mut dk: ptr<i64> = tmp_k
+    let mut svar: ptr<i64> = vals
+    let mut dvar: ptr<i64> = tmp_v
+
+    let mut pass: i64 = 0
+    while pass < 3 {
+        let shift: i64 = pass * 16
+        memset(counts, 0, 65536 * 4)
+        let mut ii: i64 = 0
+        while ii < N {
+            let b: i64 = (sk[ii] >> shift) & 0xFFFF
+            counts[b] = counts[b] + 1
+            ii = ii + 1
+        }
+        let mut total: i32 = 0
+        let mut b: i64 = 0
+        while b < 65536 {
+            let c: i32 = counts[b]
+            counts[b] = total
+            total = total + c
+            b = b + 1
+        }
+        ii = 0
+        while ii < N {
+            let b: i64 = (sk[ii] >> shift) & 0xFFFF
+            let p: i32 = counts[b]
+            counts[b] = p + 1
+            dk[p as i64] = sk[ii]
+            dvar[p as i64] = svar[ii]
+            ii = ii + 1
+        }
+        # swap
+        let tk: ptr<i64> = sk
+        sk = dk
+        dk = tk
+        let tv: ptr<i64> = svar
+        svar = dvar
+        dvar = tv
+        pass = pass + 1
+    }
+
+    # After 3 passes (odd), sorted data is in sk / svar
+    let mut acc: i64 = 0
+    i = 0
+    while i < N {
+        acc = (acc + (i + 1) * (svar[i] % mod_val)) % mod_val
+        i = i + 1
+    }
+
+    free(keys)
+    free(vals)
+    free(tmp_k)
+    free(tmp_v)
+    free(counts)
+    free(w)
+    return acc
 }
 
 function main() -> i32 {
-    printf("%lld\n", p941_native())
+    init_tables()
+    printf("%lld\n", compute_F_mod(10000000, 1234567891))
     return 0
 }

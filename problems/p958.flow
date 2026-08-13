@@ -1,11 +1,252 @@
 # Project Euler 958
-# Euclid's Labour - meet-in-the-middle on Stern-Brocot tree.
+# Euclid's Labour: meet-in-the-middle search on the Stern-Brocot tree.
 
-extern {
-    function p958_native() -> i64
+let mut g_n: i64 = 0
+let mut g_steps: i64 = 0
+let mut g_split_depth: i64 = 0
+let mut g_best_steps: i64 = 0
+let mut g_best_value: i64 = 0
+let mut g_local_a: i64 = 0
+let mut g_local_b: i64 = 0
+let mut g_norm: i64 = 0
+let mut g_inv_result: i64 = 0
+
+function mod_inverse(value0: i64, modulus: i64) -> i32 {
+    let mut value: i64 = ((value0 % modulus) + modulus) % modulus
+    let mut old_r: i128 = modulus as i128
+    let mut r: i128 = value as i128
+    let mut old_s: i128 = 0 as i128
+    let mut s: i128 = 1 as i128
+    while r != 0 as i128 {
+        let q: i128 = old_r / r
+        let tmp: i128 = old_r - q * r
+        old_r = r
+        r = tmp
+        let tmp2: i128 = old_s - q * s
+        old_s = s
+        s = tmp2
+    }
+    if old_r != 1 as i128 {
+        return 0
+    }
+    let mm: i128 = modulus as i128
+    g_inv_result = (((old_s % mm) + mm) % mm) as i64
+    return 1
+}
+
+function check(candidate_a: i64, candidate_b: i64, current_depth: i64) -> void {
+    if candidate_a < 0 || candidate_b < 0 {
+        return
+    }
+    if candidate_a * candidate_a + candidate_b * candidate_b > g_norm {
+        return
+    }
+
+    let mut x: i64 = candidate_a
+    let mut y: i64 = candidate_b
+    let mut vx: i64 = g_local_a
+    let mut vy: i64 = g_local_b
+
+    if (g_steps & 1) != 0 {
+        if (vx & 1) != 0 || (y & 1) != 0 {
+            return
+        }
+        x = x - y / 2
+        vy = vy + vx / 2
+        if (vy & 1) != 0 || (x & 1) != 0 {
+            return
+        }
+        x = x / 2
+        y = y / 2
+        vx = vx / 2
+        vy = vy / 2
+    }
+
+    if x * vx + y * vy != g_n {
+        return
+    }
+
+    let remaining_steps: i64 = g_steps - g_split_depth
+    let mut used_steps: i64 = 0
+    while used_steps <= remaining_steps && x != 0 && y != 0 {
+        if x > y {
+            let t: i64 = x
+            x = y
+            y = t
+            let t2: i64 = vx
+            vx = vy
+            vy = t2
+        }
+        y = y - x
+        vx = vx + vy
+        used_steps = used_steps + 1
+    }
+
+    if used_steps > remaining_steps {
+        return
+    }
+
+    let residue: i64 = (((vx + vy - g_n) % g_n + g_n) % g_n)
+    if mod_inverse(residue, g_n) == 0 {
+        return
+    }
+    let inv_residue: i64 = g_inv_result
+
+    let total_steps: i64 = current_depth + used_steps
+    let nn: i64 = g_n
+    let mut value: i64 = residue
+    if nn - residue < value {
+        value = nn - residue
+    }
+    if inv_residue < value {
+        value = inv_residue
+    }
+    if nn - inv_residue < value {
+        value = nn - inv_residue
+    }
+
+    if total_steps < g_best_steps {
+        g_best_steps = total_steps
+        g_best_value = value
+    } else {
+        if total_steps == g_best_steps && value < g_best_value {
+            g_best_steps = total_steps
+            g_best_value = value
+        }
+    }
+}
+
+function consider(basis_a0: i64, basis_b0: i64, coeff_a0: i64, coeff_b0: i64, current_depth: i64) -> void {
+    let mut basis_a: i64 = basis_a0
+    let mut basis_b: i64 = basis_b0
+    let mut coeff_a: i64 = coeff_a0
+    let mut coeff_b: i64 = coeff_b0
+
+    if basis_a > basis_b {
+        let t: i64 = basis_a
+        basis_a = basis_b
+        basis_b = t
+        let t2: i64 = coeff_a
+        coeff_a = coeff_b
+        coeff_b = t2
+    }
+
+    if coeff_b < 0 {
+        return
+    }
+    if coeff_a < 0 {
+        let shift: i64 = (0 - coeff_a + basis_b - 1) / basis_b
+        coeff_a = coeff_a + shift * basis_b
+        coeff_b = coeff_b - shift * basis_a
+        if coeff_b < 0 {
+            return
+        }
+    }
+
+    if basis_a * coeff_a + basis_b * coeff_b != g_n {
+        return
+    }
+
+    if current_depth == g_split_depth {
+        let mut local_a: i64 = basis_a
+        let mut local_b: i64 = basis_b
+        let mut local_ca: i64 = coeff_a
+        let mut local_cb: i64 = coeff_b
+
+        if (g_steps & 1) != 0 {
+            local_a = local_a * 2
+            local_b = local_b * 2
+            local_ca = local_ca * 2
+            local_cb = local_cb * 2
+            local_b = local_b - local_a / 2
+            local_ca = local_ca + local_cb / 2
+            if local_a * local_ca + local_b * local_cb != 4 * g_n {
+                return
+            }
+        }
+
+        let norm: i64 = local_a * local_a + local_b * local_b
+        if norm < g_n {
+            return
+        }
+
+        let cross: i64 = local_ca * local_b - local_cb * local_a
+        let shift: i64 = cross / norm
+        local_ca = local_ca - shift * local_b
+        local_cb = local_cb + shift * local_a
+
+        let cross2: i64 = cross - shift * norm
+        if cross2 < 0 {
+            local_ca = local_ca + local_b
+            local_cb = local_cb - local_a
+        }
+
+        g_local_a = local_a
+        g_local_b = local_b
+        g_norm = norm
+
+        check(local_ca, local_cb, current_depth)
+        check(local_ca - local_b, local_cb + local_a, current_depth)
+        return
+    }
+
+    let mut x: i64 = basis_a
+    let mut y: i64 = basis_b
+    let mut i: i64 = current_depth
+    while i < g_steps / 2 {
+        if x > y {
+            let t: i64 = x
+            x = y
+            y = t
+        }
+        x = x + y
+        let t: i64 = x
+        x = y
+        y = t
+        i = i + 1
+    }
+    if x > y {
+        let t: i64 = x
+        x = y
+        y = t
+    }
+
+    if (g_steps & 1) != 0 {
+        if 5 * y * y / 4 + x * y + x * x < g_n {
+            return
+        }
+    } else {
+        if x * x + y * y < g_n {
+            return
+        }
+    }
+
+    consider(basis_b, basis_a + basis_b, coeff_b - coeff_a, coeff_a, current_depth + 1)
+    if basis_a > 0 && basis_a < basis_b {
+        consider(basis_a, basis_a + basis_b, coeff_a - coeff_b, coeff_b, current_depth + 1)
+    }
+}
+
+function f(n: i64) -> i64 {
+    g_n = n
+    let mut steps: i64 = 0
+    while true {
+        g_steps = steps
+        g_split_depth = (steps + 1) / 2
+        g_best_steps = steps
+        g_best_value = n + 1
+
+        consider(0, 1, 0, n, 0)
+
+        if g_best_value <= n {
+            return g_best_value
+        }
+        steps = steps + 1
+    }
+    return 0
 }
 
 function main() -> i32 {
-    printf("%lld\n", p958_native())
+    printf("%lld\n", f(1000000000000 + 39))
     return 0
 }

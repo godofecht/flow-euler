@@ -1,11 +1,239 @@
 # Project Euler 610
 # Roman Numerals II: expected value of minimal Roman process.
+# Ported from native C++ to pure Flow.
 
 extern {
-    function pe610_answer() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function pow(base: f64, exp: f64) -> f64
+}
+
+const Terminal: f64 = 0.02
+const AnyLetter: f64 = 0.14
+
+# Encoding: each char is 3 bits (I=1,V=2,X=3,L=4,C=5,D=6,M=7).
+# Chars packed from LSB. Length stored in bits 45-50.
+const CHAR_MASK: i64 = 0x1FFFFFFFFFFF
+
+let mut n2r: ptr<i64> = null as ptr<i64>
+let mut next_arr: ptr<i32> = null as ptr<i32>
+let mut next_cnt: ptr<i32> = null as ptr<i32>
+let mut memo: ptr<f64> = null as ptr<f64>
+let mut memo_ok: ptr<i8> = null as ptr<i8>
+
+function char_value(code: i32) -> i32 {
+    if code == 1 { return 1 }
+    if code == 2 { return 5 }
+    if code == 3 { return 10 }
+    if code == 4 { return 50 }
+    if code == 5 { return 100 }
+    if code == 6 { return 500 }
+    return 1000
+}
+
+function encode_roman(n: i32) -> i64 {
+    let mut enc: i64 = 0
+    let mut pos: i32 = 0
+    while n >= 1000 {
+        enc = enc | ((7 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 1000
+    }
+    if n >= 900 {
+        enc = enc | ((5 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        enc = enc | ((7 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 900
+    }
+    if n >= 500 {
+        enc = enc | ((6 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 500
+    }
+    if n >= 400 {
+        enc = enc | ((5 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        enc = enc | ((6 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 400
+    }
+    while n >= 100 {
+        enc = enc | ((5 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 100
+    }
+    if n >= 90 {
+        enc = enc | ((3 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        enc = enc | ((5 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 90
+    }
+    if n >= 50 {
+        enc = enc | ((4 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 50
+    }
+    if n >= 40 {
+        enc = enc | ((3 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        enc = enc | ((4 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 40
+    }
+    while n >= 10 {
+        enc = enc | ((3 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 10
+    }
+    if n >= 9 {
+        enc = enc | ((1 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        enc = enc | ((3 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 9
+    }
+    if n >= 5 {
+        enc = enc | ((2 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 5
+    }
+    if n >= 4 {
+        enc = enc | ((1 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        enc = enc | ((2 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 4
+    }
+    while n >= 1 {
+        enc = enc | ((1 as i64) << ((pos as i64) * 3))
+        pos = pos + 1
+        n = n - 1
+    }
+    enc = enc | ((pos as i64) << 45)
+    return enc
+}
+
+function decode_roman(enc: i64) -> i32 {
+    let len: i32 = ((enc >> 45) & 0x3F) as i32
+    let mut result: i32 = 0
+    let mut last: i32 = 0
+    let mut subtract: bool = false
+    let mut i: i32 = len - 1
+    while i >= 0 {
+        let code: i32 = ((enc >> ((i as i64) * 3)) & 7) as i32
+        let current: i32 = char_value(code)
+        if current < last {
+            subtract = true
+            last = current
+        } else {
+            if current > last {
+                subtract = false
+                last = current
+            }
+        }
+        if subtract {
+            result = result - current
+        } else {
+            result = result + current
+        }
+        i = i - 1
+    }
+    return result
+}
+
+function build_transitions() -> void {
+    let mut i: i32 = 0
+    while i < 1000 {
+        next_cnt[i] = 0
+        let base_enc: i64 = n2r[i]
+        let base_len: i32 = ((base_enc >> 45) & 0x3F) as i32
+        let base_chars: i64 = base_enc & CHAR_MASK
+        let mut letter: i32 = 1
+        while letter <= 7 {
+            let new_enc: i64 = base_chars | ((letter as i64) << ((base_len as i64) * 3))
+            let new_len: i32 = base_len + 1
+            new_enc = new_enc | ((new_len as i64) << 45)
+            let num: i32 = decode_roman(new_enc)
+            let check_enc: i64 = encode_roman(num)
+            if check_enc == new_enc {
+                let idx: i32 = next_cnt[i]
+                next_arr[i * 7 + idx] = num
+                next_cnt[i] = idx + 1
+            }
+            letter = letter + 1
+        }
+        i = i + 1
+    }
+}
+
+function search(current: i32) -> f64 {
+    if memo_ok[current] != 0 { return memo[current] }
+    if next_cnt[current] == 0 {
+        memo_ok[current] = 1
+        memo[current] = current as f64
+        return current as f64
+    }
+    let mut result: f64 = Terminal * (current as f64)
+    let mut percentages: f64 = Terminal
+    let mut j: i32 = 0
+    while j < next_cnt[current] {
+        let next_num: i32 = next_arr[current * 7 + j]
+        result = result + AnyLetter * search(next_num)
+        percentages = percentages + AnyLetter
+        j = j + 1
+    }
+    result = result / percentages
+    memo_ok[current] = 1
+    memo[current] = result
+    return result
 }
 
 function main() -> i32 {
-    printf("%.8f\n", pe610_answer())
+    n2r = calloc(1000, 8) as ptr<i64>
+    next_arr = calloc(7000, 4) as ptr<i32>
+    next_cnt = calloc(1000, 4) as ptr<i32>
+    memo = calloc(1000, 8) as ptr<f64>
+    memo_ok = calloc(1000, 1) as ptr<i8>
+
+    let mut i: i32 = 0
+    while i < 1000 {
+        n2r[i] = encode_roman(i)
+        i = i + 1
+    }
+
+    build_transitions()
+
+    let mut upTo1000: f64 = 0.0
+    upTo1000 = upTo1000 + AnyLetter * search(1)
+    upTo1000 = upTo1000 + AnyLetter * search(5)
+    upTo1000 = upTo1000 + AnyLetter * search(10)
+    upTo1000 = upTo1000 + AnyLetter * search(50)
+    upTo1000 = upTo1000 + AnyLetter * search(100)
+    upTo1000 = upTo1000 + AnyLetter * search(500)
+
+    let precision: f64 = 0.000000001
+    let mut numM: i32 = 1
+    let mut result: f64 = upTo1000
+    let mut done: bool = false
+    while !done {
+        let manyM: f64 = (numM as f64) * 1000.0 * (1.0 - AnyLetter)
+        let increment: f64 = manyM + upTo1000
+        result = result + increment * pow(AnyLetter, numM as f64)
+        if increment < precision {
+            done = true
+        } else {
+            numM = numM + 1
+        }
+    }
+
+    printf("%.8f\n", result)
+
+    free(n2r as ptr<void>)
+    free(next_arr as ptr<void>)
+    free(next_cnt as ptr<void>)
+    free(memo as ptr<void>)
+    free(memo_ok as ptr<void>)
     return 0
 }

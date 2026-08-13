@@ -1,11 +1,76 @@
 # Project Euler 970
-# Real solver in problems/native/p970.c (linked by scripts/run.sh).
+# Kangaroo Hopping over Sixes.
+# H(n) = 2n + 2/3 + eps, where eps = 2*Re(e^{lam*n}/lam) is a tiny
+# correction with lam = 1 + W_1(-1/e) (Lambert W, branch 1).
+# For n = 10^6 the asymptotic formula is exact to far more digits than needed.
+# Precomputed lam to 70 digits, f64 is sufficient for n=10^6.
 
 extern {
-    function p970_native() -> i64
+    function cos(x: f64) -> f64
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function floor(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+function my_fmod(x: f64, y: f64) -> f64 {
+    let q: f64 = floor(x / y)
+    return x - q * y
 }
 
 function main() -> i32 {
-    printf("%lld\n", p970_native())
+    let lam_re: f64 = -2.088843015613043855957086716774947500545693741036729673239112544244607
+    let lam_im: f64 = 7.461489285654254556906116612186415334509094993202209240934411391411877
+    let lam_abs: f64 = 7.748360310659838754659859240216219375966049464762612291981467582861770
+    let lam_arg: f64 = 1.843758551210239598129985611715645443454302414441256154232297011153285
+
+    let n: f64 = 1000000.0
+    let pi: f64 = 3.141592653589793238462643383279502884197169399375105820974944592307816
+    let two_pi: f64 = 2.0 * pi
+    let neg_pi: f64 = 0.0 - pi
+
+    let ln10: f64 = log(10.0)
+
+    let mut theta: f64 = lam_im * n - lam_arg
+    theta = my_fmod(theta, two_pi)
+    if theta > pi {
+        theta = theta - two_pi
+    } else {
+        if theta < neg_pi {
+            theta = theta + two_pi
+        }
+    }
+
+    let c: f64 = cos(theta)
+
+    let mut a: f64 = log(2.0 / lam_abs) / ln10
+    a = a + lam_re * n / ln10
+    a = a + log(fabs(c)) / ln10
+
+    let L: i64 = (floor(0.0 - a) as i64)
+
+    let mut delta: f64 = exp((a + (L as f64)) * ln10)
+    if c < 0.0 {
+        delta = 0.0 - delta
+    }
+
+    let s: f64 = 2.0 / 3.0 + delta
+    let mut frac: f64 = s - floor(s)
+
+    let mut result: i64 = 0
+    let mut count: i32 = 0
+    let mut i: i32 = 0
+    while i < 200 && count < 8 {
+        frac = frac * 10.0
+        let d: i64 = (floor(frac) as i64)
+        frac = frac - floor(frac)
+        if d != 6 {
+            result = result * 10 + d
+            count = count + 1
+        }
+        i = i + 1
+    }
+
+    printf("%lld\n", result)
     return 0
 }

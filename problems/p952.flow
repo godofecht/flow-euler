@@ -1,12 +1,204 @@
 # Project Euler 952
-# Order Modulo Factorial — multiplicative order (native).
-# Companion: problems/native/p952.c
+# Order Modulo Factorial. Multiplicative order of prime p modulo n!.
+# Compute R(10^9+7, 10^7) mod 10^9+7.
 
 extern {
-    function p952_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const P: i64 = 1000000007
+const N: i64 = 10000000
+
+function mod_pow_u64(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut a: i64 = a0 % mod
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = ((r as i128 * (a as i128)) % (mod as i128)) as i64
+        }
+        a = ((a as i128 * (a as i128)) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function v_p_factorial(n0: i64, p: i64) -> i64 {
+    let mut s: i64 = 0
+    let mut n: i64 = n0
+    while n > 0 {
+        n = n / p
+        s = s + n
+    }
+    return s
+}
+
+function v2_val(x0: i64) -> i64 {
+    let mut c: i64 = 0
+    let mut x: i64 = x0
+    while (x & 1) == 0 {
+        x = x >> 1
+        c = c + 1
+    }
+    return c
+}
+
+function order_mod_2_power_exponent(a: i64, k: i64) -> i64 {
+    if k <= 1 { return 0 }
+    if k == 2 {
+        if (a & 3) == 1 { return 0 }
+        return 1
+    }
+
+    if (a & 3) == 1 {
+        let t: i64 = k - v2_val(a - 1)
+        if t > 0 { return t }
+        return 0
+    } else {
+        let t: i64 = k - v2_val(a + 1)
+        if t > 1 { return t }
+        return 1
+    }
+}
+
+# Global arrays
+let mut spf: ptr<i32> = null
+let mut primes: ptr<i32> = null
+let mut num_primes: i64 = 0
+let mut max_exp: ptr<i64> = null
+
+function linear_sieve_spf(limit: i64) -> void {
+    spf = calloc(limit + 1, 4)
+    primes = calloc(700000, 4)
+
+    num_primes = 0
+    let mut i: i64 = 2
+    while i <= limit {
+        if spf[i] == 0 {
+            spf[i] = i as i32
+            primes[num_primes] = i as i32
+            num_primes = num_primes + 1
+        }
+        let mut j: i64 = 0
+        while j < num_primes {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > limit { break }
+            spf[ip] = p as i32
+            if p == (spf[i] as i64) { break }
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+# Factorize x using SPF. Returns number of (prime, exponent) pairs.
+function factorize(x0: i64, fac_p: ptr<i64>, fac_e: ptr<i64>) -> i64 {
+    let mut cnt: i64 = 0
+    let mut x: i64 = x0
+    while x > 1 {
+        let p: i64 = spf[x] as i64
+        let mut e: i64 = 0
+        while x % p == 0 {
+            x = x / p
+            e = e + 1
+        }
+        fac_p[cnt] = p
+        fac_e[cnt] = e
+        cnt = cnt + 1
+    }
+    return cnt
+}
+
+function multiplicative_order_mod_prime(p: i64, q: i64) -> i64 {
+    let m: i64 = q - 1
+    let fac_p: ptr<i64> = calloc(32, 8)
+    let fac_e: ptr<i64> = calloc(32, 8)
+    let nfac: i64 = factorize(m, fac_p, fac_e)
+
+    let mut r: i64 = m
+    let base: i64 = p % q
+
+    let mut i: i64 = 0
+    while i < nfac {
+        let f: i64 = fac_p[i]
+        let mut e_rem: i64 = fac_e[i]
+        while e_rem > 0 {
+            let cand: i64 = r / f
+            if mod_pow_u64(base, cand, q) == 1 {
+                r = cand
+                e_rem = e_rem - 1
+            } else {
+                break
+            }
+        }
+        if e_rem > max_exp[f] {
+            max_exp[f] = e_rem
+        }
+        i = i + 1
+    }
+    free(fac_p)
+    free(fac_e)
+    return r
+}
+
+function q_adic_valuation(p: i64, r: i64, q: i64, limit: i64) -> i64 {
+    if limit <= 1 { return 1 }
+    let mut s: i64 = 1
+    let mut q_pow: i64 = q
+    while s < limit {
+        let q_pow_next: i64 = q_pow * q
+        if mod_pow_u64(p, r, q_pow_next) != 1 { break }
+        q_pow = q_pow_next
+        s = s + 1
+    }
+    return s
 }
 
 function main() -> i32 {
-    printf("%lld\n", p952_native())
+    linear_sieve_spf(N)
+    max_exp = calloc(N + 1, 8)
+
+    # Handle q=2 separately
+    let a2: i64 = v_p_factorial(N, 2)
+    let t2: i64 = order_mod_2_power_exponent(P, a2)
+    if t2 > max_exp[2] { max_exp[2] = t2 }
+
+    # Odd primes
+    let mut qi: i64 = 0
+    while qi < num_primes {
+        let q: i64 = primes[qi] as i64
+        if q == 2 {
+            qi = qi + 1
+            continue
+        }
+
+        let a: i64 = v_p_factorial(N, q)
+        let r0: i64 = multiplicative_order_mod_prime(P, q)
+        let s: i64 = q_adic_valuation(P, r0, q, a)
+        let extra: i64 = a - s
+        if extra > 0 && extra > max_exp[q] {
+            max_exp[q] = extra
+        }
+        qi = qi + 1
+    }
+
+    # Reconstruct order modulo P
+    let mut res: i64 = 1 % P
+    let mut qi2: i64 = 0
+    while qi2 < num_primes {
+        let q: i64 = primes[qi2] as i64
+        let e: i64 = max_exp[q]
+        if e != 0 {
+            res = ((res as i128 * (mod_pow_u64(q, e, P) as i128)) % (P as i128)) as i64
+        }
+        qi2 = qi2 + 1
+    }
+
+    printf("%lld\n", res)
+    free(spf)
+    free(primes)
+    free(max_exp)
     return 0
 }

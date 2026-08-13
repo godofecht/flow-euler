@@ -2,10 +2,232 @@
 # Tiling Dodecagon - T(10) mod 1e9+7.
 
 extern {
-    function p867_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+const MAX_L: i64 = 19
+const ROWCAP: i64 = 32768
+
+let mut indep_count: ptr<i64> = null
+let mut indep_lists: ptr<i64> = null
+
+let mut R_cache: ptr<i64> = null
+let mut R_computed: ptr<i32> = null
+
+function modpow(base0: i64, exp0: i64, mod0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut base: i64 = base0 % mod0
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            r = ((r as i128) * (base as i128) % (mod0 as i128)) as i64
+        }
+        base = ((base as i128) * (base as i128) % (mod0 as i128)) as i64
+        exp = exp >> 1
+    }
+    return r
+}
+
+function init_indep() -> void {
+    indep_count = calloc(MAX_L + 1, 8)
+    indep_lists = calloc((MAX_L + 1) * ROWCAP, 8)
+    let mut L: i64 = 0
+    while L <= MAX_L {
+        let mut cnt: i64 = 0
+        let mut m: i64 = 0
+        let limit: i64 = 1 << L
+        while m < limit {
+            if (m & (m << 1)) == 0 {
+                indep_lists[L * ROWCAP + cnt] = m
+                cnt = cnt + 1
+            }
+            m = m + 1
+        }
+        indep_count[L] = cnt
+        L = L + 1
+    }
+}
+
+function subset_sums(out: ptr<i64>, values: ptr<i64>, L: i64) -> void {
+    let size: i64 = 1 << L
+    memcpy(out, values, size * 8)
+    let mut i: i64 = 0
+    while i < L {
+        let step: i64 = 1 << i
+        let block: i64 = step << 1
+        let mut start: i64 = 0
+        while start < size {
+            let mid: i64 = start + step
+            let end: i64 = start + block
+            let mut m: i64 = mid
+            while m < end {
+                let s: i64 = out[m] + out[m - step]
+                if s >= MOD {
+                    out[m] = s - MOD
+                } else {
+                    out[m] = s
+                }
+                m = m + 1
+            }
+            start = start + block
+        }
+        i = i + 1
+    }
+}
+
+function count_independent_sets(row_lengths: ptr<i32>, nrows: i64) -> i64 {
+    if nrows == 0 {
+        return 1
+    }
+    let L0: i64 = row_lengths[0] as i64
+    let size0: i64 = 1 << L0
+    let mut dp: ptr<i64> = calloc(size0, 8)
+    let mut c: i64 = 0
+    while c < indep_count[L0] {
+        dp[indep_lists[L0 * ROWCAP + c]] = 1
+        c = c + 1
+    }
+    let mut i: i64 = 1
+    while i < nrows {
+        let Lc: i64 = row_lengths[i - 1] as i64
+        let Ln: i64 = row_lengths[i] as i64
+        let size_c: i64 = 1 << Lc
+        let size_n: i64 = 1 << Ln
+        let subs: ptr<i64> = calloc(size_c, 8)
+        subset_sums(subs, dp, Lc)
+        let dp2: ptr<i64> = calloc(size_n, 8)
+        let fullmask: i64 = size_c - 1
+        if Ln == Lc + 1 {
+            let mut c2: i64 = 0
+            while c2 < indep_count[Ln] {
+                let b: i64 = indep_lists[Ln * ROWCAP + c2]
+                let forb: i64 = (b | (b >> 1)) & fullmask
+                let allowed: i64 = fullmask ^ forb
+                dp2[b] = subs[allowed]
+                c2 = c2 + 1
+            }
+        } else {
+            let mut c2: i64 = 0
+            while c2 < indep_count[Ln] {
+                let b: i64 = indep_lists[Ln * ROWCAP + c2]
+                let forb: i64 = (b | (b << 1)) & fullmask
+                let allowed: i64 = fullmask ^ forb
+                dp2[b] = subs[allowed]
+                c2 = c2 + 1
+            }
+        }
+        free(subs)
+        free(dp)
+        dp = dp2
+        i = i + 1
+    }
+    let last_L: i64 = row_lengths[nrows - 1] as i64
+    let mut total: i64 = 0
+    let mut c3: i64 = 0
+    while c3 < indep_count[last_L] {
+        total = total + dp[indep_lists[last_L * ROWCAP + c3]]
+        if total >= MOD {
+            total = total - MOD
+        }
+        c3 = c3 + 1
+    }
+    free(dp)
+    return total % MOD
+}
+
+function H(n: i64) -> i64 {
+    let rows: ptr<i32> = calloc(64, 4)
+    let mut ni: i64 = 0
+    let mut i: i64 = n
+    while i < 2 * n {
+        rows[ni] = i as i32
+        ni = ni + 1
+        i = i + 1
+    }
+    let mut nd: i64 = 0
+    i = 2 * n - 2
+    while i >= n {
+        rows[ni + nd] = i as i32
+        nd = nd + 1
+        i = i - 1
+    }
+    let ans: i64 = count_independent_sets(rows, ni + nd)
+    free(rows)
+    return ans
+}
+
+function F(n: i64, h: i64) -> i64 {
+    let nrows: i64 = h - 1
+    if nrows <= 0 {
+        return 1
+    }
+    let lengths: ptr<i32> = calloc(64, 4)
+    let mut i: i64 = 0
+    while i < nrows {
+        let v: i64 = (n - 2) - i
+        if v > 0 {
+            lengths[i] = v as i32
+        } else {
+            lengths[i] = 0
+        }
+        i = i + 1
+    }
+    let mut eff_rows: i64 = nrows
+    i = 0
+    while i < nrows {
+        if lengths[i] == 0 {
+            eff_rows = i
+            break
+        }
+        i = i + 1
+    }
+    let ans: i64 = count_independent_sets(lengths, eff_rows)
+    free(lengths)
+    return ans
+}
+
+function R(u: i64, v: i64) -> i64 {
+    if v == 0 {
+        return H(u)
+    }
+    if R_computed[u * 16 + v] != 0 {
+        return R_cache[u * 16 + v]
+    }
+    let mut res: i64 = 0
+    if u == 1 && v == 1 {
+        res = 1
+    }
+    let mut w: i64 = 0
+    while w < u {
+        let corner: i64 = F(u, u - w)
+        let r_vw: i64 = R(v, w)
+        let c6: i64 = modpow(corner, 6, MOD)
+        res = (res + ((r_vw as i128) * (c6 as i128) % (MOD as i128)) as i64) % MOD
+        w = w + 1
+    }
+    R_computed[u * 16 + v] = 1
+    R_cache[u * 16 + v] = res
+    return res
+}
+
+function T(n: i64) -> i64 {
+    let mut ans: i64 = (2 * R(n, n)) % MOD
+    if n == 1 {
+        ans = ans - 1
+    }
+    if ans < 0 {
+        ans = ans + MOD
+    }
+    return ans
 }
 
 function main() -> i32 {
-    printf("%lld\n", p867_native())
+    R_cache = calloc(16 * 16, 8)
+    R_computed = calloc(16 * 16, 4)
+    init_indep()
+    printf("%lld\n", T(10))
     return 0
 }

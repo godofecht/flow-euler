@@ -1,8 +1,320 @@
+# Project Euler 896
+# DFS with CRT merge, hash table for visited states, MRV heuristic.
+
 extern {
-    function p896_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+import euler.nt { gcd }
+
+const L: i64 = 36
+const HT_SIZE: i64 = 262144
+const HT_MASK: i64 = 262143
+const ALL_MASK: i64 = 68719476735  # (1 << 36) - 1
+const HASH_C: i64 = -7046029254386353131  # 0x9e3779b97f4a7c15 as signed i64
+
+# Hash table (flat arrays)
+let mut ht_r: ptr<i64> = null
+let mut ht_m: ptr<i64> = null
+let mut ht_unused: ptr<i64> = null
+let mut ht_remaining: ptr<i64> = null
+let mut ht_used: ptr<i32> = null
+
+# DFS results
+let mut g_M: i64 = 0
+let mut g_residues: ptr<i64> = null
+let mut g_num_residues: i64 = 0
+
+# Temporary buffers for pick_index_mrv
+let mut g_cands: ptr<i32> = null
+let mut g_best_cands: ptr<i32> = null
+
+function egcd(a: i64, b: i64) -> i64 {
+    # Returns x such that a*x ≡ 1 (mod b), assuming gcd(a,b)=1
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    let mut aa: i64 = a
+    let mut bb: i64 = b
+    while bb != 0 {
+        let q: i64 = aa / bb
+        let t: i64 = bb
+        bb = aa % bb
+        aa = t
+        let tx: i64 = x1
+        x1 = x0 - q * x1
+        x0 = tx
+    }
+    return x0
+}
+
+function crt_merge(r1: i64, m1: i64, r2: i64, m2: i64) -> i64 {
+    # Returns merged residue r, or -1 on failure
+    # Sets g_merged_m via global
+    let g: i64 = gcd(m1, m2)
+    let diff_raw: i64 = r2 - r1
+    if (diff_raw % g) != 0 {
+        return -1
+    }
+    let l: i64 = (m1 / g) * m2
+    let m1g: i64 = m1 / g
+    let m2g: i64 = m2 / g
+    let diff: i64 = diff_raw / g
+    let einv: i64 = egcd(m1g, m2g)
+    einv = ((einv % m2g) + m2g) % m2g
+    let t: i64 = ((diff * einv) % m2g + m2g) % m2g
+    let r: i64 = (r1 + m1 * t) % l
+    g_merged_m = l
+    return r
+}
+
+let mut g_merged_m: i64 = 0
+
+function lcm_upto(n: i64) -> i64 {
+    let mut m: i64 = 1
+    let mut i: i64 = 1
+    while i <= n {
+        m = (m / gcd(m, i)) * i
+        i = i + 1
+    }
+    return m
+}
+
+function state_hash(r: i64, m: i64, unused_mask: i64, remaining_mask: i64) -> i64 {
+    let h: i64 = r % HT_SIZE
+    h = (h * 31 + m % HT_SIZE) % HT_SIZE
+    h = (h * 31 + unused_mask % HT_SIZE) % HT_SIZE
+    h = (h * 31 + remaining_mask % HT_SIZE) % HT_SIZE
+    return h
+}
+
+function ht_contains(r: i64, m: i64, unused_mask: i64, remaining_mask: i64) -> bool {
+    let mut h: i64 = state_hash(r, m, unused_mask, remaining_mask) & HT_MASK
+    while ht_used[h] != 0 {
+        if ht_r[h] == r && ht_m[h] == m && ht_unused[h] == unused_mask && ht_remaining[h] == remaining_mask {
+            return true
+        }
+        h = (h + 1) & HT_MASK
+    }
+    return false
+}
+
+function ht_insert(r: i64, m: i64, unused_mask: i64, remaining_mask: i64) -> void {
+    let mut h: i64 = state_hash(r, m, unused_mask, remaining_mask) & HT_MASK
+    while ht_used[h] != 0 {
+        if ht_r[h] == r && ht_m[h] == m && ht_unused[h] == unused_mask && ht_remaining[h] == remaining_mask {
+            return
+        }
+        h = (h + 1) & HT_MASK
+    }
+    ht_r[h] = r
+    ht_m[h] = m
+    ht_unused[h] = unused_mask
+    ht_remaining[h] = remaining_mask
+    ht_used[h] = 1
+}
+
+function candidates_offsets(unused_mask: i64, target: i64, step: i64) -> i32 {
+    # Fills g_cands with offsets j where j is in unused_mask and j ≡ target (mod step)
+    # Returns count
+    let mut n: i64 = 0
+    let mut j: i64 = target
+    while j < L {
+        if ((unused_mask >> j) & (1 as i64)) == 1 {
+            g_cands[n] = j as i32
+            n = n + 1
+        }
+        j = j + step
+    }
+    return n as i32
+}
+
+function pick_index_mrv(r: i64, m: i64, unused_mask: i64, remaining_mask: i64) -> i32 {
+    # Fills g_best_cands with best candidates, sets g_best_i and g_best_n
+    # Returns best_n, or 0 if any index has no candidates
+    let mut best_i: i64 = 0
+    let mut best_count: i64 = 1000000000
+    let mut best_n: i64 = 0
+
+    let mut i: i64 = L
+    while i >= 1 {
+        if ((remaining_mask >> (i - 1)) & (1 as i64)) == 0 {
+            i = i - 1
+            continue
+        }
+        let g: i64 = gcd(m, i)
+        let target: i64 = ((0 - r) % g + g) % g
+        let n: i32 = candidates_offsets(unused_mask, target, g)
+        let n64: i64 = n as i64
+        if n == 0 {
+            return 0
+        }
+        if n64 < best_count || (n64 == best_count && i > best_i) {
+            best_count = n64
+            best_i = i
+            best_n = n64
+            let mut k: i64 = 0
+            while k < n64 {
+                g_best_cands[k] = g_cands[k]
+                k = k + 1
+            }
+        }
+        i = i - 1
+    }
+
+    g_best_i = best_i
+    g_best_n = best_n
+    return best_n as i32
+}
+
+let mut g_best_i: i64 = 0
+let mut g_best_n: i64 = 0
+
+function dfs(r: i64, m: i64, unused_mask: i64, remaining_mask: i64) -> void {
+    let r_mod: i64 = r % m
+    if ht_contains(r_mod, m, unused_mask, remaining_mask) {
+        return
+    }
+    ht_insert(r_mod, m, unused_mask, remaining_mask)
+
+    if remaining_mask == 0 {
+        g_residues[g_num_residues] = r_mod
+        g_num_residues = g_num_residues + 1
+        return
+    }
+
+    let best_n: i32 = pick_index_mrv(r_mod, m, unused_mask, remaining_mask)
+    if best_n == 0 {
+        return
+    }
+
+    let best_i: i64 = g_best_i
+    let remaining2: i64 = remaining_mask & ~((1 as i64) << (best_i - 1))
+
+    let mut idx: i64 = 0
+    while idx < g_best_n {
+        let j: i64 = g_best_cands[idx] as i64
+        let r2_val: i64 = ((0 - j) % best_i + best_i) % best_i
+        let new_r: i64 = crt_merge(r_mod, m, r2_val, best_i)
+        if new_r >= 0 {
+            dfs(new_r, g_merged_m, unused_mask & ~((1 as i64) << j), remaining2)
+        }
+        idx = idx + 1
+    }
+}
+
+# Heapsort for i64 array
+function heapsort_i64(arr: ptr<i64>, n: i64) -> void {
+    # Build max heap
+    let mut i: i64 = n / 2
+    while i > 0 {
+        i = i - 1
+        let mut p: i64 = i
+        while true {
+            let largest: i64 = p
+            let left: i64 = 2 * p + 1
+            let right: i64 = 2 * p + 2
+            if left < n && arr[left] > arr[largest] {
+                largest = left
+            }
+            if right < n && arr[right] > arr[largest] {
+                largest = right
+            }
+            if largest == p {
+                break
+            }
+            let tmp: i64 = arr[p]
+            arr[p] = arr[largest]
+            arr[largest] = tmp
+            p = largest
+        }
+    }
+    # Extract elements
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let tmp: i64 = arr[0]
+        arr[0] = arr[end]
+        arr[end] = tmp
+        # Sift down from 0
+        let mut p: i64 = 0
+        while true {
+            let largest: i64 = p
+            let left: i64 = 2 * p + 1
+            let right: i64 = 2 * p + 2
+            if left < end && arr[left] > arr[largest] {
+                largest = left
+            }
+            if right < end && arr[right] > arr[largest] {
+                largest = right
+            }
+            if largest == p {
+                break
+            }
+            let tmp2: i64 = arr[p]
+            arr[p] = arr[largest]
+            arr[largest] = tmp2
+            p = largest
+        }
+        end = end - 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p896_native())
+    # Allocate hash table
+    ht_r = calloc(HT_SIZE, 8)
+    ht_m = calloc(HT_SIZE, 8)
+    ht_unused = calloc(HT_SIZE, 8)
+    ht_remaining = calloc(HT_SIZE, 8)
+    ht_used = calloc(HT_SIZE, 4)
+
+    # Allocate buffers
+    g_cands = calloc(L, 4)
+    g_best_cands = calloc(L, 4)
+    g_residues = calloc(60000, 8)
+
+    g_M = lcm_upto(L)
+
+    let all_offsets: i64 = ALL_MASK
+    let all_indices: i64 = ALL_MASK
+
+    g_num_residues = 0
+    dfs(0, 1, all_offsets, all_indices)
+
+    # Sort and deduplicate
+    heapsort_i64(g_residues, g_num_residues)
+    let mut j: i64 = 0
+    let mut i: i64 = 0
+    while i < g_num_residues {
+        if i == 0 || g_residues[i] != g_residues[i - 1] {
+            g_residues[j] = g_residues[i]
+            j = j + 1
+        }
+        i = i + 1
+    }
+    g_num_residues = j
+
+    # Convert 0 to M
+    i = 0
+    while i < g_num_residues {
+        if g_residues[i] == 0 {
+            g_residues[i] = g_M
+        }
+        i = i + 1
+    }
+
+    # Sort again
+    heapsort_i64(g_residues, g_num_residues)
+
+    printf("%lld\n", g_residues[36 - 1])
+
+    free(ht_r)
+    free(ht_m)
+    free(ht_unused)
+    free(ht_remaining)
+    free(ht_used)
+    free(g_cands)
+    free(g_best_cands)
+    free(g_residues)
     return 0
 }

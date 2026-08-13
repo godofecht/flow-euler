@@ -1,12 +1,412 @@
 # Project Euler 1002
 # Connections II: maximal above connections in bipartite chord diagram.
-# Native C helper for leftist heap + parity DSU.
+# Sweep over chords with parity DSU and leftist heaps, using a min-heap
+# of candidate components ordered by right endpoint.
 
 extern {
-    function p1002_native() -> i64
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fclose(f: ptr<void>) -> i32
+    function fseek(f: ptr<void>, off: i64, whence: i32) -> i32
+    function ftell(f: ptr<void>) -> i64
+    function fread(buf: ptr<void>, size: i64, nmemb: i64, f: ptr<void>) -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+struct Candidate {
+    right_end: i32,
+    node: i32,
+    root: i32
+}
+
+# ---- candidates min-heap (ordered by right_end, then node, then root) ----
+
+function cand_less(a: Candidate, b: Candidate) -> bool {
+    if a.right_end != b.right_end { return a.right_end < b.right_end }
+    if a.node != b.node { return a.node < b.node }
+    return a.root < b.root
+}
+
+function cand_push(h: ptr<Candidate>, pn: ptr<i32>, c: Candidate) -> void {
+    let n: i32 = pn[0]
+    let i: i32 = n
+    h[i] = c
+    pn[0] = n + 1
+    let mut ii: i32 = i
+    while ii > 0 {
+        let p: i32 = (ii - 1) / 2
+        if cand_less(h[ii], h[p]) {
+            let t: Candidate = h[ii]
+            h[ii] = h[p]
+            h[p] = t
+            ii = p
+        } else {
+            ii = 0
+        }
+    }
+}
+
+function cand_pop(h: ptr<Candidate>, pn: ptr<i32>) -> Candidate {
+    let top: Candidate = h[0]
+    let n: i32 = pn[0] - 1
+    pn[0] = n
+    h[0] = h[n]
+    let mut i: i32 = 0
+    let mut cont: bool = true
+    while cont {
+        let l: i32 = 2 * i + 1
+        let r: i32 = 2 * i + 2
+        let sm: i32 = i
+        if l < n && cand_less(h[l], h[sm]) { sm = l }
+        if r < n && cand_less(h[r], h[sm]) { sm = r }
+        if sm == i {
+            cont = false
+        } else {
+            let t: Candidate = h[i]
+            h[i] = h[sm]
+            h[sm] = t
+            i = sm
+        }
+    }
+    return top
+}
+
+# ---- parity DSU (no path compression; union by size) ----
+# Solver arrays passed as pointers.
+
+function sol_root(parent: ptr<i32>, c0: i32) -> i32 {
+    let mut c: i32 = c0
+    while parent[c] != c {
+        c = parent[c]
+    }
+    return c
+}
+
+function sol_parity(parent: ptr<i32>, x2p: ptr<i32>, c0: i32, par_out: ptr<i32>) -> i32 {
+    let mut par: i32 = 0
+    let mut c: i32 = c0
+    while parent[c] != c {
+        par = par ^ x2p[c]
+        c = parent[c]
+    }
+    par_out[0] = par
+    return c
+}
+
+# ---- leftist heap meld (recursive; depth bounded by O(log n) rank) ----
+
+function sol_meld(right_arr: ptr<i32>, hl: ptr<i32>, hr: ptr<i32>, hrank: ptr<i32>,
+                  a0: i32, b0: i32) -> i32 {
+    let a: i32 = a0
+    let b: i32 = b0
+    if a < 0 { return b }
+    if b < 0 { return a }
+    if right_arr[a] > right_arr[b] {
+        let t: i32 = a
+        a = b
+        b = t
+    }
+    hr[a] = sol_meld(right_arr, hl, hr, hrank, hr[a], b)
+    let lc: i32 = hl[a]
+    let rc: i32 = hr[a]
+    let lr: i32 = 0
+    if lc >= 0 { lr = hrank[lc] }
+    let rr: i32 = 0
+    if rc >= 0 { rr = hrank[rc] }
+    if lr < rr {
+        hl[a] = rc
+        hr[a] = lc
+        let t: i32 = lr
+        lr = rr
+        rr = t
+    }
+    hrank[a] = rr + 1
+    return a
+}
+
+function sol_pop_heap(hl: ptr<i32>, hr: ptr<i32>, right_arr: ptr<i32>, hrank: ptr<i32>,
+                      node: i32) -> i32 {
+    return sol_meld(right_arr, hl, hr, hrank, hl[node], hr[node])
+}
+
+function sol_union_opposite(parent: ptr<i32>, sz: ptr<i32>, x2p: ptr<i32>,
+                            cz: ptr<i32>, co: ptr<i32>,
+                            hl: ptr<i32>, hr: ptr<i32>, hrank: ptr<i32>, ch: ptr<i32>,
+                            right_arr: ptr<i32>,
+                            first: i32, second: i32) -> i32 {
+    let fp_ref: ptr<i32> = calloc(1, 4)
+    let sp_ref: ptr<i32> = calloc(1, 4)
+    let fr: i32 = sol_parity(parent, x2p, first, fp_ref)
+    let sr: i32 = sol_parity(parent, x2p, second, sp_ref)
+    let fp: i32 = fp_ref[0]
+    let sp: i32 = sp_ref[0]
+    free(fp_ref as ptr<void>)
+    free(sp_ref as ptr<void>)
+
+    if fr == sr {
+        return fr
+    }
+    let mut fr2: i32 = fr
+    let mut sr2: i32 = sr
+    let mut fp2: i32 = fp
+    let mut sp2: i32 = sp
+    if sz[fr2] < sz[sr2] {
+        let t: i32 = fr2
+        fr2 = sr2
+        sr2 = t
+        t = fp2
+        fp2 = sp2
+        sp2 = t
+    }
+    let shift: i32 = fp2 ^ sp2 ^ 1
+    parent[sr2] = fr2
+    x2p[sr2] = shift
+    sz[fr2] = sz[fr2] + sz[sr2]
+    if shift == 0 {
+        cz[fr2] = cz[fr2] + cz[sr2]
+        co[fr2] = co[fr2] + co[sr2]
+    } else {
+        cz[fr2] = cz[fr2] + co[sr2]
+        co[fr2] = co[fr2] + cz[sr2]
+    }
+    ch[fr2] = sol_meld(right_arr, hl, hr, hrank, ch[fr2], ch[sr2])
+    ch[sr2] = -1
+    return fr2
+}
+
+# ---- main sweep ----
+
+function sol_solve(left: ptr<i32>, right_arr: ptr<i32>,
+                   parent: ptr<i32>, sz: ptr<i32>, x2p: ptr<i32>,
+                   cz: ptr<i32>, co: ptr<i32>,
+                   hl: ptr<i32>, hr: ptr<i32>, hrank: ptr<i32>, ch: ptr<i32>,
+                   cc: i32) -> i32 {
+    let cand: ptr<Candidate> = calloc((cc + 1) as i64, 12)
+    let cn_ref: ptr<i32> = calloc(1, 4)
+    cn_ref[0] = 0
+
+    let mut chord: i32 = 0
+    while chord < cc {
+        let le: i32 = left[chord]
+        let re: i32 = right_arr[chord]
+        let mut current: i32 = chord
+
+        let mut inner: bool = true
+        while inner {
+            if cn_ref[0] == 0 {
+                inner = false
+            } else {
+                let top: Candidate = cand[0]
+                let rt: i32 = sol_root(parent, top.root)
+
+                if rt != top.root {
+                    cand_pop(cand, cn_ref)
+                } else {
+                    let chr: i32 = ch[rt]
+                    if chr != top.node || right_arr[top.node] != top.right_end {
+                        cand_pop(cand, cn_ref)
+                    } else {
+                        if rt == sol_root(parent, current) {
+                            cand_pop(cand, cn_ref)
+                        } else {
+                            if top.right_end <= le {
+                                cand_pop(cand, cn_ref)
+                                while ch[rt] >= 0 && right_arr[ch[rt]] <= le {
+                                    ch[rt] = sol_pop_heap(hl, hr, right_arr, hrank, ch[rt])
+                                }
+                                let nhr: i32 = ch[rt]
+                                if nhr >= 0 {
+                                    cand_push(cand, cn_ref, Candidate {
+                                        right_end: right_arr[nhr],
+                                        node: nhr,
+                                        root: rt
+                                    })
+                                }
+                            } else {
+                                if top.right_end >= re {
+                                    inner = false
+                                } else {
+                                    cand_pop(cand, cn_ref)
+                                    current = sol_union_opposite(parent, sz, x2p, cz, co,
+                                                                 hl, hr, hrank, ch, right_arr,
+                                                                 chord, top.node)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        current = sol_root(parent, current)
+        let chr2: i32 = ch[current]
+        if chr2 >= 0 {
+            cand_push(cand, cn_ref, Candidate {
+                right_end: right_arr[chr2],
+                node: chr2,
+                root: current
+            })
+        }
+        chord = chord + 1
+    }
+
+    let mut answer: i32 = 0
+    let mut i: i32 = 0
+    while i < cc {
+        if parent[i] == i {
+            let z: i32 = cz[i]
+            let o: i32 = co[i]
+            if z > o {
+                answer = answer + z
+            } else {
+                answer = answer + o
+            }
+        }
+        i = i + 1
+    }
+
+    free(cand as ptr<void>)
+    free(cn_ref as ptr<void>)
+    return answer
 }
 
 function main() -> i32 {
-    printf("%lld\n", p1002_native())
+    let f: ptr<void> = fopen("data/p1002_input.txt", "r")
+    if f == null {
+        printf("failed to open data/p1002_input.txt\n")
+        return 1
+    }
+    fseek(f, 0, 2)
+    let fsz: i64 = ftell(f)
+    fseek(f, 0, 0)
+    let buf: ptr<i8> = calloc(fsz + 1, 1) as ptr<i8>
+    fread(buf as ptr<void>, 1, fsz, f)
+    buf[fsz] = 0
+    fclose(f)
+
+    let cap: i32 = 200000
+    let vals: ptr<i32> = calloc(cap as i64, 4)
+    let nv_ref: ptr<i32> = calloc(1, 4)
+    nv_ref[0] = 0
+
+    let mut p: i64 = 0
+    let mut ch: i8 = buf[p]
+    while ch != 0 {
+        # skip non-digit, non-minus
+        while ch != 0 {
+            if ch >= 48 && ch <= 57 { break }
+            if ch == 45 { break }
+            p = p + 1
+            ch = buf[p]
+        }
+        if ch == 0 { break }
+        let mut neg: bool = false
+        if ch == 45 {
+            neg = true
+            p = p + 1
+            ch = buf[p]
+        }
+        let mut v: i32 = 0
+        while ch >= 48 && ch <= 57 {
+            v = v * 10 + (ch - 48) as i32
+            p = p + 1
+            ch = buf[p]
+        }
+        if neg { v = 0 - v }
+        if nv_ref[0] >= cap {
+            # grow (simplified: just abort if too many)
+            printf("too many values\n")
+            free(buf as ptr<void>)
+            free(vals as ptr<void>)
+            free(nv_ref as ptr<void>)
+            return 1
+        }
+        vals[nv_ref[0]] = v
+        nv_ref[0] = nv_ref[0] + 1
+    }
+    free(buf as ptr<void>)
+
+    let nv: i32 = nv_ref[0]
+    free(nv_ref as ptr<void>)
+
+    let mut maxv: i32 = 0
+    let mut i: i32 = 0
+    while i < nv {
+        if vals[i] > maxv { maxv = vals[i] }
+        i = i + 1
+    }
+
+    let cc: i32 = nv / 2
+    let left: ptr<i32> = calloc(cc as i64, 4)
+    let right_arr: ptr<i32> = calloc(cc as i64, 4)
+    let oc: ptr<i32> = calloc((maxv + 1) as i64, 4)
+    let mut j: i32 = 0
+    while j <= maxv {
+        oc[j] = -1
+        j = j + 1
+    }
+
+    let nc_ref: ptr<i32> = calloc(1, 4)
+    nc_ref[0] = 0
+    let mut pos: i32 = 0
+    while pos < nv {
+        let val: i32 = vals[pos]
+        let chord_idx: i32 = oc[val]
+        if chord_idx < 0 {
+            let ch2: i32 = nc_ref[0]
+            oc[val] = ch2
+            left[ch2] = pos
+            right_arr[ch2] = -1
+            nc_ref[0] = ch2 + 1
+        } else {
+            right_arr[chord_idx] = pos
+            oc[val] = -1
+        }
+        pos = pos + 1
+    }
+    free(oc as ptr<void>)
+    free(vals as ptr<void>)
+    free(nc_ref as ptr<void>)
+
+    let parent: ptr<i32> = calloc(cc as i64, 4)
+    let sz: ptr<i32> = calloc(cc as i64, 4)
+    let x2p: ptr<i32> = calloc(cc as i64, 4)
+    let cz: ptr<i32> = calloc(cc as i64, 4)
+    let co: ptr<i32> = calloc(cc as i64, 4)
+    let hl: ptr<i32> = calloc(cc as i64, 4)
+    let hr: ptr<i32> = calloc(cc as i64, 4)
+    let hrank: ptr<i32> = calloc(cc as i64, 4)
+    let ch_arr: ptr<i32> = calloc(cc as i64, 4)
+
+    let mut k: i32 = 0
+    while k < cc {
+        parent[k] = k
+        sz[k] = 1
+        x2p[k] = 0
+        cz[k] = 1
+        co[k] = 0
+        hl[k] = -1
+        hr[k] = -1
+        hrank[k] = 1
+        ch_arr[k] = k
+        k = k + 1
+    }
+
+    let ans: i32 = sol_solve(left, right_arr, parent, sz, x2p, cz, co,
+                              hl, hr, hrank, ch_arr, cc)
+
+    printf("%lld\n", ans as i64)
+
+    free(parent as ptr<void>)
+    free(sz as ptr<void>)
+    free(x2p as ptr<void>)
+    free(cz as ptr<void>)
+    free(co as ptr<void>)
+    free(hl as ptr<void>)
+    free(hr as ptr<void>)
+    free(hrank as ptr<void>)
+    free(ch_arr as ptr<void>)
+    free(left as ptr<void>)
+    free(right_arr as ptr<void>)
     return 0
 }

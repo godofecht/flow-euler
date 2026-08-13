@@ -1,12 +1,156 @@
 # Project Euler 785
 # Symmetric Diophantine Equation.
-# Native C solver handles the coprime-pair parameterisation.
+# S(N) = sum (x+y+z) over primitive solutions of
+#   15(x^2+y^2+z^2) = 34(xy+yz+zx)
+# with 1 <= x <= y <= z <= N and gcd(x,y,z)=1.
+# Coprime-pair parameterisation with SPF sieve.
 
 extern {
-    function p785_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+function isqrt_i64(x: i64) -> i64 {
+    if x <= 0 { return 0 }
+    let mut r: i64 = sqrt(x as f64) as i64
+    while r * r > x {
+        r = r - 1
+    }
+    while (r + 1) * (r + 1) <= x {
+        r = r + 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%lld\n", p785_native())
+    let N: i64 = 1000000000
+    let max_a: i64 = isqrt_i64(N / 3)
+    if max_a < 1 {
+        printf("%lld\n", 0 as i64)
+        return 0
+    }
+
+    # SPF sieve
+    let spf: ptr<i32> = calloc(max_a + 1, 4) as ptr<i32>
+    for i in 0..(max_a + 1) {
+        spf[i] = i as i32
+    }
+    let mut i: i64 = 2
+    while i * i <= max_a {
+        if spf[i] == i as i32 {
+            let mut j: i64 = i * i
+            while j <= max_a {
+                if spf[j] == j as i32 {
+                    spf[j] = i as i32
+                }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let N3: i64 = 12 * N
+    let N5: i64 = 5 * N
+
+    let mut total: i64 = 0
+    let pf: ptr<i32> = calloc(64, 4) as ptr<i32>
+
+    for a in 1..(max_a + 1) {
+        let aa: i64 = a * a
+
+        # distinct prime factors of a
+        let mut pf_n: i64 = 0
+        let mut x: i64 = a
+        while x > 1 {
+            let p: i64 = spf[x] as i64
+            pf[pf_n] = p as i32
+            pf_n = pf_n + 1
+            while x % p == 0 {
+                x = x / p
+            }
+        }
+
+        # bmin from B = 5a^2 - 2ab <= N  ==>  b >= (5a^2 - N)/(2a)
+        let mut bmin: i64
+        if 5 * aa <= N {
+            bmin = 1
+        } else {
+            let num: i64 = 5 * aa - N
+            bmin = (num + (2 * a - 1)) / (2 * a)
+            if bmin < 1 { bmin = 1 }
+        }
+
+        # C > 0 requires b < 3a/5
+        let bmax_pos: i64 = (3 * a - 1) / 5
+        if bmax_pos < bmin { continue }
+
+        # A = 2ab + 3b^2 <= N  ->  b <= floor((-2a + sqrt(4a^2+12N))/6)
+        let disc1: i64 = 4 * aa + N3
+        let bmax1: i64 = (-2 * a + isqrt_i64(disc1)) / 6
+
+        # C = 3a^2 - 8ab + 5b^2 <= N
+        let disc3: i64 = aa + N5
+        let sdisc3: i64 = isqrt_i64(disc3)
+        let bmax3: i64 = (4 * a + sdisc3) / 5
+        let bmin3: i64 = (4 * a - sdisc3 + 4) / 5
+
+        if bmin3 > bmin { bmin = bmin3 }
+
+        let mut bmax: i64 = bmax_pos
+        if bmax1 < bmax { bmax = bmax1 }
+        if bmax3 < bmax { bmax = bmax3 }
+        if bmax >= a { bmax = a - 1 }
+
+        if bmax < bmin { continue }
+
+        let mut b: i64 = bmin
+        while b <= bmax {
+            # coprimality: b not divisible by any prime factor of a
+            let mut ok: i64 = 1
+            let mut k: i64 = 0
+            while k < pf_n {
+                if b % (pf[k] as i64) == 0 {
+                    ok = 0
+                    break
+                }
+                k = k + 1
+            }
+            if ok == 0 {
+                b = b + 1
+                continue
+            }
+
+            let ab: i64 = a * b
+            let bb: i64 = b * b
+
+            let A: i64 = 2 * ab + 3 * bb
+            let B: i64 = 5 * aa - 2 * ab
+            let C: i64 = 3 * aa - 8 * ab + 5 * bb
+
+            if C <= 0 {
+                b = b + 1
+                continue
+            }
+            if A > N || B > N || C > N {
+                b = b + 1
+                continue
+            }
+
+            # non-primitive iff all divisible by 19
+            if A % 19 == 0 && B % 19 == 0 {
+                b = b + 1
+                continue
+            }
+
+            total = total + 8 * (aa - ab + bb)
+            b = b + 1
+        }
+    }
+
+    free(spf)
+    free(pf)
+
+    printf("%lld\n", total)
     return 0
 }

@@ -1,9 +1,446 @@
-# Wrapper for native C solver.
+# Project Euler 842
+# Irregular Star Polygons - sum T(n) mod 1e9+7 for n=3..60.
+
 extern {
-    function p842_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function cos(x: f64) -> f64
+    function sin(x: f64) -> f64
+    function fabs(x: f64) -> f64
+    function floor(x: f64) -> f64
+    function llround(x: f64) -> i64
+}
+
+const MOD: i64 = 1000000007
+const SCALE: i64 = 100000000000
+const HASH_SIZE: i64 = 1048576
+const HASH_MASK: i64 = 1048575
+const MAX_POINTS: i64 = 600000
+const MAX_REPS: i64 = 600000
+
+let mut fact_mod: ptr<i64> = null
+let mut inv_fact_mod: ptr<i64> = null
+
+let mut pts_qx: ptr<i64> = null
+let mut pts_qy: ptr<i64> = null
+let mut pts_count: ptr<i32> = null
+let mut num_points: i64 = 0
+let mut hash_buckets: ptr<i32> = null
+let mut hash_next: ptr<i32> = null
+
+let mut reps_x: ptr<f64> = null
+let mut reps_y: ptr<f64> = null
+let mut reps_cnt: ptr<i32> = null
+let mut num_reps: i64 = 0
+let mut grid_buckets: ptr<i32> = null
+let mut grid_next: ptr<i32> = null
+
+function modpow(b0: i64, e0: i64, m0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = b0 % m0
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (b as i128) % (m0 as i128)) as i64
+        }
+        b = ((b as i128) * (b as i128) % (m0 as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function modinv(a: i64, m: i64) -> i64 {
+    return modpow(a, m - 2, m)
+}
+
+function init_factorials() -> void {
+    fact_mod = calloc(61, 8)
+    inv_fact_mod = calloc(61, 8)
+    fact_mod[0] = 1
+    let mut i: i64 = 1
+    while i <= 60 {
+        fact_mod[i] = (fact_mod[i - 1] * i) % MOD
+        i = i + 1
+    }
+    i = 0
+    while i <= 60 {
+        inv_fact_mod[i] = modinv(fact_mod[i], MOD)
+        i = i + 1
+    }
+}
+
+function comb_mod(n: i64, k: i64) -> i64 {
+    if k < 0 || k > n {
+        return 0
+    }
+    return (fact_mod[n] * inv_fact_mod[k] % MOD * inv_fact_mod[n - k] % MOD) as i64
+}
+
+function cycles_at_least_two_edges(n: i64, m: i64) -> i64 {
+    if m < 2 {
+        return 0
+    }
+    let inv2: i64 = modinv(2, MOD)
+    let total: i64 = fact_mod[n - 1] * inv2 % MOD
+    let mut c0: i64 = 0
+    let mut k: i64 = 0
+    while k <= m {
+        let ak: i64 = 0
+        if k == 0 {
+            ak = total
+        } else {
+            ak = modpow(2, k - 1, MOD) * fact_mod[n - k - 1] % MOD
+        }
+        let term: i64 = comb_mod(m, k) * ak % MOD
+        if k % 2 == 0 {
+            c0 = (c0 + term) % MOD
+        } else {
+            c0 = (c0 - term % MOD + MOD) % MOD
+        }
+        k = k + 1
+    }
+    let mut c1: i64 = 0
+    k = 1
+    while k <= m {
+        let ak: i64 = modpow(2, k - 1, MOD) * fact_mod[n - k - 1] % MOD
+        let term: i64 = (k * comb_mod(m, k) % MOD) * ak % MOD
+        if (k - 1) % 2 == 0 {
+            c1 = (c1 + term) % MOD
+        } else {
+            c1 = (c1 - term % MOD + MOD) % MOD
+        }
+        k = k + 1
+    }
+    return (total - c0 - c1 % MOD + 2 * MOD) % MOD
+}
+
+function isqrt_ll(n: i64) -> i64 {
+    if n < 0 {
+        return -1
+    }
+    if n == 0 {
+        return 0
+    }
+    let mut x: i64 = 0
+    # Newton's method
+    let mut bit: i64 = 1
+    while bit <= n {
+        bit = bit << 2
+    }
+    bit = bit >> 2
+    while bit != 0 {
+        if n >= x + bit {
+            n = n - (x + bit)
+            x = (x >> 1) + bit
+        } else {
+            x = x >> 1
+        }
+        bit = bit >> 2
+    }
+    return x
+}
+
+function inv_triangular(q: i64) -> i64 {
+    let disc: i64 = 1 + 8 * q
+    let r: i64 = isqrt_ll(disc)
+    if r * r != disc {
+        return -1
+    }
+    if (1 + r) % 2 != 0 {
+        return -1
+    }
+    return (1 + r) / 2
+}
+
+function hash_key(qx: i64, qy: i64) -> i64 {
+    let h: i64 = qx * 1000000007 + qy
+    # mix high bits down
+    let hi: i64 = (h as i64) >> 32
+    let lo: i64 = h & 0xFFFFFFFF
+    let mixed: i64 = (lo ^ hi) & HASH_MASK
+    return mixed
+}
+
+function find_point(qx: i64, qy: i64) -> i64 {
+    let h: i64 = hash_key(qx, qy)
+    let mut idx: i64 = hash_buckets[h] as i64
+    while idx != -1 {
+        if pts_qx[idx] == qx && pts_qy[idx] == qy {
+            return idx
+        }
+        idx = hash_next[idx] as i64
+    }
+    return -1
+}
+
+function add_point_fast(qx: i64, qy: i64) -> void {
+    let idx: i64 = find_point(qx, qy)
+    if idx >= 0 {
+        pts_count[idx] = pts_count[idx] + 1
+        return
+    }
+    idx = num_points
+    num_points = num_points + 1
+    pts_qx[idx] = qx
+    pts_qy[idx] = qy
+    pts_count[idx] = 1
+    let h: i64 = hash_key(qx, qy)
+    hash_next[idx] = hash_buckets[h]
+    hash_buckets[h] = idx as i32
+}
+
+function grid_key(x: f64, y: f64) -> i64 {
+    let ix: i64 = floor(x / 0.000001) as i64
+    let iy: i64 = floor(y / 0.000001) as i64
+    let h: i64 = ix * 1000000007 + iy
+    let hi: i64 = (h as i64) >> 32
+    let lo: i64 = h & 0xFFFFFFFF
+    return (lo ^ hi) & HASH_MASK
+}
+
+function add_point_slow(x: f64, y: f64) -> void {
+    let ix: i64 = floor(x / 0.000001) as i64
+    let iy: i64 = floor(y / 0.000001) as i64
+    let mut dx: i64 = -1
+    while dx <= 1 {
+        let mut dy: i64 = -1
+        while dy <= 1 {
+            let cx: i64 = ix + dx
+            let cy: i64 = iy + dy
+            let h2: i64 = cx * 1000000007 + cy
+            let hi: i64 = (h2 as i64) >> 32
+            let lo: i64 = h2 & 0xFFFFFFFF
+            let h: i64 = (lo ^ hi) & HASH_MASK
+            let mut idx: i64 = grid_buckets[h] as i64
+            while idx != -1 {
+                let ddx: f64 = x - reps_x[idx]
+                let ddy: f64 = y - reps_y[idx]
+                if ddx * ddx + ddy * ddy <= 1e-18 {
+                    reps_cnt[idx] = reps_cnt[idx] + 1
+                    return
+                }
+                idx = grid_next[idx] as i64
+            }
+            dy = dy + 1
+        }
+        dx = dx + 1
+    }
+    let idx: i64 = num_reps
+    num_reps = num_reps + 1
+    reps_x[idx] = x
+    reps_y[idx] = y
+    reps_cnt[idx] = 1
+    let h: i64 = grid_key(x, y)
+    grid_next[idx] = grid_buckets[h]
+    grid_buckets[h] = idx as i32
+}
+
+function compute_points_fast(n: i64, xs: ptr<f64>, ys: ptr<f64>) -> i32 {
+    num_points = 0
+    let mut i: i64 = 0
+    while i < HASH_SIZE {
+        hash_buckets[i] = -1
+        i = i + 1
+    }
+    let mut a: i64 = 0
+    while a < n - 3 {
+        let x1: f64 = xs[a]
+        let y1: f64 = ys[a]
+        let mut b: i64 = a + 1
+        while b < n - 2 {
+            let x3: f64 = xs[b]
+            let y3: f64 = ys[b]
+            let abx: f64 = x3 - x1
+            let aby: f64 = y3 - y1
+            let mut c: i64 = b + 1
+            while c < n - 1 {
+                let x2: f64 = xs[c]
+                let y2: f64 = ys[c]
+                let dx12: f64 = x2 - x1
+                let dy12: f64 = y2 - y1
+                let mut d: i64 = c + 1
+                while d < n {
+                    let x4: f64 = xs[d]
+                    let y4: f64 = ys[d]
+                    let dx34: f64 = x4 - x3
+                    let dy34: f64 = y4 - y3
+                    let denom: f64 = dx12 * dy34 - dy12 * dx34
+                    if fabs(denom) < 1e-18 {
+                        d = d + 1
+                        continue
+                    }
+                    let t: f64 = (abx * dy34 - aby * dx34) / denom
+                    let px: f64 = x1 + t * dx12
+                    let py: f64 = y1 + t * dy12
+                    let qx: i64 = llround(px * (SCALE as f64))
+                    let qy: i64 = llround(py * (SCALE as f64))
+                    add_point_fast(qx, qy)
+                    d = d + 1
+                }
+                c = c + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    i = 0
+    while i < num_points {
+        if inv_triangular(pts_count[i] as i64) < 0 {
+            return 0
+        }
+        i = i + 1
+    }
+    return 1
+}
+
+function compute_points_slow(n: i64, xs: ptr<f64>, ys: ptr<f64>) -> void {
+    num_reps = 0
+    let mut i: i64 = 0
+    while i < HASH_SIZE {
+        grid_buckets[i] = -1
+        i = i + 1
+    }
+    let mut a: i64 = 0
+    while a < n - 3 {
+        let x1: f64 = xs[a]
+        let y1: f64 = ys[a]
+        let mut b: i64 = a + 1
+        while b < n - 2 {
+            let x3: f64 = xs[b]
+            let y3: f64 = ys[b]
+            let abx: f64 = x3 - x1
+            let aby: f64 = y3 - y1
+            let mut c: i64 = b + 1
+            while c < n - 1 {
+                let x2: f64 = xs[c]
+                let y2: f64 = ys[c]
+                let dx12: f64 = x2 - x1
+                let dy12: f64 = y2 - y1
+                let mut d: i64 = c + 1
+                while d < n {
+                    let x4: f64 = xs[d]
+                    let y4: f64 = ys[d]
+                    let dx34: f64 = x4 - x3
+                    let dy34: f64 = y4 - y3
+                    let denom: f64 = dx12 * dy34 - dy12 * dx34
+                    if fabs(denom) < 1e-18 {
+                        d = d + 1
+                        continue
+                    }
+                    let t: f64 = (abx * dy34 - aby * dx34) / denom
+                    let px: f64 = x1 + t * dx12
+                    let py: f64 = y1 + t * dy12
+                    add_point_slow(px, py)
+                    d = d + 1
+                }
+                c = c + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+}
+
+function T_mod(n: i64) -> i64 {
+    if n < 4 {
+        return 0
+    }
+    let tau: f64 = 2.0 * 3.14159265358979323846
+    let xs: ptr<f64> = calloc(60, 8)
+    let ys: ptr<f64> = calloc(60, 8)
+    let mut k: i64 = 0
+    while k < n {
+        xs[k] = cos(tau * (k as f64) / (n as f64))
+        ys[k] = sin(tau * (k as f64) / (n as f64))
+        k = k + 1
+    }
+    let dist_m: ptr<i64> = calloc(100, 8)
+    let dist_cnt: ptr<i64> = calloc(100, 8)
+    let mut dist_size: i64 = 0
+    let fast: i32 = compute_points_fast(n, xs, ys)
+    if fast != 0 {
+        let mut i: i64 = 0
+        while i < num_points {
+            let m: i64 = inv_triangular(pts_count[i] as i64)
+            let mut found: i64 = -1
+            let mut j: i64 = 0
+            while j < dist_size {
+                if dist_m[j] == m {
+                    found = j
+                    break
+                }
+                j = j + 1
+            }
+            if found < 0 {
+                dist_m[dist_size] = m
+                dist_cnt[dist_size] = 1
+                dist_size = dist_size + 1
+            } else {
+                dist_cnt[found] = dist_cnt[found] + 1
+            }
+            i = i + 1
+        }
+    } else {
+        compute_points_slow(n, xs, ys)
+        let mut i: i64 = 0
+        while i < num_reps {
+            let m: i64 = inv_triangular(reps_cnt[i] as i64)
+            if m < 0 {
+                i = i + 1
+                continue
+            }
+            let mut found: i64 = -1
+            let mut j: i64 = 0
+            while j < dist_size {
+                if dist_m[j] == m {
+                    found = j
+                    break
+                }
+                j = j + 1
+            }
+            if found < 0 {
+                dist_m[dist_size] = m
+                dist_cnt[dist_size] = 1
+                dist_size = dist_size + 1
+            } else {
+                dist_cnt[found] = dist_cnt[found] + 1
+            }
+            i = i + 1
+        }
+    }
+    let mut total: i64 = 0
+    let mut i: i64 = 0
+    while i < dist_size {
+        let g: i64 = cycles_at_least_two_edges(n, dist_m[i])
+        total = (total + dist_cnt[i] * g) % MOD
+        i = i + 1
+    }
+    free(xs)
+    free(ys)
+    free(dist_m)
+    free(dist_cnt)
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p842_native())
+    init_factorials()
+    pts_qx = calloc(MAX_POINTS, 8)
+    pts_qy = calloc(MAX_POINTS, 8)
+    pts_count = calloc(MAX_POINTS, 4)
+    hash_buckets = calloc(HASH_SIZE, 4)
+    hash_next = calloc(MAX_POINTS, 4)
+    reps_x = calloc(MAX_REPS, 8)
+    reps_y = calloc(MAX_REPS, 8)
+    reps_cnt = calloc(MAX_REPS, 4)
+    grid_buckets = calloc(HASH_SIZE, 4)
+    grid_next = calloc(MAX_REPS, 4)
+    let mut ans: i64 = 0
+    let mut n: i64 = 3
+    while n <= 60 {
+        ans = (ans + T_mod(n)) % MOD
+        n = n + 1
+    }
+    printf("%lld\n", ans)
     return 0
 }

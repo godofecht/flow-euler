@@ -1,13 +1,390 @@
 # Project Euler 803
 # Pseudorandom Sequence: find the minimum step at which the sequence
 # starting from the "PuzzleOne" seed first produces "LuckyText".
-# Native C helper for 48-bit LCG seed recovery and 2-adic discrete log.
+# Pure Flow port of the native C solver using 48-bit LCG arithmetic.
 
 extern {
-    function p803_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const A_VAL: i64 = 25214903917
+const C_VAL: i64 = 11
+const MOD48: i64 = 281474976710656
+const MOD24: i64 = 16777216
+const MOD18: i64 = 262144
+const INV9_MOD13: i32 = 3
+const ORDER_EXP: i32 = 46
+
+# Global state for dlog
+let mut G_ORDER: i64 = 0
+let mut inv_pows: ptr<i64> = null
+
+# Global output for powA_sumY
+let mut g_powv: i64 = 0
+let mut g_sumv: i64 = 0
+
+function mul48(a: i64, b: i64) -> i64 {
+    let prod: i128 = (a as i128) * (b as i128)
+    return (prod % (MOD48 as i128)) as i64
+}
+
+function powmod48(base: i64, exp: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b: i64 = base % MOD48
+    if b < 0 { b = b + MOD48 }
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            result = mul48(result, b)
+        }
+        b = mul48(b, b)
+        e = e / 2
+    }
+    return result
+}
+
+function invmod48(x0: i64) -> i64 {
+    let mut x: i64 = x0 % MOD48
+    if x < 0 { x = x + MOD48 }
+    let mut inv: i64 = x
+    let mut i: i32 = 0
+    while i < 5 {
+        let t: i64 = mul48(x, inv)
+        let two_minus: i64 = (MOD48 + 2 - t) % MOD48
+        inv = mul48(inv, two_minus)
+        i = i + 1
+    }
+    return inv
+}
+
+function step48(x: i64) -> i64 {
+    return (mul48(A_VAL, x) + C_VAL) % MOD48
+}
+
+function b_from_a(a: i64) -> i32 {
+    return ((a >> 16) % 52) as i32
+}
+
+function check_prefix(a0: i64, vals: ptr<i32>, L: i32) -> i32 {
+    let mut a: i64 = a0 % MOD48
+    if a < 0 { a = a + MOD48 }
+    let mut i: i32 = 0
+    while i < L {
+        if b_from_a(a) != vals[i] { return 0 }
+        a = step48(a)
+        i = i + 1
+    }
+    return 1
+}
+
+function u0_candidates(pattern_vals: ptr<i32>, L: i32, out: ptr<i64>, max_out: i32) -> i32 {
+    let mut count: i32 = 0
+    let mut u0: i64 = 0
+    while u0 < MOD18 {
+        let mut u: i64 = u0
+        let mut ok: bool = true
+        let mut i: i32 = 0
+        while i < L {
+            if ((u >> 16) % 4) as i32 != pattern_vals[i] % 4 {
+                ok = false
+                break
+            }
+            u = (mul48(A_VAL, u) + C_VAL) % MOD18
+            i = i + 1
+        }
+        if ok {
+            if count < max_out { out[count] = u0 }
+            count = count + 1
+        }
+        u0 = u0 + 1
+    }
+    return count
+}
+
+function solve_y0(carries24: ptr<i64>, residues13: ptr<i32>, L: i32, out: ptr<i64>, max_out: i32) -> i32 {
+    if L == 0 { return 0 }
+    let r0: i32 = residues13[0]
+    let mut count: i32 = 0
+
+    if L == 1 {
+        let mut y0: i64 = r0 as i64
+        while y0 < MOD24 {
+            if count < max_out { out[count] = y0 }
+            count = count + 1
+            y0 = y0 + 13
+        }
+        return count
+    }
+
+    let r1: i32 = residues13[1]
+    let a24: i64 = A_VAL % MOD24
+
+    if L == 2 {
+        let y0_init: i64 = r0 as i64
+        let mut y1: i64 = (mul48(A_VAL, y0_init) + carries24[0]) % MOD24
+        let delta1: i64 = (13 * a24) % MOD24
+        let mut y0: i64 = r0 as i64
+        while y0 < MOD24 {
+            if y1 % 13 == r1 as i64 {
+                if count < max_out { out[count] = y0 }
+                count = count + 1
+            }
+            y1 = (y1 + delta1) % MOD24
+            y0 = y0 + 13
+        }
+        return count
+    }
+
+    # L >= 3
+    let r2: i32 = residues13[2]
+    let y0_init: i64 = r0 as i64
+    let mut y1: i64 = (mul48(A_VAL, y0_init) + carries24[0]) % MOD24
+    let mut y2: i64 = (mul48(A_VAL, y1) + carries24[1]) % MOD24
+    let delta1: i64 = (13 * a24) % MOD24
+    let delta2: i64 = mul48(delta1, a24) % MOD24
+
+    let mut y0: i64 = r0 as i64
+    while y0 < MOD24 {
+        if y1 % 13 == r1 as i64 && y2 % 13 == r2 as i64 {
+            let mut y: i64 = y2
+            let mut ok: bool = true
+            let mut i: i32 = 2
+            while i < L - 1 {
+                y = (mul48(A_VAL, y) + carries24[i]) % MOD24
+                if y % 13 != residues13[i + 1] as i64 {
+                    ok = false
+                    break
+                }
+                i = i + 1
+            }
+            if ok {
+                if count < max_out { out[count] = y0 }
+                count = count + 1
+            }
+        }
+        y1 = (y1 + delta1) % MOD24
+        y2 = (y2 + delta2) % MOD24
+        y0 = y0 + 13
+    }
+    return count
+}
+
+function solve_states(vals: ptr<i32>, L: i32, states_out: ptr<i64>, max_states: i32) -> i32 {
+    let us: ptr<i64> = calloc(1024, 8)
+    let n_us: i32 = u0_candidates(vals, L, us, 1024)
+
+    let mut n_states: i32 = 0
+
+    let u_list: ptr<i64> = calloc(64, 8)
+    let k_list: ptr<i64> = calloc(64, 8)
+    let carries24: ptr<i64> = calloc(64, 8)
+    let t_list: ptr<i32> = calloc(64, 4)
+    let residues13: ptr<i32> = calloc(64, 4)
+    let y0s: ptr<i64> = calloc(4096, 8)
+
+    let mut ui: i32 = 0
+    while ui < n_us {
+        let u0: i64 = us[ui]
+        let mut u: i64 = u0
+        let mut i: i32 = 0
+        while i < L {
+            u_list[i] = u
+            let nxt: i64 = A_VAL * u + C_VAL
+            if i < L - 1 { k_list[i] = nxt >> 18 }
+            u = nxt % MOD18
+            i = i + 1
+        }
+
+        let mut w0: i32 = 0
+        while w0 < 64 {
+            let mut w: i64 = w0 as i64
+            let mut i2: i32 = 0
+            while i2 < L {
+                t_list[i2] = (((u_list[i2] >> 16) % 4) + w * 4) as i32
+                if i2 < L - 1 {
+                    carries24[i2] = (k_list[i2] + A_VAL * w) >> 6
+                    w = (A_VAL * w + k_list[i2]) % 64
+                }
+                i2 = i2 + 1
+            }
+
+            # Compute residues13
+            let mut i3: i32 = 0
+            while i3 < L {
+                let mut t_mod13: i32 = t_list[i3] % 13
+                if t_mod13 < 0 { t_mod13 = t_mod13 + 13 }
+                let mut diff: i32 = (vals[i3] - t_mod13) % 13
+                if diff < 0 { diff = diff + 13 }
+                residues13[i3] = (INV9_MOD13 * diff) % 13
+                i3 = i3 + 1
+            }
+
+            # Solve y0
+            let n_y0: i32 = solve_y0(carries24, residues13, L, y0s, 4096)
+            let mut yi: i32 = 0
+            while yi < n_y0 {
+                let y0: i64 = y0s[yi]
+                let x0: i64 = u0 + ((w0 as i64) << 18)
+                let a0: i64 = x0 + (y0 << 24)
+                if check_prefix(a0, vals, L) == 1 {
+                    if n_states < max_states { states_out[n_states] = a0 }
+                    n_states = n_states + 1
+                }
+                yi = yi + 1
+            }
+            w0 = w0 + 1
+        }
+        ui = ui + 1
+    }
+
+    free(us)
+    free(u_list)
+    free(k_list)
+    free(carries24)
+    free(t_list)
+    free(residues13)
+    free(y0s)
+    return n_states
+}
+
+function precompute_dlog() -> void {
+    inv_pows = calloc(ORDER_EXP as i64, 8)
+    G_ORDER = powmod48(A_VAL, (1 as i64) << (ORDER_EXP - 1))
+    let mut i: i32 = 0
+    while i < ORDER_EXP {
+        let p: i64 = powmod48(A_VAL, (1 as i64) << i)
+        inv_pows[i] = invmod48(p)
+        i = i + 1
+    }
+}
+
+function dlog_pow2(h: i64) -> i64 {
+    let mut x: i64 = 0
+    let mut cur: i64 = h % MOD48
+    if cur < 0 { cur = cur + MOD48 }
+    let mut i: i32 = 0
+    while i < ORDER_EXP {
+        let e: i64 = (1 as i64) << (ORDER_EXP - 1 - i)
+        let t: i64 = powmod48(cur, e)
+        if t == G_ORDER {
+            x = x | ((1 as i64) << i)
+            cur = mul48(cur, inv_pows[i])
+        }
+        i = i + 1
+    }
+    return x
+}
+
+function powA_sumY(n: i64) -> void {
+    if n == 0 {
+        g_powv = 1
+        g_sumv = 0
+        return
+    }
+    let mut powv: i64 = 1
+    let mut sumv: i64 = 0
+    let mut top: i32 = 63
+    while (n >> top) % 2 == 0 {
+        top = top - 1
+    }
+    let mut bit: i32 = top
+    while bit >= 0 {
+        let one_plus_powv: i64 = (1 + powv) % MOD48
+        sumv = mul48(sumv, one_plus_powv)
+        powv = mul48(powv, powv)
+        if (n >> bit) % 2 == 1 {
+            sumv = (sumv + powv) % MOD48
+            powv = mul48(powv, A_VAL)
+        }
+        bit = bit - 1
+    }
+    g_powv = powv
+    g_sumv = sumv
+}
+
+function index_of_state(a0_in: i64, target_in: i64) -> i64 {
+    let a0: i64 = a0_in % MOD48
+    if a0 < 0 { a0 = a0 + MOD48 }
+    let target: i64 = target_in % MOD48
+    if target < 0 { target = target + MOD48 }
+    if target == a0 { return 0 }
+
+    let a1: i64 = step48(a0)
+    let mut K: i64 = (a1 - a0) % MOD48
+    if K < 0 { K = K + MOD48 }
+    let invK: i64 = invmod48(K)
+
+    let mut diff: i64 = (target - a0) % MOD48
+    if diff < 0 { diff = diff + MOD48 }
+    let y_target: i64 = mul48(diff, invK)
+    let h: i64 = (mul48(A_VAL - 1, y_target) + 1) % MOD48
+
+    let n0: i64 = dlog_pow2(h)
+    let stepN: i64 = (1 as i64) << ORDER_EXP
+
+    let mut t: i32 = 0
+    while t < 4 {
+        let n: i64 = n0 + (t as i64) * stepN
+        powA_sumY(n)
+        if g_sumv == y_target { return n }
+        t = t + 1
+    }
+    return 0
 }
 
 function main() -> i32 {
-    printf("%lld\n", p803_native())
+    precompute_dlog()
+
+    # "PuzzleOne" -> vals = [41, 20, 25, 25, 11, 4, 40, 13, 4]
+    let puzzle_vals: ptr<i32> = calloc(64, 4)
+    puzzle_vals[0] = 41
+    puzzle_vals[1] = 20
+    puzzle_vals[2] = 25
+    puzzle_vals[3] = 25
+    puzzle_vals[4] = 11
+    puzzle_vals[5] = 4
+    puzzle_vals[6] = 40
+    puzzle_vals[7] = 13
+    puzzle_vals[8] = 4
+
+    let puzzle_states: ptr<i64> = calloc(16, 8)
+    let n_puzzle: i32 = solve_states(puzzle_vals, 9, puzzle_states, 16)
+    let seed: i64 = puzzle_states[0]
+
+    # "LuckyText" -> vals = [37, 20, 2, 10, 24, 45, 4, 23, 19]
+    let lucky_vals: ptr<i32> = calloc(64, 4)
+    lucky_vals[0] = 37
+    lucky_vals[1] = 20
+    lucky_vals[2] = 2
+    lucky_vals[3] = 10
+    lucky_vals[4] = 24
+    lucky_vals[5] = 45
+    lucky_vals[6] = 4
+    lucky_vals[7] = 23
+    lucky_vals[8] = 19
+
+    let lucky_states: ptr<i64> = calloc(256, 8)
+    let n_lucky: i32 = solve_states(lucky_vals, 9, lucky_states, 256)
+
+    let mut best: i64 = 0
+    let mut found: bool = false
+    let mut i: i32 = 0
+    while i < n_lucky {
+        let n: i64 = index_of_state(seed, lucky_states[i])
+        if !found || n < best {
+            best = n
+            found = true
+        }
+        i = i + 1
+    }
+
+    printf("%lld\n", best)
+
+    free(puzzle_vals)
+    free(puzzle_states)
+    free(lucky_vals)
+    free(lucky_states)
+    free(inv_pows)
     return 0
 }

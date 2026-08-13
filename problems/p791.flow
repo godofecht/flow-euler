@@ -1,13 +1,191 @@
 # Project Euler 791
 # Average and Variance: S(10^8) mod 433494437.
 # Sum over quadruples (a,b,c,d) whose average equals twice their variance.
-# Native C helper for the lattice enumeration with prefix sums.
+# Lattice enumeration with prefix sums.
 
 extern {
-    function p791_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+const MOD: i64 = 433494437
+const LIM: i64 = 1152921504606846976
+
+function isqrt_i64(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut r: i64 = sqrt(n as f64) as i64
+    while r > 0 && r * r > n {
+        r = r - 1
+    }
+    while (r + 1) * (r + 1) <= n {
+        r = r + 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%lld\n", p791_native())
+    let n: i64 = 100000000
+    let N2: i64 = 2 * n
+    let R: i64 = isqrt_i64(2 * n) + 2
+
+    let s2: ptr<i64> = calloc(R + 1, 8)
+    let ps2: ptr<i64> = calloc(R + 1, 8)
+    let p1: ptr<i64> = calloc(R + 1, 8)
+    let p2: ptr<i64> = calloc(R + 1, 8)
+    let p3: ptr<i64> = calloc(R + 1, 8)
+
+    for i in 1..(R + 1) {
+        let ii: i64 = i * i
+        s2[i] = s2[i - 1] + ii
+        ps2[i] = ps2[i - 1] + s2[i]
+        p1[i] = p1[i - 1] + i
+        p2[i] = p2[i - 1] + ii
+        p3[i] = p3[i - 1] + ii * i
+    }
+
+    let mut total: i64 = 0
+
+    # Small U cases (U=0,1): brute force
+    for U in 0..2 {
+        for V in 0..(U + 1) {
+            for W in 0..(V + 1) {
+                let mut sgn: i32 = -1
+                while sgn <= 1 {
+                    if W == 0 && sgn == -1 {
+                        sgn = sgn + 2
+                    } else {
+                        let u: i64 = -(U as i64)
+                        let v: i64 = -(V as i64)
+                        let w: i64 = (sgn as i64) * (W as i64)
+                        let m: i64 = (U as i64) * (U as i64) + (V as i64) * (V as i64) + (W as i64) * (W as i64)
+                        if m != 0 {
+                            let a: i64 = (m + u + v + w) / 2
+                            let b: i64 = (m + u - v - w) / 2
+                            let c: i64 = (m - u + v - w) / 2
+                            let d: i64 = (m - u - v + w) / 2
+                            if 1 <= a && a <= b && b <= c && c <= d && d <= n {
+                                let v_add: i64 = 2 * m
+                                total = total + v_add % MOD
+                                if total >= LIM { total = total % MOD }
+                            }
+                        }
+                        sgn = sgn + 2
+                    }
+                }
+            }
+        }
+    }
+
+    # Main enumeration
+    let mut U: i64 = 2
+    while U <= R {
+        let U2: i64 = U * U
+        let rem: i64 = N2 - U2 - U
+        if rem < 0 { break }
+
+        let mut Wmax0: i64 = isqrt_i64(rem / 2)
+        if Wmax0 > U { Wmax0 = U }
+
+        let T: i64 = N2 - 2 * U2 - 2 * U
+
+        let mut sgn: i32 = -1
+        while sgn <= 1 {
+            let startW: i64 = if sgn == 1 { 0 } else { 1 }
+            if startW > Wmax0 {
+                sgn = sgn + 2
+                continue
+            }
+
+            let mut Wfull: i64
+            if T < 0 {
+                Wfull = -1
+            } else {
+                let rt: i64 = isqrt_i64(1 + 4 * T)
+                if sgn == 1 {
+                    Wfull = (rt - 1) / 2
+                } else {
+                    Wfull = (rt + 1) / 2
+                }
+                if Wfull > Wmax0 { Wfull = Wmax0 }
+            }
+
+            # Full segment: W in [startW..Wfull], V in [W..U]
+            if Wfull >= startW {
+                let A: i64 = startW
+                let B: i64 = Wfull
+                let num: i64 = B - A + 1
+
+                let sumW: i64 = p1[B] - (if A > 0 { p1[A - 1] } else { 0 })
+                let sumW2: i64 = p2[B] - (if A > 0 { p2[A - 1] } else { 0 })
+                let sumW3: i64 = p3[B] - (if A > 0 { p3[A - 1] } else { 0 })
+
+                let sumCnt: i64 = num * (U + 1) - sumW
+                let sumCntW2: i64 = (U + 1) * sumW2 - sumW3
+
+                let sumPrefix: i64
+                if B == 0 {
+                    sumPrefix = 0
+                } else {
+                    let mut lo: i64 = A - 1
+                    let hi: i64 = B - 1
+                    if lo < 0 { lo = 0 }
+                    sumPrefix = ps2[hi] - (if lo > 0 { ps2[lo - 1] } else { 0 })
+                }
+
+                let sumSumV2: i64 = num * s2[U] - sumPrefix
+
+                let contrib: i128 = (2 as i128) * (U2 as i128) * (sumCnt as i128) + (2 as i128) * (sumCntW2 as i128) + (2 as i128) * (sumSumV2 as i128)
+                let mut cmod: i64 = (contrib % (MOD as i128)) as i64
+                if cmod < 0 { cmod = cmod + MOD }
+                total = total + cmod
+                if total >= LIM { total = total % MOD }
+            }
+
+            # Tail segment
+            let mut tail_start: i64 = Wfull + 1
+            if tail_start < startW { tail_start = startW }
+            if tail_start > Wmax0 {
+                sgn = sgn + 2
+                continue
+            }
+
+            let base_D: i64 = 4 * N2 + 1 - 4 * (U2 + U)
+
+            let mut W: i64 = tail_start
+            while W <= Wmax0 {
+                let D: i64 = base_D - 4 * (W * W + (sgn as i64) * W)
+                if D < 0 { break }
+
+                let mut Vmax: i64 = (isqrt_i64(D) - 1) / 2
+                if Vmax > U { Vmax = U }
+                if Vmax < W {
+                    W = W + 1
+                    continue
+                }
+
+                let cnt: i64 = Vmax - W + 1
+                let sumV2: i64 = s2[Vmax] - (if W > 0 { s2[W - 1] } else { 0 })
+
+                let W2: i64 = W * W
+                let contrib2: i128 = (cnt as i128) * (2 as i128) * ((U2 + W2) as i128) + (2 as i128) * (sumV2 as i128)
+                let mut cmod2: i64 = (contrib2 % (MOD as i128)) as i64
+                if cmod2 < 0 { cmod2 = cmod2 + MOD }
+                total = total + cmod2
+                if total >= LIM { total = total % MOD }
+                W = W + 1
+            }
+            sgn = sgn + 2
+        }
+        U = U + 1
+    }
+
+    free(s2)
+    free(ps2)
+    free(p1)
+    free(p2)
+    free(p3)
+
+    printf("%lld\n", total % MOD)
     return 0
 }

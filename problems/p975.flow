@@ -1,10 +1,275 @@
 # Project Euler 975
+# Winding walk on turning points of H(a,b,x) over prime pairs.
+# Port of the C reference solver to pure Flow.
 
 extern {
-    function p975_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function cos(x: f64) -> f64
+    function sin(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+const PI: f64 = 3.14159265358979323846
+const MAXC: i64 = 4096
+
+function gcd_int(a: i64, b: i64) -> i64 {
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function iabs(x: i64) -> i64 {
+    if x < 0 { return -x }
+    return x
+}
+
+function fmaxv(a: f64, b: f64) -> f64 {
+    if a > b { return a }
+    return b
+}
+
+function fminv(a: f64, b: f64) -> f64 {
+    if a < b { return a }
+    return b
+}
+
+# candidate points stored in global buffers
+let mut g_num: ptr<i64> = null
+let mut g_den: ptr<i64> = null
+let mut g_signs: ptr<i64> = null
+let mut g_kept_num: ptr<i64> = null
+let mut g_kept_den: ptr<i64> = null
+
+function make_normalized(num: i64, den: i64, idx: i64) -> void {
+    let g: i64 = gcd_int(num, den)
+    g_num[idx] = num / g
+    g_den[idx] = den / g
+}
+
+function height_val(a: i64, b: i64, num: i64, den: i64) -> f64 {
+    if num == 0 { return 0.0 }
+    if num == den { return 1.0 }
+    let x: f64 = (num as f64) / (den as f64)
+    let z: f64 = 0.5 - ((b as f64) * cos((a as f64) * PI * x) + (a as f64) * cos((b as f64) * PI * x)) / (2.0 * ((a + b) as f64))
+    if z < 0.0 {
+        if z > -1e-14 { return 0.0 }
+    }
+    if z > 1.0 {
+        if z < 1.0 + 1e-14 { return 1.0 }
+    }
+    return z
+}
+
+function deriv_sign(a: i64, b: i64, ln: i64, ld: i64, rn: i64, rd: i64) -> i64 {
+    let x: f64 = ((ln * rd + rn * ld) as f64) / (2.0 * ((ld * rd) as f64))
+    let value: f64 = sin(((a + b) as f64) * PI * x * 0.5) * cos((iabs(a - b) as f64) * PI * x * 0.5)
+    if value > 0.0 { return 1 }
+    return -1
+}
+
+# selection sort candidate points by value num/den ascending
+function sort_cand2(nc: i64) -> void {
+    let mut i: i64 = 0
+    while i < nc {
+        let mut best: i64 = i
+        let mut j: i64 = i + 1
+        while j < nc {
+            # compare g_num[j]/g_den[j] < g_num[best]/g_den[best]
+            if g_num[j] * g_den[best] < g_num[best] * g_den[j] {
+                best = j
+            }
+            j = j + 1
+        }
+        if best != i {
+            let tn: i64 = g_num[i]
+            let td: i64 = g_den[i]
+            g_num[i] = g_num[best]
+            g_den[i] = g_den[best]
+            g_num[best] = tn
+            g_den[best] = td
+        }
+        i = i + 1
+    }
+}
+
+function turning_values(a: i64, b: i64, tv: ptr<f64>) -> i64 {
+    let s: i64 = a + b
+    let delta: i64 = iabs(a - b)
+
+    let mut nc: i64 = 0
+    let mut k: i64 = 0
+    while k <= s / 2 {
+        make_normalized(2 * k, s, nc)
+        nc = nc + 1
+        k = k + 1
+    }
+    k = 0
+    while k < delta / 2 {
+        make_normalized(2 * k + 1, delta, nc)
+        nc = nc + 1
+        k = k + 1
+    }
+
+    sort_cand2(nc)
+
+    # dedupe
+    let mut unique: i64 = 1
+    let mut i: i64 = 1
+    while i < nc {
+        if g_num[i] != g_num[unique - 1] || g_den[i] != g_den[unique - 1] {
+            g_num[unique] = g_num[i]
+            g_den[unique] = g_den[i]
+            unique = unique + 1
+        }
+        i = i + 1
+    }
+    nc = unique
+
+    i = 0
+    while i < nc - 1 {
+        g_signs[i] = deriv_sign(a, b, g_num[i], g_den[i], g_num[i + 1], g_den[i + 1])
+        i = i + 1
+    }
+
+    let mut nk: i64 = 0
+    g_kept_num[nk] = g_num[0]
+    g_kept_den[nk] = g_den[0]
+    nk = nk + 1
+    i = 1
+    while i < nc - 1 {
+        if g_signs[i - 1] != g_signs[i] {
+            g_kept_num[nk] = g_num[i]
+            g_kept_den[nk] = g_den[i]
+            nk = nk + 1
+        }
+        i = i + 1
+    }
+    g_kept_num[nk] = g_num[nc - 1]
+    g_kept_den[nk] = g_den[nc - 1]
+    nk = nk + 1
+
+    i = 0
+    while i < nk {
+        tv[i] = height_val(a, b, g_kept_num[i], g_kept_den[i])
+        i = i + 1
+    }
+    return nk
+}
+
+function F_func(a: i64, b: i64, c: i64, d: i64) -> f64 {
+    let za: ptr<f64> = calloc(MAXC, 8)
+    let zb: ptr<f64> = calloc(MAXC, 8)
+    let na: i64 = turning_values(a, b, za)
+    let nb: i64 = turning_values(c, d, zb)
+
+    let mut i: i64 = 0
+    let mut j: i64 = 0
+    let mut current: f64 = 0.0
+    let mut total: f64 = 0.0
+    let mut upward: i64 = 1
+    let eps: f64 = 1e-12
+    let max_steps: i64 = 4 * (na + nb) * (na + nb)
+
+    let mut step: i64 = 0
+    while step < max_steps {
+        if i < 0 || i >= na - 1 || j < 0 || j >= nb - 1 {
+            free(za as ptr<void>)
+            free(zb as ptr<void>)
+            return total
+        }
+        let a0: f64 = za[i]
+        let a1: f64 = za[i + 1]
+        let b0: f64 = zb[j]
+        let b1: f64 = zb[j + 1]
+        let lower: f64 = fmaxv(fminv(a0, a1), fminv(b0, b1))
+        let upper: f64 = fminv(fmaxv(a0, a1), fmaxv(b0, b1))
+        let nxt: f64 = 0.0
+        if upward != 0 { nxt = upper } else { nxt = lower }
+        total = total + fabs(nxt - current)
+        let mut advanced: i64 = 0
+        if fabs(nxt - a0) <= eps { i = i - 1; advanced = 1 }
+        else {
+            if fabs(nxt - a1) <= eps { i = i + 1; advanced = 1 }
+        }
+        if fabs(nxt - b0) <= eps { j = j - 1; advanced = 1 }
+        else {
+            if fabs(nxt - b1) <= eps { j = j + 1; advanced = 1 }
+        }
+        if advanced == 0 {
+            free(za as ptr<void>)
+            free(zb as ptr<void>)
+            return total
+        }
+        current = nxt
+        upward = 1 - upward
+        step = step + 1
+    }
+    free(za as ptr<void>)
+    free(zb as ptr<void>)
+    return total
+}
+
+function G_func(m: i64, n: i64) -> f64 {
+    let is_prime: ptr<i64> = calloc(n + 1, 8)
+    let mut p: i64 = 0
+    while p <= n {
+        is_prime[p] = 1
+        p = p + 1
+    }
+    is_prime[0] = 0
+    is_prime[1] = 0
+    p = 2
+    while p * p <= n {
+        if is_prime[p] != 0 {
+            let mut j: i64 = p * p
+            while j <= n {
+                is_prime[j] = 0
+                j = j + p
+            }
+        }
+        p = p + 1
+    }
+
+    let ps: ptr<i64> = calloc(256, 8)
+    let mut np: i64 = 0
+    p = m
+    while p <= n {
+        if is_prime[p] != 0 {
+            ps[np] = p
+            np = np + 1
+        }
+        p = p + 1
+    }
+    free(is_prime as ptr<void>)
+
+    let mut total: f64 = 0.0
+    let mut i: i64 = 0
+    while i < np {
+        let mut j: i64 = i + 1
+        while j < np {
+            let pp: i64 = ps[i]
+            let qq: i64 = ps[j]
+            total = total + F_func(pp, qq, pp, 2 * qq - pp)
+            j = j + 1
+        }
+        i = i + 1
+    }
+    free(ps as ptr<void>)
+    return total
 }
 
 function main() -> i32 {
-    printf("%.5f\n", p975_native())
+    g_num = calloc(MAXC, 8) as ptr<i64>
+    g_den = calloc(MAXC, 8) as ptr<i64>
+    g_signs = calloc(MAXC, 8) as ptr<i64>
+    g_kept_num = calloc(MAXC, 8) as ptr<i64>
+    g_kept_den = calloc(MAXC, 8) as ptr<i64>
+    printf("%.5f\n", G_func(500, 1000))
     return 0
 }

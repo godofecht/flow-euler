@@ -1,11 +1,348 @@
 # Project Euler 790
 # Clock Grid: C(10^5) via sweep line with a 12-bucket segment tree.
+# Each rectangle increments the overlap count mod 12 of covered cells.
 
 extern {
-    function p790_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const M_VAL: i64 = 50515093
+const S0: i64 = 290797
+
+let mut g_seg: ptr<i64> = null
+let mut g_lazy: ptr<i32> = null
+let mut g_y_vals: ptr<i64> = null
+let mut g_tmp12: ptr<i64> = null
+
+function heapsort_i64(arr: ptr<i64>, n: i64) -> void {
+    if n < 2 { return }
+    let mut i: i64 = n / 2 - 1
+    while i >= 0 {
+        let mut root: i64 = i
+        while 2 * root + 1 < n {
+            let mut child: i64 = 2 * root + 1
+            if child + 1 < n && arr[child + 1] > arr[child] {
+                child = child + 1
+            }
+            if arr[root] < arr[child] {
+                let t: i64 = arr[root]
+                arr[root] = arr[child]
+                arr[child] = t
+                root = child
+            } else {
+                break
+            }
+        }
+        i = i - 1
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let t: i64 = arr[0]
+        arr[0] = arr[end]
+        arr[end] = t
+        let mut root: i64 = 0
+        while 2 * root + 1 < end {
+            let mut child: i64 = 2 * root + 1
+            if child + 1 < end && arr[child + 1] > arr[child] {
+                child = child + 1
+            }
+            if arr[root] < arr[child] {
+                let t2: i64 = arr[root]
+                arr[root] = arr[child]
+                arr[child] = t2
+                root = child
+            } else {
+                break
+            }
+        }
+        end = end - 1
+    }
+}
+
+function heapsort_idx(idx: ptr<i64>, val: ptr<i64>, n: i64) -> void {
+    if n < 2 { return }
+    let mut i: i64 = n / 2 - 1
+    while i >= 0 {
+        let mut root: i64 = i
+        while 2 * root + 1 < n {
+            let mut child: i64 = 2 * root + 1
+            if child + 1 < n && val[idx[child + 1]] > val[idx[child]] {
+                child = child + 1
+            }
+            if val[idx[root]] < val[idx[child]] {
+                let t: i64 = idx[root]
+                idx[root] = idx[child]
+                idx[child] = t
+                root = child
+            } else {
+                break
+            }
+        }
+        i = i - 1
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let t: i64 = idx[0]
+        idx[0] = idx[end]
+        idx[end] = t
+        let mut root: i64 = 0
+        while 2 * root + 1 < end {
+            let mut child: i64 = 2 * root + 1
+            if child + 1 < end && val[idx[child + 1]] > val[idx[child]] {
+                child = child + 1
+            }
+            if val[idx[root]] < val[idx[child]] {
+                let t2: i64 = idx[root]
+                idx[root] = idx[child]
+                idx[child] = t2
+                root = child
+            } else {
+                break
+            }
+        }
+        end = end - 1
+    }
+}
+
+function bsearch_idx(arr: ptr<i64>, n: i64, v: i64) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = n - 1
+    while lo < hi {
+        let mid: i64 = (lo + hi) >> 1
+        if arr[mid] < v {
+            lo = mid + 1
+        } else {
+            hi = mid
+        }
+    }
+    return lo
+}
+
+function build_tree(node: i64, l: i64, r: i64) -> void {
+    let base: i64 = node * 12
+    if r - l == 1 {
+        g_seg[base] = g_y_vals[l + 1] - g_y_vals[l]
+        return
+    }
+    let mid: i64 = (l + r) >> 1
+    let left: i64 = node << 1
+    build_tree(left, l, mid)
+    build_tree(left + 1, mid, r)
+    g_seg[base] = g_seg[left * 12] + g_seg[(left + 1) * 12]
+}
+
+function apply_rot(node: i64, shift: i64) -> void {
+    if shift == 0 { return }
+    let sh: i64 = shift % 12
+    let base: i64 = node * 12
+    for i in 0..12 {
+        g_tmp12[i] = g_seg[base + ((i - sh + 12) % 12)]
+    }
+    for i in 0..12 {
+        g_seg[base + i] = g_tmp12[i]
+    }
+    let v: i64 = g_lazy[node] + sh
+    if v >= 12 {
+        g_lazy[node] = (v - 12) as i32
+    } else {
+        g_lazy[node] = v as i32
+    }
+}
+
+function push_down(node: i64) -> void {
+    let s: i64 = g_lazy[node] as i64
+    if s != 0 {
+        let left: i64 = node << 1
+        apply_rot(left, s)
+        apply_rot(left + 1, s)
+        g_lazy[node] = 0
+    }
+}
+
+function pull_up(node: i64) -> void {
+    let base: i64 = node * 12
+    let bl: i64 = (node << 1) * 12
+    let br: i64 = ((node << 1) + 1) * 12
+    for i in 0..12 {
+        g_seg[base + i] = g_seg[bl + i] + g_seg[br + i]
+    }
+}
+
+function update_tree(node: i64, l: i64, r: i64, ql: i64, qr: i64, shift: i64) -> void {
+    if ql <= l && r <= qr {
+        apply_rot(node, shift)
+        return
+    }
+    push_down(node)
+    let mid: i64 = (l + r) >> 1
+    let left: i64 = node << 1
+    if ql < mid { update_tree(left, l, mid, ql, qr, shift) }
+    if qr > mid { update_tree(left + 1, mid, r, ql, qr, shift) }
+    pull_up(node)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p790_native())
+    let t: i64 = 100000
+
+    let cap: i64 = 2 + 2 * t
+    let x_arr: ptr<i64> = malloc(cap * 8) as ptr<i64>
+    let y_arr: ptr<i64> = malloc(cap * 8) as ptr<i64>
+    let mut nx: i64 = 0
+    let mut ny: i64 = 0
+
+    x_arr[nx] = 0
+    nx = nx + 1
+    x_arr[nx] = M_VAL
+    nx = nx + 1
+    y_arr[ny] = 0
+    ny = ny + 1
+    y_arr[ny] = M_VAL
+    ny = ny + 1
+
+    let ev_x: ptr<i64> = malloc(2 * t * 8) as ptr<i64>
+    let ev_shift: ptr<i32> = malloc(2 * t * 4) as ptr<i32>
+    let ev_yl: ptr<i64> = malloc(2 * t * 8) as ptr<i64>
+    let ev_yh1: ptr<i64> = malloc(2 * t * 8) as ptr<i64>
+    let mut nev: i64 = 0
+
+    let mut s: i64 = S0
+    for i in 0..t {
+        let x1: i64 = s
+        s = (s * s) % M_VAL
+        let x2: i64 = s
+        s = (s * s) % M_VAL
+        let y1: i64 = s
+        s = (s * s) % M_VAL
+        let y2: i64 = s
+        s = (s * s) % M_VAL
+
+        let xl: i64
+        let xh: i64
+        if x1 <= x2 {
+            xl = x1
+            xh = x2
+        } else {
+            xl = x2
+            xh = x1
+        }
+        let yl: i64
+        let yh: i64
+        if y1 <= y2 {
+            yl = y1
+            yh = y2
+        } else {
+            yl = y2
+            yh = y1
+        }
+
+        let xh1: i64 = xh + 1
+        let yh1: i64 = yh + 1
+
+        x_arr[nx] = xl
+        nx = nx + 1
+        x_arr[nx] = xh1
+        nx = nx + 1
+        y_arr[ny] = yl
+        ny = ny + 1
+        y_arr[ny] = yh1
+        ny = ny + 1
+
+        ev_x[nev] = xl
+        ev_shift[nev] = 1
+        ev_yl[nev] = yl
+        ev_yh1[nev] = yh1
+        nev = nev + 1
+
+        ev_x[nev] = xh1
+        ev_shift[nev] = 11
+        ev_yl[nev] = yl
+        ev_yh1[nev] = yh1
+        nev = nev + 1
+    }
+
+    # Sort and deduplicate x and y
+    heapsort_i64(x_arr, nx)
+    heapsort_i64(y_arr, ny)
+
+    let mut num_x: i64 = 1
+    for i in 1..nx {
+        if x_arr[i] != x_arr[num_x - 1] {
+            x_arr[num_x] = x_arr[i]
+            num_x = num_x + 1
+        }
+    }
+
+    let mut num_y: i64 = 1
+    for i in 1..ny {
+        if y_arr[i] != y_arr[num_y - 1] {
+            y_arr[num_y] = y_arr[i]
+            num_y = num_y + 1
+        }
+    }
+
+    # Map event y-values to compressed indices
+    for i in 0..nev {
+        ev_yl[i] = bsearch_idx(y_arr, num_y, ev_yl[i])
+        ev_yh1[i] = bsearch_idx(y_arr, num_y, ev_yh1[i])
+    }
+
+    # Sort events by x using index array
+    let ev_idx: ptr<i64> = malloc(nev * 8) as ptr<i64>
+    for i in 0..nev {
+        ev_idx[i] = i
+    }
+    heapsort_idx(ev_idx, ev_x, nev)
+
+    # Build segment tree over y-intervals
+    let m: i64 = num_y - 1
+    let tree_size: i64 = 4 * m + 5
+    g_seg = calloc(12 * tree_size, 8) as ptr<i64>
+    g_lazy = calloc(tree_size, 4) as ptr<i32>
+    g_y_vals = y_arr
+    g_tmp12 = malloc(12 * 8) as ptr<i64>
+
+    build_tree(1, 0, m)
+
+    # Sweep along x
+    let counts: ptr<i64> = calloc(12, 8) as ptr<i64>
+
+    let mut ev_i: i64 = 0
+    for i in 0..(num_x - 1) {
+        let x: i64 = x_arr[i]
+        while ev_i < nev && ev_x[ev_idx[ev_i]] == x {
+            update_tree(1, 0, m, ev_yl[ev_idx[ev_i]], ev_yh1[ev_idx[ev_i]], ev_shift[ev_idx[ev_i]] as i64)
+            ev_i = ev_i + 1
+        }
+
+        let width: i64 = x_arr[i + 1] - x
+        if width != 0 {
+            let base: i64 = 12
+            for r in 0..12 {
+                counts[r] = counts[r] + width * g_seg[base + r]
+            }
+        }
+    }
+
+    # Convert overlap residues to displayed hours
+    let mut total: i64 = 12 * counts[0]
+    for r in 1..12 {
+        total = total + r * counts[r]
+    }
+
+    free(g_seg)
+    free(g_lazy)
+    free(g_tmp12)
+    free(x_arr)
+    free(y_arr)
+    free(ev_x)
+    free(ev_shift)
+    free(ev_yl)
+    free(ev_yh1)
+    free(ev_idx)
+    free(counts)
+
+    printf("%lld\n", total)
     return 0
 }

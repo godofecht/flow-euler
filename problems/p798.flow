@@ -1,12 +1,213 @@
 # Project Euler 798
 # Card Stacking Game: C(n, s) mod 1e9+7 with n = s = 10^7.
-# Companion: problems/native/p798.c
+# Pure Flow port of the native C solver.
 
 extern {
-    function p798_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+
+function mod_pow(a: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = a % MOD
+    if b < 0 { b = b + MOD }
+    let mut exp: i64 = e
+    while exp > 0 {
+        if exp % 2 == 1 {
+            r = r * b % MOD
+        }
+        b = b * b % MOD
+        exp = exp / 2
+    }
+    return r
+}
+
+# Global factorials and inverse factorials
+let mut fact: ptr<i64> = null
+let mut inv_fact: ptr<i64> = null
+
+function build_factorials(N: i32) -> void {
+    fact = calloc((N + 1) as i64, 8)
+    inv_fact = calloc((N + 1) as i64, 8)
+    fact[0] = 1
+    fact[1] = 1
+    let mut i: i32 = 2
+    while i <= N {
+        fact[i] = fact[i - 1] * (i as i64) % MOD
+        i = i + 1
+    }
+    inv_fact[N] = mod_pow(fact[N], MOD - 2)
+    i = N
+    while i >= 1 {
+        inv_fact[i - 1] = inv_fact[i] * (i as i64) % MOD
+        i = i - 1
+    }
+}
+
+function nCk(n: i32, k: i32) -> i64 {
+    if k < 0 || k > n { return 0 }
+    return fact[n] * inv_fact[k] % MOD * inv_fact[n - k] % MOD
+}
+
+# Walsh-Hadamard Transform (XOR) in place
+function fwht_xor(a: ptr<i64>, n: i32) -> void {
+    let mut h: i32 = 1
+    while h < n {
+        let step: i32 = h << 1
+        let mut i: i32 = 0
+        while i < n {
+            let mut j: i32 = i
+            while j < i + h {
+                let x: i64 = a[j]
+                let y: i64 = a[j + h]
+                let mut u: i64 = x + y
+                if u >= MOD { u = u - MOD }
+                let mut v: i64 = 0
+                if x >= y {
+                    v = x - y
+                } else {
+                    v = x + MOD - y
+                }
+                a[j] = u
+                a[j + h] = v
+                j = j + 1
+            }
+            i = i + step
+        }
+        h = step
+    }
+}
+
+# Q(X,k) = X*C(X+k+1,k+1) - (k+1)*C(X+k+1,k+2)
+function Q_of(X: i32, k: i32) -> i64 {
+    let n1: i32 = X + k + 1
+    let c1: i64 = nCk(n1, k + 1)
+    let c2: i64 = nCk(n1, k + 2)
+    let mut val: i64 = (X as i64) * c1 - ((k + 1) as i64) * c2
+    val = val % MOD
+    if val < 0 { val = val + MOD }
+    return val
+}
+
+# Build single-suit Grundy distribution, padded to length L
+function build_single_suit(a: ptr<i64>, n: i32, L: i32) -> void {
+    memset(a, 0, (L as i64) * 8)
+    if n <= 0 { return }
+    if n == 1 {
+        a[0] = 2
+        return
+    }
+
+    build_factorials(n)
+
+    let pow2_n2: i64 = mod_pow(2, (n - 2) as i64)
+    let a0: i64 = (pow2_n2 + 2) % MOD
+    let a1: i64 = (pow2_n2 + (n - 2) as i64) % MOD
+    a[0] = a0
+    if n > 1 { a[1] = a1 }
+    if n > 2 {
+        let pow2_n3: i64 = mod_pow(2, (n - 3) as i64)
+        a[2] = (pow2_n3 + (n - 3) as i64) % MOD
+    }
+
+    let inv4: i64 = mod_pow(4, MOD - 2)
+
+    # Odd Grundy values: g = 2k+3, starting at (X0=n-4, k=0)
+    let X0a: i32 = n - 4
+    if 3 < n && X0a >= 0 {
+        let mut k: i32 = 0
+        let mut X: i32 = X0a
+        let mut F: i64 = (mod_pow(2, (X + 1) as i64) + MOD - 1) % MOD
+        while true {
+            let g: i32 = 2 * k + 3
+            if g >= n || X < 0 { break }
+            a[g] = (F + Q_of(X, k)) % MOD
+
+            if X < 2 { break }
+            let c_xk_1: i64 = nCk(X + k - 1, k)
+            let c_xk: i64 = nCk(X + k, k)
+            let mut tmp: i64 = F - 2 * c_xk_1 - c_xk
+            tmp = tmp % MOD
+            if tmp < 0 { tmp = tmp + MOD }
+            tmp = tmp * inv4 % MOD
+            let c_next: i64 = nCk(X + k - 1, k + 1)
+            F = (2 * tmp - c_next) % MOD
+            if F < 0 { F = F + MOD }
+            k = k + 1
+            X = X - 2
+        }
+    }
+
+    # Even Grundy values: g = 2k+4, starting at (X0=n-5, k=0)
+    let X0b: i32 = n - 5
+    if 4 < n && X0b >= 0 {
+        let mut k: i32 = 0
+        let mut X: i32 = X0b
+        let mut F: i64 = (mod_pow(2, (X + 1) as i64) + MOD - 1) % MOD
+        while true {
+            let g: i32 = 2 * k + 4
+            if g >= n || X < 0 { break }
+            a[g] = (F + Q_of(X, k)) % MOD
+
+            if X < 2 { break }
+            let c_xk_1: i64 = nCk(X + k - 1, k)
+            let c_xk: i64 = nCk(X + k, k)
+            let mut tmp: i64 = F - 2 * c_xk_1 - c_xk
+            tmp = tmp % MOD
+            if tmp < 0 { tmp = tmp + MOD }
+            tmp = tmp * inv4 % MOD
+            let c_next: i64 = nCk(X + k - 1, k + 1)
+            F = (2 * tmp - c_next) % MOD
+            if F < 0 { F = F + MOD }
+            k = k + 1
+            X = X - 2
+        }
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p798_native())
+    let n: i32 = 10000000
+    let s: i32 = 10000000
+
+    if n == 0 {
+        printf("1\n")
+        return 0
+    }
+
+    # L = next power of 2 >= n
+    let mut L: i32 = 1
+    while L < n {
+        L = L << 1
+    }
+
+    let f: ptr<i64> = calloc(L as i64, 8)
+    build_single_suit(f, n, L)
+
+    # Free factorials to save memory
+    free(fact)
+    free(inv_fact)
+
+    fwht_xor(f, L)
+
+    # Pointwise exponentiation and sum
+    let mut total: i64 = 0
+    let mut i: i32 = 0
+    while i < L {
+        total = total + mod_pow(f[i], s as i64)
+        if i % 8192 == 0 {
+            total = total % MOD
+        }
+        i = i + 1
+    }
+    total = total % MOD
+
+    let inv_L: i64 = mod_pow(L as i64, MOD - 2)
+    let result: i64 = total * inv_L % MOD
+
+    free(f)
+    printf("%lld\n", result)
     return 0
 }

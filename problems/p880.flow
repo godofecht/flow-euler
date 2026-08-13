@@ -1,8 +1,220 @@
+# Project Euler 880
+# Nested Radicals: Compute H(10^15) mod (1031^3 + 2).
+
 extern {
-    function p880_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function round(x: f64) -> f64
+}
+
+const MOD: i64 = 1095930893
+const N: i64 = 1000000000000000
+
+let mut g_spf: ptr<i32> = null
+
+function icbrt(n: i64) -> i64 {
+    if n <= 1 { return n }
+    let mut r: i64 = round(exp(log(n as f64) / 3.0)) as i64
+    while (r + 1) * (r + 1) * (r + 1) <= n { r = r + 1 }
+    while r * r * r > n { r = r - 1 }
+    return r
+}
+
+function iroot4(n: i64) -> i64 {
+    let mut r: i64 = sqrt(sqrt(n as f64)) as i64
+    let n128: i128 = n as i128
+    while ((r + 1) as i128) * ((r + 1) as i128) * ((r + 1) as i128) * ((r + 1) as i128) <= n128 { r = r + 1 }
+    while (r as i128) * (r as i128) * (r as i128) * (r as i128) > n128 { r = r - 1 }
+    return r
+}
+
+function isqrt_ll(n: i64) -> i64 {
+    if n < 0 { return 0 }
+    let mut r: i64 = sqrt(n as f64) as i64
+    while (r + 1) * (r + 1) <= n { r = r + 1 }
+    while r * r > n { r = r - 1 }
+    return r
+}
+
+function gcd_int(a0: i32, b0: i32) -> i32 {
+    let mut a: i32 = a0
+    let mut b: i32 = b0
+    while b != 0 {
+        let t: i32 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function build_spf(limit: i32) -> void {
+    g_spf = calloc((limit + 1) as i64, 4)
+    let mut i: i32 = 0
+    while i <= limit {
+        g_spf[i] = i
+        i = i + 1
+    }
+    g_spf[1] = 1
+    let mut p: i32 = 2
+    while (p as i64) * (p as i64) <= (limit as i64) {
+        if g_spf[p] == p {
+            let mut m: i32 = p * p
+            while m <= limit {
+                if g_spf[m] == m { g_spf[m] = p }
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+}
+
+function cube_free_table(limit: i32) -> ptr<i32> {
+    build_spf(limit)
+    let cf: ptr<i32> = calloc((limit + 1) as i64, 4)
+    cf[0] = 1
+    cf[1] = 1
+    let mut n: i32 = 2
+    while n <= limit {
+        let p: i32 = g_spf[n]
+        let mut m: i32 = n / p
+        let mut e: i32 = 1
+        while m % p == 0 {
+            m = m / p
+            e = e + 1
+        }
+        let rem: i32 = e % 3
+        if rem == 0 {
+            cf[n] = cf[m]
+        } else {
+            if rem == 1 {
+                cf[n] = cf[m] * p
+            } else {
+                cf[n] = cf[m] * p * p
+            }
+        }
+        n = n + 1
+    }
+    return cf
+}
+
+function sumsq_mod(k: i64, mod: i64) -> i64 {
+    let val: i128 = (k as i128) * ((k + 1) as i128) * ((2 * k + 1) as i128) / 6
+    return (val % (mod as i128)) as i64
+}
+
+function mulmod(a0: i64, b0: i64, m: i64) -> i64 {
+    let a_w: i128 = a0 as i128
+    let b_w: i128 = b0 as i128
+    let m_w: i128 = m as i128
+    let r: i128 = (a_w * b_w) % m_w
+    return r as i64
+}
+
+function H_mod(limit: i64) -> i64 {
+    let b_limit: i64 = iroot4(4 * limit)
+
+    let mut max_odd_a: i64 = 0
+    let c_odd: i64 = icbrt(limit)
+    if c_odd > 1 { max_odd_a = (c_odd - 1) / 4 }
+
+    let mut max_even_a: i64 = 0
+    let c_even: i64 = icbrt(limit / 4)
+    if c_even > 1 { max_even_a = (c_even - 1) / 2 }
+
+    let mut cf_limit_val: i64 = 4 * max_odd_a
+    if max_even_a > cf_limit_val { cf_limit_val = max_even_a }
+    if 2 * b_limit > cf_limit_val { cf_limit_val = 2 * b_limit }
+
+    let cf_limit: i32 = cf_limit_val as i32
+    let cf: ptr<i32> = cube_free_table(cf_limit)
+
+    let cf4: ptr<i32> = calloc(max_odd_a + 1, 4)
+    cf4[0] = 0
+    let mut a_init: i64 = 1
+    while a_init <= max_odd_a {
+        cf4[a_init] = cf[4 * a_init]
+        a_init = a_init + 1
+    }
+
+    let mut total: i64 = 0
+    let mod_val: i64 = MOD
+
+    # Odd b
+    let mut b: i64 = 1
+    while b <= b_limit {
+        let a_limit: i64 = (icbrt(limit / b) - b) / 4
+        let cf_b: i32 = cf[b]
+        let mut a: i64 = 1
+        while a <= a_limit {
+            if gcd_int(a as i32, b as i32) == 1 && cf_b != cf4[a] {
+                let x_base: i64 = b + 4 * a
+                let x: i128 = (b as i128) * (x_base as i128) * (x_base as i128) * (x_base as i128)
+                let y_base: i64 = a - 2 * b
+                let yc: i128 = (y_base as i128) * (y_base as i128) * (y_base as i128)
+                let mut yc_abs: i128 = yc
+                if yc_abs < 0 { yc_abs = 0 - yc_abs }
+                let y_abs: i128 = 4 * (a as i128) * yc_abs
+
+                let mut max_coord: i128 = x
+                if y_abs > x { max_coord = y_abs }
+                if max_coord <= (limit as i128) {
+                    let mc: i64 = max_coord as i64
+                    let tmax: i64 = isqrt_ll(limit / mc)
+                    let s: i64 = sumsq_mod(tmax, mod_val)
+                    let xy_mod: i64 = ((x + y_abs) % (mod_val as i128)) as i64
+                    let contribution: i64 = mulmod(xy_mod, s, mod_val)
+                    total = (total + contribution) % mod_val
+                }
+            }
+            a = a + 1
+        }
+        b = b + 2
+    }
+
+    # Even b
+    b = 2
+    while b <= b_limit {
+        let half_b: i64 = b / 2
+        let a_limit: i64 = (icbrt(limit / (2 * b)) - half_b) / 2
+        let cf_2b: i32 = cf[2 * b]
+        let mut a: i64 = 1
+        while a <= a_limit {
+            if gcd_int(a as i32, b as i32) == 1 && cf_2b != cf[a] {
+                let x_base: i64 = half_b + 2 * a
+                let x: i128 = (2 as i128) * (b as i128) * (x_base as i128) * (x_base as i128) * (x_base as i128)
+                let y_base: i64 = a - 2 * b
+                let yc: i128 = (y_base as i128) * (y_base as i128) * (y_base as i128)
+                let mut yc_abs: i128 = yc
+                if yc_abs < 0 { yc_abs = 0 - yc_abs }
+                let y_abs: i128 = (a as i128) * yc_abs
+
+                let mut max_coord: i128 = x
+                if y_abs > x { max_coord = y_abs }
+                if max_coord <= (limit as i128) {
+                    let mc: i64 = max_coord as i64
+                    let tmax: i64 = isqrt_ll(limit / mc)
+                    let s: i64 = sumsq_mod(tmax, mod_val)
+                    let xy_mod: i64 = ((x + y_abs) % (mod_val as i128)) as i64
+                    let contribution: i64 = mulmod(xy_mod, s, mod_val)
+                    total = (total + contribution) % mod_val
+                }
+            }
+            a = a + 2
+        }
+        b = b + 2
+    }
+
+    free(cf)
+    free(cf4)
+    free(g_spf)
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p880_native())
+    let ans: i64 = H_mod(N) % MOD
+    printf("%lld\n", ans)
     return 0
 }

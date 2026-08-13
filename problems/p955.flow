@@ -1,11 +1,285 @@
 # Project Euler 955: Finding Triangles
 # Index of the 70th triangular term in the sequence.
+# Uses i128 arithmetic, Miller-Rabin, Pollard's rho factorization.
 
 extern {
-    function p955_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+# gcd for i128
+function gcd128(a0: i128, b0: i128) -> i128 {
+    let mut a: i128 = a0
+    if a < 0 { a = 0 - a }
+    let mut b: i128 = b0
+    if b < 0 { b = 0 - b }
+    while b != 0 {
+        let t: i128 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+# (a * b) mod n for i128, overflow-safe
+function mulmod128(a0: i128, b0: i128, n: i128) -> i128 {
+    # If both fit in 62 bits, direct multiply fits in i128
+    if a0 >= 0 - ((1 as i128) << 62) && a0 < ((1 as i128) << 62) &&
+       b0 >= 0 - ((1 as i128) << 62) && b0 < ((1 as i128) << 62) {
+        return a0 * b0 % n
+    }
+    # Binary multiplication, overflow-safe
+    let mut a: i128 = a0 % n
+    if a < 0 { a = a + n }
+    let mut b: i128 = b0 % n
+    if b < 0 { b = b + n }
+    let mut result: i128 = 0
+    while b > 0 {
+        if (b & 1) != 0 {
+            if result >= n - a {
+                result = result - (n - a)
+            } else {
+                result = result + a
+            }
+        }
+        if a >= n - a {
+            a = a - (n - a)
+        } else {
+            a = a + a
+        }
+        b = b >> 1
+    }
+    return result
+}
+
+function powmod128(base0: i128, exp0: i128, n: i128) -> i128 {
+    let mut r: i128 = 1 % n
+    let mut b: i128 = base0 % n
+    if b < 0 { b = b + n }
+    let mut exp: i128 = exp0
+    while exp > 0 {
+        if (exp & 1) != 0 {
+            r = mulmod128(r, b, n)
+        }
+        b = mulmod128(b, b, n)
+        exp = exp >> 1
+    }
+    return r
+}
+
+function is_prime128(n: i128) -> bool {
+    if n < 2 { return false }
+    let small: array<i64, 10> = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+    let mut i: i64 = 0
+    while i < 10 {
+        if n % (small[i] as i128) == 0 { return n == (small[i] as i128) }
+        i = i + 1
+    }
+    let mut d: i128 = n - 1
+    let mut s: i64 = 0
+    while (d & 1) == 0 {
+        s = s + 1
+        d = d >> 1
+    }
+    let bases: array<i64, 7> = [2, 325, 9375, 28178, 450775, 9780504, 1795265022]
+    let mut bi: i64 = 0
+    while bi < 7 {
+        let a: i128 = (bases[bi] as i128) % n
+        if a == 0 {
+            bi = bi + 1
+            continue
+        }
+        let mut x: i128 = powmod128(a, d, n)
+        if x == 1 || x == n - 1 {
+            bi = bi + 1
+            continue
+        }
+        let mut composite: bool = true
+        let mut j: i64 = 0
+        while j < s - 1 {
+            x = mulmod128(x, x, n)
+            if x == n - 1 {
+                composite = false
+                break
+            }
+            j = j + 1
+        }
+        if composite { return false }
+        bi = bi + 1
+    }
+    return true
+}
+
+let mut rng_state: i64 = 123456789
+
+function rng_next(modv: i64) -> i64 {
+    rng_state = rng_state * 6364136223846793005 + 1
+    let mut v: i64 = rng_state
+    if v < 0 { v = 0 - v }
+    return v % modv
+}
+
+function pollard_rho(n: i128) -> i128 {
+    if n % 2 == 0 { return 2 }
+    if n % 3 == 0 { return 3 }
+    while true {
+        let mut x: i128 = (2 + rng_next(1000000007)) as i128 % n
+        let mut y: i128 = x
+        let c: i128 = (1 + rng_next(1000000007)) as i128 % n
+        let mut d: i128 = 1
+        while d == 1 {
+            x = mulmod128(x, x, n)
+            x = x + c
+            if x >= n { x = x - n }
+            y = mulmod128(y, y, n)
+            y = y + c
+            if y >= n { y = y - n }
+            y = mulmod128(y, y, n)
+            y = y + c
+            if y >= n { y = y - n }
+            let mut diff: i128 = x - y
+            if diff < 0 { diff = 0 - diff }
+            d = gcd128(diff, n)
+        }
+        if d != n { return d }
+    }
+    return 0
+}
+
+# Factorization storage
+let mut fac_p: ptr<i128> = null
+let mut fac_e: ptr<i64> = null
+let mut fac_count: i64 = 0
+
+function factor_rec(n: i128) -> void {
+    if n == 1 { return }
+    if is_prime128(n) {
+        let mut i: i64 = 0
+        while i < fac_count {
+            if fac_p[i] == n {
+                fac_e[i] = fac_e[i] + 1
+                return
+            }
+            i = i + 1
+        }
+        fac_p[fac_count] = n
+        fac_e[fac_count] = 1
+        fac_count = fac_count + 1
+        return
+    }
+    let d: i128 = pollard_rho(n)
+    factor_rec(d)
+    factor_rec(n / d)
+}
+
+# Heapsort for i128
+function sift_down(arr: ptr<i128>, start: i64, end: i64) -> void {
+    let mut root: i64 = start
+    while 2 * root + 1 <= end {
+        let mut child: i64 = 2 * root + 1
+        if child + 1 <= end && arr[child] < arr[child + 1] {
+            child = child + 1
+        }
+        if arr[root] < arr[child] {
+            let tmp: i128 = arr[root]
+            arr[root] = arr[child]
+            arr[child] = tmp
+            root = child
+        } else {
+            break
+        }
+    }
+}
+
+function heapsort_i128(arr: ptr<i128>, n: i64) -> void {
+    if n <= 1 { return }
+    let mut start: i64 = n / 2 - 1
+    while start >= 0 {
+        sift_down(arr, start, n - 1)
+        start = start - 1
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let tmp: i128 = arr[0]
+        arr[0] = arr[end]
+        arr[end] = tmp
+        end = end - 1
+        sift_down(arr, 0, end)
+    }
+}
+
+let mut g_divisors: ptr<i128> = null
+let mut g_nd: i64 = 0
+
+function all_divisors(n: i128) -> void {
+    fac_p = malloc(64 * 16)
+    fac_e = malloc(64 * 8)
+    fac_count = 0
+    factor_rec(n)
+
+    g_divisors = malloc(50000 * 16)
+    let mut nd: i64 = 1
+    g_divisors[0] = 1
+    let mut i: i64 = 0
+    while i < fac_count {
+        let old: i64 = nd
+        let mut pe: i128 = 1
+        let mut e: i64 = 0
+        while e < fac_e[i] {
+            pe = pe * fac_p[i]
+            let mut j: i64 = 0
+            while j < old {
+                g_divisors[nd] = g_divisors[j] * pe
+                nd = nd + 1
+                j = j + 1
+            }
+            e = e + 1
+        }
+        i = i + 1
+    }
+    heapsort_i128(g_divisors, nd)
+    g_nd = nd
+    free(fac_p)
+    free(fac_e)
+}
+
+let mut out_k: i128 = 0
+let mut out_a: i128 = 0
+
+function next_triangle_jump(a_tri: i128) -> void {
+    let M: i128 = 2 * a_tri
+    all_divisors(M)
+    let mut i: i64 = 0
+    while i < g_nd {
+        let x: i128 = g_divisors[i]
+        let y: i128 = M / x
+        if (x - y) & 1 != 0 {
+            let k: i128 = (x - y - 1) / 2
+            if k > 0 {
+                out_k = k
+                out_a = a_tri + k * (k + 1) / 2
+                free(g_divisors)
+                return
+            }
+        }
+        i = i + 1
+    }
+    free(g_divisors)
+    out_k = 0 - 1
+    out_a = 0 - 1
 }
 
 function main() -> i32 {
-    printf("%lld\n", p955_native())
+    let mut n: i128 = 0
+    let mut a: i128 = 3
+    let mut i: i64 = 0
+    while i < 69 {
+        next_triangle_jump(a)
+        n = n + out_k
+        a = out_a
+        i = i + 1
+    }
+    printf("%lld\n", n as i64)
     return 0
 }

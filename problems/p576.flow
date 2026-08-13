@@ -2,10 +2,389 @@
 # Irrational Jumps — piecewise S(l,g,d) merge for max sum.
 
 extern {
-    function pe576_answer() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+    function fabs(x: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+struct Seg {
+    ends: ptr<f64>,
+    vals: ptr<f64>,
+    n: i32
+}
+
+function sift_down(arr: ptr<f64>, start: i64, end: i64) -> void {
+    let mut root: i64 = start
+    while 2 * root + 1 < end {
+        let mut child: i64 = 2 * root + 1
+        if child + 1 < end {
+            if arr[child] < arr[child + 1] {
+                child = child + 1
+            }
+        }
+        if arr[root] < arr[child] {
+            let tmp: f64 = arr[root]
+            arr[root] = arr[child]
+            arr[child] = tmp
+            root = child
+        } else {
+            return
+        }
+    }
+}
+
+function sort_doubles(arr: ptr<f64>, n: i64) -> void {
+    if n < 2 { return }
+    let mut start: i64 = n / 2
+    while start > 0 {
+        start = start - 1
+        sift_down(arr, start, n)
+    }
+    let mut end: i64 = n
+    while end > 1 {
+        end = end - 1
+        let tmp: f64 = arr[0]
+        arr[0] = arr[end]
+        arr[end] = tmp
+        sift_down(arr, 0, end)
+    }
+}
+
+function bisect_left(a: ptr<f64>, n: i32, x: f64) -> i32 {
+    let mut lo: i32 = 0
+    let mut hi: i32 = n
+    while lo < hi {
+        let mid: i32 = lo + (hi - lo) / 2
+        if a[mid] < x {
+            lo = mid + 1
+        } else {
+            hi = mid
+        }
+    }
+    return lo
+}
+
+function findp(parent: ptr<i32>, i0: i32) -> i32 {
+    let mut i: i32 = i0
+    while parent[i] != i {
+        parent[i] = parent[parent[i]]
+        i = parent[i]
+    }
+    return i
+}
+
+function build_piecewise(l: f64, g: f64) -> Seg {
+    let domain_end: f64 = 1.0 - g
+    let mut K: i32 = (1.5 / g) as i32
+    if K < 10 { K = 10 }
+
+    while true {
+        if K > 4000000 {
+            return Seg { ends: null, vals: null, n: 0 }
+        }
+        let starts: ptr<f64> = malloc((K as i64) * 8) as ptr<f64>
+        let ends_arr: ptr<f64> = malloc((K as i64) * 8) as ptr<f64>
+        let labels: ptr<i32> = malloc((K as i64) * 4) as ptr<i32>
+        let nint: i32 = 0
+        let endpoints: ptr<f64> = malloc(((2 * K + 2) as i64) * 8) as ptr<f64>
+        let nep: i32 = 0
+        endpoints[0] = 0.0
+        nep = 1
+        endpoints[1] = domain_end
+        nep = 2
+
+        let mut x: f64 = 0.0
+        let mut k: i32 = 1
+        while k <= K {
+            x = x + l
+            x = x - floor(x)
+            let s: f64 = x - g
+            let e: f64 = x
+            if e <= 0.0 || s >= domain_end {
+                k = k + 1
+                continue
+            }
+            let mut ss: f64 = s
+            let mut ee: f64 = e
+            if ss < 0.0 { ss = 0.0 }
+            if ee > domain_end { ee = domain_end }
+            if ss < ee {
+                starts[nint] = ss
+                ends_arr[nint] = ee
+                labels[nint] = k
+                endpoints[nep] = ss
+                nep = nep + 1
+                endpoints[nep] = ee
+                nep = nep + 1
+                nint = nint + 1
+            }
+            k = k + 1
+        }
+
+        sort_doubles(endpoints, nep as i64)
+
+        let nu: i32 = 0
+        let mut i: i32 = 0
+        while i < nep {
+            if nu == 0 || endpoints[i] != endpoints[nu - 1] {
+                endpoints[nu] = endpoints[i]
+                nu = nu + 1
+            }
+            i = i + 1
+        }
+
+        let num_cells: i32 = nu - 1
+        let parent: ptr<i32> = malloc(((num_cells + 1) as i64) * 4) as ptr<i32>
+        let values: ptr<i32> = calloc(num_cells as i64, 4) as ptr<i32>
+
+        i = 0
+        while i <= num_cells {
+            parent[i] = i
+            i = i + 1
+        }
+
+        let mut t: i32 = 0
+        while t < nint {
+            let bi: i32 = bisect_left(endpoints, nu, starts[t])
+            let bj: i32 = bisect_left(endpoints, nu, ends_arr[t])
+            let mut idx: i32 = findp(parent, bi)
+            while idx < bj {
+                values[idx] = labels[t]
+                parent[idx] = idx + 1
+                idx = findp(parent, idx)
+            }
+            t = t + 1
+        }
+
+        if findp(parent, 0) == num_cells {
+            let seg_ends: ptr<f64> = malloc(((num_cells + 1) as i64) * 8) as ptr<f64>
+            let seg_vals: ptr<f64> = malloc(((num_cells + 1) as i64) * 8) as ptr<f64>
+            let seg_n: i32 = 0
+            let mut curr: i32 = values[0]
+            i = 1
+            while i < num_cells {
+                if values[i] != curr {
+                    seg_ends[seg_n] = endpoints[i]
+                    seg_vals[seg_n] = (curr as f64) * l
+                    seg_n = seg_n + 1
+                    curr = values[i]
+                }
+                i = i + 1
+            }
+            seg_ends[seg_n] = domain_end
+            seg_vals[seg_n] = (curr as f64) * l
+            seg_n = seg_n + 1
+
+            free(starts)
+            free(ends_arr)
+            free(labels)
+            free(endpoints)
+            free(parent)
+            free(values)
+            return Seg { ends: seg_ends, vals: seg_vals, n: seg_n }
+        }
+
+        free(starts)
+        free(ends_arr)
+        free(labels)
+        free(endpoints)
+        free(parent)
+        free(values)
+        K = K * 2
+    }
+    return Seg { ends: null, vals: null, n: 0 }
+}
+
+function hpush(heap_keys: ptr<f64>, heap_ids: ptr<i32>, hn0: i32, key: f64, id: i32) -> i32 {
+    let mut n: i32 = hn0
+    let mut i: i32 = n
+    n = n + 1
+    heap_keys[i] = key
+    heap_ids[i] = id
+    while i > 0 {
+        let p: i32 = (i - 1) / 2
+        if heap_keys[p] <= heap_keys[i] { break }
+        let tk: f64 = heap_keys[p]
+        let ti: i32 = heap_ids[p]
+        heap_keys[p] = heap_keys[i]
+        heap_ids[p] = heap_ids[i]
+        heap_keys[i] = tk
+        heap_ids[i] = ti
+        i = p
+    }
+    return n
+}
+
+function hpop(heap_keys: ptr<f64>, heap_ids: ptr<i32>, hn0: i32, out_id: ptr<i32>) -> i32 {
+    out_id[0] = heap_ids[0]
+    let mut n: i32 = hn0 - 1
+    heap_keys[0] = heap_keys[n]
+    heap_ids[0] = heap_ids[n]
+    let mut i: i32 = 0
+    while true {
+        let l: i32 = 2 * i + 1
+        let rg: i32 = 2 * i + 2
+        let mut sm: i32 = i
+        if l < n {
+            if heap_keys[l] < heap_keys[sm] { sm = l }
+        }
+        if rg < n {
+            if heap_keys[rg] < heap_keys[sm] { sm = rg }
+        }
+        if sm == i { break }
+        let tk: f64 = heap_keys[i]
+        let ti: i32 = heap_ids[i]
+        heap_keys[i] = heap_keys[sm]
+        heap_ids[i] = heap_ids[sm]
+        heap_keys[sm] = tk
+        heap_ids[sm] = ti
+        i = sm
+    }
+    return n
+}
+
+function merge_max_sum(seg_ends_arr: ptr<ptr<f64> >, seg_vals_arr: ptr<ptr<f64> >, seg_n_arr: ptr<i32>, P: i32, domain_end: f64) -> f64 {
+    let idx: ptr<i32> = calloc(P as i64, 4) as ptr<i32>
+    let cur: ptr<f64> = malloc((P as i64) * 8) as ptr<f64>
+    let mut total: f64 = 0.0
+    let mut i: i32 = 0
+    while i < P {
+        cur[i] = seg_vals_arr[i][0]
+        total = total + cur[i]
+        i = i + 1
+    }
+
+    let heap_keys: ptr<f64> = malloc(((P * 2 + 8) as i64) * 8) as ptr<f64>
+    let heap_ids: ptr<i32> = malloc(((P * 2 + 8) as i64) * 4) as ptr<i32>
+    let mut hn: i32 = 0
+    i = 0
+    while i < P {
+        hn = hpush(heap_keys, heap_ids, hn, seg_ends_arr[i][0], i)
+        i = i + 1
+    }
+
+    let mut cur_pos: f64 = 0.0
+    let mut best: f64 = total
+    let eps: f64 = 1e-15
+    let aff: ptr<i32> = malloc(512 * 4) as ptr<i32>
+
+    while hn > 0 {
+        let boundary: f64 = heap_keys[0]
+        if boundary > cur_pos + 1e-18 {
+            if total > best { best = total }
+        }
+        let na: i32 = 0
+        while hn > 0 && fabs(heap_keys[0] - boundary) <= eps {
+            let out_id: ptr<i32> = calloc(1, 4) as ptr<i32>
+            hn = hpop(heap_keys, heap_ids, hn, out_id)
+            if na < 512 {
+                aff[na] = out_id[0]
+                na = na + 1
+            }
+            free(out_id)
+        }
+        cur_pos = boundary
+        if cur_pos >= domain_end - 1e-15 { break }
+        let mut a: i32 = 0
+        while a < na {
+            let ii: i32 = aff[a]
+            let old: f64 = cur[ii]
+            idx[ii] = idx[ii] + 1
+            let nv: f64 = seg_vals_arr[ii][idx[ii]]
+            cur[ii] = nv
+            total = total + nv - old
+            hn = hpush(heap_keys, heap_ids, hn, seg_ends_arr[ii][idx[ii]], ii)
+            a = a + 1
+        }
+    }
+
+    free(idx)
+    free(cur)
+    free(heap_keys)
+    free(heap_ids)
+    free(aff)
+    return best
+}
+
+function primes_up_to(n: i32, outc: ptr<i32>) -> ptr<i32> {
+    let sv: ptr<i8> = calloc((n + 1) as i64, 1) as ptr<i8>
+    let mut i: i32 = 0
+    while i <= n {
+        sv[i] = 1
+        i = i + 1
+    }
+    sv[0] = 0
+    sv[1] = 0
+    let r: i32 = sqrt((n as f64)) as i32
+    i = 2
+    while i <= r {
+        if sv[i] == 1 {
+            let mut j: i64 = (i as i64) * (i as i64)
+            while j <= (n as i64) {
+                sv[j] = 0
+                j = j + (i as i64)
+            }
+        }
+        i = i + 1
+    }
+    let mut c: i32 = 0
+    i = 2
+    while i <= n {
+        if sv[i] == 1 { c = c + 1 }
+        i = i + 1
+    }
+    let ps: ptr<i32> = malloc((c as i64) * 4) as ptr<i32>
+    c = 0
+    i = 2
+    while i <= n {
+        if sv[i] == 1 {
+            ps[c] = i
+            c = c + 1
+        }
+        i = i + 1
+    }
+    free(sv)
+    outc[0] = c
+    return ps
 }
 
 function main() -> i32 {
-    printf("%.4f\n", pe576_answer())
+    let n: i32 = 100
+    let g: f64 = 0.00002
+    let outc: ptr<i32> = calloc(1, 4) as ptr<i32>
+    let ps: ptr<i32> = primes_up_to(n, outc)
+    let npc: i32 = outc[0]
+    free(outc)
+
+    let seg_ends_arr: ptr<ptr<f64> > = calloc(npc as i64, 8) as ptr<ptr<f64> >
+    let seg_vals_arr: ptr<ptr<f64> > = calloc(npc as i64, 8) as ptr<ptr<f64> >
+    let seg_n_arr: ptr<i32> = calloc(npc as i64, 4) as ptr<i32>
+
+    let mut i: i32 = 0
+    while i < npc {
+        let seg: Seg = build_piecewise(1.0 / sqrt((ps[i] as f64)), g)
+        seg_ends_arr[i] = seg.ends
+        seg_vals_arr[i] = seg.vals
+        seg_n_arr[i] = seg.n
+        i = i + 1
+    }
+
+    let ans: f64 = merge_max_sum(seg_ends_arr, seg_vals_arr, seg_n_arr, npc, 1.0 - g)
+
+    i = 0
+    while i < npc {
+        free(seg_ends_arr[i])
+        free(seg_vals_arr[i])
+        i = i + 1
+    }
+    free(seg_ends_arr)
+    free(seg_vals_arr)
+    free(seg_n_arr)
+    free(ps)
+
+    printf("%.4f\n", ans)
     return 0
 }

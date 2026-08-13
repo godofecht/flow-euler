@@ -1,11 +1,368 @@
 # Project Euler 908: Clock Sequence II
-# C(10^4) mod 1111211113 via moduli generation, binomial coefficients, and Mobius inversion.
+# Compute C(10^4) mod 1111211113.
+# Port of the C reference solver: moduli generation, binomial coefficients, Mobius inversion.
 
 extern {
-    function p908_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1111211113
+const N: i64 = 10000
+
+# Global pairs buffer for moduli generation
+let mut pairs_buf: ptr<i64> = null
+let mut pairs_count: i64 = 0
+let mut pairs_cap: i64 = 0
+
+# Options per prime: stored as flat arrays (all opts for all primes in one buffer)
+# opt_all_m[prime_idx * 64 + oi], opt_all_k[prime_idx * 64 + oi]
+let mut opt_all_m: ptr<i64> = null
+let mut opt_all_k: ptr<i64> = null
+let mut opt_counts: ptr<i32> = null
+
+function gcd64(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function add_pair(m: i64, k: i64) -> void {
+    if pairs_count >= pairs_cap {
+        let new_cap: i64 = 1024
+        if pairs_cap > 0 {
+            new_cap = pairs_cap * 2
+        }
+        let new_buf: ptr<i64> = calloc(new_cap * 2, 8)
+        let mut i: i64 = 0
+        while i < pairs_count {
+            new_buf[i * 2] = pairs_buf[i * 2]
+            new_buf[i * 2 + 1] = pairs_buf[i * 2 + 1]
+            i = i + 1
+        }
+        if pairs_buf != null {
+            free(pairs_buf)
+        }
+        pairs_buf = new_buf
+        pairs_cap = new_cap
+    }
+    pairs_buf[pairs_count * 2] = m
+    pairs_buf[pairs_count * 2 + 1] = k
+    pairs_count = pairs_count + 1
+}
+
+# k(p^e)
+function k_prime_power(p: i64, e: i64) -> i64 {
+    if e <= 0 {
+        return 1
+    }
+    if p == 2 {
+        let mut result: i64 = 1
+        let mut i: i64 = 0
+        while i < e {
+            result = result * 2
+            i = i + 1
+        }
+        return result
+    }
+    let mut k: i64 = (p + 1) / 2
+    let mut exp: i64 = 2
+    while exp <= e {
+        if (exp % 2) == 0 {
+            k = p * k - (p - 1)
+        } else {
+            k = p * k - (p - 1) / 2
+        }
+        exp = exp + 1
+    }
+    return k
+}
+
+# DFS to generate all (m, k) pairs with k <= max_k
+function dfs_moduli(start_idx: i64, num_primes: i64, primes: ptr<i64>,
+                    m_cur: i64, k_cur: i64, max_k: i64) -> void {
+    add_pair(m_cur, k_cur)
+    let mut j: i64 = start_idx
+    while j < num_primes {
+        let p: i64 = primes[j]
+        let oc: i32 = opt_counts[j]
+        if oc == 0 {
+            j = j + 1
+            continue
+        }
+        # smallest k-factor for this prime
+        if k_cur * opt_all_k[j * 64 + 0] > max_k {
+            break
+        }
+        let mut oi: i64 = 0
+        while oi < (oc as i64) {
+            let mp: i64 = opt_all_m[j * 64 + oi]
+            let kp: i64 = opt_all_k[j * 64 + oi]
+            let k_new: i64 = k_cur * kp
+            if k_new > max_k {
+                break
+            }
+            let m_new: i128 = (m_cur as i128) * (mp as i128)
+            dfs_moduli(j + 1, num_primes, primes, m_new as i64, k_new, max_k)
+            oi = oi + 1
+        }
+        j = j + 1
+    }
+}
+
+# Generate moduli (m, k(m)) with k(m) <= max_k
+# Returns pairs in pairs_buf, count in pairs_count
+function generate_moduli(max_k: i64) -> void {
+    # Sieve primes up to 2*max_k
+    let limit: i64 = 2 * max_k
+    let is_comp: ptr<i8> = calloc(limit + 1, 1)
+    let primes: ptr<i64> = calloc(limit + 1, 8)
+    let mut pc: i64 = 0
+    let mut p: i64 = 2
+    while p <= limit {
+        if is_comp[p] == 0 {
+            primes[pc] = p
+            pc = pc + 1
+            let mut m: i64 = p * p
+            while m <= limit {
+                is_comp[m] = 1
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    # Build options for each prime
+    opt_all_m = calloc(pc * 64, 8)
+    opt_all_k = calloc(pc * 64, 8)
+    opt_counts = calloc(pc, 4)
+
+    let mut j: i64 = 0
+    while j < pc {
+        let pr: i64 = primes[j]
+        let mut oc: i64 = 0
+        if pr == 2 {
+            let mut m: i64 = 2
+            let mut k: i64 = 2
+            while k <= max_k {
+                opt_all_m[j * 64 + oc] = m
+                opt_all_k[j * 64 + oc] = k
+                oc = oc + 1
+                m = m * 2
+                k = k * 2
+            }
+        } else {
+            let mut m: i64 = pr
+            let mut k: i64 = (pr + 1) / 2
+            let mut e: i64 = 1
+            while k <= max_k {
+                opt_all_m[j * 64 + oc] = m
+                opt_all_k[j * 64 + oc] = k
+                oc = oc + 1
+                e = e + 1
+                m = m * pr
+                if (e % 2) == 0 {
+                    k = pr * k - (pr - 1)
+                } else {
+                    k = pr * k - (pr - 1) / 2
+                }
+            }
+        }
+        opt_counts[j] = oc as i32
+        j = j + 1
+    }
+
+    pairs_buf = null
+    pairs_count = 0
+    pairs_cap = 0
+
+    dfs_moduli(0, pc, primes, 1, 1, max_k)
+
+    # Cleanup options
+    free(opt_all_m)
+    free(opt_all_k)
+    free(opt_counts)
+    free(primes)
+    free(is_comp)
+}
+
+# Prepare modular inverses 1..n mod mod
+function prepare_inverses(n: i64, mod: i64) -> ptr<i64> {
+    let inv: ptr<i64> = calloc(n + 1, 8)
+    inv[1] = 1
+    let mut i: i64 = 2
+    while i <= n {
+        inv[i] = (mod - (mod / i) * inv[mod % i] % mod) % mod
+        i = i + 1
+    }
+    return inv
+}
+
+# Compute B array
+function compute_B(max_period: i64, mod: i64, B: ptr<i64>) -> void {
+    generate_moduli(max_period)
+    let inv: ptr<i64> = prepare_inverses(max_period, mod)
+
+    let mut i: i64 = 0
+    while i <= max_period {
+        B[i] = 0
+        i = i + 1
+    }
+
+    let mut idx: i64 = 0
+    while idx < pairs_count {
+        let m: i64 = pairs_buf[idx * 2]
+        let k: i64 = pairs_buf[idx * 2 + 1]
+        if k > max_period {
+            idx = idx + 1
+            continue
+        }
+        let n: i64 = m - k
+        if n < 0 {
+            idx = idx + 1
+            continue
+        }
+        let mut rmax: i64 = max_period - k
+        if rmax < 0 {
+            idx = idx + 1
+            continue
+        }
+        if n < rmax {
+            rmax = n
+        }
+
+        # r = 0
+        let idx0: i64 = k
+        B[idx0] = B[idx0] + 1
+        if B[idx0] >= mod {
+            B[idx0] = B[idx0] - mod
+        }
+
+        let mut c: i64 = 1
+        let mut r: i64 = 1
+        while r <= rmax {
+            c = ((c as i128) * (n - r + 1) % mod) as i64
+            c = ((c as i128) * inv[r] % mod) as i64
+            let bidx: i64 = idx0 + r
+            B[bidx] = B[bidx] + c
+            if B[bidx] >= mod {
+                B[bidx] = B[bidx] - mod
+            }
+            r = r + 1
+        }
+        idx = idx + 1
+    }
+
+    free(inv)
+    free(pairs_buf)
+}
+
+# Mobius via linear sieve
+function mobius_upto(n: i64, mu: ptr<i8>) -> void {
+    let mut i: i64 = 0
+    while i <= n {
+        mu[i] = 0
+        i = i + 1
+    }
+    let primes: ptr<i64> = calloc(n + 1, 8)
+    let is_comp: ptr<i8> = calloc(n + 1, 1)
+    let mut pc: i64 = 0
+    mu[1] = 1
+    i = 2
+    while i <= n {
+        if is_comp[i] == 0 {
+            primes[pc] = i
+            pc = pc + 1
+            mu[i] = (0 - 1) as i8
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j]
+            let v: i64 = i * p
+            if v > n {
+                break
+            }
+            is_comp[v] = 1
+            if (i % p) == 0 {
+                mu[v] = 0
+                break
+            }
+            mu[v] = (0 - (mu[i] as i32)) as i8
+            j = j + 1
+        }
+        i = i + 1
+    }
+    free(primes)
+    free(is_comp)
+}
+
+# Compute A from B via Mobius
+function compute_A_from_B(B: ptr<i64>, mu: ptr<i8>, mod: i64, A: ptr<i64>, n: i64) -> void {
+    let mut i: i64 = 0
+    while i <= n {
+        A[i] = 0
+        i = i + 1
+    }
+    let mut d: i64 = 1
+    while d <= n {
+        let md: i8 = mu[d]
+        if md == 0 {
+            d = d + 1
+            continue
+        }
+        if md == 1 {
+            let mut q: i64 = 1
+            while q <= n / d {
+                let p: i64 = d * q
+                A[p] = A[p] + B[q]
+                if A[p] >= mod {
+                    A[p] = A[p] - mod
+                }
+                q = q + 1
+            }
+        } else {
+            let mut q: i64 = 1
+            while q <= n / d {
+                let p: i64 = d * q
+                A[p] = A[p] - B[q]
+                if A[p] < 0 {
+                    A[p] = A[p] + mod
+                }
+                q = q + 1
+            }
+        }
+        d = d + 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p908_native())
+    let B: ptr<i64> = calloc(N + 1, 8)
+    compute_B(N, MOD, B)
+
+    let mu: ptr<i8> = calloc(N + 1, 1)
+    mobius_upto(N, mu)
+
+    let A: ptr<i64> = calloc(N + 1, 8)
+    compute_A_from_B(B, mu, MOD, A, N)
+
+    # Prefix sum
+    let mut s: i64 = 0
+    let mut i: i64 = 1
+    while i <= N {
+        s = s + A[i]
+        s = s % MOD
+        i = i + 1
+    }
+
+    printf("%lld\n", s % MOD)
+    free(B)
+    free(mu)
+    free(A)
     return 0
 }

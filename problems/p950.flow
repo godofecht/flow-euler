@@ -1,12 +1,163 @@
 # Project Euler 950
-# Pirate Treasure — exact integer arithmetic (native).
-# Companion: problems/native/p950.c
+# Pirate Treasure. Exact integer arithmetic with i128.
+# Compute sum_{k=1..6} T(10^16, 10^k+1, 1/sqrt(10^k+1)) mod 10^9.
 
-extern {
-    function p950_native() -> i64
+const MOD9: i128 = 1000000000
+
+function isqrt128(x: i128) -> i128 {
+    if x <= 0 { return 0 }
+    # Check if fits in i64 path
+    if x < (1 as i128) << 63 {
+        let mut r: i128 = x
+        let mut s: i128 = 0
+        let mut b: i128 = (1 as i128) << 62
+        while b > r { b = b >> 2 }
+        while b > 0 {
+            if r >= s + b {
+                r = r - (s + b)
+                s = (s >> 1) + b
+            } else {
+                s = s >> 1
+            }
+            b = b >> 2
+        }
+        return s
+    }
+    # Newton's method for large values
+    let mut bits: i64 = 0
+    let mut tmp: i128 = x
+    while tmp > 0 {
+        bits = bits + 1
+        tmp = tmp >> 1
+    }
+    let mut r: i128 = (1 as i128) << (bits / 2 + 1)
+    while true {
+        let next: i128 = (r + x / r) / 2
+        if next >= r { break }
+        r = next
+    }
+    while r * r > x { r = r - 1 }
+    while (r + 1) * (r + 1) <= x { r = r + 1 }
+    return r
+}
+
+function floor_div_sqrt(d: i128, D: i128) -> i128 {
+    if d <= 0 { return 0 }
+    let dd: i128 = d * d
+    let mut t: i128 = isqrt128(dd / D)
+    while (t + 1) * (t + 1) * D <= dd { t = t + 1 }
+    while t * t * D > dd { t = t - 1 }
+    return t
+}
+
+function ceil_div_sqrt(d: i128, D: i128) -> i128 {
+    if d <= 0 { return 0 }
+    return floor_div_sqrt(d, D) + 1
+}
+
+function initial_prefix_sum(N: i128, C: i128) -> i128 {
+    if N <= 0 { return 0 }
+    let limit: i128 = 2 * C + 2
+    let mut M: i128 = N
+    if M > limit { M = limit }
+    if M > 2 * C { M = 2 * C }
+    if M <= 0 { return 0 }
+
+    let m: i128 = M / 2
+    let mut s: i128 = 2 * (m * C - (m * (m - 1)) / 2)
+    if M % 2 == 1 {
+        s = s + (C - m)
+    }
+    return s
+}
+
+function next_reset(L: i128, C: i128, D: i128) -> i128 {
+    if C == 0 {
+        return 2 * L
+    }
+
+    let mut t: i128 = 1
+    while t <= C {
+        let y: i128 = C / t
+        let x: i128 = 2 * L - 2 * y
+        let d: i128 = x - L
+        if d > 0 {
+            let s: i128 = ceil_div_sqrt(d, D)
+            if C / s == y {
+                return x
+            }
+        }
+        t = C / y + 1
+    }
+
+    return 2 * L
+}
+
+function T_func(N: i128, C: i128, D: i128) -> i128 {
+    if N <= 0 { return 0 }
+
+    let start_reset: i128 = 2 * C + 2
+    if N <= start_reset {
+        return initial_prefix_sum(N, C)
+    }
+
+    let mut total: i128 = initial_prefix_sum(start_reset, C)
+    let mut L: i128 = start_reset
+    let mut cL: i128 = 0
+
+    while L < N {
+        let x: i128 = next_reset(L, C, D)
+        if x > N {
+            let d: i128 = N - L + 1
+            total = total + (d - 1) * cL + (d - 1) * d / 2
+            break
+        }
+
+        let d: i128 = x - L
+        if d > 1 {
+            total = total + (d - 1) * cL + (d - 1) * d / 2
+        }
+
+        let required_votes: i128 = (x + 1) / 2
+        let free_votes: i128 = d
+        let mut need_bribes: i128 = required_votes - free_votes
+        if need_bribes < 0 { need_bribes = 0 }
+
+        let s: i128 = ceil_div_sqrt(d, D)
+        let cost: i128 = need_bribes * s
+        cL = C - cost
+
+        total = total + cL
+        L = x
+    }
+
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p950_native())
+    let mut Nval: i128 = 1
+    let mut i: i64 = 0
+    while i < 16 {
+        Nval = Nval * 10
+        i = i + 1
+    }
+
+    let mut acc: i128 = 0
+    let mut k: i64 = 1
+    while k <= 6 {
+        let mut C: i128 = 1
+        let mut j: i64 = 0
+        while j < k {
+            C = C * 10
+            j = j + 1
+        }
+        C = C + 1
+        acc = acc + T_func(Nval, C, C)
+        k = k + 1
+    }
+
+    let mut result: i128 = acc % MOD9
+    if result < 0 { result = result + MOD9 }
+    printf("%lld\n", result as i64)
     return 0
 }

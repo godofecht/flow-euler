@@ -1,8 +1,309 @@
+# Project Euler 910: L-Expressions II
+# Polynomial arithmetic in Z/(10^9)[x] mod prod_{k=1}^{40}(x+k).
+# All polynomials are degree-39 remainders.
+
 extern {
-    function p910_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+const DEGREE: i64 = 40
+const MOD: i64 = 1000000000
+
+let mut FOLD: ptr<i64> = null
+let mut ZERO: ptr<i64> = null
+let mut ONE: ptr<i64> = null
+let mut X: ptr<i64> = null
+
+function init_globals() -> void {
+    # Build FOLD: coefficients to replace x^40
+    # prod_{k=1}^{40} (x + k) = x^40 + c39*x^39 + ... + c0
+    # x^40 = -(c39*x^39 + ... + c0) mod the product
+    let coeffs: ptr<i64> = calloc(DEGREE + 1, 8)
+    let nxt: ptr<i64> = calloc(DEGREE + 2, 8)
+    let mut i: i64 = 0
+    while i < DEGREE + 1 {
+        coeffs[i] = 0
+        i = i + 1
+    }
+    coeffs[0] = 1
+    let mut len: i64 = 1
+    let mut k: i64 = 1
+    while k <= DEGREE {
+        let mut j: i64 = 0
+        while j < DEGREE + 2 {
+            nxt[j] = 0
+            j = j + 1
+        }
+        j = 0
+        while j < len {
+            nxt[j] = (nxt[j] + coeffs[j] * k) % MOD
+            nxt[j + 1] = (nxt[j + 1] + coeffs[j]) % MOD
+            j = j + 1
+        }
+        len = len + 1
+        j = 0
+        while j < len {
+            coeffs[j] = nxt[j]
+            j = j + 1
+        }
+        k = k + 1
+    }
+    # FOLD[i] = -coeffs[i] for i=0..39
+    i = 0
+    while i < DEGREE {
+        FOLD[i] = (MOD - coeffs[i]) % MOD
+        i = i + 1
+    }
+
+    ZERO = calloc(DEGREE, 8)
+    i = 0
+    while i < DEGREE {
+        ZERO[i] = 0
+        i = i + 1
+    }
+
+    ONE = calloc(DEGREE, 8)
+    i = 0
+    while i < DEGREE {
+        ONE[i] = 0
+        i = i + 1
+    }
+    ONE[0] = 1
+
+    X = calloc(DEGREE, 8)
+    i = 0
+    while i < DEGREE {
+        X[i] = 0
+        i = i + 1
+    }
+    X[1] = 1
+
+    free(coeffs)
+    free(nxt)
+}
+
+function poly_add(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < DEGREE {
+        out[i] = (a[i] + b[i]) % MOD
+        i = i + 1
+    }
+}
+
+function mul_x(poly: ptr<i64>, out: ptr<i64>) -> void {
+    let overflow: i64 = poly[DEGREE - 1]
+    let mut i: i64 = DEGREE - 1
+    while i > 0 {
+        out[i] = poly[i - 1]
+        i = i - 1
+    }
+    out[0] = 0
+    if overflow != 0 {
+        i = 0
+        while i < DEGREE {
+            out[i] = (out[i] + overflow * FOLD[i]) % MOD
+            i = i + 1
+        }
+    }
+}
+
+function poly_mul(a: ptr<i64>, b: ptr<i64>, out: ptr<i64>) -> void {
+    let tmp: ptr<i64> = calloc(DEGREE, 8)
+    let shifted: ptr<i64> = calloc(DEGREE, 8)
+    let next_shifted: ptr<i64> = calloc(DEGREE, 8)
+    let mut i: i64 = 0
+    while i < DEGREE {
+        shifted[i] = b[i]
+        i = i + 1
+    }
+    i = 0
+    while i < DEGREE {
+        if a[i] != 0 {
+            let mut j1: i64 = 0
+            while j1 < DEGREE {
+                tmp[j1] = (tmp[j1] + a[i] * shifted[j1]) % MOD
+                j1 = j1 + 1
+            }
+        }
+        mul_x(shifted, next_shifted)
+        let mut j2: i64 = 0
+        while j2 < DEGREE {
+            shifted[j2] = next_shifted[j2]
+            j2 = j2 + 1
+        }
+        i = i + 1
+    }
+    i = 0
+    while i < DEGREE {
+        out[i] = tmp[i]
+        i = i + 1
+    }
+    free(tmp)
+    free(shifted)
+    free(next_shifted)
+}
+
+function poly_pow(base: ptr<i64>, exponent: i64, result: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < DEGREE {
+        result[i] = ONE[i]
+        i = i + 1
+    }
+    let power: ptr<i64> = calloc(DEGREE, 8)
+    let tmp: ptr<i64> = calloc(DEGREE, 8)
+    i = 0
+    while i < DEGREE {
+        power[i] = base[i]
+        i = i + 1
+    }
+    let mut exp: i64 = exponent
+    while exp != 0 {
+        if (exp & 1) == 1 {
+            poly_mul(power, result, tmp)
+            let mut j: i64 = 0
+            while j < DEGREE {
+                result[j] = tmp[j]
+                j = j + 1
+            }
+        }
+        exp = exp >> 1
+        if exp != 0 {
+            poly_mul(power, power, tmp)
+            let mut j: i64 = 0
+            while j < DEGREE {
+                power[j] = tmp[j]
+                j = j + 1
+            }
+        }
+    }
+    free(power)
+    free(tmp)
+}
+
+function poly_compose(outer: ptr<i64>, inner: ptr<i64>, result: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < DEGREE {
+        result[i] = ZERO[i]
+        i = i + 1
+    }
+    let tmp: ptr<i64> = calloc(DEGREE, 8)
+    i = DEGREE - 1
+    while i >= 0 {
+        poly_mul(result, inner, tmp)
+        let mut j: i64 = 0
+        while j < DEGREE {
+            result[j] = tmp[j]
+            j = j + 1
+        }
+        result[0] = (result[0] + outer[i]) % MOD
+        i = i - 1
+    }
+    free(tmp)
+}
+
+function iterate_composition(poly: ptr<i64>, count: i64, result: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < DEGREE {
+        result[i] = X[i]
+        i = i + 1
+    }
+    let power: ptr<i64> = calloc(DEGREE, 8)
+    let tmp: ptr<i64> = calloc(DEGREE, 8)
+    i = 0
+    while i < DEGREE {
+        power[i] = poly[i]
+        i = i + 1
+    }
+    let mut cnt: i64 = count
+    while cnt != 0 {
+        if (cnt & 1) == 1 {
+            poly_compose(power, result, tmp)
+            let mut j: i64 = 0
+            while j < DEGREE {
+                result[j] = tmp[j]
+                j = j + 1
+            }
+        }
+        cnt = cnt >> 1
+        if cnt != 0 {
+            poly_compose(power, power, tmp)
+            let mut j: i64 = 0
+            while j < DEGREE {
+                power[j] = tmp[j]
+                j = j + 1
+            }
+        }
+    }
+    free(power)
+    free(tmp)
+}
+
+function d1(length: i64, out: ptr<i64>) -> void {
+    let base: ptr<i64> = calloc(DEGREE, 8)
+    let base_x: ptr<i64> = calloc(DEGREE, 8)
+    poly_pow(X, length, base)
+    mul_x(base, base_x)
+    poly_add(base, base_x, out)
+    free(base)
+    free(base_x)
+}
+
+function d2(count: i64, poly: ptr<i64>, out: ptr<i64>) -> void {
+    let iter: ptr<i64> = calloc(DEGREE, 8)
+    let poly_x: ptr<i64> = calloc(DEGREE, 8)
+    iterate_composition(poly, count, iter)
+    mul_x(poly, poly_x)
+    poly_compose(iter, poly_x, out)
+    free(iter)
+    free(poly_x)
+}
+
+function evaluate(poly: ptr<i64>, x: i64) -> i64 {
+    let mut result: i64 = 0
+    let mut i: i64 = DEGREE - 1
+    while i >= 0 {
+        result = (result * x + poly[i]) % MOD
+        i = i - 1
+    }
+    return result
 }
 
 function main() -> i32 {
-    printf("%lld\n", p910_native())
+    FOLD = calloc(DEGREE, 8)
+    init_globals()
+
+    let nesting: i64 = 12
+    let middle_count: i64 = 345678
+    let length: i64 = 9012345
+    let x_val: i64 = 678
+    let addend: i64 = 90
+
+    let base: ptr<i64> = calloc(DEGREE, 8)
+    d1(length, base)
+
+    let d2val: ptr<i64> = calloc(DEGREE, 8)
+    d2(middle_count, base, d2val)
+
+    let current: ptr<i64> = calloc(DEGREE, 8)
+    poly_compose(base, d2val, current)
+
+    let mut i: i64 = 0
+    while i < nesting {
+        let tmp: ptr<i64> = calloc(DEGREE, 8)
+        d2(middle_count, current, tmp)
+        let mut j: i64 = 0
+        while j < DEGREE {
+            current[j] = tmp[j]
+            j = j + 1
+        }
+        free(tmp)
+        i = i + 1
+    }
+
+    let val: i64 = evaluate(current, x_val)
+    printf("%lld\n", (val + addend) % MOD)
     return 0
 }

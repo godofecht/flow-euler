@@ -1,12 +1,194 @@
 # Project Euler 797
 # Cyclogenic Polynomials: Q_{10^7}(2) mod 1e9+7.
-# Companion: problems/native/p797.c
+# Linear sieve + cyclotomic polynomial at 2 + Mobius inversion.
 
 extern {
-    function p797_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const N: i64 = 10000000
+
+function mod_pow(a: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = a % MOD
+    let mut ee: i64 = e
+    while ee > 0 {
+        if (ee & 1) != 0 {
+            r = r * b % MOD
+        }
+        b = b * b % MOD
+        ee = ee >> 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%lld\n", p797_native())
+    # Linear sieve for spf and mu
+    let spf: ptr<i32> = calloc(N + 1, 4) as ptr<i32>
+    let mu: ptr<i8> = calloc(N + 1, 1) as ptr<i8>
+    let primes: ptr<i32> = calloc(N / 10 + 1000, 4) as ptr<i32>
+    let mut pc: i64 = 0
+
+    spf[1] = 1
+    mu[1] = 1
+    for i in 2..(N + 1) {
+        if spf[i] == 0 {
+            spf[i] = i as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+            mu[i] = -1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > N { break }
+            spf[ip] = p as i32
+            if i % p == 0 {
+                mu[ip] = 0
+                break
+            }
+            mu[ip] = -mu[i]
+            j = j + 1
+        }
+    }
+
+    # Build b_arr[k] = 2^k - 1 mod MOD and invb[k] = inverse
+    let b_arr: ptr<i64> = calloc(N + 1, 8) as ptr<i64>
+    let invb: ptr<i64> = calloc(N + 1, 8) as ptr<i64>
+
+    let mut pow2: i64 = 1
+    for k in 1..(N + 1) {
+        pow2 = pow2 * 2 % MOD
+        b_arr[k] = pow2 - 1
+    }
+
+    # Batch inversion using prefix products
+    invb[0] = 1
+    let mut acc: i64 = 1
+    for k in 1..(N + 1) {
+        acc = acc * b_arr[k] % MOD
+        invb[k] = acc
+    }
+
+    let mut inv_total: i64 = mod_pow(acc, MOD - 2)
+    let mut k: i64 = N
+    while k >= 1 {
+        let prev_prefix: i64 = invb[k - 1]
+        invb[k] = inv_total * prev_prefix % MOD
+        inv_total = inv_total * b_arr[k] % MOD
+        k = k - 1
+    }
+    invb[0] = 0
+
+    # Build T[k] = product_{d|k} (1 + Phi_d(2)), then prefix sums
+    let T: ptr<i64> = calloc(N + 1, 8) as ptr<i64>
+    for i in 0..(N + 1) {
+        T[i] = 1
+    }
+    T[0] = 0
+
+    # Working arrays for cyclotomic computation (reused)
+    let pp: ptr<i32> = calloc(16, 4) as ptr<i32>
+    let prod: ptr<i64> = calloc(256, 8) as ptr<i64>
+    let par: ptr<i32> = calloc(256, 4) as ptr<i32>
+
+    for d in 1..(N + 1) {
+        let mut phi_d: i64 = 0
+        if d == 1 {
+            phi_d = 1
+        } else {
+            # Extract distinct primes of d
+            let mut m: i64 = d
+            let mut npc: i64 = 0
+            while m > 1 {
+                let p: i64 = spf[m] as i64
+                pp[npc] = p as i32
+                npc = npc + 1
+                while m % p == 0 {
+                    m = m / p
+                }
+            }
+
+            # Enumerate squarefree divisors with parity
+            let mut cnt: i64 = 1
+            prod[0] = 1
+            par[0] = 0
+            for i in 0..npc {
+                let L: i64 = cnt
+                for j in 0..L {
+                    prod[cnt] = prod[j] * (pp[i] as i64)
+                    par[cnt] = par[j] ^ 1
+                    cnt = cnt + 1
+                }
+            }
+
+            let mut res: i64 = 1
+            for i in 0..cnt {
+                let idx: i64 = d / prod[i]
+                if par[i] == 0 {
+                    res = res * b_arr[idx] % MOD
+                } else {
+                    res = res * invb[idx] % MOD
+                }
+            }
+            phi_d = res
+        }
+
+        let mut fd: i64 = phi_d + 1
+        if fd >= MOD { fd = fd - MOD }
+        let mut mm: i64 = d
+        while mm <= N {
+            T[mm] = T[mm] * fd % MOD
+            mm = mm + d
+        }
+    }
+
+    free(pp)
+    free(prod)
+    free(par)
+    free(b_arr)
+    free(invb)
+    free(spf)
+
+    # Prefix sum T in-place
+    let mut run: i64 = 0
+    for i in 1..(N + 1) {
+        run = run + T[i]
+        if run >= MOD { run = run - MOD }
+        T[i] = run
+    }
+
+    # Prefix sums of mu (Mertens function)
+    let prefix_mu: ptr<i32> = calloc(N + 1, 4) as ptr<i32>
+    let mut run_mu: i32 = 0
+    for i in 1..(N + 1) {
+        run_mu = run_mu + (mu[i] as i32)
+        prefix_mu[i] = run_mu
+    }
+
+    # Q_n = sum_{d<=n} mu(d) * T_prefix[n/d], grouped by floor division
+    let mut ans: i64 = 0
+    let mut l: i64 = 1
+    while l <= N {
+        let t: i64 = N / l
+        let r: i64 = N / t
+        let sum_mu: i64 = (prefix_mu[r] - prefix_mu[l - 1]) as i64
+        let term: i64 = (sum_mu % MOD) * T[t]
+        ans = (ans + term) % MOD
+        l = r + 1
+    }
+
+    ans = ans % MOD
+    if ans < 0 { ans = ans + MOD }
+
+    free(prefix_mu)
+    free(mu)
+    free(primes)
+    free(T)
+
+    printf("%lld\n", ans)
     return 0
 }

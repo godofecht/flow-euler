@@ -1,12 +1,166 @@
 # Project Euler 976
 # F(10^7, 10^7) modulo 1234567891.
-# Native C helper for the modular-binomial summation.
+# Port of the C reference solver to pure Flow.
 
 extern {
-    function p976_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1234567891
+
+function build_inverses(n: i64, mod: i64) -> ptr<i64> {
+    let inv: ptr<i64> = calloc(n + 1, 8)
+    if n >= 1 { inv[1] = 1 }
+    let mut i: i64 = 2
+    while i <= n {
+        inv[i] = mod - (mod / i) * inv[mod % i] % mod
+        i = i + 1
+    }
+    return inv
 }
 
 function main() -> i32 {
-    printf("%lld\n", p976_native())
+    let n: i64 = 10000000
+    let k: i64 = 10000000
+
+    let e: i64 = n / 2
+    let a_cnt: i64 = (n + 3) / 4
+    let b_cnt: i64 = (n + 1) / 4
+    let c: i64 = b_cnt - a_cnt
+
+    if e == 0 {
+        let inv: ptr<i64> = build_inverses(k + 2, MOD)
+        let inv2: i64 = (MOD + 1) / 2
+        let mut h: i64 = 1
+        let mut qv: i64 = 1
+        let mut sum_odd_a: i64 = 0
+        let mut ans: i64 = 0
+        let mut s: i64 = 0
+        while s <= k {
+            if s > 0 {
+                h = h * (a_cnt + b_cnt + s - 1) % MOD * inv[s] % MOD
+                if s % 2 == 0 {
+                    let r: i64 = s / 2
+                    qv = qv * (a_cnt + r - 1) % MOD * inv[r] % MOD
+                }
+            }
+            let mut coeff: i64 = 0
+            if c == 0 {
+                if s % 2 == 0 { coeff = qv } else { coeff = 0 }
+            } else {
+                if c == 1 {
+                    coeff = qv
+                } else {
+                    if s % 2 == 0 { coeff = qv } else { coeff = MOD - qv }
+                }
+            }
+            let mut diff: i64 = (h - coeff) % MOD
+            if diff < 0 { diff = diff + MOD }
+            let h_odd_a: i64 = diff * inv2 % MOD
+            sum_odd_a = (sum_odd_a + h_odd_a) % MOD
+            ans = sum_odd_a
+            s = s + 1
+        }
+        free(inv as ptr<void>)
+        printf("%lld\n", ans % MOD)
+        return 0
+    }
+
+    let max_inv: i64 = e + k + 2
+    let inv: ptr<i64> = build_inverses(max_inv, MOD)
+    let inv2: i64 = (MOD + 1) / 2
+
+    # total_even at m = k: C(e + k - 1, k)
+    let mut total_even: i64 = 1
+    let mut m: i64 = 0
+    while m < k {
+        total_even = total_even * (e + m) % MOD * inv[m + 1] % MOD
+        m = m + 1
+    }
+
+    # e0 at q = k / 2: C(e + q - 1, q)
+    let qmax: i64 = k / 2
+    let mut e0: i64 = 1
+    let mut q: i64 = 0
+    while q < qmax {
+        e0 = e0 * (e + q) % MOD * inv[q + 1] % MOD
+        q = q + 1
+    }
+
+    let mut h: i64 = 1
+    let mut qv: i64 = 1
+    let mut qsum: i64 = 1
+    let mut sum_even: i64 = 0
+    let mut sum_odd: i64 = 0
+    let mut sum_odd_a: i64 = 0
+    let mut ans: i64 = 0
+    let ab: i64 = a_cnt + b_cnt
+
+    let mut s: i64 = 0
+    while s <= k {
+        if s > 0 {
+            h = h * (ab + s - 1) % MOD * inv[s] % MOD
+            if s % 2 == 0 {
+                let r: i64 = s / 2
+                qv = qv * (a_cnt + r - 1) % MOD * inv[r] % MOD
+                if c == 1 {
+                    qsum = qsum * (a_cnt + r) % MOD * inv[r] % MOD
+                }
+            }
+        }
+
+        let mut coeff: i64 = 0
+        if c == 0 {
+            if s % 2 == 0 { coeff = qv } else { coeff = 0 }
+        } else {
+            if c == 1 {
+                coeff = qsum
+            } else {
+                if s % 2 == 0 { coeff = qv } else { coeff = MOD - qv }
+            }
+        }
+
+        let mut diff: i64 = (h - coeff) % MOD
+        if diff < 0 { diff = diff + MOD }
+        let h_odd_a: i64 = diff * inv2 % MOD
+
+        if s % 2 == 0 {
+            sum_even = (sum_even + h) % MOD
+        } else {
+            sum_odd = (sum_odd + h) % MOD
+        }
+        sum_odd_a = (sum_odd_a + h_odd_a) % MOD
+
+        let m: i64 = k - s
+        let mut t0: i64 = 0
+        let mut t1: i64 = 0
+        if m % 2 == 0 {
+            let e0_m: i64 = e0
+            t0 = e0_m * sum_odd_a % MOD
+            let mut d1: i64 = (total_even - e0_m) % MOD
+            if d1 < 0 { d1 = d1 + MOD }
+            t1 = d1 * sum_even % MOD
+        } else {
+            t0 = 0
+            t1 = total_even * sum_odd % MOD
+        }
+        ans = (ans + t0 + t1) % MOD
+
+        if m > 0 {
+            total_even = total_even * m % MOD * inv[e + m - 1] % MOD
+        }
+        if m % 2 == 0 {
+            if m >= 2 {
+                let qcur: i64 = m / 2
+                e0 = e0 * qcur % MOD * inv[e + qcur - 1] % MOD
+            }
+        }
+
+        s = s + 1
+    }
+
+    free(inv as ptr<void>)
+    printf("%lld\n", ans % MOD)
     return 0
 }

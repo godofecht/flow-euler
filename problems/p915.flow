@@ -1,11 +1,282 @@
-# Project Euler 915
-# Giant GCDs: T(10^8) mod 123456789.
+# Project Euler 915: Giant GCDs
+# s(1)=1, s(n+1) = (s(n)-1)^3 + 2
+# T(N) = sum_{a=1..N} sum_{b=1..N} gcd(s(s(a)), s(s(b)))
+# Compute T(10^8) mod 123456789.
+# Uses cycle detection for s(n) mod M, summatory totient via sieve + memoized recursion.
 
 extern {
-    function p915_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 123456789
+const BASE: i64 = 2000000
+const MEMO_CAP: i64 = 1 << 20
+
+let mut s_mod_MOD_arr: ptr<i64> = null
+let mut muM: i64 = 0
+let mut lamM: i64 = 0
+
+let mut s_mod_lam_arr: ptr<i64> = null
+let mut muP: i64 = 0
+let mut lamP: i64 = 0
+
+let mut small_exact_arr: ptr<i64> = null
+let mut n_small_max: i64 = 0
+let mut muM_mod: i64 = 0
+
+let mut phi_prefix_arr: ptr<i64> = null
+let mut memo_keys: ptr<i64> = null
+let mut memo_vals: ptr<i64> = null
+
+function mulmod(a: i64, b: i64, m: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (m as i128)) as i64
+}
+
+function f_mod(x: i64, m: i64) -> i64 {
+    let y: i64 = (x + m - 1) % m
+    let y2: i64 = mulmod(y, y, m)
+    let y3: i64 = mulmod(y2, y, m)
+    return (y3 + 2) % m
+}
+
+function cycle_info(m: i64) -> ptr<i64> {
+    let result: ptr<i64> = calloc(2, 8)
+    let mut tortoise: i64 = f_mod(0, m)
+    let mut hare: i64 = f_mod(f_mod(0, m), m)
+    while tortoise != hare {
+        tortoise = f_mod(tortoise, m)
+        hare = f_mod(f_mod(hare, m), m)
+    }
+    let mut mu: i64 = 0
+    tortoise = 0
+    while tortoise != hare {
+        tortoise = f_mod(tortoise, m)
+        hare = f_mod(hare, m)
+        mu = mu + 1
+    }
+    let mut lam: i64 = 1
+    hare = f_mod(tortoise, m)
+    while tortoise != hare {
+        hare = f_mod(hare, m)
+        lam = lam + 1
+    }
+    result[0] = mu
+    result[1] = lam
+    return result
+}
+
+function build_s_mod(m: i64, length: i64) -> ptr<i64> {
+    let arr: ptr<i64> = calloc(length + 1, 8)
+    let mut x: i64 = 0
+    let mut n: i64 = 1
+    while n <= length {
+        x = f_mod(x, m)
+        arr[n] = x
+        n = n + 1
+    }
+    return arr
+}
+
+function sieve_phi_prefix(n: i64) -> ptr<i64> {
+    let phi: ptr<i64> = calloc(n + 1, 8)
+    let mut i: i64 = 0
+    while i <= n {
+        phi[i] = i
+        i = i + 1
+    }
+    i = 2
+    while i <= n {
+        if phi[i] == i {
+            let mut j: i64 = i
+            while j <= n {
+                phi[j] = phi[j] - phi[j] / i
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let pref: ptr<i64> = calloc(n + 1, 8)
+    let mut s: i64 = 0
+    i = 1
+    while i <= n {
+        s = s + phi[i]
+        pref[i] = s
+        i = i + 1
+    }
+    free(phi as ptr<void>)
+    return pref
+}
+
+function mix64(x: i64) -> i64 {
+    let mut v: i64 = x
+    v = v ^ (v >> 30)
+    v = v * 0xbf58476d1ce4e5b9
+    v = v ^ (v >> 27)
+    v = v * 0x94d049bb133111eb
+    v = v ^ (v >> 31)
+    return v
+}
+
+function s_index_modMOD(k: i64) -> i64 {
+    if k <= muM + lamM {
+        return s_mod_MOD_arr[k]
+    }
+    let k2: i64 = muM + ((k - muM) % lamM)
+    return s_mod_MOD_arr[k2]
+}
+
+function s_n_mod_lamM(n: i64) -> i64 {
+    if n <= muP + lamP {
+        return s_mod_lam_arr[n]
+    }
+    let n2: i64 = muP + ((n - muP) % lamP)
+    return s_mod_lam_arr[n2]
+}
+
+function s2_mod(n: i64) -> i64 {
+    if n <= n_small_max {
+        return s_index_modMOD(small_exact_arr[n])
+    }
+    let k_mod: i64 = s_n_mod_lamM(n)
+    let diff: i64
+    if k_mod >= muM_mod {
+        diff = (k_mod - muM_mod) % lamM
+    } else {
+        diff = lamM - ((muM_mod - k_mod) % lamM)
+    }
+    if diff == lamM {
+        return s_mod_MOD_arr[muM]
+    }
+    return s_mod_MOD_arr[muM + diff]
+}
+
+function phi_sum_memo(n: i64) -> i64 {
+    if n <= BASE {
+        return phi_prefix_arr[n]
+    }
+    let mut h: i64 = mix64(n) & (MEMO_CAP - 1)
+    while memo_keys[h] != 0 {
+        if memo_keys[h] == n { return memo_vals[h] }
+        h = (h + 1) & (MEMO_CAP - 1)
+    }
+    let mut res: i64 = (n * (n + 1)) / 2
+    let mut l: i64 = 2
+    while l <= n {
+        let q: i64 = n / l
+        let r: i64 = n / q
+        let sub: i64 = phi_sum_memo(q)
+        let cnt: i64 = r - l + 1
+        let val: i128 = (cnt as i128) * (sub as i128)
+        res = ((res as i128) - val) as i64
+        l = r + 1
+    }
+    memo_keys[h] = n
+    memo_vals[h] = res
+    return res
+}
+
+function coprime_pairs(m: i64) -> i64 {
+    let ps: i64 = phi_sum_memo(m) % MOD
+    return (2 * ps - 1 + MOD) % MOD
+}
+
+function prefix_s2(n: i64, start: i64, period: i64, small_prefix: ptr<i64>, period_prefix: ptr<i64>, period_sum: i64) -> i64 {
+    if n == 0 { return 0 }
+    if n < start { return small_prefix[n] }
+    let base: i64 = 0
+    if start > 0 { base = small_prefix[start - 1] }
+    let t: i64 = n - (start - 1)
+    let full: i64 = t / period
+    let rem: i64 = t % period
+    return (base + mulmod(full % MOD, period_sum, MOD) + period_prefix[rem]) % MOD
 }
 
 function main() -> i32 {
-    printf("%lld\n", p915_native())
+    let N: i64 = 100000000
+
+    # Periodicity of s(n) mod MOD
+    let ci: ptr<i64> = cycle_info(MOD)
+    muM = ci[0]
+    lamM = ci[1]
+    free(ci as ptr<void>)
+    s_mod_MOD_arr = build_s_mod(MOD, muM + lamM)
+
+    # Periodicity of s(n) mod lamM
+    let ci2: ptr<i64> = cycle_info(lamM)
+    muP = ci2[0]
+    lamP = ci2[1]
+    free(ci2 as ptr<void>)
+    s_mod_lam_arr = build_s_mod(lamM, muP + lamP)
+
+    # Compute exact s(n) for small n until s(n) > muM
+    small_exact_arr = calloc(20, 8)
+    small_exact_arr[0] = 0
+    let mut x: i64 = 0
+    let mut n: i64 = 0
+    while true {
+        n = n + 1
+        let xm1: i128 = (x as i128) - 1
+        let xc: i128 = xm1 * xm1 * xm1 + 2
+        x = xc as i64
+        small_exact_arr[n] = x
+        if x > muM { break }
+    }
+    n_small_max = n - 1
+    muM_mod = muM % lamM
+
+    # s2_mod becomes periodic once s(n) mod lamM is in its cycle
+    let mut start: i64 = muP
+    if n_small_max + 1 > start { start = n_small_max + 1 }
+    if 1 > start { start = 1 }
+    let period: i64 = lamP
+
+    let period_vals: ptr<i64> = calloc(period, 8)
+    let mut i: i64 = 0
+    while i < period {
+        period_vals[i] = s2_mod(start + i) % MOD
+        i = i + 1
+    }
+
+    let small_prefix: ptr<i64> = calloc(start, 8)
+    let mut acc: i64 = 0
+    i = 1
+    while i < start {
+        acc = (acc + s2_mod(i)) % MOD
+        small_prefix[i] = acc
+        i = i + 1
+    }
+
+    let period_prefix: ptr<i64> = calloc(period + 1, 8)
+    let mut accp: i64 = 0
+    i = 0
+    while i < period {
+        accp = (accp + period_vals[i]) % MOD
+        period_prefix[i + 1] = accp
+        i = i + 1
+    }
+    let period_sum: i64 = period_prefix[period]
+
+    # Summatory totient
+    phi_prefix_arr = sieve_phi_prefix(BASE)
+    memo_keys = calloc(MEMO_CAP, 8)
+    memo_vals = calloc(MEMO_CAP, 8)
+
+    # Block over d where floor(N/d) is constant
+    let mut ans: i64 = 0
+    let mut l: i64 = 1
+    while l <= N {
+        let q: i64 = N / l
+        let r: i64 = N / q
+
+        let pr: i64 = prefix_s2(r, start, period, small_prefix, period_prefix, period_sum)
+        let pl: i64 = prefix_s2(l - 1, start, period, small_prefix, period_prefix, period_sum)
+        let sum_s2: i64 = (pr + MOD - pl) % MOD
+        ans = (ans + mulmod(sum_s2, coprime_pairs(q), MOD)) % MOD
+        l = r + 1
+    }
+
+    printf("%lld\n", ans % MOD)
     return 0
 }

@@ -1,10 +1,194 @@
 # Project Euler 953
+# DFS over products of distinct odd primes with XOR constraint.
+
+import euler.nt { isqrt }
 
 extern {
-    function p953_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+}
+
+const MOD: i64 = 1000000007
+
+let mut INV6: i64 = 0
+
+function my_mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut base: i64 = base0 % mod
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) == 1 {
+            result = result * base % mod
+        }
+        base = base * base % mod
+        exp = exp >> 1
+    }
+    return result
+}
+
+function isqrt_ll(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = isqrt(n)
+    while x * x > n { x = x - 1 }
+    while (x + 1) * (x + 1) <= n { x = x + 1 }
+    return x
+}
+
+function sum_sq(n0: i64) -> i64 {
+    let n: i64 = n0 % MOD
+    return n * (n + 1) % MOD * (2 * n + 1) % MOD * INV6 % MOD
+}
+
+function contribution(kernel: i64, bound: i64, multiplier: i64) -> i64 {
+    let t: i64 = isqrt_ll(bound / kernel)
+    return multiplier * (kernel % MOD) % MOD * sum_sq(t) % MOD
+}
+
+# Global state
+let mut g_flags: ptr<i8> = null
+let mut g_odd_primes: ptr<i32> = null
+let mut g_odd_prime_count: i64 = 0
+let mut g_limit: i64 = 0
+
+# Stack-based DFS. State: prod, next_idx, xor_val, last, odd_count
+# We use parallel arrays for the stack.
+let mut st_prod: ptr<i64> = null
+let mut st_next_idx: ptr<i32> = null
+let mut st_xor_val: ptr<i32> = null
+let mut st_last: ptr<i32> = null
+let mut st_odd_count: ptr<i32> = null
+
+function branch_sum(bound: i64, target: i64, multiplier: i64) -> i64 {
+    if bound <= 0 { return 0 }
+
+    let mut total: i64 = 0
+    if target == 0 {
+        total = contribution(1, bound, multiplier)
+    }
+
+    let plen: i64 = g_odd_prime_count
+
+    let mut stack_cap: i64 = 1 << 21
+    st_prod = malloc(stack_cap * 8)
+    st_next_idx = malloc(stack_cap * 4)
+    st_xor_val = malloc(stack_cap * 4)
+    st_last = malloc(stack_cap * 4)
+    st_odd_count = malloc(stack_cap * 4)
+    let mut sp: i64 = 0
+
+    let mut idx: i64 = 0
+    while idx < plen {
+        let p: i64 = g_odd_primes[idx] as i64
+        if p > bound / (p + 2) { break }
+        st_prod[sp] = p
+        st_next_idx[sp] = (idx + 1) as i32
+        st_xor_val[sp] = p as i32
+        st_last[sp] = p as i32
+        st_odd_count[sp] = 1
+        sp = sp + 1
+        idx = idx + 1
+    }
+
+    while sp > 0 {
+        sp = sp - 1
+        let next_idx: i64 = st_next_idx[sp] as i64
+        let prod: i64 = st_prod[sp]
+        let xor_val: i64 = st_xor_val[sp] as i64
+        let last: i64 = st_last[sp] as i64
+        let odd_count: i64 = st_odd_count[sp] as i64
+
+        if odd_count != 0 {
+            let cand: i64 = target ^ xor_val
+            if cand > last && cand <= g_limit && g_flags[cand] != 0 {
+                if prod <= bound / cand {
+                    total = (total + contribution(prod * cand, bound, multiplier)) % MOD
+                }
+            }
+        }
+
+        let next_odd_count: i64 = odd_count ^ 1
+        let mut j: i64 = next_idx
+        while j < plen {
+            let q: i64 = g_odd_primes[j] as i64
+            if prod > bound / q { break }
+            let new_prod: i64 = prod * q
+            let first: i64 = q + 2
+            if new_prod > bound / first { break }
+            if next_odd_count == 0 {
+                let temp: i64 = new_prod * first
+                if temp > bound / (first + 2) { break }
+            }
+            st_prod[sp] = new_prod
+            st_next_idx[sp] = (j + 1) as i32
+            st_xor_val[sp] = (xor_val ^ q) as i32
+            st_last[sp] = q as i32
+            st_odd_count[sp] = next_odd_count as i32
+            sp = sp + 1
+            j = j + 1
+        }
+    }
+
+    free(st_prod)
+    free(st_next_idx)
+    free(st_xor_val)
+    free(st_last)
+    free(st_odd_count)
+    return total % MOD
+}
+
+function prime_sieve(limit: i64) -> void {
+    let flags: ptr<i8> = malloc(limit + 1)
+    memset(flags, 1, limit + 1)
+    flags[0] = 0
+    flags[1] = 0
+    let mut p: i64 = 2
+    while p * p <= limit {
+        if flags[p] != 0 {
+            let mut j: i64 = p * p
+            while j <= limit {
+                flags[j] = 0
+                j = j + p
+            }
+        }
+        p = p + 1
+    }
+    let mut count: i64 = 0
+    let mut pp: i64 = 3
+    while pp <= limit {
+        if flags[pp] != 0 { count = count + 1 }
+        pp = pp + 2
+    }
+    let odd_primes: ptr<i32> = malloc(count * 4)
+    let mut ii: i64 = 0
+    let mut pp2: i64 = 3
+    while pp2 <= limit {
+        if flags[pp2] != 0 {
+            odd_primes[ii] = pp2 as i32
+            ii = ii + 1
+        }
+        pp2 = pp2 + 2
+    }
+    g_flags = flags
+    g_odd_primes = odd_primes
+    g_odd_prime_count = count
 }
 
 function main() -> i32 {
-    printf("%lld\n", p953_native())
+    INV6 = my_mod_pow(6, MOD - 2, MOD)
+
+    let n: i64 = 100000000000000
+    let prime_limit: i64 = isqrt_ll(2 * n) + 10
+
+    prime_sieve(prime_limit)
+    g_limit = prime_limit
+
+    let result: i64 = (branch_sum(n, 0, 1) + branch_sum(n / 2, 2, 2)) % MOD
+
+    printf("%lld\n", result)
+    free(g_flags)
+    free(g_odd_primes)
     return 0
 }

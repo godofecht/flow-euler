@@ -1,11 +1,285 @@
-# Project Euler 769
-# Count primitive representations of squares by x^2 + 5xy + 3y^2 up to N=10^14.
+# Project Euler 769: Count primitive representations of squares by
+# f(x,y) = x^2 + 5xy + 3y^2, i.e. f(x,y) = z^2 with z <= N, x,y>0, gcd(x,y)=1.
+# N = 10^14. Two branches with inclusion-exclusion over distinct prime factors.
+# Pure Flow port of the native C solver.
+
+import euler.nt { isqrt }
 
 extern {
-    function p769_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+const SQRT3: f64 = 1.7320508075688772
+
+# Inverses mod 13.
+let mut inv_mod13: ptr<i32> = null
+
+function init_inv_mod13() -> void {
+    inv_mod13 = calloc(13, 4) as ptr<i32>
+    let mut a: i32 = 1
+    while a < 13 {
+        let mut x: i32 = 1
+        while x < 13 {
+            if (a * x) % 13 == 1 {
+                inv_mod13[a] = x
+                x = 13
+            }
+            x = x + 1
+        }
+        a = a + 1
+    }
+}
+
+# Linear sieve for smallest prime factor.
+let mut spf_arr: ptr<i32> = null
+
+function build_spf(n: i64) -> void {
+    spf_arr = calloc(n + 1, 4) as ptr<i32>
+    let primes: ptr<i32> = calloc(n, 4) as ptr<i32>
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= n {
+        if spf_arr[i] == 0 {
+            spf_arr[i] = i as i32
+            primes[pc] = i as i32
+            pc = pc + 1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let v: i64 = (primes[j] as i64) * i
+            if v > n {
+                j = pc
+            } else {
+                spf_arr[v] = primes[j]
+                if (primes[j] as i64) == (spf_arr[i] as i64) {
+                    j = pc
+                } else {
+                    j = j + 1
+                }
+            }
+        }
+        i = i + 1
+    }
+    free(primes)
+}
+
+# Distinct prime factors of n (n <= spf table size).
+function distinct_prime_factors(n0: i64, out: ptr<i32>) -> i64 {
+    let mut cnt: i64 = 0
+    let mut n: i64 = n0
+    while n > 1 {
+        let p: i32 = spf_arr[n]
+        out[cnt] = p
+        cnt = cnt + 1
+        while n % (p as i64) == 0 {
+            n = n / (p as i64)
+        }
+    }
+    return cnt
+}
+
+# Generate squarefree divisors and Mobius values.
+function gen_divisors_mu(primes: ptr<i32>, np: i64, ds: ptr<i64>, mus: ptr<i32>) -> i64 {
+    ds[0] = 1
+    mus[0] = 1
+    let mut len: i64 = 1
+    let mut i: i64 = 0
+    while i < np {
+        let p: i64 = primes[i] as i64
+        let mut j: i64 = 0
+        while j < len {
+            ds[j + len] = ds[j] * p
+            mus[j + len] = -mus[j]
+            j = j + 1
+        }
+        len = len * 2
+        i = i + 1
+    }
+    return len
+}
+
+# Count integers in [L, R] with x = rem (mod modv), 0 <= rem < modv.
+function count_cong(L: i64, R: i64, modv: i64, rem0: i64) -> i64 {
+    let mut rem: i64 = rem0
+    if rem < L {
+        rem = rem + ((L - rem + modv - 1) / modv) * modv
+    }
+    if rem > R {
+        return 0
+    }
+    return 1 + (R - rem) / modv
+}
+
+# Count coprime q in [L, R] with gcd(q, n) = 1.
+function count_coprime_interval(L: i64, R: i64, ds: ptr<i64>, mus: ptr<i32>, nd: i64) -> i64 {
+    let Lm: i64 = L - 1
+    let mut total: i64 = 0
+    let mut i: i64 = 0
+    while i < nd {
+        total = total + (mus[i] as i64) * (R / ds[i] - Lm / ds[i])
+        i = i + 1
+    }
+    return total
+}
+
+# Count coprime q in [L, R] with q = rem13 (mod 13).
+function count_coprime_mod13(ds: ptr<i64>, mus: ptr<i32>, nd: i64, L: i64, R: i64, rem13: i32) -> i64 {
+    let mut total: i64 = 0
+    let mut i: i64 = 0
+    while i < nd {
+        let d: i64 = ds[i]
+        let inv: i32 = inv_mod13[(d % 13) as i32]
+        let m0: i32 = (rem13 * inv) % 13
+        let rem: i64 = d * (m0 as i64)
+        let modv: i64 = 13 * d
+        total = total + (mus[i] as i64) * count_cong(L, R, modv, rem)
+        i = i + 1
+    }
+    return total
+}
+
+# Binary search for max a in negative branch.
+function max_abs_p_negative(N: i64) -> i64 {
+    let hi: i64 = isqrt(N) + 2
+    let mut lo: i64 = 0
+    while lo + 1 < hi {
+        let a: i64 = (lo + hi) / 2
+        if a == 0 {
+            lo = a
+        } else {
+            let mut qmin: i64 = (SQRT3 * (a as f64)) as i64 + 1
+            let thr: i64 = 3 * a * a
+            while qmin * qmin <= thr {
+                qmin = qmin + 1
+            }
+            let qmax: i64 = (5 * a - 1) / 2
+            let mut ok: i32 = 0
+            if qmin <= qmax {
+                let z: i64 = -(qmin * qmin - 5 * a * qmin + 3 * a * a)
+                if z <= N {
+                    ok = 1
+                }
+            }
+            if ok != 0 {
+                lo = a
+            } else {
+                hi = a
+            }
+        }
+    }
+    return lo
+}
+
+# Main count C(N).
+function C_func(N: i64) -> i64 {
+    let fourN: i64 = 4 * N
+    let mut total: i64 = 0
+
+    let primes: ptr<i32> = calloc(32, 4) as ptr<i32>
+    let ds: ptr<i64> = calloc(256, 8) as ptr<i64>
+    let mus: ptr<i32> = calloc(256, 4) as ptr<i32>
+
+    # Branch 1: p > 0, q > sqrt(3)*p, z = q^2 + 5pq + 3p^2
+    let pmax: i64 = isqrt(N / 3)
+    let mut p: i64 = 1
+    while p <= pmax {
+        let mut qmin: i64 = (SQRT3 * (p as f64)) as i64 + 1
+        let thr: i64 = 3 * p * p
+        while qmin * qmin <= thr {
+            qmin = qmin + 1
+        }
+
+        let disc: i64 = 13 * p * p + fourN
+        let mut qmax: i64 = (isqrt(disc) - 5 * p) / 2
+        if qmax >= qmin {
+            let pp3: i64 = 3 * p * p
+            while qmax >= qmin && (qmax * qmax + 5 * p * qmax + pp3) > N {
+                qmax = qmax - 1
+            }
+            if qmax >= qmin {
+                let np: i64 = distinct_prime_factors(p, primes)
+                let nd: i64 = gen_divisors_mu(primes, np, ds, mus)
+
+                let mut cnt: i64 = count_coprime_interval(qmin, qmax, ds, mus, nd)
+
+                if p % 13 != 0 {
+                    let bad: i64 = count_coprime_mod13(ds, mus, nd, qmin, qmax, ((4 * p) % 13) as i32)
+                    cnt = cnt - bad
+                }
+                total = total + cnt
+            }
+        }
+        p = p + 1
+    }
+
+    # Branch 2: p = -a < 0, sqrt(3)*a < q < 2.5a, z = -(q^2 - 5aq + 3a^2)
+    let amax: i64 = max_abs_p_negative(N)
+    let threshold: i64 = isqrt(fourN / 13)
+
+    let mut a: i64 = 1
+    while a <= amax {
+        let mut qmin: i64 = (SQRT3 * (a as f64)) as i64 + 1
+        let thr: i64 = 3 * a * a
+        while qmin * qmin <= thr {
+            qmin = qmin + 1
+        }
+
+        let mut qmax: i64 = (5 * a - 1) / 2
+        if qmax >= qmin {
+            if a > threshold {
+                let disc2: i64 = 13 * a * a - fourN
+                let s: i64 = isqrt(disc2)
+                let lim: i64 = (5 * a - s) / 2
+                if lim < qmax {
+                    qmax = lim
+                }
+            }
+
+            while qmax >= qmin && (-(qmax * qmax - 5 * a * qmax + 3 * a * a)) > N {
+                qmax = qmax - 1
+            }
+            if qmax >= qmin {
+                let np: i64 = distinct_prime_factors(a, primes)
+                let nd: i64 = gen_divisors_mu(primes, np, ds, mus)
+
+                let mut cnt: i64 = count_coprime_interval(qmin, qmax, ds, mus, nd)
+
+                if a % 13 != 0 {
+                    let rem13: i32 = ((((-4 * a) % 13) + 13) % 13) as i32
+                    let bad: i64 = count_coprime_mod13(ds, mus, nd, qmin, qmax, rem13)
+                    cnt = cnt - bad
+                }
+                total = total + cnt
+            }
+        }
+        a = a + 1
+    }
+
+    free(primes)
+    free(ds)
+    free(mus)
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p769_native())
+    init_inv_mod13()
+
+    let N: i64 = 100000000000000
+    let pmax: i64 = isqrt(N / 3)
+    let amax: i64 = max_abs_p_negative(N)
+    let mut maxp: i64 = pmax
+    if amax > maxp {
+        maxp = amax
+    }
+
+    build_spf(maxp)
+
+    let ans: i64 = C_func(N)
+
+    free(spf_arr)
+    free(inv_mod13)
+    printf("%lld\n", ans)
     return 0
 }

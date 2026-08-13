@@ -1,8 +1,271 @@
+# Project Euler 913
+# i128, sieve, factorization, number theory.
+
+import euler.nt { gcd, lcm }
+
 extern {
-    function p913_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(dst: ptr<void>, val: i32, n: i64) -> void
+}
+
+const SIEVE_LIMIT: i64 = 100000
+const MAX_PF: i32 = 20
+const MAX_EX: i32 = 64
+
+let mut g_primes: ptr<i64> = null
+let mut g_prime_count: i32 = 0
+let mut g_sieve_done: i32 = 0
+
+let mut g_phi: ptr<i64> = null
+let mut g_ord: ptr<i64> = null
+let mut g_exps: ptr<i32> = null
+
+struct Factors {
+    p: array<i64, 32>
+    e: array<i32, 32>
+    n: i32
+}
+
+function factors_zero() -> Factors {
+    return Factors {
+        p: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        e: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        n: 0
+    }
+}
+
+function init_sieve() -> void {
+    if g_sieve_done != 0 { return }
+    g_sieve_done = 1
+    let is_comp: ptr<i8> = calloc(SIEVE_LIMIT + 1, 1)
+    memset(is_comp as ptr<void>, 0, SIEVE_LIMIT + 1)
+    let mut p: i64 = 2
+    while p * p <= SIEVE_LIMIT {
+        if is_comp[p] == 0 {
+            let mut i: i64 = p * p
+            while i <= SIEVE_LIMIT {
+                is_comp[i] = 1
+                i = i + p
+            }
+        }
+        p = p + 1
+    }
+    g_primes = calloc(10000, 8)
+    let mut i: i64 = 2
+    while i <= SIEVE_LIMIT {
+        if is_comp[i] == 0 {
+            g_primes[g_prime_count] = i
+            g_prime_count = g_prime_count + 1
+        }
+        i = i + 1
+    }
+    free(is_comp as ptr<void>)
+}
+
+function factorize(n_in: i64) -> Factors {
+    let mut f: Factors = factors_zero()
+    let mut n: i64 = n_in
+    if n <= 1 { return f }
+    let mut i: i32 = 0
+    while i < g_prime_count {
+        let p: i64 = g_primes[i]
+        if p * p > n { break }
+        if n % p == 0 {
+            f.p[f.n] = p
+            f.e[f.n] = 0
+            while n % p == 0 {
+                n = n / p
+                f.e[f.n] = f.e[f.n] + 1
+            }
+            f.n = f.n + 1
+        }
+        i = i + 1
+    }
+    if n > 1 {
+        f.p[f.n] = n
+        f.e[f.n] = 1
+        f.n = f.n + 1
+    }
+    return f
+}
+
+function merge_factors(a: Factors, b: Factors) -> Factors {
+    let mut r: Factors = a
+    for i in 0..b.n {
+        let mut found: i32 = 0 - 1
+        for j in 0..r.n {
+            if r.p[j] == b.p[i] {
+                found = j
+                break
+            }
+        }
+        if found >= 0 {
+            r.e[found] = r.e[found] + b.e[i]
+        } else {
+            r.p[r.n] = b.p[i]
+            r.e[r.n] = b.e[i]
+            r.n = r.n + 1
+        }
+    }
+    return r
+}
+
+function factorize_t4m1(t: i64) -> Factors {
+    let f1: Factors = factorize(t - 1)
+    let f2: Factors = factorize(t + 1)
+    let f3: Factors = factorize(t * t + 1)
+    let r: Factors = merge_factors(f1, f2)
+    return merge_factors(r, f3)
+}
+
+function lcm64(a: i64, b: i64) -> i64 {
+    return (a / gcd(a, b)) * b
+}
+
+function powmod128(a_in: i64, e_in: i64, mod: i64) -> i64 {
+    let mut r: i128 = 1
+    let mut b: i128 = a_in % mod
+    if b < 0 { b = b + (mod as i128) }
+    let mut e: i64 = e_in
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = r * b % (mod as i128)
+        }
+        b = b * b % (mod as i128)
+        e = e >> 1
+    }
+    return r as i64
+}
+
+function phi_pp(p: i64, a: i32) -> i64 {
+    if a == 0 { return 1 }
+    if p == 2 { return (1 as i64) << (a - 1) }
+    let mut r: i64 = p - 1
+    let mut i: i32 = 1
+    while i < a {
+        r = r * p
+        i = i + 1
+    }
+    return r
+}
+
+function carmichael(p: i64, exp: i32) -> i64 {
+    if exp <= 0 { return 1 }
+    if p == 2 {
+        if exp == 1 { return 1 }
+        if exp == 2 { return 2 }
+        return (1 as i64) << (exp - 2)
+    }
+    let mut r: i64 = p - 1
+    let mut i: i32 = 1
+    while i < exp {
+        r = r * p
+        i = i + 1
+    }
+    return r
+}
+
+function mult_order(a_in: i64, p: i64, exp: i32) -> i64 {
+    let mut mod_: i64 = 1
+    let mut i: i32 = 0
+    while i < exp {
+        mod_ = mod_ * p
+        i = i + 1
+    }
+    if mod_ == 1 { return 1 }
+    let a: i64 = a_in % mod_
+    let lam: i64 = carmichael(p, exp)
+    let q: array<i64, 32> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let mut qn: i32 = 0
+    if p == 2 {
+        if exp >= 2 {
+            q[qn] = 2
+            qn = qn + 1
+        }
+    } else {
+        let pf: Factors = factorize(p - 1)
+        for i in 0..pf.n {
+            q[qn] = pf.p[i]
+            qn = qn + 1
+        }
+        if exp >= 2 {
+            q[qn] = p
+            qn = qn + 1
+        }
+    }
+    let mut order: i64 = lam
+    for i in 0..qn {
+        while order % q[i] == 0 {
+            if powmod128(a, order / q[i], mod_) == 1 {
+                order = order / q[i]
+            } else {
+                break
+            }
+        }
+    }
+    return order
+}
+
+function dfs(i: i32, np: i32, cur_phi: i64, cur_ord: i64, total: ptr<i64>) -> void {
+    if i == np {
+        total[0] = total[0] + cur_phi / cur_ord
+        return
+    }
+    let mut a: i32 = 0
+    while a <= g_exps[i] {
+        let phi_val: i64 = g_phi[(i as i64) * (MAX_EX as i64) + (a as i64)]
+        let ord_val: i64 = g_ord[(i as i64) * (MAX_EX as i64) + (a as i64)]
+        dfs(i + 1, np, cur_phi * phi_val, lcm64(cur_ord, ord_val), total)
+        a = a + 1
+    }
+}
+
+function sum_phi_over_order(mult: i64, fac: ptr<Factors>) -> i64 {
+    let np: i32 = fac[0].n
+    let mut i: i32 = 0
+    while i < np {
+        let p: i64 = fac[0].p[i]
+        let e: i32 = fac[0].e[i]
+        g_exps[i] = e
+        let mut a: i32 = 0
+        while a <= e {
+            g_phi[(i as i64) * (MAX_EX as i64) + (a as i64)] = phi_pp(p, a)
+            if a == 0 {
+                g_ord[(i as i64) * (MAX_EX as i64) + (a as i64)] = 1
+            } else {
+                g_ord[(i as i64) * (MAX_EX as i64) + (a as i64)] = mult_order(mult, p, a)
+            }
+            a = a + 1
+        }
+        i = i + 1
+    }
+    let mut total: i64 = 0
+    dfs(0, np, 1, 1, &total)
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p913_native())
+    init_sieve()
+    g_phi = calloc((MAX_PF as i64) * (MAX_EX as i64), 8)
+    g_ord = calloc((MAX_PF as i64) * (MAX_EX as i64), 8)
+    g_exps = calloc(MAX_PF as i64, 4)
+
+    let mut ans: i128 = 0
+    for n in 2..101 {
+        for m in n..101 {
+            let t: i64 = (n as i64) * (m as i64)
+            let N: i64 = t * t * t * t
+            let fac: Factors = factorize_t4m1(t)
+            let mult: i64 = (m as i64) * (m as i64) * (m as i64) * (m as i64)
+            let contrib: i64 = sum_phi_over_order(mult, &fac)
+            let S: i64 = (N - 1) - contrib
+            ans = ans + (S as i128)
+        }
+    }
+    printf("%lld\n", ans as i64)
     return 0
 }

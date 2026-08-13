@@ -1,11 +1,538 @@
 # Project Euler 812
-# Dynamical Polynomials — NTT-based polynomial exp/ln (native C).
+# Dynamical Polynomials: S(10000) mod 998244353 via NTT-based polynomial exp/ln.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p812_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 998244353
+const PRIMITIVE_ROOT: i64 = 3
+
+let mut g_out_len: i32 = 0
+let mut g_prime_count: i32 = 0
+
+function powmod(base: i64, exp: i64, mod_val: i64) -> i64 {
+    let mut r: i64 = 1 % mod_val
+    let mut b: i64 = base % mod_val
+    if b < 0 { b = b + mod_val }
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            r = r * b % mod_val
+        }
+        b = b * b % mod_val
+        e = e / 2
+    }
+    return r
+}
+
+function inv_mod(a: i64) -> i64 {
+    return powmod(a, MOD - 2, MOD)
+}
+
+function ntt(a: ptr<i64>, n: i32, invert: i32) -> void {
+    let mut j: i32 = 0
+    let mut i: i32 = 1
+    while i < n {
+        let mut bit: i32 = n >> 1
+        while (j & bit) != 0 {
+            j = j ^ bit
+            bit = bit >> 1
+        }
+        j = j ^ bit
+        if i < j {
+            let tmp: i64 = a[i]
+            a[i] = a[j]
+            a[j] = tmp
+        }
+        i = i + 1
+    }
+
+    let mut len_val: i32 = 2
+    while len_val <= n {
+        let mut wlen: i64 = powmod(PRIMITIVE_ROOT, (MOD - 1) / (len_val as i64), MOD)
+        if invert != 0 {
+            wlen = powmod(wlen, MOD - 2, MOD)
+        }
+        let half: i32 = len_val >> 1
+        let mut i2: i32 = 0
+        while i2 < n {
+            let mut w: i64 = 1
+            let mut j2: i32 = 0
+            while j2 < half {
+                let u: i64 = a[i2 + j2]
+                let v: i64 = a[i2 + j2 + half] * w % MOD
+                a[i2 + j2] = (u + v) % MOD
+                let mut tmp2: i64 = (u - v) % MOD
+                if tmp2 < 0 { tmp2 = tmp2 + MOD }
+                a[i2 + j2 + half] = tmp2
+                w = w * wlen % MOD
+                j2 = j2 + 1
+            }
+            i2 = i2 + len_val
+        }
+        len_val = len_val << 1
+    }
+
+    if invert != 0 {
+        let inv_n: i64 = powmod(n as i64, MOD - 2, MOD)
+        let mut i3: i32 = 0
+        while i3 < n {
+            a[i3] = a[i3] * inv_n % MOD
+            i3 = i3 + 1
+        }
+    }
+}
+
+function polymul(a: ptr<i64>, la: i32, b: ptr<i64>, lb: i32) -> ptr<i64> {
+    if la == 0 || lb == 0 {
+        g_out_len = 0
+        return null
+    }
+    let n: i32 = la + lb - 1
+
+    # Small-size fallback
+    if la <= 32 || lb <= 32 {
+        let res: ptr<i64> = calloc(n as i64, 8)
+        let mut i: i32 = 0
+        while i < la {
+            if a[i] != 0 {
+                let mut j: i32 = 0
+                while j < lb {
+                    res[i + j] = (res[i + j] + a[i] * b[j]) % MOD
+                    j = j + 1
+                }
+            }
+            i = i + 1
+        }
+        g_out_len = n
+        return res
+    }
+
+    let mut size: i32 = 1
+    while size < n {
+        size = size << 1
+    }
+    let fa: ptr<i64> = calloc(size as i64, 8)
+    let fb: ptr<i64> = calloc(size as i64, 8)
+    memcpy(fa, a, (la as i64) * 8)
+    memcpy(fb, b, (lb as i64) * 8)
+    ntt(fa, size, 0)
+    ntt(fb, size, 0)
+    let mut i: i32 = 0
+    while i < size {
+        fa[i] = fa[i] * fb[i] % MOD
+        i = i + 1
+    }
+    ntt(fa, size, 1)
+    let res: ptr<i64> = malloc((n as i64) * 8)
+    memcpy(res, fa, (n as i64) * 8)
+    free(fa)
+    free(fb)
+    g_out_len = n
+    return res
+}
+
+function poly_der(a: ptr<i64>, la: i32) -> ptr<i64> {
+    if la <= 1 {
+        g_out_len = 0
+        return null
+    }
+    let out_len: i32 = la - 1
+    let res: ptr<i64> = malloc((out_len as i64) * 8)
+    let mut i: i32 = 1
+    while i < la {
+        res[i - 1] = (i as i64) * a[i] % MOD
+        i = i + 1
+    }
+    g_out_len = out_len
+    return res
+}
+
+function poly_int(a: ptr<i64>, la: i32, invs: ptr<i64>) -> ptr<i64> {
+    let out_len: i32 = la + 1
+    let res: ptr<i64> = calloc(out_len as i64, 8)
+    let mut i: i32 = 0
+    while i < la {
+        res[i + 1] = a[i] * invs[i + 1] % MOD
+        i = i + 1
+    }
+    g_out_len = out_len
+    return res
+}
+
+function poly_inv(a: ptr<i64>, la: i32, n: i32) -> ptr<i64> {
+    let res: ptr<i64> = calloc(n as i64, 8)
+    res[0] = powmod(a[0], MOD - 2, MOD)
+    let mut m: i32 = 1
+    while m < n {
+        let mut m2: i32 = m * 2
+        if m2 > n { m2 = n }
+        let la_used: i32 = la
+        let la_arg: i32 = if la_used > m2 { m2 } else { la_used }
+        let t: ptr<i64> = polymul(a, la_arg, res, m)
+        let t_len: i32 = g_out_len
+        let tl: i32 = if t_len > m2 { m2 } else { t_len }
+        let t2: ptr<i64> = calloc(m2 as i64, 8)
+        let mut i: i32 = 0
+        while i < tl {
+            t2[i] = t[i]
+            i = i + 1
+        }
+        free(t)
+        t2[0] = (2 - t2[0]) % MOD
+        if t2[0] < 0 { t2[0] = t2[0] + MOD }
+        let mut i2: i32 = 1
+        while i2 < m2 {
+            t2[i2] = (0 - t2[i2]) % MOD
+            if t2[i2] < 0 { t2[i2] = t2[i2] + MOD }
+            i2 = i2 + 1
+        }
+        let new_res: ptr<i64> = polymul(res, m, t2, m2)
+        let r_len: i32 = g_out_len
+        let rl: i32 = if r_len > m2 { m2 } else { r_len }
+        memcpy(res, new_res, (rl as i64) * 8)
+        free(new_res)
+        free(t2)
+        m = m2
+    }
+    g_out_len = n
+    return res
+}
+
+function poly_ln(a: ptr<i64>, la: i32, n: i32, invs: ptr<i64>) -> ptr<i64> {
+    let der: ptr<i64> = poly_der(a, la)
+    let der_len: i32 = g_out_len
+    let inv_a: ptr<i64> = poly_inv(a, la, n)
+    let inv_len: i32 = g_out_len
+    let q: ptr<i64> = polymul(der, der_len, inv_a, inv_len)
+    let q_len: i32 = g_out_len
+    let ql: i32 = if n - 1 > q_len { q_len } else { n - 1 }
+    if ql < 0 { ql = 0 }
+    let result: ptr<i64> = poly_int(q, ql, invs)
+    let int_len: i32 = g_out_len
+    let rl: i32 = if n > int_len { int_len } else { n }
+    free(der)
+    free(inv_a)
+    free(q)
+    let res: ptr<i64> = calloc(n as i64, 8)
+    memcpy(res, result, (rl as i64) * 8)
+    free(result)
+    g_out_len = n
+    return res
+}
+
+function poly_exp(f: ptr<i64>, lf: i32, n: i32, invs: ptr<i64>) -> ptr<i64> {
+    let g: ptr<i64> = calloc(n as i64, 8)
+    g[0] = 1
+    let mut m: i32 = 1
+    while m < n {
+        let mut m2: i32 = m * 2
+        if m2 > n { m2 = n }
+        let g_pad: ptr<i64> = calloc(m2 as i64, 8)
+        memcpy(g_pad, g, (m as i64) * 8)
+        let ln_g: ptr<i64> = poly_ln(g_pad, m2, m2, invs)
+        let ln_len: i32 = g_out_len
+        let diff: ptr<i64> = calloc(m2 as i64, 8)
+        let mut i: i32 = 0
+        while i < m2 {
+            let fi: i64 = if i < lf { f[i] } else { 0 }
+            let mut d: i64 = (fi - ln_g[i]) % MOD
+            if d < 0 { d = d + MOD }
+            diff[i] = d
+            i = i + 1
+        }
+        diff[0] = (diff[0] + 1) % MOD
+        let new_g: ptr<i64> = polymul(g, m, diff, m2)
+        let new_len: i32 = g_out_len
+        let nl: i32 = if new_len > m2 { m2 } else { new_len }
+        memcpy(g, new_g, (nl as i64) * 8)
+        free(g_pad)
+        free(ln_g)
+        free(diff)
+        free(new_g)
+        m = m2
+    }
+    g_out_len = n
+    return g
+}
+
+function special_component(N: i32) -> ptr<i64> {
+    let inv2: i64 = (MOD + 1) / 2
+    let v1: ptr<i64> = calloc((N + 1) as i64, 8)
+    v1[0] = 1
+    let mut p: i32 = 2
+    while p <= N {
+        let mut d: i32 = p
+        while d <= N {
+            v1[d] = (v1[d] + v1[d - p]) % MOD
+            d = d + 1
+        }
+        p = p << 1
+    }
+
+    let vminus: ptr<i64> = calloc((N + 1) as i64, 8)
+    vminus[0] = 1
+    let mut p2: i32 = 2
+    while p2 <= N {
+        let new_arr: ptr<i64> = calloc((N + 1) as i64, 8)
+        let mut d: i32 = 0
+        while d <= N {
+            let mut val: i64 = vminus[d]
+            if d >= p2 {
+                val = (val - new_arr[d - p2]) % MOD
+                if val < 0 { val = val + MOD }
+            }
+            new_arr[d] = val
+            d = d + 1
+        }
+        free(vminus)
+        # Can't reassign vminus to new_arr directly; use a temp
+        # Actually in Flow we can reassign let mut... wait, vminus is not mut
+        # Let me use a different approach
+        # Copy new_arr into vminus
+        # Actually, vminus is not mutable. Let me restructure.
+        # I'll use a mutable global or restructure the code.
+        # For now, let me copy new_arr back into vminus
+        let mut d2: i32 = 0
+        while d2 <= N {
+            vminus[d2] = new_arr[d2]
+            d2 = d2 + 1
+        }
+        free(new_arr)
+        p2 = p2 << 1
+    }
+
+    # P(x) = 1/2 * ((1+x)V1 + (1-x)Vminus)
+    let pser: ptr<i64> = calloc((N + 1) as i64, 8)
+    let mut d3: i32 = 0
+    while d3 <= N {
+        let mut t1: i64 = v1[d3]
+        if d3 > 0 { t1 = (t1 + v1[d3 - 1]) % MOD }
+        let mut t2: i64 = vminus[d3]
+        if d3 > 0 {
+            t2 = (t2 - vminus[d3 - 1]) % MOD
+            if t2 < 0 { t2 = t2 + MOD }
+        }
+        pser[d3] = (t1 + t2) % MOD * inv2 % MOD
+        d3 = d3 + 1
+    }
+
+    # Multiply by 1/(1-x): prefix sums
+    let a: ptr<i64> = calloc((N + 1) as i64, 8)
+    let mut s: i64 = 0
+    let mut d4: i32 = 0
+    while d4 <= N {
+        s = (s + pser[d4]) % MOD
+        a[d4] = s
+        d4 = d4 + 1
+    }
+
+    # Multiply by 1/(1-x^2)
+    let b: ptr<i64> = calloc((N + 1) as i64, 8)
+    let mut d5: i32 = 0
+    while d5 <= N {
+        let mut val: i64 = a[d5]
+        if d5 >= 2 { val = (val + b[d5 - 2]) % MOD }
+        b[d5] = val
+        d5 = d5 + 1
+    }
+
+    free(v1)
+    free(vminus)
+    free(pser)
+    free(a)
+    return b
+}
+
+function add_component_multiplicities(c: ptr<i64>, N: i32) -> void {
+    let limit_phi: i32 = 2 * N
+
+    # Sieve primes <= limit_phi + 1
+    let sieve_n: i32 = limit_phi + 1
+    let bs: ptr<i8> = malloc((sieve_n + 1) as i64)
+    memset(bs, 1, (sieve_n + 1) as i64)
+    bs[0] = 0
+    bs[1] = 0
+    let mut p: i32 = 2
+    while (p as i64) * (p as i64) <= sieve_n as i64 {
+        if bs[p] != 0 {
+            let mut j: i32 = p * p
+            while j <= sieve_n {
+                bs[j] = 0
+                j = j + p
+            }
+        }
+        p = p + 1
+    }
+    let mut prime_count: i32 = 0
+    let mut i: i32 = 2
+    while i <= sieve_n {
+        if bs[i] != 0 { prime_count = prime_count + 1 }
+        i = i + 1
+    }
+    let primes: ptr<i32> = malloc((prime_count as i64) * 4)
+    let mut idx: i32 = 0
+    let mut i2: i32 = 2
+    while i2 <= sieve_n {
+        if bs[i2] != 0 {
+            primes[idx] = i2
+            idx = idx + 1
+        }
+        i2 = i2 + 1
+    }
+    free(bs)
+
+    # Filter odd primes
+    let odd_primes: ptr<i32> = malloc((prime_count as i64) * 4)
+    let mut nop: i32 = 0
+    let mut i3: i32 = 0
+    while i3 < prime_count {
+        if (primes[i3] & 1) != 0 {
+            odd_primes[nop] = primes[i3]
+            nop = nop + 1
+        }
+        i3 = i3 + 1
+    }
+
+    # DFS using explicit stack
+    # Stack frame: (start_idx, n_val, phi_val)
+    let stack_cap: i32 = 200000
+    let stack_start: ptr<i32> = malloc((stack_cap as i64) * 4)
+    let stack_n: ptr<i64> = malloc((stack_cap as i64) * 8)
+    let stack_phi: ptr<i64> = malloc((stack_cap as i64) * 8)
+    let mut sp: i32 = 0
+    stack_start[sp] = 0
+    stack_n[sp] = 1
+    stack_phi[sp] = 1
+    sp = sp + 1
+
+    while sp > 0 {
+        sp = sp - 1
+        let f_start: i32 = stack_start[sp]
+        let f_n: i64 = stack_n[sp]
+        let f_phi: i64 = stack_phi[sp]
+
+        # Record this odd m0 (exclude 1)
+        if f_n > 1 {
+            let ph: i64 = f_phi
+            let deg0: i64 = ph / 2
+            let mut w: i64 = 0
+            let mut k: i32 = 0
+            while true {
+                let mut deg: i64 = 0
+                if k == 0 || k == 1 {
+                    deg = deg0
+                } else {
+                    deg = ph * ((1 as i64) << (k - 2))
+                }
+                w = w + deg
+                if w > (N as i64) { break }
+                c[w] = c[w] + 1
+                k = k + 1
+            }
+        }
+
+        # Extend by adding new prime powers
+        let mut i: i32 = f_start
+        while i < nop {
+            let p_val: i32 = odd_primes[i]
+            if f_phi * ((p_val - 1) as i64) > limit_phi as i64 { break }
+
+            # exponent 1
+            if sp >= stack_cap {
+                # Should grow stack, but 200000 should be enough
+            }
+            stack_start[sp] = i + 1
+            stack_n[sp] = f_n * (p_val as i64)
+            stack_phi[sp] = f_phi * ((p_val - 1) as i64)
+            sp = sp + 1
+
+            # exponent >= 2
+            let mut n_e: i64 = f_n * (p_val as i64) * (p_val as i64)
+            let mut phi_e: i64 = f_phi * ((p_val - 1) as i64) * (p_val as i64)
+            while phi_e <= limit_phi as i64 {
+                stack_start[sp] = i + 1
+                stack_n[sp] = n_e
+                stack_phi[sp] = phi_e
+                sp = sp + 1
+                n_e = n_e * (p_val as i64)
+                phi_e = phi_e * (p_val as i64)
+            }
+            i = i + 1
+        }
+    }
+
+    free(stack_start)
+    free(stack_n)
+    free(stack_phi)
+    free(primes)
+    free(odd_primes)
+}
+
+function solve(N: i32) -> i64 {
+    let c: ptr<i64> = calloc((N + 1) as i64, 8)
+    add_component_multiplicities(c, N)
+
+    # Build g(x) = log(F)(x) where F(x) = Prod (1 - x^a)^(-c[a])
+    let g: ptr<i64> = calloc((N + 1) as i64, 8)
+    let mut d: i32 = 1
+    while d <= N {
+        let cd: i64 = c[d]
+        if cd != 0 {
+            let add_val: i64 = (d as i64) * (cd % MOD) % MOD
+            let mut k: i32 = d
+            while k <= N {
+                g[k] = (g[k] + add_val) % MOD
+                k = k + d
+            }
+        }
+        d = d + 1
+    }
+
+    # Inverses
+    let invs: ptr<i64> = calloc((N + 2) as i64, 8)
+    let mut i: i32 = 1
+    while i <= N + 1 {
+        invs[i] = inv_mod(i as i64)
+        i = i + 1
+    }
+
+    # h[k] = g[k] * invs[k]
+    let h: ptr<i64> = calloc((N + 1) as i64, 8)
+    let mut k: i32 = 1
+    while k <= N {
+        h[k] = g[k] * invs[k] % MOD
+        k = k + 1
+    }
+
+    let colored: ptr<i64> = poly_exp(h, N + 1, N + 1, invs)
+    let colored_len: i32 = g_out_len
+
+    let special: ptr<i64> = special_component(N)
+
+    # Total = convolution of colored and special
+    let total: ptr<i64> = polymul(colored, colored_len, special, N + 1)
+    let total_len: i32 = g_out_len
+
+    let result: i64 = total[N] % MOD
+
+    free(c)
+    free(g)
+    free(invs)
+    free(h)
+    free(colored)
+    free(special)
+    free(total)
+    return result
 }
 
 function main() -> i32 {
-    printf("%lld\n", p812_native())
+    printf("%lld\n", solve(10000))
     return 0
 }

@@ -3,10 +3,190 @@
 # lattice-point incenter and inradius <= 10^6.
 
 extern {
-    function p883_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+# Cache for count_hex_points_leq
+const CACHE_CAP: i64 = 1048576
+const CACHE_MASK: i64 = 1048575
+let mut g_cache_key: ptr<i64> = null
+let mut g_cache_val: ptr<i64> = null
+let mut g_cache_used: ptr<i8> = null
+
+function isqrt_u64(n: i64) -> i64 {
+    if n == 0 { return 0 }
+    let mut x: i64 = sqrt(n as f64) as i64
+    while x * x > n { x = x - 1 }
+    while (x + 1) * (x + 1) <= n { x = x + 1 }
+    return x
+}
+
+function gcd_u64(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function cache_hash(key: i64) -> i64 {
+    let h: i64 = key ^ (key >> 16)
+    let h2: i64 = h * 2654435761
+    let h3: i64 = h2 ^ (h2 >> 16)
+    return h3 & CACHE_MASK
+}
+
+function cache_lookup(key: i64, found: ptr<i32>) -> i64 {
+    let mut h: i64 = cache_hash(key)
+    while g_cache_used[h] != 0 {
+        if g_cache_key[h] == key {
+            found[0] = 1
+            return g_cache_val[h]
+        }
+        h = (h + 1) & CACHE_MASK
+    }
+    found[0] = 0
+    return 0
+}
+
+function cache_insert(key: i64, val: i64) -> void {
+    let mut h: i64 = cache_hash(key)
+    while g_cache_used[h] != 0 {
+        if g_cache_key[h] == key {
+            g_cache_val[h] = val
+            return
+        }
+        h = (h + 1) & CACHE_MASK
+    }
+    g_cache_used[h] = 1
+    g_cache_key[h] = key
+    g_cache_val[h] = val
+}
+
+function chi_prefix(m: i64) -> i64 {
+    return (m + 2) / 3 - (m + 1) / 3
+}
+
+function count_hex_points_leq(B: i64) -> i64 {
+    if B == 0 { return 1 }
+    let found: ptr<i32> = calloc(1, 4)
+    let hit: i64 = cache_lookup(B, found)
+    if found[0] == 1 {
+        free(found)
+        return hit
+    }
+    free(found)
+
+    let mut total: i64 = 0
+    let n: i64 = B
+    let mut i: i64 = 1
+    while i <= n {
+        let q: i64 = n / i
+        let j: i64 = n / q
+        total = total + q * (chi_prefix(j) - chi_prefix(i - 1))
+        i = j + 1
+    }
+
+    let res: i64 = 1 + 6 * total
+    cache_insert(B, res)
+    return res
+}
+
+function remarkable_triangles(R_num: i64, R_den: i64) -> i64 {
+    let C_num: i64 = 12 * R_num * R_num
+    let C_den: i64 = R_den * R_den
+    let Dmax: i64 = isqrt_u64(C_num / C_den)
+
+    let M: ptr<i32> = calloc(Dmax + 1, 4)
+
+    # Family 1: d = 3*t, multiplicity = 2^{omega(t)-1} where t % 3 != 1
+    let Nmax: i64 = Dmax / 3
+    let omega: ptr<i8> = calloc(Nmax + 1, 1)
+    let mut p: i64 = 2
+    while p <= Nmax {
+        if omega[p] == 0 {
+            let mut k: i64 = p
+            while k <= Nmax {
+                omega[k] = omega[k] + 1
+                k = k + p
+            }
+        }
+        p = p + 1
+    }
+    let mut t: i64 = 2
+    while t <= Nmax {
+        if t % 3 != 1 {
+            M[3 * t] = M[3 * t] + (1 << (omega[t] - 1))
+        }
+        t = t + 1
+    }
+    free(omega)
+
+    # Family 2: d = a*(a+3v), gcd(u,v)=1, u mod 3 != v mod 3
+    let D: i64 = Dmax
+    let vmax: i64 = D / 3
+    let mut v: i64 = 1
+    while v <= vmax {
+        let disc: i64 = 9 * v * v + 4 * D
+        let sq: i64 = isqrt_u64(disc)
+        let amax: i64 = (sq - 3 * v) / 2
+        if amax <= 0 { v = v + 1; continue }
+        let mut a: i64 = 1
+        while a <= amax {
+            let u: i64 = v + a
+            if u % 3 != v % 3 {
+                if gcd_u64(u, v) == 1 {
+                    let d: i64 = a * (a + 3 * v)
+                    M[d] = M[d] + 1
+                }
+            }
+            a = a + 1
+        }
+        v = v + 1
+    }
+
+    # Sum contributions over d
+    let mut total_scalene: i64 = 0
+    let mut d: i64 = 1
+    while d <= Dmax {
+        let mult: i32 = M[d]
+        if mult == 0 { d = d + 1; continue }
+        let B: i64 = C_num / (C_den * d * d)
+        if B == 0 { d = d + 1; continue }
+        let pts: i64 = 0
+        if d % 3 == 0 {
+            pts = count_hex_points_leq(B) - 1
+        } else {
+            pts = count_hex_points_leq(B / 3) - 1
+        }
+        total_scalene = total_scalene + 2 * (mult as i64) * pts
+        d = d + 1
+    }
+
+    # Equilateral triangles
+    let Beq: i64 = (4 * R_num * R_num) / (R_den * R_den)
+    let equi_points: i64 = count_hex_points_leq(Beq) - 1
+    let total_equilateral: i64 = equi_points / 3
+
+    free(M)
+    return total_scalene + total_equilateral
 }
 
 function main() -> i32 {
-    printf("%lld\n", p883_native())
+    g_cache_key = calloc(CACHE_CAP, 8)
+    g_cache_val = calloc(CACHE_CAP, 8)
+    g_cache_used = calloc(CACHE_CAP, 1)
+
+    let ans: i64 = remarkable_triangles(1000000, 1)
+    printf("%lld\n", ans)
+
+    free(g_cache_key)
+    free(g_cache_val)
+    free(g_cache_used)
     return 0
 }

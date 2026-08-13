@@ -1,12 +1,406 @@
 # Project Euler 989
 # Fibonacci sum with nonprimitive pairs, mod 1e9+9.
-# Native C helper for Tonelli-Shanks, Mobius sieve, and sliding window sums.
+# Tonelli-Shanks, Mobius sieve, and sliding window sums.
 
 extern {
-    function p989_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+}
+
+const MOD: i64 = 1000000009
+const TARGET_LIMIT: i64 = 100000000000000
+const SMALL_LIMIT: i64 = 8
+
+function mulmod(a: i64, b: i64) -> i64 {
+    return ((a as i128) * (b as i128) % MOD) as i64
+}
+
+function mod_pow(a0: i64, e0: i64) -> i64 {
+    let mut a: i64 = a0 % MOD
+    if a < 0 { a = a + MOD }
+    let mut r: i64 = 1
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 { r = mulmod(r, a) }
+        a = mulmod(a, a)
+        e = e >> 1
+    }
+    return r
+}
+
+function tonelli_shanks(n0: i64, p: i64) -> i64 {
+    let n: i64 = n0 % p
+    if n == 0 { return 0 }
+    if mod_pow(n, (p - 1) / 2) != 1 { return -1 }
+    if p % 4 == 3 { return mod_pow(n, (p + 1) / 4) }
+
+    let mut q: i64 = p - 1
+    let mut s: i64 = 0
+    while q % 2 == 0 { q = q / 2; s = s + 1 }
+
+    let mut z: i64 = 2
+    while mod_pow(z, (p - 1) / 2) != p - 1 { z = z + 1 }
+
+    let mut m: i64 = s
+    let mut c: i64 = mod_pow(z, q)
+    let mut t: i64 = mod_pow(n, q)
+    let mut r: i64 = mod_pow(n, (q + 1) / 2)
+
+    while t != 1 {
+        let mut i: i64 = 1
+        let mut t2i: i64 = mulmod(t, t)
+        while t2i != 1 { t2i = mulmod(t2i, t2i); i = i + 1 }
+        let b: i64 = mod_pow(c, 1 << (m - i - 1))
+        r = mulmod(r, b)
+        c = mulmod(b, b)
+        t = mulmod(t, c)
+        m = i
+    }
+    return r
+}
+
+function isqrt_i64(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut r: i64 = sqrt(n as f64) as i64
+    while r > 0 && r * r > n { r = r - 1 }
+    while (r + 1) * (r + 1) <= n { r = r + 1 }
+    return r
+}
+
+function mobius_sieve(limit: i64) -> ptr<i8> {
+    let mu: ptr<i8> = calloc(limit + 1, 1)
+    memset(mu, 1, limit + 1)
+    let is_prime: ptr<i8> = calloc(limit + 1, 1)
+    memset(is_prime, 1, limit + 1)
+    if limit >= 0 { is_prime[0] = 0 }
+    if limit >= 1 { is_prime[1] = 0 }
+
+    let mut p: i64 = 2
+    while p <= limit {
+        if is_prime[p] == 0 {
+            p = p + 1
+            continue
+        }
+        let mut mult: i64 = p
+        while mult <= limit {
+            mu[mult] = -mu[mult]
+            mult = mult + p
+        }
+        let square: i64 = p * p
+        if square <= limit {
+            let mut mult2: i64 = square
+            while mult2 <= limit {
+                mu[mult2] = 0
+                mult2 = mult2 + square
+            }
+            let mut mult3: i64 = square
+            while mult3 <= limit {
+                is_prime[mult3] = 0
+                mult3 = mult3 + p
+            }
+        }
+        let mut mult4: i64 = p + p
+        while mult4 <= limit {
+            is_prime[mult4] = 0
+            mult4 = mult4 + p
+        }
+        p = p + 1
+    }
+    free(is_prime as ptr<void>)
+    return mu
+}
+
+# Small nonprimitive terms: q = a^2 - ab - b^2, 0 < q <= 8
+const MAX_SMALL: i32 = 16
+
+function build_small_values(out: ptr<i32>) -> i32 {
+    let max_a: i32 = 2 * isqrt_i64(SMALL_LIMIT) + 2
+    let mut count: i32 = 0
+    let mut a: i32 = 2
+    while a <= max_a {
+        let mut b: i32 = 1
+        while b <= a / 2 {
+            let q: i32 = a * a - a * b - b * b
+            if q > 0 && q <= (SMALL_LIMIT as i32) {
+                out[count] = q
+                count = count + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    # insertion sort
+    let mut i: i32 = 0
+    while i < count {
+        let mut j: i32 = i + 1
+        while j < count {
+            if out[j] < out[i] {
+                let t: i32 = out[i]
+                out[i] = out[j]
+                out[j] = t
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return count
+}
+
+function eval_small_nonprimitive_pair(limit: i64, z1: i64, z2: i64,
+                                       sv: ptr<i32>, svc: i32,
+                                       out1: ptr<i64>, out2: ptr<i64>) -> void {
+    let mut total1: i64 = 0
+    let mut total2: i64 = 0
+    let mut power1: i64 = 1
+    let mut power2: i64 = 1
+    let mut exponent: i64 = 0
+
+    let mut idx: i32 = 0
+    while idx < svc {
+        let target: i64 = sv[idx] as i64
+        if target > limit { break }
+        while exponent < target {
+            power1 = mulmod(power1, z1)
+            power2 = mulmod(power2, z2)
+            exponent = exponent + 1
+        }
+        total1 = total1 + power1
+        if total1 >= MOD { total1 = total1 - MOD }
+        total2 = total2 + power2
+        if total2 >= MOD { total2 = total2 - MOD }
+        idx = idx + 1
+    }
+    out1[0] = total1
+    out2[0] = total2
+}
+
+function nonprimitive_pair(limit: i64, z1: i64, z1_inv: i64,
+                            z2: i64, z2_inv: i64,
+                            sv: ptr<i32>, svc: i32,
+                            out1: ptr<i64>, out2: ptr<i64>) -> void {
+    if limit <= SMALL_LIMIT {
+        eval_small_nonprimitive_pair(limit, z1, z2, sv, svc, out1, out2)
+        return
+    }
+
+    let mut total1: i64 = 0
+    let mut total2: i64 = 0
+
+    let z1_sq: i64 = mulmod(z1, z1)
+    let z2_sq: i64 = mulmod(z2, z2)
+
+    let z1_inv_sq: i64 = mulmod(z1_inv, z1_inv)
+    let z2_inv_sq: i64 = mulmod(z2_inv, z2_inv)
+    let z1_inv_4: i64 = mulmod(z1_inv_sq, z1_inv_sq)
+    let z2_inv_4: i64 = mulmod(z2_inv_sq, z2_inv_sq)
+    let z1_inv_5: i64 = mulmod(z1_inv_4, z1_inv)
+    let z2_inv_5: i64 = mulmod(z2_inv_4, z2_inv)
+    let z1_inv_10: i64 = mulmod(z1_inv_5, z1_inv_5)
+    let z2_inv_10: i64 = mulmod(z2_inv_5, z2_inv_5)
+    let z1_inv_15: i64 = mulmod(z1_inv_10, z1_inv_5)
+    let z2_inv_15: i64 = mulmod(z2_inv_10, z2_inv_5)
+
+    # Even part: sliding window of z^(m^2)
+    let mut even_weight1: i64 = z1_inv_5
+    let mut even_weight2: i64 = z2_inv_5
+    let mut even_delta1: i64 = z1_inv_15
+    let mut even_delta2: i64 = z2_inv_15
+
+    let mut add_index: i64 = 0
+    let mut add_term1: i64 = 1
+    let mut add_term2: i64 = 1
+    let mut add_step1: i64 = z1
+    let mut add_step2: i64 = z2
+
+    let mut drop_index: i64 = 0
+    let mut drop_term1: i64 = 1
+    let mut drop_term2: i64 = 1
+    let mut drop_step1: i64 = z1
+    let mut drop_step2: i64 = z2
+
+    let mut window1: i64 = 0
+    let mut window2: i64 = 0
+    let mut t: i64 = 1
+    let mut lower: i64 = 3
+    let mut upper: i64 = 0
+    let mut rhs: i64 = limit + 5
+
+    while (upper + 1) * (upper + 1) <= rhs { upper = upper + 1 }
+
+    while lower <= upper {
+        while add_index <= upper {
+            window1 = window1 + add_term1
+            if window1 >= MOD { window1 = window1 - MOD }
+            window2 = window2 + add_term2
+            if window2 >= MOD { window2 = window2 - MOD }
+            add_term1 = mulmod(add_term1, add_step1)
+            add_step1 = mulmod(add_step1, z1_sq)
+            add_term2 = mulmod(add_term2, add_step2)
+            add_step2 = mulmod(add_step2, z2_sq)
+            add_index = add_index + 1
+        }
+        while drop_index < lower {
+            window1 = window1 - drop_term1
+            if window1 < 0 { window1 = window1 + MOD }
+            window2 = window2 - drop_term2
+            if window2 < 0 { window2 = window2 + MOD }
+            drop_term1 = mulmod(drop_term1, drop_step1)
+            drop_step1 = mulmod(drop_step1, z1_sq)
+            drop_term2 = mulmod(drop_term2, drop_step2)
+            drop_step2 = mulmod(drop_step2, z2_sq)
+            drop_index = drop_index + 1
+        }
+        total1 = (total1 + mulmod(window1, even_weight1)) % MOD
+        total2 = (total2 + mulmod(window2, even_weight2)) % MOD
+        even_weight1 = mulmod(even_weight1, even_delta1)
+        even_delta1 = mulmod(even_delta1, z1_inv_10)
+        even_weight2 = mulmod(even_weight2, even_delta2)
+        even_delta2 = mulmod(even_delta2, z2_inv_10)
+        rhs = rhs + 10 * t + 5
+        t = t + 1
+        lower = lower + 3
+        while (upper + 1) * (upper + 1) <= rhs { upper = upper + 1 }
+    }
+
+    # Odd part: sliding window of z^(m(m+1))
+    let mut odd_weight1: i64 = z1_inv
+    let mut odd_weight2: i64 = z2_inv
+    let mut odd_delta1: i64 = z1_inv_10
+    let mut odd_delta2: i64 = z2_inv_10
+
+    add_index = 0
+    add_term1 = 1
+    add_term2 = 1
+    add_step1 = z1_sq
+    add_step2 = z2_sq
+    drop_index = 0
+    drop_term1 = 1
+    drop_term2 = 1
+    drop_step1 = z1_sq
+    drop_step2 = z2_sq
+    window1 = 0
+    window2 = 0
+    t = 0
+    lower = 1
+    upper = 0
+    rhs = limit + 1
+
+    while (upper + 1) * (upper + 2) <= rhs { upper = upper + 1 }
+
+    while lower <= upper {
+        while add_index <= upper {
+            window1 = window1 + add_term1
+            if window1 >= MOD { window1 = window1 - MOD }
+            window2 = window2 + add_term2
+            if window2 >= MOD { window2 = window2 - MOD }
+            add_term1 = mulmod(add_term1, add_step1)
+            add_step1 = mulmod(add_step1, z1_sq)
+            add_term2 = mulmod(add_term2, add_step2)
+            add_step2 = mulmod(add_step2, z2_sq)
+            add_index = add_index + 1
+        }
+        while drop_index < lower {
+            window1 = window1 - drop_term1
+            if window1 < 0 { window1 = window1 + MOD }
+            window2 = window2 - drop_term2
+            if window2 < 0 { window2 = window2 + MOD }
+            drop_term1 = mulmod(drop_term1, drop_step1)
+            drop_step1 = mulmod(drop_step1, z1_sq)
+            drop_term2 = mulmod(drop_term2, drop_step2)
+            drop_step2 = mulmod(drop_step2, z2_sq)
+            drop_index = drop_index + 1
+        }
+        total1 = (total1 + mulmod(window1, odd_weight1)) % MOD
+        total2 = (total2 + mulmod(window2, odd_weight2)) % MOD
+        odd_weight1 = mulmod(odd_weight1, odd_delta1)
+        odd_delta1 = mulmod(odd_delta1, z1_inv_10)
+        odd_weight2 = mulmod(odd_weight2, odd_delta2)
+        odd_delta2 = mulmod(odd_delta2, z2_inv_10)
+        rhs = rhs + 10 * t + 10
+        t = t + 1
+        lower = lower + 3
+        while (upper + 1) * (upper + 2) <= rhs { upper = upper + 1 }
+    }
+
+    out1[0] = total1
+    out2[0] = total2
 }
 
 function main() -> i32 {
-    printf("%lld\n", p989_native())
+    let sv: ptr<i32> = calloc(MAX_SMALL, 4)
+    let svc: i32 = build_small_values(sv)
+
+    let limit: i64 = TARGET_LIMIT
+    let root: i64 = isqrt_i64(limit)
+    let mu: ptr<i8> = mobius_sieve(root)
+
+    let sqrt5_mod: i64 = tonelli_shanks(5, MOD)
+    let inv_sqrt5_mod: i64 = mod_pow(sqrt5_mod, MOD - 2)
+    let inv2_mod: i64 = (MOD + 1) / 2
+    let phi_mod: i64 = mulmod((1 + sqrt5_mod) % MOD, inv2_mod)
+    let phi_inv_mod: i64 = mod_pow(phi_mod, MOD - 2)
+    let phi_sq_mod: i64 = mulmod(phi_mod, phi_mod)
+    let phi_inv_sq_mod: i64 = mulmod(phi_inv_mod, phi_inv_mod)
+
+    let mut p_phi: i64 = 0
+    let mut p_psi: i64 = 0
+    let mut phi_pow_g2: i64 = 1
+    let mut phi_inv_pow_g2: i64 = 1
+    let mut forward_step: i64 = phi_mod
+    let mut backward_step: i64 = phi_inv_mod
+    let mut g_square: i64 = 1
+
+    let np_phi: ptr<i64> = calloc(1, 8)
+    let np_psi: ptr<i64> = calloc(1, 8)
+
+    let mut g: i64 = 1
+    while g <= root {
+        phi_pow_g2 = mulmod(phi_pow_g2, forward_step)
+        forward_step = mulmod(forward_step, phi_sq_mod)
+        phi_inv_pow_g2 = mulmod(phi_inv_pow_g2, backward_step)
+        backward_step = mulmod(backward_step, phi_inv_sq_mod)
+
+        let mu_g: i8 = mu[g]
+        if mu_g != 0 {
+            let scaled_limit: i64 = limit / g_square
+            let psi_pow_g2: i64
+            let psi_inv_pow_g2: i64
+            if (g & 1) != 0 {
+                psi_pow_g2 = MOD - phi_inv_pow_g2
+                psi_inv_pow_g2 = MOD - phi_pow_g2
+            } else {
+                psi_pow_g2 = phi_inv_pow_g2
+                psi_inv_pow_g2 = phi_pow_g2
+            }
+
+            nonprimitive_pair(scaled_limit,
+                              phi_pow_g2, phi_inv_pow_g2,
+                              psi_pow_g2, psi_inv_pow_g2,
+                              sv, svc, np_phi, np_psi)
+
+            if mu_g == 1 {
+                p_phi = p_phi + np_phi[0]
+                if p_phi >= MOD { p_phi = p_phi - MOD }
+                p_psi = p_psi + np_psi[0]
+                if p_psi >= MOD { p_psi = p_psi - MOD }
+            } else {
+                p_phi = p_phi - np_phi[0]
+                if p_phi < 0 { p_phi = p_phi + MOD }
+                p_psi = p_psi - np_psi[0]
+                if p_psi < 0 { p_psi = p_psi + MOD }
+            }
+        }
+        g_square = g_square + 2 * g + 1
+        g = g + 1
+    }
+
+    free(mu as ptr<void>)
+    free(sv as ptr<void>)
+    free(np_phi as ptr<void>)
+    free(np_psi as ptr<void>)
+
+    printf("%lld\n", mulmod((p_phi - p_psi + MOD) % MOD, inv_sqrt5_mod))
     return 0
 }

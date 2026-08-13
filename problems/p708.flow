@@ -1,12 +1,230 @@
-# Project Euler 708
-# Twos Are All You Need: S(10^14) = sum_{n<=N} 2^{Omega(n)}.
-# Native C helper performs the powerful-number DFS over a tau prefix.
+# Project Euler 708: Twos Are All You Need
+# S(N) = sum_{n<=N} 2^{Omega(n)}, computed for N = 10^14.
+#
+# Identity: 2^{Omega(n)} = sum_{d|n, d powerful} g(d), where a powerful number
+# d = prod p_i^{e_i} (e_i >= 2) carries weight g(d) = prod 2^{e_i - 2}.
+# Then S(N) = sum_{d powerful, d<=N} g(d) * D(N/d), where
+# D(x) = sum_{k<=x} tau(k) = #{(a,b): a*b <= x} = 2*sum_{i<=s} floor(x/i) - s^2,
+# s = isqrt(x). Small x use a precomputed prefix of tau; large x are cached.
+
+import euler.nt { isqrt }
 
 extern {
-    function p708_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memset(dst: ptr<void>, val: i32, n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+}
+
+const N_VAL: i64 = 100000000000000
+const SMALL_LIMIT: i64 = 1000000
+const CACHE_BITS: i64 = 17
+const CACHE_SIZE: i64 = 131072
+const CACHE_MASK: i64 = 131071
+
+let mut g_primes: ptr<i32> = null
+let mut g_prime_sq: ptr<i64> = null
+let mut g_nprimes: i64 = 0
+let mut g_prefix: ptr<i64> = null
+let mut g_N: i64 = 0
+let mut g_total: i64 = 0
+
+let mut cache_key: ptr<i64> = null
+let mut cache_val: ptr<i64> = null
+let mut cache_used: ptr<i8> = null
+
+function isqrt_i64(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = sqrt(n as f64) as i64
+    while x > 0 && x * x > n {
+        x = x - 1
+    }
+    while (x + 1) * (x + 1) <= n {
+        x = x + 1
+    }
+    return x
+}
+
+# Odd-only sieve; returns malloc'd prime list (2, 3, 5, ...).
+function primes_upto(limit: i64) -> ptr<i32> {
+    if limit < 2 { return null }
+    let size: i64 = limit / 2 + 1
+    let sieve: ptr<i8> = malloc(size) as ptr<i8>
+    memset(sieve, 1, size)
+    sieve[0] = 0
+
+    let r: i64 = isqrt_i64(limit)
+    let mut p: i64 = 3
+    while p <= r {
+        if sieve[p / 2] != 0 {
+            let start: i64 = p * p
+            let mut j: i64 = start
+            while j <= limit {
+                sieve[j / 2] = 0
+                j = j + 2 * p
+            }
+        }
+        p = p + 2
+    }
+
+    let mut cnt: i64 = 1
+    let mut i: i64 = 1
+    while i < size {
+        if sieve[i] != 0 { cnt = cnt + 1 }
+        i = i + 1
+    }
+
+    let primes: ptr<i32> = malloc(cnt * 4) as ptr<i32>
+    primes[0] = 2
+    let mut k: i64 = 1
+    i = 1
+    while i < size {
+        if sieve[i] != 0 {
+            primes[k] = (2 * i + 1) as i32
+            k = k + 1
+        }
+        i = i + 1
+    }
+    free(sieve)
+    g_nprimes = cnt
+    return primes
+}
+
+# Prefix sums of tau(k) (number of divisors) for k = 1..limit.
+function build_divisor_prefix(limit: i64) -> ptr<i64> {
+    let spf: ptr<i32> = calloc(limit + 1, 4) as ptr<i32>
+    let mut i: i64 = 2
+    while i <= limit {
+        if spf[i] == 0 {
+            spf[i] = i as i32
+            if i * i <= limit {
+                let mut j: i64 = i * i
+                while j <= limit {
+                    if spf[j] == 0 { spf[j] = i as i32 }
+                    j = j + i
+                }
+            }
+        }
+        i = i + 1
+    }
+
+    let d: ptr<i32> = calloc(limit + 1, 4) as ptr<i32>
+    let exp: ptr<i32> = calloc(limit + 1, 4) as ptr<i32>
+    d[1] = 1
+    i = 2
+    while i <= limit {
+        let p: i32 = spf[i]
+        let m: i64 = i / (p as i64)
+        if m % (p as i64) == 0 {
+            exp[i] = exp[m] + 1
+            d[i] = d[m] / (exp[m] + 1) * (exp[i] + 1)
+        } else {
+            exp[i] = 1
+            d[i] = d[m] * 2
+        }
+        i = i + 1
+    }
+
+    let prefix: ptr<i64> = calloc(limit + 1, 8) as ptr<i64>
+    let mut total: i64 = 0
+    i = 1
+    while i <= limit {
+        total = total + (d[i] as i64)
+        prefix[i] = total
+        i = i + 1
+    }
+    free(spf)
+    free(d)
+    free(exp)
+    return prefix
+}
+
+function D_func(x: i64) -> i64 {
+    if x <= SMALL_LIMIT { return g_prefix[x] }
+
+    # Open-addressing hash table lookup
+    let h: i64 = (x * 11400714819323198485) >> (64 - CACHE_BITS)
+    let mut idx: i64 = h & CACHE_MASK
+    while cache_used[idx] != 0 {
+        if cache_key[idx] == x { return cache_val[idx] }
+        idx = (idx + 1) & CACHE_MASK
+    }
+
+    let s: i64 = isqrt_i64(x)
+    let mut total: i64 = 0
+    let mut i: i64 = 1
+    while i <= s {
+        let q: i64 = x / i
+        let j: i64 = x / q
+        let jj: i64 = if j > s { s } else { j }
+        total = total + q * (jj - i + 1)
+        i = jj + 1
+    }
+    let res: i64 = 2 * total - s * s
+    cache_used[idx] = 1
+    cache_key[idx] = x
+    cache_val[idx] = res
+    return res
+}
+
+function dfs(start_idx: i64, current_n: i64, current_g: i64) -> void {
+    g_total = g_total + current_g * D_func(g_N / current_n)
+
+    let limit: i64 = g_N / current_n
+    let mut i: i64 = start_idx
+    while i < g_nprimes {
+        let p2: i64 = g_prime_sq[i]
+        if p2 > limit {
+            i = g_nprimes
+        } else {
+            let p: i64 = g_primes[i] as i64
+            let mut pow_p: i64 = p2
+            let mut g: i64 = current_g
+            while pow_p <= limit {
+                dfs(i + 1, current_n * pow_p, g)
+                if pow_p > limit / p {
+                    pow_p = limit + 1
+                } else {
+                    pow_p = pow_p * p
+                    g = g << 1
+                }
+            }
+            i = i + 1
+        }
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p708_native())
+    let prime_limit: i64 = isqrt_i64(N_VAL)
+    g_primes = primes_upto(prime_limit)
+
+    g_prime_sq = malloc(g_nprimes * 8) as ptr<i64>
+    let mut i: i64 = 0
+    while i < g_nprimes {
+        let p: i64 = g_primes[i] as i64
+        g_prime_sq[i] = p * p
+        i = i + 1
+    }
+
+    g_prefix = build_divisor_prefix(SMALL_LIMIT)
+
+    cache_key = calloc(CACHE_SIZE, 8) as ptr<i64>
+    cache_val = calloc(CACHE_SIZE, 8) as ptr<i64>
+    cache_used = calloc(CACHE_SIZE, 1) as ptr<i8>
+
+    g_N = N_VAL
+    g_total = 0
+
+    dfs(0, 1, 1)
+
+    printf("%lld\n", g_total)
+
+    free(g_primes)
+    free(g_prime_sq)
+    free(g_prefix)
+    free(cache_key)
+    free(cache_val)
+    free(cache_used)
     return 0
 }

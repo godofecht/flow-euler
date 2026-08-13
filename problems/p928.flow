@@ -1,12 +1,265 @@
 # Project Euler 928
-# Cribbage — native C solver.
-# Companion: problems/native/p928.c
+# Cribbage: count non-empty hands where hand_score == cribbage_score.
+# Meet-in-the-middle with heapsort and binary search.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p928_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+    function memset(dst: ptr<void>, val: i32, n: i64) -> void
 }
 
-function main() -> i32 {
-    printf("%lld\n", p928_native())
+struct LeftEntry {
+    L5: i32
+    L6: i32
+    L7: i32
+    L15: i32
+    tail_len: i32
+    tail_prod: i32
+    A_L: i32
+    weight: i64
+}
+
+struct RightEntry {
+    c8: i32
+    c9: i32
+    n10: i32
+    head_len: i32
+    head_prod: i32
+    A_R: i32
+    weight: i64
+}
+
+struct RightGroup {
+    c8: i32
+    c9: i32
+    n10: i32
+    head_len: i32
+    head_prod: i32
+    start: i32
+    end: i32
+}
+
+struct RightSuperGroup {
+    c8: i32
+    c9: i32
+    n10: i32
+    start: i32
+    end: i32
+}
+
+let mut COMB4: ptr<i32> = null as ptr<i32>
+let mut CHOOSE: ptr<i32> = null as ptr<i32>
+let mut g_nd: ptr<i64> = null as ptr<i64>
+let mut g_dp: ptr<i64> = null as ptr<i64>
+let mut left_entries: ptr<LeftEntry> = null as ptr<LeftEntry>
+let mut n_left: i32 = 0
+let mut right_entries: ptr<RightEntry> = null as ptr<RightEntry>
+let mut n_right: i32 = 0
+
+function init_choose() -> void {
+    let mut n: i32 = 0
+    while n < 5 {
+        CHOOSE[n * 5 + 0] = 1
+        let mut k: i32 = 1
+        while k <= n {
+            let mut val: i32 = CHOOSE[(n - 1) * 5 + k - 1]
+            if k <= n - 1 {
+                val = val + CHOOSE[(n - 1) * 5 + k]
+            }
+            CHOOSE[n * 5 + k] = val
+            k = k + 1
+        }
+        n = n + 1
+    }
+}
+
+function dp_update(dp: ptr<i64>, v: i32, c: i32) -> void {
+    if c == 0 { return }
+    memset(g_nd as ptr<void>, 0, 128)
+    let mut s: i32 = 0
+    while s < 16 {
+        let mut tot: i64 = 0
+        let mut maxk: i32 = c
+        if v > 0 {
+            if s / v < maxk { maxk = s / v }
+        }
+        let mut k: i32 = 0
+        while k <= maxk {
+            tot = tot + dp[s - k * v] * (CHOOSE[c * 5 + k] as i64)
+            k = k + 1
+        }
+        g_nd[s] = tot
+        s = s + 1
+    }
+    memcpy(dp as ptr<void>, g_nd as ptr<void>, 128)
+}
+
+function run_boundary(tl: i32, tp: i32, hl: i32, hp: i32) -> i32 {
+    let mut L: i32 = 0
+    let mut P: i32 = 0
+    if tl > 0 && hl > 0 {
+        L = tl + hl
+        P = tp * hp
+    } else {
+        if tl > 0 {
+            L = tl
+            P = tp
+        } else {
+            if hl > 0 {
+                L = hl
+                P = hp
+            } else {
+                return 0
+            }
+        }
+    }
+    if L >= 3 { return L * P }
     return 0
+}
+
+function cmp_left_at(entries: ptr<LeftEntry>, i: i32, j: i32) -> i32 {
+    if entries[i].L5 != entries[j].L5 { return entries[i].L5 - entries[j].L5 }
+    if entries[i].L6 != entries[j].L6 { return entries[i].L6 - entries[j].L6 }
+    if entries[i].L7 != entries[j].L7 { return entries[i].L7 - entries[j].L7 }
+    if entries[i].L15 != entries[j].L15 { return entries[i].L15 - entries[j].L15 }
+    if entries[i].tail_len != entries[j].tail_len { return entries[i].tail_len - entries[j].tail_len }
+    if entries[i].tail_prod != entries[j].tail_prod { return entries[i].tail_prod - entries[j].tail_prod }
+    return entries[i].A_L - entries[j].A_L
+}
+
+function swap_left(entries: ptr<LeftEntry>, i: i32, j: i32) -> void {
+    let t: i32 = entries[i].L5
+    entries[i].L5 = entries[j].L5
+    entries[j].L5 = t
+    t = entries[i].L6
+    entries[i].L6 = entries[j].L6
+    entries[j].L6 = t
+    t = entries[i].L7
+    entries[i].L7 = entries[j].L7
+    entries[j].L7 = t
+    t = entries[i].L15
+    entries[i].L15 = entries[j].L15
+    entries[j].L15 = t
+    t = entries[i].tail_len
+    entries[i].tail_len = entries[j].tail_len
+    entries[j].tail_len = t
+    t = entries[i].tail_prod
+    entries[i].tail_prod = entries[j].tail_prod
+    entries[j].tail_prod = t
+    t = entries[i].A_L
+    entries[i].A_L = entries[j].A_L
+    entries[j].A_L = t
+    let tw: i64 = entries[i].weight
+    entries[i].weight = entries[j].weight
+    entries[j].weight = tw
+}
+
+function sift_down_left(entries: ptr<LeftEntry>, root: i32, size: i32) -> void {
+    let mut r: i32 = root
+    while true {
+        let mut largest: i32 = r
+        let left: i32 = 2 * r + 1
+        let right: i32 = 2 * r + 2
+        if left < size {
+            if cmp_left_at(entries, left, largest) > 0 {
+                largest = left
+            }
+        }
+        if right < size {
+            if cmp_left_at(entries, right, largest) > 0 {
+                largest = right
+            }
+        }
+        if largest == r { break }
+        swap_left(entries, r, largest)
+        r = largest
+    }
+}
+
+function heapsort_left(entries: ptr<LeftEntry>, n: i32) -> void {
+    if n <= 1 { return }
+    let mut i: i32 = n / 2 - 1
+    while i >= 0 {
+        sift_down_left(entries, i, n)
+        i = i - 1
+    }
+    i = n - 1
+    while i > 0 {
+        swap_left(entries, 0, i)
+        sift_down_left(entries, 0, i)
+        i = i - 1
+    }
+}
+
+function cmp_right_at(entries: ptr<RightEntry>, i: i32, j: i32) -> i32 {
+    if entries[i].c8 != entries[j].c8 { return entries[i].c8 - entries[j].c8 }
+    if entries[i].c9 != entries[j].c9 { return entries[i].c9 - entries[j].c9 }
+    if entries[i].n10 != entries[j].n10 { return entries[i].n10 - entries[j].n10 }
+    if entries[i].head_len != entries[j].head_len { return entries[i].head_len - entries[j].head_len }
+    if entries[i].head_prod != entries[j].head_prod { return entries[i].head_prod - entries[j].head_prod }
+    return entries[i].A_R - entries[j].A_R
+}
+
+function swap_right(entries: ptr<RightEntry>, i: i32, j: i32) -> void {
+    let t: i32 = entries[i].c8
+    entries[i].c8 = entries[j].c8
+    entries[j].c8 = t
+    t = entries[i].c9
+    entries[i].c9 = entries[j].c9
+    entries[j].c9 = t
+    t = entries[i].n10
+    entries[i].n10 = entries[j].n10
+    entries[j].n10 = t
+    t = entries[i].head_len
+    entries[i].head_len = entries[j].head_len
+    entries[j].head_len = t
+    t = entries[i].head_prod
+    entries[i].head_prod = entries[j].head_prod
+    entries[j].head_prod = t
+    t = entries[i].A_R
+    entries[i].A_R = entries[j].A_R
+    entries[j].A_R = t
+    let tw: i64 = entries[i].weight
+    entries[i].weight = entries[j].weight
+    entries[j].weight = tw
+}
+
+function sift_down_right(entries: ptr<RightEntry>, root: i32, size: i32) -> void {
+    let mut r: i32 = root
+    while true {
+        let mut largest: i32 = r
+        let left: i32 = 2 * r + 1
+        let right: i32 = 2 * r + 2
+        if left < size {
+            if cmp_right_at(entries, left, largest) > 0 {
+                largest = left
+            }
+        }
+        if right < size {
+            if cmp_right_at(entries, right, largest) > 0 {
+                largest = right
+            }
+        }
+        if largest == r { break }
+        swap_right(entries, r, largest)
+        r = largest
+    }
+}
+
+function heapsort_right(entries: ptr<RightEntry>, n: i32) -> void {
+    if n <= 1 { return }
+    let mut i: i32 = n / 2 - 1
+    while i >= 0 {
+        sift_down_right(entries, i, n)
+        i = i - 1
+    }
+    i = n - 1
+    while i > 0 {
+        swap_right(entries, 0, i)
+        sift_down_right(entries, 0, i)
+        i = i - 1
+    }
 }

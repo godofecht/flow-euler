@@ -1,11 +1,297 @@
-# Project Euler 990
-# Digit equations - DP over decimal columns with signed carry.
+# Project Euler 990: Digit Equations
+# DP over decimal columns with signed carry, mod 1e9+7.
 
 extern {
-    function p990_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+const MAX_N: i32 = 50
+const MAX_TERMS: i32 = 25
+const MAX_CARRY: i32 = 25
+const CARRY_RANGE: i32 = 51
+const MAX_DEG: i32 = 851
+
+function mod_add(a: i64, b: i64) -> i64 {
+    let mut r: i64 = a + b
+    if r >= MOD { r = r - MOD }
+    return r
+}
+
+function mod_mul(a: i64, b: i64) -> i64 {
+    return ((a as i128) * (b as i128) % MOD) as i64
+}
+
+# Flat index helpers
+function binom_idx(n: i32, k: i32) -> i64 {
+    return (n as i64) * 26 + (k as i64)
+}
+
+function st_idx(p: i32, q: i32, d: i32) -> i64 {
+    return (p as i64) * 51 * 851 + (q as i64) * 851 + (d as i64)
+}
+
+function stl_idx(p: i32, q: i32) -> i64 {
+    return (p as i64) * 51 + (q as i64)
+}
+
+function trans_idx(al: i32, ar: i32, ci: i32) -> i64 {
+    return (al as i64) * 26 * 51 + (ar as i64) * 51 + (ci as i64)
+}
+
+function dp_idx(used: i32, al: i32, ar: i32, ci: i32) -> i64 {
+    return (used as i64) * 26 * 26 * 51 + (al as i64) * 26 * 51 + (ar as i64) * 51 + (ci as i64)
+}
+
+function convolve_small(poly: ptr<i64>, plen: i32, width: i32, out: ptr<i64>, out_len: ptr<i32>) -> void {
+    let n: i32 = plen + width - 1
+    let mut i: i32 = 0
+    while i < n {
+        out[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i < plen {
+        if poly[i] != 0 {
+            let mut d: i32 = 0
+            while d < width {
+                out[i + d] = mod_add(out[i + d], poly[i])
+                d = d + 1
+            }
+        }
+        i = i + 1
+    }
+    out_len[0] = n
 }
 
 function main() -> i32 {
-    printf("%lld\n", p990_native())
+    # Build binom
+    let binom: ptr<i64> = calloc(26 * 26, 8)
+    let mut n: i32 = 0
+    while n <= MAX_TERMS {
+        binom[binom_idx(n, 0)] = 1
+        binom[binom_idx(n, n)] = 1
+        let mut k: i32 = 1
+        while k < n {
+            binom[binom_idx(n, k)] = mod_add(binom[binom_idx(n - 1, k - 1)], binom[binom_idx(n - 1, k)])
+            k = k + 1
+        }
+        n = n + 1
+    }
+
+    # Build sum_tables
+    let sum_tables: ptr<i64> = calloc(51 * 51 * 851, 8)
+    let sum_table_len: ptr<i32> = calloc(51 * 51, 4)
+
+    # ways[p] = convolution of p copies of [1]*10
+    let ways: ptr<ptr<i64> > = calloc(51, 8) as ptr<ptr<i64> >
+    let mut p: i32 = 0
+    while p <= 50 {
+        ways[p] = calloc(MAX_DEG, 8)
+        p = p + 1
+    }
+    let tmp: ptr<i64> = calloc(MAX_DEG, 8)
+    let len_out: ptr<i32> = calloc(1, 4)
+    let ways_len: ptr<i32> = calloc(51, 4)
+
+    ways[0][0] = 1
+    ways_len[0] = 1
+    p = 1
+    while p <= 2 * MAX_TERMS {
+        convolve_small(ways[p - 1], ways_len[p - 1], 10, ways[p], len_out)
+        ways_len[p] = len_out[0]
+        p = p + 1
+    }
+
+    p = 0
+    while p <= 2 * MAX_TERMS {
+        # sum_tables[p][0] = ways[p]
+        memcpy(sum_tables + st_idx(p, 0, 0), ways[p], (ways_len[p] as i64) * 8)
+        sum_table_len[stl_idx(p, 0)] = ways_len[p]
+        let mut q: i32 = 1
+        while q <= 2 * MAX_TERMS {
+            convolve_small(sum_tables + st_idx(p, q - 1, 0), sum_table_len[stl_idx(p, q - 1)], 9,
+                          sum_tables + st_idx(p, q, 0), len_out)
+            sum_table_len[stl_idx(p, q)] = len_out[0]
+            q = q + 1
+        }
+        p = p + 1
+    }
+
+    # Transition storage: flat arrays
+    let trans_data: ptr<ptr<i64> > = calloc(26 * 26 * 51, 8) as ptr<ptr<i64> >
+    let trans_count_arr: ptr<i32> = calloc(26 * 26 * 51, 4)
+    let trans_computed_arr: ptr<i8> = calloc(26 * 26 * 51, 1)
+
+    # DP array
+    let dp: ptr<i64> = calloc(51 * 26 * 26 * 51, 8)
+
+    let limit: i32 = MAX_N
+
+    # Initial states
+    let mut lt: i32 = 1
+    while lt <= MAX_TERMS {
+        let mut rt: i32 = 1
+        while rt <= MAX_TERMS {
+            let base_length: i32 = lt + rt - 1
+            if base_length <= limit {
+                let idx: i64 = dp_idx(base_length, lt, rt, MAX_CARRY)
+                dp[idx] = mod_add(dp[idx], 1)
+            }
+            rt = rt + 1
+        }
+        lt = lt + 1
+    }
+
+    let mut answer: i64 = 0
+    let mut used: i32 = 0
+    while used <= limit {
+        answer = mod_add(answer, dp[dp_idx(used, 0, 0, MAX_CARRY)])
+
+        let mut al: i32 = 0
+        while al <= MAX_TERMS {
+            let mut ar: i32 = 0
+            while ar <= MAX_TERMS {
+                if al == 0 && ar == 0 {
+                    ar = ar + 1
+                    continue
+                }
+                let mut ci: i32 = 0
+                while ci < CARRY_RANGE {
+                    let ways_val: i64 = dp[dp_idx(used, al, ar, ci)]
+                    if ways_val == 0 {
+                        ci = ci + 1
+                        continue
+                    }
+                    let carry: i32 = ci - MAX_CARRY
+
+                    # Compute transitions if not done
+                    let tidx: i64 = trans_idx(al, ar, ci)
+                    if trans_computed_arr[tidx] == 0 {
+                        trans_computed_arr[tidx] = 1
+
+                        if al == 0 && ar == 0 {
+                            trans_count_arr[tidx] = 0
+                        } else {
+                            # First pass: count
+                            let mut count: i32 = 0
+                            let mut nl: i32 = 0
+                            while nl <= al {
+                                let mut nr: i32 = 0
+                                while nr <= ar {
+                                    let continuing: i32 = nl + nr
+                                    let ending: i32 = (al - nl) + (ar - nr)
+                                    let ending_left: i32 = al - nl
+                                    let counts: ptr<i64> = sum_tables + st_idx(continuing, ending, 0)
+                                    let clen: i32 = sum_table_len[stl_idx(continuing, ending)]
+                                    let base: i64 = -(carry as i64) - (ending_left as i64) + 9 * (ar as i64)
+                                    let mut nc: i32 = -MAX_CARRY
+                                    while nc <= MAX_CARRY {
+                                        let index: i64 = 10 * (nc as i64) + base
+                                        if index >= 0 && index < (clen as i64) && counts[index] != 0 {
+                                            count = count + 1
+                                        }
+                                        nc = nc + 1
+                                    }
+                                    nr = nr + 1
+                                }
+                                nl = nl + 1
+                            }
+
+                            trans_count_arr[tidx] = count
+                            if count > 0 {
+                                let list: ptr<i64> = calloc((count as i64) * 4, 8)
+                                let mut idx2: i32 = 0
+                                nl = 0
+                                while nl <= al {
+                                    let choose_left: i64 = binom[binom_idx(al, nl)]
+                                    let ending_left: i32 = al - nl
+                                    let mut nr: i32 = 0
+                                    while nr <= ar {
+                                        let choose_terms: i64 = mod_mul(choose_left, binom[binom_idx(ar, nr)])
+                                        let continuing: i32 = nl + nr
+                                        let ending: i32 = ending_left + (ar - nr)
+                                        let counts: ptr<i64> = sum_tables + st_idx(continuing, ending, 0)
+                                        let clen: i32 = sum_table_len[stl_idx(continuing, ending)]
+                                        let base: i64 = -(carry as i64) - (ending_left as i64) + 9 * (ar as i64)
+                                        let mut nc: i32 = -MAX_CARRY
+                                        while nc <= MAX_CARRY {
+                                            let index: i64 = 10 * (nc as i64) + base
+                                            if index >= 0 && index < (clen as i64) && counts[index] != 0 {
+                                                let weight: i64 = mod_mul(choose_terms, counts[index])
+                                                list[(idx2 as i64) * 4 + 0] = nl as i64
+                                                list[(idx2 as i64) * 4 + 1] = nr as i64
+                                                list[(idx2 as i64) * 4 + 2] = nc as i64
+                                                list[(idx2 as i64) * 4 + 3] = weight
+                                                idx2 = idx2 + 1
+                                            }
+                                            nc = nc + 1
+                                        }
+                                        nr = nr + 1
+                                    }
+                                    nl = nl + 1
+                                }
+                                trans_data[tidx] = list
+                            }
+                        }
+                    }
+
+                    let cnt: i32 = trans_count_arr[tidx]
+                    let next_length: i32 = used + al + ar
+                    if next_length > limit {
+                        ci = ci + 1
+                        continue
+                    }
+
+                    let list: ptr<i64> = trans_data[tidx]
+                    let mut t: i32 = 0
+                    while t < cnt {
+                        let nci: i32 = (list[(t as i64) * 4 + 2]) as i32 + MAX_CARRY
+                        let val: i64 = mod_mul(ways_val, list[(t as i64) * 4 + 3])
+                        let nli: i32 = (list[(t as i64) * 4 + 0]) as i32
+                        let nri: i32 = (list[(t as i64) * 4 + 1]) as i32
+                        let di: i64 = dp_idx(next_length, nli, nri, nci)
+                        dp[di] = mod_add(dp[di], val)
+                        t = t + 1
+                    }
+                    ci = ci + 1
+                }
+                ar = ar + 1
+            }
+            al = al + 1
+        }
+        used = used + 1
+    }
+
+    printf("%lld\n", answer)
+
+    # Cleanup
+    p = 0
+    while p <= 50 {
+        free(ways[p] as ptr<void>)
+        p = p + 1
+    }
+    free(ways as ptr<void>)
+    free(tmp as ptr<void>)
+    free(len_out as ptr<void>)
+    free(ways_len as ptr<void>)
+    free(binom as ptr<void>)
+    free(sum_tables as ptr<void>)
+    free(sum_table_len as ptr<void>)
+    let mut ti: i64 = 0
+    while ti < 26 * 26 * 51 {
+        if trans_data[ti] != null {
+            free(trans_data[ti] as ptr<void>)
+        }
+        ti = ti + 1
+    }
+    free(trans_data as ptr<void>)
+    free(trans_count_arr as ptr<void>)
+    free(trans_computed_arr as ptr<void>)
+    free(dp as ptr<void>)
+
     return 0
 }

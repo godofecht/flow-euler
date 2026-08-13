@@ -1,12 +1,158 @@
 # Project Euler 698
 # 123 Numbers: F(111111111111222333) mod 123123123.
-# Native C helper with GMP for bignum factorials.
+# 123-numbers: digits only 1,2,3, and each digit count is itself a 123-number.
+# Enumerate by length, count valid strings, unrank within the target length.
+# All counts fit in i64 (verified: L=38, max count ~8.5e16).
 
-extern {
-    function p698_native() -> i64
+const MOD: i64 = 123123123
+const TARGET: i64 = 111111111111222333
+
+# Allowed digit counts: 0,1,2,3,11,12,13,21,22,23,31,32,33
+const N_ALLOWED: i64 = 13
+
+function binom(n: i64, k: i64) -> i64 {
+    if k < 0 { return 0 }
+    if k > n { return 0 }
+    if k == 0 { return 1 }
+    if k > n - k { k = n - k }
+    let mut result: i64 = 1
+    let mut i: i64 = 1
+    while i <= k {
+        result = result * (n - k + i) / i
+        i = i + 1
+    }
+    return result
+}
+
+# Count valid strings of length L with given prefix usage (u1,u2,u3).
+# A string is valid if total counts (a,b,c) with a+b+c=L, each in allowed set.
+function count_completions(L: i64, u1: i64, u2: i64, u3: i64) -> i64 {
+    let used: i64 = u1 + u2 + u3
+    let r: i64 = L - used
+    let mut total: i64 = 0
+
+    let allowed: array<i64, 13> = [0, 1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33]
+
+    let mut ai: i64 = 0
+    while ai < N_ALLOWED {
+        let a: i64 = allowed[ai]
+        if a < u1 {
+            ai = ai + 1
+        } else {
+            let ra: i64 = a - u1
+            if ra > r {
+                ai = ai + 1
+            } else {
+                let mut bi: i64 = 0
+                while bi < N_ALLOWED {
+                    let b: i64 = allowed[bi]
+                    if b < u2 {
+                        bi = bi + 1
+                    } else {
+                        let rb: i64 = b - u2
+                        if ra + rb > r {
+                            bi = bi + 1
+                        } else {
+                            let rc: i64 = r - ra - rb
+                            let c: i64 = u3 + rc
+                            # Check if c is in allowed set
+                            let mut ok: i32 = 0
+                            let mut ci: i64 = 0
+                            while ci < N_ALLOWED {
+                                if allowed[ci] == c { ok = 1 }
+                                ci = ci + 1
+                            }
+                            if ok == 0 {
+                                bi = bi + 1
+                            } else {
+                                if a == 0 && b == 0 && c == 0 {
+                                    bi = bi + 1
+                                } else {
+                                    let m: i64 = binom(r, ra) * binom(r - ra, rb)
+                                    total = total + m
+                                    bi = bi + 1
+                                }
+                            }
+                        }
+                    }
+                }
+                ai = ai + 1
+            }
+        }
+    }
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p698_native())
+    let mut cumulative: i64 = 0
+    let mut found_L: i64 = 0
+    let mut rank_in_length: i64 = 0
+
+    let mut L: i64 = 1
+    while L < 5000 {
+        let cnt_L: i64 = count_completions(L, 0, 0, 0)
+        if cumulative + cnt_L >= TARGET {
+            rank_in_length = TARGET - cumulative
+            found_L = L
+            L = 5000
+        } else {
+            cumulative = cumulative + cnt_L
+            L = L + 1
+        }
+    }
+
+    let mut u1: i64 = 0
+    let mut u2: i64 = 0
+    let mut u3: i64 = 0
+    let mut answer: i64 = 0
+
+    let mut pos: i64 = 0
+    while pos < found_L {
+        let mut digit: i64 = 1
+        while digit <= 3 {
+            let nu1: i64 = u1
+            let nu2: i64 = u2
+            let nu3: i64 = u3
+            if digit == 1 {
+                let nu1b: i64 = u1 + 1
+                let cnt: i64 = count_completions(found_L, nu1b, nu2, nu3)
+                if rank_in_length > cnt {
+                    rank_in_length = rank_in_length - cnt
+                    digit = digit + 1
+                } else {
+                    u1 = nu1b
+                    answer = (answer * 10 + digit) % MOD
+                    digit = 4
+                }
+            } else {
+                if digit == 2 {
+                    let nu2b: i64 = u2 + 1
+                    let cnt: i64 = count_completions(found_L, nu1, nu2b, nu3)
+                    if rank_in_length > cnt {
+                        rank_in_length = rank_in_length - cnt
+                        digit = digit + 1
+                    } else {
+                        u2 = nu2b
+                        answer = (answer * 10 + digit) % MOD
+                        digit = 4
+                    }
+                } else {
+                    let nu3b: i64 = u3 + 1
+                    let cnt: i64 = count_completions(found_L, nu1, nu2, nu3b)
+                    if rank_in_length > cnt {
+                        rank_in_length = rank_in_length - cnt
+                        digit = digit + 1
+                    } else {
+                        u3 = nu3b
+                        answer = (answer * 10 + digit) % MOD
+                        digit = 4
+                    }
+                }
+            }
+        }
+        pos = pos + 1
+    }
+
+    printf("%lld\n", answer)
     return 0
 }

@@ -1,11 +1,310 @@
-# Project Euler 774
-# Divide and Rule.  Real solver in problems/native/p774.c (linked by run.sh).
+# Project Euler 774: Divide and Rule.
+# Counts sequences a_1..a_l with 0 <= a_i <= m such that every pair of
+# equal values a_i = a_j (i < j) has gcd(a_i, ..., a_j) > 1.
+# D(length, bound, left, right) is memoised with open-addressing hash table.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p774_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 998244353
+const TOP: i32 = -1
+const ODD: i32 = -2
+const MAX_N: i64 = 123
+
+# Fibonacci table mod MOD.
+let mut FIB: ptr<i64> = null
+
+function init_fib() -> void {
+    FIB = calloc(MAX_N + 2, 8) as ptr<i64>
+    FIB[0] = 0
+    FIB[1] = 1 % MOD
+    let mut i: i64 = 2
+    while i < MAX_N + 2 {
+        FIB[i] = (FIB[i - 1] + FIB[i - 2]) % MOD
+        i = i + 1
+    }
+}
+
+function fib(index: i32) -> i64 {
+    if index >= 0 {
+        return FIB[index]
+    }
+    let k: i64 = -(index as i64)
+    if k % 2 == 1 {
+        return FIB[k]
+    }
+    let mut v: i64 = -(FIB[k]) % MOD
+    if v < 0 {
+        v = v + MOD
+    }
+    return v
+}
+
+function boundary_is_impossible(state: i32) -> i32 {
+    if state == 0 {
+        return 1
+    }
+    return 0
+}
+
+function satisfies(state: i32, value: i64) -> i32 {
+    if state == TOP {
+        return 1
+    }
+    if state == ODD {
+        if value % 2 == 1 {
+            return 1
+        }
+        return 0
+    }
+    if (value & (state as i64)) != 0 {
+        return 1
+    }
+    return 0
+}
+
+function phi_even(state: i32) -> i32 {
+    if state == TOP {
+        return TOP
+    }
+    if state == ODD {
+        return 0
+    }
+    return state / 2
+}
+
+function phi_odd(state: i32) -> i32 {
+    if state == TOP || state == ODD {
+        return TOP
+    }
+    if state % 2 == 1 {
+        return TOP
+    }
+    return state / 2
+}
+
+# Memoisation hash table. Key: (length, bound, left, right). Value: result mod MOD.
+# Store keys as parallel arrays of 4 i32 fields.
+let mut memo_len: ptr<i32> = null
+let mut memo_bnd: ptr<i32> = null
+let mut memo_lft: ptr<i32> = null
+let mut memo_rgt: ptr<i32> = null
+let mut memo_val: ptr<i64> = null
+let mut memo_used: ptr<i8> = null
+let mut memo_cap: i64 = 0
+let mut memo_count: i64 = 0
+
+function hash_key(length: i32, bound: i32, left: i32, right: i32) -> i64 {
+    let mut h: i64 = 1469598103934665603
+    h = h ^ (length as i64)
+    h = h * 1099511628211
+    h = h ^ (bound as i64)
+    h = h * 1099511628211
+    h = h ^ (left as i64)
+    h = h * 1099511628211
+    h = h ^ (right as i64)
+    h = h * 1099511628211
+    return h
+}
+
+function memo_init(cap: i64) -> void {
+    memo_cap = cap
+    memo_count = 0
+    memo_len = calloc(cap, 4) as ptr<i32>
+    memo_bnd = calloc(cap, 4) as ptr<i32>
+    memo_lft = calloc(cap, 4) as ptr<i32>
+    memo_rgt = calloc(cap, 4) as ptr<i32>
+    memo_val = calloc(cap, 8) as ptr<i64>
+    memo_used = calloc(cap, 1) as ptr<i8>
+}
+
+function memo_lookup(length: i32, bound: i32, left: i32, right: i32, out: ptr<i64>) -> i32 {
+    if memo_cap == 0 {
+        return 0
+    }
+    let mask: i64 = memo_cap - 1
+    let mut h: i64 = hash_key(length, bound, left, right) & mask
+    while memo_used[h] != 0 {
+        if memo_len[h] == length && memo_bnd[h] == bound && memo_lft[h] == left && memo_rgt[h] == right {
+            out[0] = memo_val[h]
+            return 1
+        }
+        h = (h + 1) & mask
+    }
+    return 0
+}
+
+function memo_insert_raw(length: i32, bound: i32, left: i32, right: i32, v: i64) -> void {
+    let mask: i64 = memo_cap - 1
+    let mut h: i64 = hash_key(length, bound, left, right) & mask
+    while memo_used[h] != 0 {
+        h = (h + 1) & mask
+    }
+    memo_used[h] = 1
+    memo_len[h] = length
+    memo_bnd[h] = bound
+    memo_lft[h] = left
+    memo_rgt[h] = right
+    memo_val[h] = v
+    memo_count = memo_count + 1
+}
+
+function memo_grow() -> void {
+    let old_len: ptr<i32> = memo_len
+    let old_bnd: ptr<i32> = memo_bnd
+    let old_lft: ptr<i32> = memo_lft
+    let old_rgt: ptr<i32> = memo_rgt
+    let old_val: ptr<i64> = memo_val
+    let old_used: ptr<i8> = memo_used
+    let old_cap: i64 = memo_cap
+    memo_cap = memo_cap * 2
+    memo_len = calloc(memo_cap, 4) as ptr<i32>
+    memo_bnd = calloc(memo_cap, 4) as ptr<i32>
+    memo_lft = calloc(memo_cap, 4) as ptr<i32>
+    memo_rgt = calloc(memo_cap, 4) as ptr<i32>
+    memo_val = calloc(memo_cap, 8) as ptr<i64>
+    memo_used = calloc(memo_cap, 1) as ptr<i8>
+    memo_count = 0
+    let mut i: i64 = 0
+    while i < old_cap {
+        if old_used[i] != 0 {
+            memo_insert_raw(old_len[i], old_bnd[i], old_lft[i], old_rgt[i], old_val[i])
+        }
+        i = i + 1
+    }
+    free(old_len)
+    free(old_bnd)
+    free(old_lft)
+    free(old_rgt)
+    free(old_val)
+    free(old_used)
+}
+
+function memo_put(length: i32, bound: i32, left: i32, right: i32, v: i64) -> void {
+    if memo_count * 10 >= memo_cap * 7 {
+        memo_grow()
+    }
+    memo_insert_raw(length, bound, left, right, v)
+}
+
+# Core recursion D(length, bound, left, right).
+function D(length: i32, bound: i32, left: i32, right: i32) -> i64 {
+    if boundary_is_impossible(left) != 0 || boundary_is_impossible(right) != 0 {
+        return 0
+    }
+
+    if length == 0 {
+        if left == TOP && right == TOP {
+            return 1
+        }
+        return 0
+    }
+
+    if bound <= 1 {
+        if length == 1 {
+            let mut s: i64 = 0
+            let mut value: i64 = 0
+            while value <= (bound as i64) {
+                if satisfies(left, value) != 0 && satisfies(right, value) != 0 {
+                    s = s + 1
+                }
+                value = value + 1
+            }
+            return s
+        }
+        if bound == 0 {
+            return 0
+        }
+        if satisfies(left, 1) != 0 && satisfies(right, 1) != 0 {
+            return 1
+        }
+        return 0
+    }
+
+    let outp: ptr<i64> = calloc(1, 8) as ptr<i64>
+    if memo_lookup(length, bound, left, right, outp) != 0 {
+        let rv: i64 = outp[0]
+        free(outp)
+        return rv
+    }
+    free(outp)
+
+    let mut total: i64 = 0
+
+    if bound % 2 == 0 {
+        let marked_bound: i32 = bound
+        total = D(length, bound - 1, left, right)
+
+        let mut split: i32 = 1
+        while split <= length {
+            let prefix_len: i32 = split - 1
+            let suffix_len: i32 = length - split
+
+            let mut prefix_count: i64 = 0
+            if prefix_len == 0 {
+                if satisfies(left, bound as i64) != 0 {
+                    prefix_count = 1
+                }
+            } else {
+                prefix_count = D(prefix_len, bound - 1, left, marked_bound)
+            }
+            if prefix_count != 0 {
+                let mut suffix_count: i64 = 0
+                if suffix_len == 0 {
+                    if satisfies(right, bound as i64) != 0 {
+                        suffix_count = 1
+                    }
+                } else {
+                    suffix_count = D(suffix_len, bound, marked_bound, right)
+                }
+                total = (total + prefix_count * suffix_count) % MOD
+            }
+            split = split + 1
+        }
+
+        memo_put(length, bound, left, right, total)
+        return total
+    }
+
+    # bound is odd
+    let reduced_bound: i32 = (bound - 1) / 2
+    let left_even: i32 = phi_even(left)
+    let left_odd: i32 = phi_odd(left)
+    let right_even: i32 = phi_even(right)
+    let right_odd: i32 = phi_odd(right)
+
+    total = D(length, reduced_bound, left_even, right_even) * fib(length) % MOD
+    total = (total + D(length, reduced_bound, left_even, right_odd) * fib(length - 1)) % MOD
+    total = (total + D(length, reduced_bound, left_odd, right_even) * fib(length - 1)) % MOD
+    total = (total + D(length, reduced_bound, left_odd, right_odd) * fib(length - 2)) % MOD
+    total = total % MOD
+
+    let mut cut: i32 = 1
+    while cut < length {
+        let mut prefix: i64 = D(cut, reduced_bound, left_odd, TOP) * fib(cut - 2) % MOD
+        if cut > 1 {
+            prefix = (prefix + D(cut, reduced_bound, left_even, TOP) * fib(cut - 1)) % MOD
+        }
+        if prefix != 0 {
+            total = (total + D(length - cut, bound, ODD, right) * prefix) % MOD
+        }
+        cut = cut + 1
+    }
+
+    memo_put(length, bound, left, right, total)
+    return total
+}
+
+function c_func(length: i32, bound: i32) -> i64 {
+    return D(length, bound, TOP, TOP)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p774_native())
+    init_fib()
+    memo_init(1 << 16)
+    printf("%lld\n", c_func(123, 123456789))
     return 0
 }

@@ -1,11 +1,249 @@
-# Project Euler 805
-# Shifted Multiples — T(200) mod 1e9+7.
+# Project Euler 805: Shifted Multiples - T(200) mod 1e9+7.
+# Pure Flow port of the native C solver.
+
+import euler.nt { gcd, mod_pow }
 
 extern {
-    function p805_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const M: i64 = 200
+
+function mod_inv(a: i64) -> i64 {
+    return mod_pow(a, MOD - 2, MOD)
+}
+
+# Sieve primes up to 10000 into pp; returns count.
+function init_primes(pp: ptr<i64>) -> i64 {
+    let limit: i64 = 10000
+    let sieve: ptr<i8> = calloc(limit + 1, 1) as ptr<i8>
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= limit {
+        if sieve[i] == 0 {
+            pp[pc] = i
+            pc = pc + 1
+            let mut j: i64 = i * i
+            while j <= limit {
+                sieve[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    free(sieve)
+    return pc
+}
+
+# Factorize n into pp/ee arrays. Returns count.
+function factorize(n0: i64, primes: ptr<i64>, nprimes: i64, pp: ptr<i64>, ee: ptr<i64>) -> i64 {
+    let mut cnt: i64 = 0
+    let mut x: i64 = n0
+    let mut i: i64 = 0
+    while i < nprimes {
+        let p: i64 = primes[i]
+        if p * p > x {
+            i = nprimes
+        } else {
+            if x % p == 0 {
+                let mut e: i64 = 0
+                while x % p == 0 {
+                    x = x / p
+                    e = e + 1
+                }
+                pp[cnt] = p
+                ee[cnt] = e
+                cnt = cnt + 1
+            }
+            i = i + 1
+        }
+    }
+    if x > 1 {
+        pp[cnt] = x
+        ee[cnt] = 1
+        cnt = cnt + 1
+    }
+    return cnt
+}
+
+function euler_phi(n: i64, primes: ptr<i64>, nprimes: i64) -> i64 {
+    if n == 1 {
+        return 1
+    }
+    let pp: ptr<i64> = calloc(64, 8) as ptr<i64>
+    let ee: ptr<i64> = calloc(64, 8) as ptr<i64>
+    let c: i64 = factorize(n, primes, nprimes, pp, ee)
+    let mut phi: i64 = n
+    let mut i: i64 = 0
+    while i < c {
+        phi = (phi / pp[i]) * (pp[i] - 1)
+        i = i + 1
+    }
+    free(pp)
+    free(ee)
+    return phi
+}
+
+# Multiplicative order of 10 mod m. Returns 0 if gcd(10,m) != 1.
+function mult_order_10(m: i64, primes: ptr<i64>, nprimes: i64) -> i64 {
+    if m == 1 {
+        return 1
+    }
+    if gcd(m, 10) != 1 {
+        return 0
+    }
+    let phi: i64 = euler_phi(m, primes, nprimes)
+    let pp: ptr<i64> = calloc(64, 8) as ptr<i64>
+    let ee: ptr<i64> = calloc(64, 8) as ptr<i64>
+    let c: i64 = factorize(phi, primes, nprimes, pp, ee)
+    let mut k: i64 = phi
+    let mut i: i64 = 0
+    while i < c {
+        let p: i64 = pp[i]
+        while k % p == 0 && mod_pow(10, k / p, m) == 1 {
+            k = k / p
+        }
+        i = i + 1
+    }
+    free(pp)
+    free(ee)
+    return k
+}
+
+# Derive bounds on digit length k for leading digit d.
+# k_low = -1 means no solution. k_high = -1 means unbounded.
+function digit_k_bounds(a: i64, b: i64, d: i64, k_low: ptr<i64>, k_high: ptr<i64>) -> void {
+    let mut e: i64 = 0
+    let mut t: i64 = a
+    while t < b {
+        t = t * 10
+        e = e + 1
+    }
+    k_low[0] = e + 1
+
+    let denom: i64 = a * (d + 1) - 10 * b
+    if denom <= 0 {
+        k_high[0] = -1
+        return
+    }
+    let max_pow10: i64 = (b * d - 1) / denom
+    if max_pow10 <= 0 {
+        k_low[0] = -1
+        k_high[0] = -1
+        return
+    }
+    let mut e_high: i64 = 0
+    let mut pow10: i64 = 1
+    while pow10 * 10 <= max_pow10 {
+        pow10 = pow10 * 10
+        e_high = e_high + 1
+    }
+    k_high[0] = e_high + 1
+}
+
+# For reduced a/b, find minimal (k,d,D). Returns 1 on success.
+function find_N_params(a: i64, b: i64, primes: ptr<i64>, nprimes: i64, out_k: ptr<i64>, out_d: ptr<i64>, out_D: ptr<i64>) -> i32 {
+    if a == b {
+        out_k[0] = 1
+        out_d[0] = 1
+        out_D[0] = 9 * b
+        return 1
+    }
+    let D: i64 = 10 * b - a
+    if D <= 0 {
+        return 0
+    }
+
+    let mut best_k: i64 = 0
+    let mut best_d: i64 = 0
+    let mut have: i32 = 0
+    let kl: ptr<i64> = calloc(1, 8) as ptr<i64>
+    let kh: ptr<i64> = calloc(1, 8) as ptr<i64>
+    let mut d: i64 = 1
+    while d <= 9 {
+        digit_k_bounds(a, b, d, kl, kh)
+        if kl[0] != -1 {
+            let mut klow: i64 = kl[0]
+            if klow < 2 {
+                klow = 2
+            }
+            let m: i64 = D / gcd(D, d * b)
+            let ord10: i64 = mult_order_10(m, primes, nprimes)
+            if ord10 != 0 {
+                let k: i64 = ((klow + ord10 - 1) / ord10) * ord10
+                if !(kh[0] != -1 && k > kh[0]) {
+                    if have == 0 || k < best_k || (k == best_k && d < best_d) {
+                        best_k = k
+                        best_d = d
+                        have = 1
+                    }
+                }
+            }
+        }
+        d = d + 1
+    }
+    free(kl)
+    free(kh)
+    if have == 0 {
+        return 0
+    }
+    out_k[0] = best_k
+    out_d[0] = best_d
+    out_D[0] = D
+    return 1
+}
+
+function N_mod(a0: i64, b0: i64, primes: ptr<i64>, nprimes: i64) -> i64 {
+    let g: i64 = gcd(a0, b0)
+    let a: i64 = a0 / g
+    let b: i64 = b0 / g
+    if a == b {
+        return 1 % MOD
+    }
+    let kp: ptr<i64> = calloc(1, 8) as ptr<i64>
+    let dp: ptr<i64> = calloc(1, 8) as ptr<i64>
+    let Dp: ptr<i64> = calloc(1, 8) as ptr<i64>
+    if find_N_params(a, b, primes, nprimes, kp, dp, Dp) == 0 {
+        free(kp)
+        free(dp)
+        free(Dp)
+        return 0
+    }
+    let k: i64 = kp[0]
+    let d: i64 = dp[0]
+    let D: i64 = Dp[0]
+    free(kp)
+    free(dp)
+    free(Dp)
+    let invD: i64 = mod_inv(D % MOD)
+    let ten_k: i64 = mod_pow(10, k, MOD)
+    let term: i64 = (ten_k - 1 + MOD) % MOD
+    let mut res: i64 = (d % MOD) * (b % MOD) % MOD
+    res = res * term % MOD
+    res = res * invD % MOD
+    return res
 }
 
 function main() -> i32 {
-    printf("%lld\n", p805_native())
+    let primes: ptr<i64> = calloc(2000, 8) as ptr<i64>
+    let nprimes: i64 = init_primes(primes)
+    let mut total: i64 = 0
+    let mut u: i64 = 1
+    while u <= M {
+        let a: i64 = u * u * u
+        let mut v: i64 = 1
+        while v <= M {
+            if gcd(u, v) == 1 {
+                let b: i64 = v * v * v
+                total = (total + N_mod(a, b, primes, nprimes)) % MOD
+            }
+            v = v + 1
+        }
+        u = u + 1
+    }
+    free(primes)
+    printf("%lld\n", total)
     return 0
 }

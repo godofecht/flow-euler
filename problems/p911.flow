@@ -1,11 +1,204 @@
-# Project Euler 911
-# Khinchin Exceptions: geometric mean of k_infty(rho_n) for 0<=n<=50.
+# Project Euler 911: Khinchin Exceptions
+# Geometric mean of k_infinity(rho_n) for 0 <= n <= 50.
+# Uses Shallit's continued fraction recurrences (Theorems 1 and 11).
 
 extern {
-    function p911_native() -> f64
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> void
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+struct LA {
+    data: ptr<i64>
+    len: i32
+    cap: i32
+}
+
+function la_new(cap: i32) -> LA {
+    return LA { data: malloc((cap as i64) * 8) as ptr<i64>, len: 0, cap: cap }
+}
+
+function la_push(a: ptr<LA>, v: i64) -> void {
+    if a[0].len >= a[0].cap {
+        let new_cap: i32 = a[0].cap * 2
+        let new_data: ptr<i64> = malloc((new_cap as i64) * 8) as ptr<i64>
+        memcpy(new_data as ptr<void>, a[0].data as ptr<void>, (a[0].len as i64) * 8)
+        free(a[0].data as ptr<void>)
+        a[0].data = new_data
+        a[0].cap = new_cap
+    }
+    a[0].data[a[0].len] = v
+    a[0].len = a[0].len + 1
+}
+
+function la_last(a: ptr<LA>) -> i64 {
+    return a[0].data[a[0].len - 1]
+}
+
+function la_copy(src: ptr<LA>) -> LA {
+    let r: LA = la_new(src[0].cap)
+    r.len = src[0].len
+    memcpy(r.data as ptr<void>, src[0].data as ptr<void>, (src[0].len as i64) * 8)
+    return r
+}
+
+function la_free(a: ptr<LA>) -> void {
+    free(a[0].data as ptr<void>)
+    a[0].data = null
+}
+
+function canonicalize_tail(cf: ptr<LA>) -> void {
+    if cf[0].len > 1 {
+        if cf[0].data[cf[0].len - 1] == 1 {
+            cf[0].data[cf[0].len - 2] = cf[0].data[cf[0].len - 2] + 1
+            cf[0].len = cf[0].len - 1
+        }
+    }
+}
+
+function avg_log_positive(arr: ptr<i64>, start: i32, len: i32) -> f64 {
+    let mut s: f64 = 0.0
+    for i in 0..len {
+        s = s + log(arr[start + i] as f64)
+    }
+    return s / (len as f64)
+}
+
+# One application of Shallit Theorem 1(B) for u=2
+function extend_theorem1(coeffs: ptr<LA>) -> LA {
+    let last: i64 = la_last(coeffs)
+    let result: LA = la_new(coeffs[0].cap + coeffs[0].len)
+
+    for i in 0..(coeffs[0].len - 1) {
+        la_push(&result, coeffs[0].data[i])
+    }
+
+    if last > 1 {
+        la_push(&result, last + 1)
+        la_push(&result, last - 1)
+        let mut i: i32 = coeffs[0].len - 2
+        while i >= 1 {
+            la_push(&result, coeffs[0].data[i])
+            i = i - 1
+        }
+    } else {
+        let prelast: i64 = coeffs[0].data[coeffs[0].len - 2]
+        la_push(&result, 2 + prelast)
+        let mut i: i32 = coeffs[0].len - 3
+        while i >= 1 {
+            la_push(&result, coeffs[0].data[i])
+            i = i - 1
+        }
+    }
+    return result
+}
+
+function log_khinchin_rho0() -> f64 {
+    # seed_rho(0): coeffs = [0, 1, 3]
+    let mut coeffs: LA = la_new(16)
+    la_push(&coeffs, 0)
+    la_push(&coeffs, 1)
+    la_push(&coeffs, 3)
+    canonicalize_tail(&coeffs)
+
+    let mut mu1: f64 = 0.0
+    let mut mu2: f64 = 0.0
+    let mut L1: i32 = 0
+    let mut L2: i32 = 0
+
+    for step in 1..23 {
+        let next: LA = extend_theorem1(&coeffs)
+        la_free(&coeffs)
+        coeffs = next
+        canonicalize_tail(&coeffs)
+
+        if step == 20 {
+            L1 = coeffs.len - 1
+            mu1 = avg_log_positive(coeffs.data, 1, L1)
+        }
+        if step == 22 {
+            L2 = coeffs.len - 1
+            mu2 = avg_log_positive(coeffs.data, 1, L2)
+        }
+    }
+    la_free(&coeffs)
+
+    return (mu2 * (L2 as f64) - mu1 * (L1 as f64)) / ((L2 - L1) as f64)
+}
+
+function khinchin_log_limit(n: i32, max_steps: i32) -> f64 {
+    if n == 0 {
+        return log_khinchin_rho0()
+    }
+
+    # seed_rho(n) for n >= 1
+    let mut vprime: i32 = 0
+    while (1 << vprime) <= n {
+        vprime = vprime + 1
+    }
+    let d: i64 = ((1 as i64) << vprime) - (n as i64)
+    let ut: i64 = (1 as i64) << n
+    let ud: i64 = (1 as i64) << d
+    let mut c: i64 = 0
+    for k in 0..vprime {
+        c = c + ((1 as i64) << (n - (1 << k)))
+    }
+
+    let mut coeffs: LA = la_new(16)
+    la_push(&coeffs, c)
+    la_push(&coeffs, ud - 1)
+    la_push(&coeffs, 1)
+    la_push(&coeffs, ut - 1)
+    la_push(&coeffs, ud)
+    let t2: i64 = ut - 1
+
+    # tail = coeffs[1:]
+    let mut L: f64 = (coeffs.len - 1) as f64
+    let mut mu: f64 = 0.0
+    for i in 1..coeffs.len {
+        mu = mu + log(coeffs.data[i] as f64)
+    }
+    mu = mu / L
+
+    let first: i64 = coeffs.data[1]
+    let second: i64 = coeffs.data[2]
+    let mut last: i64 = coeffs.data[coeffs.len - 1]
+    let mut prelast: i64 = coeffs.data[coeffs.len - 2]
+
+    for step in 0..max_steps {
+        let mu_old: f64 = mu
+        let L_new: f64
+        let delta: f64
+        if last > 1 {
+            L_new = 2.0 * L + 2.0
+            delta = (0.0 - log(last as f64)) + log(t2 as f64) + log((last - 1) as f64)
+            mu = mu * (2.0 * L / L_new) + delta / L_new
+        } else {
+            L_new = 2.0 * L
+            delta = (0.0 - log(prelast as f64)) + log(t2 as f64) + log((prelast + 1) as f64)
+            mu = mu + delta / L_new
+        }
+        L = L_new
+        prelast = second
+        last = first
+        if fabs(mu - mu_old) < 1e-15 {
+            break
+        }
+    }
+
+    la_free(&coeffs)
+    return mu
 }
 
 function main() -> i32 {
-    printf("%.6f\n", p911_native())
+    let mut total_log: f64 = 0.0
+    for n in 0..51 {
+        total_log = total_log + khinchin_log_limit(n, 80)
+    }
+    let avg_log: f64 = total_log / 51.0
+    printf("%.6f\n", exp(avg_log))
     return 0
 }

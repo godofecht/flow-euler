@@ -1,11 +1,223 @@
 # Project Euler 786
 # Billiard -- B(10^9).
+# Uses floor_sum, Mertens function with Du Jiao sieve, and Mobius inversion.
 
 extern {
-    function p786_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const HT_SIZE: i64 = 2097152
+const HT_MASK: i64 = 2097151
+
+let mut g_pref: ptr<i64> = null
+let mut g_limit: i64 = 0
+let mut g_ht_m_key: ptr<i64> = null
+let mut g_ht_m_val: ptr<i64> = null
+let mut g_ht_f_key: ptr<i64> = null
+let mut g_ht_f_val: ptr<i64> = null
+
+function floor_sum(n0: i64, m0: i64, a0: i64, b0: i64) -> i64 {
+    let mut res: i64 = 0
+    let mut n: i64 = n0
+    let mut m: i64 = m0
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while true {
+        if a >= m {
+            res = res + (n - 1) * n * (a / m) / 2
+            a = a % m
+        }
+        if b >= m {
+            res = res + n * (b / m)
+            b = b % m
+        }
+        let y_max: i64 = a * n + b
+        if y_max < m { break }
+        b = y_max % m
+        n = y_max / m
+        let tmp: i64 = m
+        m = a
+        a = tmp
+    }
+    return res
+}
+
+function icbrt(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut bits: i64 = 0
+    let mut t: i64 = n
+    while t != 0 {
+        bits = bits + 1
+        t = t >> 1
+    }
+    let mut x: i64 = 1 << ((bits + 2) / 3)
+    while true {
+        let y: i64 = (2 * x + n / (x * x)) / 3
+        if y >= x { break }
+        x = y
+    }
+    while (x + 1) * (x + 1) * (x + 1) <= n {
+        x = x + 1
+    }
+    while x * x * x > n {
+        x = x - 1
+    }
+    return x
+}
+
+function ht_get(ht_key: ptr<i64>, ht_val: ptr<i64>, key: i64, out: ptr<i64>) -> i64 {
+    let mut h: i64 = (key * 2654435761) & HT_MASK
+    while ht_key[h] != 0 {
+        if ht_key[h] == key {
+            out[0] = ht_val[h]
+            return 1
+        }
+        h = (h + 1) & HT_MASK
+    }
+    return 0
+}
+
+function ht_put(ht_key: ptr<i64>, ht_val: ptr<i64>, key: i64, val: i64) -> void {
+    let mut h: i64 = (key * 2654435761) & HT_MASK
+    while ht_key[h] != 0 {
+        if ht_key[h] == key {
+            ht_val[h] = val
+            return
+        }
+        h = (h + 1) & HT_MASK
+    }
+    ht_key[h] = key
+    ht_val[h] = val
+}
+
+function M_func(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    if n <= g_limit { return g_pref[n] }
+    let out: ptr<i64> = malloc(8) as ptr<i64>
+    if ht_get(g_ht_m_key, g_ht_m_val, n, out) == 1 {
+        let v: i64 = out[0]
+        free(out)
+        return v
+    }
+    free(out)
+    let mut res: i64 = 1
+    let mut l: i64 = 2
+    while l <= n {
+        let q: i64 = n / l
+        let r: i64 = n / q
+        res = res - (r - l + 1) * M_func(q)
+        l = r + 1
+    }
+    ht_put(g_ht_m_key, g_ht_m_val, n, res)
+    return res
+}
+
+function F_func(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let out: ptr<i64> = malloc(8) as ptr<i64>
+    if ht_get(g_ht_f_key, g_ht_f_val, n, out) == 1 {
+        let v: i64 = out[0]
+        free(out)
+        return v
+    }
+    free(out)
+    let res: i64 = M_func(n) + F_func(n / 3)
+    ht_put(g_ht_f_key, g_ht_f_val, n, res)
+    return res
+}
+
+function count_points_nonprimitive(M: i64) -> i64 {
+    if M < 28 { return 0 }
+    let n: i64 = (M - 18) / 10
+    let b: i64 = M - 10 * n
+    let total: i64 = floor_sum(n, 18, 10, b)
+
+    let n3: i64 = n / 3
+    let b3: i64 = M - 30 * n3
+    let total3: i64 = floor_sum(n3, 18, 30, b3)
+
+    return total - total3
+}
+
+function count_points_primitive(M: i64) -> i64 {
+    let max_d: i64 = M / 28
+    if max_d <= 0 { return 0 }
+
+    let limit: i64 = icbrt(max_d * max_d) + 64
+
+    # Linear sieve for mu
+    let mu: ptr<i64> = calloc(limit + 1, 8) as ptr<i64>
+    let is_comp: ptr<i8> = calloc(limit + 1, 1) as ptr<i8>
+    let primes: ptr<i64> = malloc((limit + 1) * 8) as ptr<i64>
+    let mut pc: i64 = 0
+    mu[1] = 1
+    for i in 2..(limit + 1) {
+        if is_comp[i] == 0 {
+            primes[pc] = i
+            pc = pc + 1
+            mu[i] = -1
+        }
+        let mut j: i64 = 0
+        while j < pc {
+            let p: i64 = primes[j]
+            let v: i64 = i * p
+            if v > limit { break }
+            is_comp[v] = 1
+            if i % p == 0 {
+                mu[v] = 0
+                break
+            }
+            mu[v] = -mu[i]
+            j = j + 1
+        }
+    }
+
+    # Prefix sums of mu (Mertens function)
+    let pref: ptr<i64> = calloc(limit + 1, 8) as ptr<i64>
+    let mut s: i64 = 0
+    for i in 1..(limit + 1) {
+        s = s + mu[i]
+        pref[i] = s
+    }
+
+    g_pref = pref
+    g_limit = limit
+    g_ht_m_key = calloc(HT_SIZE, 8) as ptr<i64>
+    g_ht_m_val = calloc(HT_SIZE, 8) as ptr<i64>
+    g_ht_f_key = calloc(HT_SIZE, 8) as ptr<i64>
+    g_ht_f_val = calloc(HT_SIZE, 8) as ptr<i64>
+
+    let mut ans: i64 = 0
+    let mut l: i64 = 1
+    while l <= max_d {
+        let q: i64 = M / l
+        let r: i64 = M / q
+        let mut rr: i64 = r
+        if rr > max_d { rr = max_d }
+        let coef: i64 = F_func(rr) - F_func(l - 1)
+        if coef != 0 {
+            ans = ans + coef * count_points_nonprimitive(q)
+        }
+        l = rr + 1
+    }
+
+    free(mu)
+    free(is_comp)
+    free(primes)
+    free(pref)
+    free(g_ht_m_key)
+    free(g_ht_m_val)
+    free(g_ht_f_key)
+    free(g_ht_f_val)
+    return ans
 }
 
 function main() -> i32 {
-    printf("%lld\n", p786_native())
+    let N: i64 = 1000000000
+    let M: i64 = 3 * N + 6
+    let ans: i64 = 2 + 4 * count_points_primitive(M)
+    printf("%lld\n", ans)
     return 0
 }

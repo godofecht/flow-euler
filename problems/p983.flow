@@ -1,11 +1,674 @@
 # Project Euler 983
 # Parity family of circles on lattice points.
+# Find minimum radius^2 m for k=10 vectors giving 512 circles, 512 harmony points.
+# Port of the C reference solver to pure Flow.
 
 extern {
-    function p983_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+function encode(x: i64, y: i64) -> i64 {
+    return ((x + 100000) << 32) | ((y + 100000) & 4294967295)
+}
+
+function iabs(x: i64) -> i64 {
+    if x < 0 { return -x }
+    return x
+}
+
+# --- HashSet (open addressing, linear probing) ---
+let mut hs_keys: ptr<i64> = null
+let mut hs_used: ptr<i64> = null
+let mut hs_cap: i64 = 0
+let mut hs_count: i64 = 0
+
+function hash_ll(key: i64, cap: i64) -> i64 {
+    let mut h: i64 = key % cap
+    if h < 0 { h = h + cap }
+    return h
+}
+
+function hs_init(cap: i64) -> void {
+    hs_cap = cap
+    hs_count = 0
+    hs_keys = calloc(cap, 8) as ptr<i64>
+    hs_used = calloc(cap, 8) as ptr<i64>
+}
+
+function hs_free() -> void {
+    free(hs_keys as ptr<void>)
+    free(hs_used as ptr<void>)
+    hs_keys = null
+    hs_used = null
+    hs_cap = 0
+    hs_count = 0
+}
+
+function hs_insert(key: i64) -> void {
+    if hs_count * 2 > hs_cap {
+        let old_cap: i64 = hs_cap
+        let old_keys: ptr<i64> = hs_keys
+        let old_used: ptr<i64> = hs_used
+        hs_cap = old_cap * 2
+        hs_keys = calloc(hs_cap, 8) as ptr<i64>
+        hs_used = calloc(hs_cap, 8) as ptr<i64>
+        hs_count = 0
+        let mut i: i64 = 0
+        while i < old_cap {
+            if old_used[i] != 0 {
+                let mut h: i64 = hash_ll(old_keys[i], hs_cap)
+                while hs_used[h] != 0 { h = (h + 1) % hs_cap }
+                hs_keys[h] = old_keys[i]
+                hs_used[h] = 1
+                hs_count = hs_count + 1
+            }
+            i = i + 1
+        }
+        free(old_keys as ptr<void>)
+        free(old_used as ptr<void>)
+    }
+    let mut h: i64 = hash_ll(key, hs_cap)
+    while hs_used[h] != 0 {
+        if hs_keys[h] == key { return }
+        h = (h + 1) % hs_cap
+    }
+    hs_keys[h] = key
+    hs_used[h] = 1
+    hs_count = hs_count + 1
+}
+
+function hs_contains(key: i64) -> i64 {
+    let mut h: i64 = hash_ll(key, hs_cap)
+    while hs_used[h] != 0 {
+        if hs_keys[h] == key { return 1 }
+        h = (h + 1) % hs_cap
+    }
+    return 0
+}
+
+# --- HashMap (long long -> int) ---
+let mut hm_keys: ptr<i64> = null
+let mut hm_vals: ptr<i64> = null
+let mut hm_used: ptr<i64> = null
+let mut hm_cap: i64 = 0
+
+function hm_init(cap: i64) -> void {
+    hm_cap = cap
+    hm_keys = calloc(cap, 8) as ptr<i64>
+    hm_vals = calloc(cap, 8) as ptr<i64>
+    hm_used = calloc(cap, 8) as ptr<i64>
+}
+
+function hm_free() -> void {
+    free(hm_keys as ptr<void>)
+    free(hm_vals as ptr<void>)
+    free(hm_used as ptr<void>)
+    hm_keys = null
+    hm_vals = null
+    hm_used = null
+    hm_cap = 0
+}
+
+function hm_get(key: i64) -> i64 {
+    # returns value if found, -1 if not found
+    let mut h: i64 = hash_ll(key, hm_cap)
+    while hm_used[h] != 0 {
+        if hm_keys[h] == key { return hm_vals[h] }
+        h = (h + 1) % hm_cap
+    }
+    return -1
+}
+
+function hm_set(key: i64, val: i64) -> void {
+    let mut h: i64 = hash_ll(key, hm_cap)
+    while hm_used[h] != 0 {
+        if hm_keys[h] == key { hm_vals[h] = val; return }
+        h = (h + 1) % hm_cap
+    }
+    hm_keys[h] = key
+    hm_vals[h] = val
+    hm_used[h] = 1
+}
+
+function isqrt_int(n: i64) -> i64 {
+    if n < 0 { return 0 }
+    let mut r: i64 = sqrt((n as f64)) as i64
+    while r * r > n { r = r - 1 }
+    while (r + 1) * (r + 1) <= n { r = r + 1 }
+    return r
+}
+
+function antipodal_pair_count(m: i64) -> i64 {
+    let mut x: i64 = m
+    while x % 2 == 0 { x = x / 2 }
+    let mut product: i64 = 1
+    let mut p: i64 = 3
+    while p * p <= x {
+        if x % p == 0 {
+            let mut exp: i64 = 0
+            while x % p == 0 { x = x / p; exp = exp + 1 }
+            if p % 4 == 1 { product = product * (exp + 1) }
+            else {
+                if exp % 2 == 1 { return 0 }
+            }
+        }
+        p = p + 2
+    }
+    if x > 1 {
+        if x % 4 == 1 { product = product * 2 }
+        else {
+            if x % 4 == 3 { return 0 }
+        }
+    }
+    return 2 * product
+}
+
+const MAXPTS: i64 = 100
+
+# Global circle points
+let mut circle_px: ptr<i64> = null
+let mut circle_py: ptr<i64> = null
+let mut num_circle_points: i64 = 0
+
+# Global pair data
+let mut pair_px: ptr<i64> = null
+let mut pair_py: ptr<i64> = null
+let mut pair_nx: ptr<i64> = null
+let mut pair_ny: ptr<i64> = null
+let mut num_pairs: i64 = 0
+
+function lattice_points_on_circle(m: i64) -> i64 {
+    let lim: i64 = isqrt_int(m)
+    let mut cnt: i64 = 0
+    let mut x: i64 = -lim
+    while x <= lim {
+        let y2: i64 = m - x * x
+        if y2 >= 0 {
+            let y: i64 = isqrt_int(y2)
+            if y * y == y2 {
+                circle_px[cnt] = x
+                circle_py[cnt] = y
+                cnt = cnt + 1
+                if y != 0 {
+                    circle_px[cnt] = x
+                    circle_py[cnt] = -y
+                    cnt = cnt + 1
+                }
+            }
+        }
+        x = x + 1
+    }
+    return cnt
+}
+
+function has_unit_coordinate(npts: i64) -> i64 {
+    let mut i: i64 = 0
+    while i < npts {
+        if iabs(circle_px[i]) == 1 || iabs(circle_py[i]) == 1 { return 1 }
+        i = i + 1
+    }
+    return 0
+}
+
+function build_displacement_set() -> void {
+    hs_init(1024)
+    let mut i: i64 = 0
+    while i < num_circle_points {
+        let mut j: i64 = 0
+        while j < num_circle_points {
+            if i != j {
+                hs_insert(encode(circle_px[i] - circle_px[j], circle_py[i] - circle_py[j]))
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+# DFS state
+let mut sel_x: ptr<i64> = null
+let mut sel_y: ptr<i64> = null
+let mut dfs_k: i64 = 0
+let mut dfs_n: i64 = 0
+let mut dfs_masks: ptr<i64> = null
+let mut dfs_nmasks: i64 = 0
+
+function passes_four_vector_prune(sel_len: i64, vx: i64, vy: i64) -> i64 {
+    if sel_len < 3 { return 1 }
+    let mut i: i64 = 0
+    while i < sel_len - 2 {
+        let ax: i64 = sel_x[i]
+        let ay: i64 = sel_y[i]
+        let mut j: i64 = i + 1
+        while j < sel_len - 1 {
+            let bx: i64 = sel_x[j]
+            let by: i64 = sel_y[j]
+            let mut k: i64 = j + 1
+            while k < sel_len {
+                let cx: i64 = sel_x[k]
+                let cy: i64 = sel_y[k]
+                let mut sa: i64 = 1
+                while sa >= -1 {
+                    let x1: i64 = vx + sa * ax
+                    let y1: i64 = vy + sa * ay
+                    let mut sb: i64 = 1
+                    while sb >= -1 {
+                        let x2: i64 = x1 + sb * bx
+                        let y2: i64 = y1 + sb * by
+                        let mut sc: i64 = 1
+                        while sc >= -1 {
+                            let mut x: i64 = x2 + sc * cx
+                            let mut y: i64 = y2 + sc * cy
+                            if (x != 0 || y != 0) && hs_contains(encode(x, y)) { return 0 }
+                            x = x2 - cx
+                            y = y2 - cy
+                            if (x != 0 || y != 0) && hs_contains(encode(x, y)) { return 0 }
+                            sc = sc - 2
+                        }
+                        sb = sb - 2
+                    }
+                    sa = sa - 2
+                }
+                k = k + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return 1
+}
+
+function popcount(x: i64) -> i64 {
+    let mut c: i64 = 0
+    let mut v: i64 = x
+    while v != 0 {
+        c = c + 1
+        v = v & (v - 1)
+    }
+    return c
+}
+
+let mut even_masks: ptr<i64> = null
+let mut num_even_masks: i64 = 0
+
+function compute_even_masks(k: i64) -> void {
+    num_even_masks = 0
+    let mut mask: i64 = 0
+    while mask < (1 << k) {
+        if popcount(mask) % 2 == 0 {
+            even_masks[num_even_masks] = mask
+            num_even_masks = num_even_masks + 1
+        }
+        mask = mask + 1
+    }
+}
+
+function centers_from_vectors(vx: ptr<i64>, vy: ptr<i64>, k: i64, masks: ptr<i64>, nmasks: i64, cx: ptr<i64>, cy: ptr<i64>) -> void {
+    let mut mi: i64 = 0
+    while mi < nmasks {
+        let mask: i64 = masks[mi]
+        let mut x: i64 = 0
+        let mut y: i64 = 0
+        let mut i: i64 = 0
+        while i < k {
+            if (mask & (1 << i)) != 0 { x = x + vx[i]; y = y + vy[i] }
+            i = i + 1
+        }
+        cx[mi] = x
+        cy[mi] = y
+        mi = mi + 1
+    }
+}
+
+function quick_harmony_count_equals_n(ncen: i64, cx: ptr<i64>, cy: ptr<i64>, n: i64) -> i64 {
+    hm_init(16384)
+    let mut harmony: i64 = 0
+    let mut ci: i64 = 0
+    while ci < ncen {
+        let mut vi: i64 = 0
+        while vi < num_circle_points {
+            let key: i64 = encode(cx[ci] + circle_px[vi], cy[ci] + circle_py[vi])
+            let cur: i64 = hm_get(key)
+            if cur == -1 {
+                hm_set(key, 1)
+            } else {
+                if cur == 1 {
+                    hm_set(key, 2)
+                    harmony = harmony + 1
+                    if harmony > n { hm_free(); return 0 }
+                } else {
+                    hm_set(key, cur + 1)
+                }
+            }
+            vi = vi + 1
+        }
+        ci = ci + 1
+    }
+    hm_free()
+    if harmony == n { return 1 }
+    return 0
+}
+
+# Union-Find
+let mut uf_parent: ptr<i64> = null
+let mut uf_size: ptr<i64> = null
+
+function uf_find(x: i64) -> i64 {
+    let mut xx: i64 = x
+    while uf_parent[xx] != xx {
+        uf_parent[xx] = uf_parent[uf_parent[xx]]
+        xx = uf_parent[xx]
+    }
+    return xx
+}
+
+function uf_union(a: i64, b: i64) -> void {
+    let ra: i64 = uf_find(a)
+    let rb: i64 = uf_find(b)
+    if ra == rb { return }
+    let mut r1: i64 = ra
+    let mut r2: i64 = rb
+    if uf_size[r1] < uf_size[r2] { r1 = rb; r2 = ra }
+    uf_parent[r2] = r1
+    uf_size[r1] = uf_size[r1] + uf_size[r2]
+}
+
+function strict_perfect_check(ncen: i64, cx: ptr<i64>, cy: ptr<i64>, n: i64) -> i64 {
+    # Check no tangent circle pairs
+    hs_init(1024)
+    let mut i: i64 = 0
+    while i < ncen {
+        hs_insert(encode(cx[i], cy[i]))
+        i = i + 1
+    }
+
+    i = 0
+    while i < ncen {
+        let mut vi: i64 = 0
+        while vi < num_circle_points {
+            let other: i64 = encode(cx[i] + 2 * circle_px[vi], cy[i] + 2 * circle_py[vi])
+            if hs_contains(other) != 0 {
+                let ci_enc: i64 = encode(cx[i], cy[i])
+                if ci_enc < other {
+                    hs_free()
+                    return 0
+                }
+            }
+            vi = vi + 1
+        }
+        i = i + 1
+    }
+    hs_free()
+
+    # Build linked list of centers per point
+    let total_entries: i64 = ncen * num_circle_points
+    let link_next: ptr<i64> = calloc(total_entries, 8) as ptr<i64>
+    let link_center: ptr<i64> = calloc(total_entries, 8) as ptr<i64>
+    let link_key: ptr<i64> = calloc(total_entries, 8) as ptr<i64>
+
+    hm_init(16384)
+
+    let mut link_count: i64 = 0
+    let mut ci: i64 = 0
+    while ci < ncen {
+        let mut vi: i64 = 0
+        while vi < num_circle_points {
+            let key: i64 = encode(cx[ci] + circle_px[vi], cy[ci] + circle_py[vi])
+            let head: i64 = hm_get(key)
+            if head == -1 {
+                link_key[link_count] = key
+                link_center[link_count] = ci
+                link_next[link_count] = -1
+                hm_set(key, link_count)
+                link_count = link_count + 1
+            } else {
+                link_key[link_count] = key
+                link_center[link_count] = ci
+                link_next[link_count] = head
+                hm_set(key, link_count)
+                link_count = link_count + 1
+            }
+            vi = vi + 1
+        }
+        ci = ci + 1
+    }
+
+    # Init union-find
+    let mut ii: i64 = 0
+    while ii < n {
+        uf_parent[ii] = ii
+        uf_size[ii] = 1
+        ii = ii + 1
+    }
+
+    let mut harmony: i64 = 0
+    let mut h: i64 = 0
+    while h < hm_cap {
+        if hm_used[h] != 0 {
+            let key: i64 = hm_keys[h]
+            let head: i64 = hm_vals[h]
+
+            let mut count: i64 = 0
+            let mut idx2: i64 = head
+            while idx2 != -1 {
+                count = count + 1
+                idx2 = link_next[idx2]
+            }
+
+            if count >= 2 {
+                harmony = harmony + 1
+                idx2 = head
+                let base: i64 = link_center[idx2]
+                idx2 = link_next[idx2]
+                while idx2 != -1 {
+                    uf_union(base, link_center[idx2])
+                    idx2 = link_next[idx2]
+                }
+            }
+        }
+        h = h + 1
+    }
+
+    free(link_next as ptr<void>)
+    free(link_center as ptr<void>)
+    free(link_key as ptr<void>)
+    hm_free()
+
+    if harmony != n { return 0 }
+
+    # Check all circles connected
+    let root: i64 = uf_find(0)
+    let mut i3: i64 = 1
+    while i3 < n {
+        if uf_find(i3) != root { return 0 }
+        i3 = i3 + 1
+    }
+    return 1
+}
+
+function dfs(start: i64, sel_len: i64) -> i64 {
+    if sel_len == dfs_k {
+        let cx: ptr<i64> = calloc(1024, 8) as ptr<i64>
+        let cy: ptr<i64> = calloc(1024, 8) as ptr<i64>
+        centers_from_vectors(sel_x, sel_y, dfs_k, dfs_masks, dfs_nmasks, cx, cy)
+        let ok1: i64 = quick_harmony_count_equals_n(dfs_nmasks, cx, cy, dfs_n)
+        let mut result: i64 = 0
+        if ok1 != 0 {
+            result = strict_perfect_check(dfs_nmasks, cx, cy, dfs_n)
+        }
+        free(cx as ptr<void>)
+        free(cy as ptr<void>)
+        return result
+    }
+
+    let needed: i64 = dfs_k - sel_len
+    let mut pi: i64 = start
+    while pi < num_pairs - needed + 1 {
+        let n_choices: i64 = 0
+        if sel_len == 0 { n_choices = 1 } else { n_choices = 2 }
+        let mut ci: i64 = 0
+        while ci < n_choices {
+            let mut vx: i64 = 0
+            let mut vy: i64 = 0
+            if ci == 0 { vx = pair_px[pi]; vy = pair_py[pi] }
+            else { vx = pair_nx[pi]; vy = pair_ny[pi] }
+
+            if passes_four_vector_prune(sel_len, vx, vy) != 0 {
+                sel_x[sel_len] = vx
+                sel_y[sel_len] = vy
+                if dfs(pi + 1, sel_len + 1) != 0 { return 1 }
+            }
+            ci = ci + 1
+        }
+        pi = pi + 1
+    }
+    return 0
+}
+
+function has_valid_oriented_vectors(k: i64, n: i64) -> i64 {
+    dfs_k = k
+    dfs_n = n
+    compute_even_masks(k)
+    dfs_nmasks = num_even_masks
+    let mut i: i64 = 0
+    while i < num_even_masks {
+        dfs_masks[i] = even_masks[i]
+        i = i + 1
+    }
+    return dfs(0, 0)
+}
+
+# Sort points by (x, y) ascending. Selection sort on sorted_pts arrays.
+function sort_points(npts: i64, sx: ptr<i64>, sy: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < npts {
+        let mut best: i64 = i
+        let mut j: i64 = i + 1
+        while j < npts {
+            if sx[j] < sx[best] || (sx[j] == sx[best] && sy[j] < sy[best]) {
+                best = j
+            }
+            j = j + 1
+        }
+        if best != i {
+            let tx: i64 = sx[i]
+            let ty: i64 = sy[i]
+            sx[i] = sx[best]
+            sy[i] = sy[best]
+            sx[best] = tx
+            sy[best] = ty
+        }
+        i = i + 1
+    }
+}
+
+function find_min_radius_sq(k: i64, m_limit: i64, filtered: i64) -> i64 {
+    let n: i64 = 1 << (k - 1)
+
+    let mut m: i64 = 1
+    while m <= m_limit {
+        let p: i64 = antipodal_pair_count(m)
+        if p < k { m = m + 1 } else {
+            let mut skip: i64 = 0
+            if filtered != 0 {
+                if p != k && p != k + 2 { skip = 1 }
+            }
+            if skip != 0 { m = m + 1 } else {
+                num_circle_points = lattice_points_on_circle(m)
+
+                let mut skip2: i64 = 0
+                if filtered != 0 {
+                    if has_unit_coordinate(num_circle_points) == 0 { skip2 = 1 }
+                }
+                if skip2 != 0 { m = m + 1 } else {
+                    # Sort points
+                    let sx: ptr<i64> = calloc(MAXPTS, 8) as ptr<i64>
+                    let sy: ptr<i64> = calloc(MAXPTS, 8) as ptr<i64>
+                    let mut i: i64 = 0
+                    while i < num_circle_points {
+                        sx[i] = circle_px[i]
+                        sy[i] = circle_py[i]
+                        i = i + 1
+                    }
+                    sort_points(num_circle_points, sx, sy)
+
+                    # Group into antipodal pairs
+                    let used: ptr<i64> = calloc(MAXPTS, 8) as ptr<i64>
+                    num_pairs = 0
+                    i = 0
+                    while i < num_circle_points {
+                        if used[i] != 0 { i = i + 1 } else {
+                            let nx: i64 = -sx[i]
+                            let ny: i64 = -sy[i]
+                            # Binary search for negation
+                            let mut lo: i64 = 0
+                            let mut hi: i64 = num_circle_points - 1
+                            let mut found: i64 = -1
+                            while lo <= hi {
+                                let mid: i64 = (lo + hi) / 2
+                                if sx[mid] < nx || (sx[mid] == nx && sy[mid] < ny) {
+                                    lo = mid + 1
+                                } else {
+                                    if sx[mid] > nx || (sx[mid] == nx && sy[mid] > ny) {
+                                        hi = mid - 1
+                                    } else {
+                                        found = mid
+                                        lo = hi + 1
+                                    }
+                                }
+                            }
+                            if found == -1 {
+                                i = i + 1
+                            } else {
+                                used[i] = 1
+                                used[found] = 1
+                                pair_px[num_pairs] = sx[i]
+                                pair_py[num_pairs] = sy[i]
+                                pair_nx[num_pairs] = nx
+                                pair_ny[num_pairs] = ny
+                                num_pairs = num_pairs + 1
+                                i = i + 1
+                            }
+                        }
+                    }
+                    free(sx as ptr<void>)
+                    free(sy as ptr<void>)
+                    free(used as ptr<void>)
+
+                    if num_pairs != p { m = m + 1 } else {
+                        build_displacement_set()
+                        if has_valid_oriented_vectors(k, n) != 0 {
+                            hs_free()
+                            return m
+                        }
+                        hs_free()
+                        m = m + 1
+                    }
+                }
+            }
+        }
+    }
+    return -1
 }
 
 function main() -> i32 {
-    printf("%lld\n", p983_native())
+    circle_px = calloc(MAXPTS, 8) as ptr<i64>
+    circle_py = calloc(MAXPTS, 8) as ptr<i64>
+    pair_px = calloc(MAXPTS, 8) as ptr<i64>
+    pair_py = calloc(MAXPTS, 8) as ptr<i64>
+    pair_nx = calloc(MAXPTS, 8) as ptr<i64>
+    pair_ny = calloc(MAXPTS, 8) as ptr<i64>
+    sel_x = calloc(16, 8) as ptr<i64>
+    sel_y = calloc(16, 8) as ptr<i64>
+    even_masks = calloc(1024, 8) as ptr<i64>
+    dfs_masks = calloc(1024, 8) as ptr<i64>
+    uf_parent = calloc(1024, 8) as ptr<i64>
+    uf_size = calloc(1024, 8) as ptr<i64>
+
+    printf("%lld\n", find_min_radius_sq(10, 20000, 1))
     return 0
 }

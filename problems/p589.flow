@@ -1,11 +1,553 @@
 # Project Euler 589
-# Real solver in problems/native/p589.c (linked by scripts/run.sh).
+# Poisson Games — iterative/direct C1 solver + Gaussian elimination.
 
 extern {
-    function pe589_answer() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function fabs(x: f64) -> f64
+}
+
+function arith_sum(a: i64, b: i64) -> f64 {
+    if a > b { return 0.0 }
+    let n: f64 = ((b - a + 1) as f64)
+    return ((a + b) as f64) * n * 0.5
+}
+
+function expected_min_consecutive(low: i64, high: i64) -> f64 {
+    let L: i64 = high - low + 1
+    let denom: f64 = ((L * L) as f64)
+    let mut total: f64 = 0.0
+    let mut i: i64 = 0
+    while i < L {
+        let v: f64 = (low + i) as f64
+        let w: f64 = ((2 * L - 2 * i - 1) as f64) / denom
+        total = total + v * w
+        i = i + 1
+    }
+    return total
+}
+
+function prefix_fill(arr: ptr<f64>, pref: ptr<f64>, M: i64) -> void {
+    let mut s: f64 = 0.0
+    pref[0] = 0.0
+    let mut i: i64 = 1
+    while i <= M {
+        s = s + arr[i]
+        pref[i] = s
+        i = i + 1
+    }
+}
+
+function compute_C1_iterative(n: i64, m: i64, C1: ptr<f64>, B0_out: ptr<f64>) -> i32 {
+    let L: i64 = m - n + 1
+    let A_low: i64 = n + 5
+    let A_high: i64 = m + 5
+    let M: i64 = A_high
+    let EminA: f64 = expected_min_consecutive(A_low, A_high)
+    let k: f64 = (L as f64) / ((L - 1) as f64)
+    let invL: f64 = 1.0 / (L as f64)
+    let meanA: f64 = 0.5 * ((A_low + A_high) as f64)
+
+    let C0: ptr<f64> = calloc(M + 1, 8)
+    let newC0: ptr<f64> = calloc(M + 1, 8)
+    let newC1: ptr<f64> = calloc(M + 1, 8)
+    let pref: ptr<f64> = calloc(M + 1, 8)
+
+    let mut x: i64 = 1
+    while x <= M {
+        let mut mx: f64 = meanA
+        if meanA >= (x as f64) {
+            mx = (x as f64)
+        }
+        C1[x] = meanA + mx
+        C0[x] = meanA + (x as f64)
+        x = x + 1
+    }
+
+    let w: f64 = 1.15
+    let mut ok: i32 = 0
+    let mut it: i32 = 0
+    while it < 2000 {
+        prefix_fill(C1, pref, M)
+        let mut ss: f64 = 0.0
+        let mut d: i64 = 1
+        while d < L {
+            ss = ss + ((L - d) as f64) * 2.0 * C1[d]
+            d = d + 1
+        }
+        let B0: f64 = k * (EminA + ss / ((L * L) as f64))
+
+        x = 1
+        while x <= M {
+            let mut lt_low: i64 = A_low
+            let mut lt_high: i64 = A_high
+            if lt_high > x - 1 {
+                lt_high = x - 1
+            }
+            let sum_lt_a: f64 = arith_sum(lt_low, lt_high)
+            let mut sum_lt_C: f64 = 0.0
+            if lt_low <= lt_high {
+                let y_lo: i64 = x - lt_high
+                let y_hi: i64 = x - lt_low
+                let mut sub: f64 = 0.0
+                if y_lo > 1 {
+                    sub = pref[y_lo - 1]
+                }
+                sum_lt_C = pref[y_hi] - sub
+            }
+            let mut gt_low: i64 = A_low
+            if gt_low < x + 1 {
+                gt_low = x + 1
+            }
+            let gt_high: i64 = A_high
+            let mut count_gt: i64 = gt_high - gt_low + 1
+            if count_gt < 0 {
+                count_gt = 0
+            }
+            let base_gt: f64 = (count_gt as f64) * (x as f64)
+            let mut sum_gt_C: f64 = 0.0
+            if gt_low <= gt_high {
+                let y_lo: i64 = gt_low - x
+                let y_hi: i64 = gt_high - x
+                let mut sub: f64 = 0.0
+                if y_lo > 1 {
+                    sub = pref[y_lo - 1]
+                }
+                sum_gt_C = pref[y_hi] - sub
+            }
+            let mut total: f64 = sum_lt_a + sum_lt_C + base_gt + sum_gt_C
+            if A_low <= x {
+                if x <= A_high {
+                    total = total + (x as f64) + B0
+                }
+            }
+            newC0[x] = total * invL
+            x = x + 1
+        }
+
+        x = 1
+        while x <= M {
+            C0[x] = C0[x] + w * (newC0[x] - C0[x])
+            x = x + 1
+        }
+
+        prefix_fill(C0, pref, M)
+        ss = 0.0
+        d = 1
+        while d < L {
+            ss = ss + ((L - d) as f64) * C0[d]
+            d = d + 1
+        }
+        let B1: f64 = k * (EminA + ss / ((L * L) as f64))
+        let mut err: f64 = 0.0
+        let mut bad: i32 = 0
+
+        x = 1
+        while x <= M {
+            if bad == 0 {
+                let mut lt_low: i64 = A_low
+                let mut lt_high: i64 = A_high
+                if lt_high > x - 1 {
+                    lt_high = x - 1
+                }
+                let sum_lt_a: f64 = arith_sum(lt_low, lt_high)
+                let mut gt_low: i64 = A_low
+                if gt_low < x + 1 {
+                    gt_low = x + 1
+                }
+                let gt_high: i64 = A_high
+                let mut count_gt: i64 = gt_high - gt_low + 1
+                if count_gt < 0 {
+                    count_gt = 0
+                }
+                let base_gt: f64 = (count_gt as f64) * (x as f64)
+                let mut sum_gt_C: f64 = 0.0
+                if gt_low <= gt_high {
+                    let y_lo: i64 = gt_low - x
+                    let y_hi: i64 = gt_high - x
+                    let mut sub: f64 = 0.0
+                    if y_lo > 1 {
+                        sub = pref[y_lo - 1]
+                    }
+                    sum_gt_C = pref[y_hi] - sub
+                }
+                let mut total: f64 = sum_lt_a + base_gt + sum_gt_C
+                if A_low <= x {
+                    if x <= A_high {
+                        total = total + (x as f64) + B1
+                    }
+                }
+                newC1[x] = total * invL
+                let v: f64 = C1[x] + w * (newC1[x] - C1[x])
+                if v != v {
+                    bad = 1
+                }
+                if fabs(v) > 1e300 {
+                    bad = 1
+                }
+                if bad == 0 {
+                    let e: f64 = fabs(v - C1[x])
+                    if e > err {
+                        err = e
+                    }
+                    C1[x] = v
+                }
+            }
+            x = x + 1
+        }
+
+        if bad == 1 {
+            break
+        }
+        if err < 1e-12 {
+            ss = 0.0
+            d = 1
+            while d < L {
+                ss = ss + ((L - d) as f64) * 2.0 * C1[d]
+                d = d + 1
+            }
+            B0_out[0] = k * (EminA + ss / ((L * L) as f64))
+            ok = 1
+            break
+        }
+        it = it + 1
+    }
+
+    free(C0)
+    free(newC0)
+    free(newC1)
+    free(pref)
+    return ok
+}
+
+function gauss_solve(A: ptr<f64>, b: ptr<f64>, n: i64, xout: ptr<f64>) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        A[i * (n + 1) + n] = b[i]
+        i = i + 1
+    }
+    let mut col: i64 = 0
+    while col < n {
+        let mut piv: i64 = col
+        let mut best: f64 = fabs(A[col * (n + 1) + col])
+        let mut r: i64 = col + 1
+        while r < n {
+            let v: f64 = fabs(A[r * (n + 1) + col])
+            if v > best {
+                best = v
+                piv = r
+            }
+            r = r + 1
+        }
+        if piv != col {
+            let mut j: i64 = col
+            while j <= n {
+                let tmp: f64 = A[col * (n + 1) + j]
+                A[col * (n + 1) + j] = A[piv * (n + 1) + j]
+                A[piv * (n + 1) + j] = tmp
+                j = j + 1
+            }
+        }
+        let inv: f64 = 1.0 / A[col * (n + 1) + col]
+        let mut j: i64 = col
+        while j <= n {
+            A[col * (n + 1) + j] = A[col * (n + 1) + j] * inv
+            j = j + 1
+        }
+        r = 0
+        while r < n {
+            if r != col {
+                let factor: f64 = A[r * (n + 1) + col]
+                if factor != 0.0 {
+                    let mut j: i64 = col
+                    while j <= n {
+                        A[r * (n + 1) + j] = A[r * (n + 1) + j] - factor * A[col * (n + 1) + j]
+                        j = j + 1
+                    }
+                }
+            }
+            r = r + 1
+        }
+        col = col + 1
+    }
+    i = 0
+    while i < n {
+        xout[i] = A[i * (n + 1) + n]
+        i = i + 1
+    }
+}
+
+function compute_C1_direct(n: i64, m: i64, C1: ptr<f64>, B0_out: ptr<f64>) -> void {
+    let L: i64 = m - n + 1
+    let A_low: i64 = n + 5
+    let A_high: i64 = m + 5
+    let M: i64 = A_high
+    let EminA: f64 = expected_min_consecutive(A_low, A_high)
+    let k: f64 = (L as f64) / ((L - 1) as f64)
+    let invL: f64 = 1.0 / (L as f64)
+
+    let q0: ptr<f64> = calloc(M + 1, 8)
+    let p0: ptr<f64> = calloc((M + 1) * (M + 1), 8)
+    let pref_q: ptr<f64> = calloc(M + 1, 8)
+    let pref_p: ptr<f64> = calloc((M + 1) * (M + 1), 8)
+    let b1: ptr<f64> = calloc(M + 1, 8)
+    let b0_coeff: ptr<f64> = calloc(M + 1, 8)
+
+    let B0_const: f64 = k * EminA
+    let mut d: i64 = 1
+    while d < L {
+        if d <= M {
+            b0_coeff[d] = k * (2.0 / ((L * L) as f64)) * ((L - d) as f64)
+        }
+        d = d + 1
+    }
+
+    let mut y: i64 = 1
+    while y <= M {
+        let mut lt_low: i64 = A_low
+        let mut lt_high: i64 = A_high
+        if lt_high > y - 1 {
+            lt_high = y - 1
+        }
+        let sum_lt_a: f64 = arith_sum(lt_low, lt_high)
+        if lt_low <= lt_high {
+            let mut j: i64 = y - lt_high
+            while j <= y - lt_low {
+                if j >= 1 {
+                    if j <= M {
+                        p0[y * (M + 1) + j] = p0[y * (M + 1) + j] + invL
+                    }
+                }
+                j = j + 1
+            }
+        }
+        let mut gt_low: i64 = A_low
+        if gt_low < y + 1 {
+            gt_low = y + 1
+        }
+        let gt_high: i64 = A_high
+        let mut count_gt: i64 = gt_high - gt_low + 1
+        if count_gt < 0 {
+            count_gt = 0
+        }
+        let base_gt: f64 = (count_gt as f64) * (y as f64)
+        if gt_low <= gt_high {
+            let mut j: i64 = gt_low - y
+            while j <= gt_high - y {
+                if j >= 1 {
+                    if j <= M {
+                        p0[y * (M + 1) + j] = p0[y * (M + 1) + j] + invL
+                    }
+                }
+                j = j + 1
+            }
+        }
+        let mut q: f64 = (sum_lt_a + base_gt) * invL
+        if A_low <= y {
+            if y <= A_high {
+                q = q + (y as f64) * invL + B0_const * invL
+                let mut d2: i64 = 1
+                while d2 < L {
+                    if d2 <= M {
+                        p0[y * (M + 1) + d2] = p0[y * (M + 1) + d2] + b0_coeff[d2] * invL
+                    }
+                    d2 = d2 + 1
+                }
+            }
+        }
+        q0[y] = q
+        y = y + 1
+    }
+
+    prefix_fill(q0, pref_q, M)
+
+    let mut j: i64 = 1
+    while j <= M {
+        let mut s: f64 = 0.0
+        let mut yy: i64 = 1
+        while yy <= M {
+            s = s + p0[yy * (M + 1) + j]
+            pref_p[j * (M + 1) + yy] = s
+            yy = yy + 1
+        }
+        j = j + 1
+    }
+
+    let mut sum_w_q: f64 = 0.0
+    d = 1
+    while d < L {
+        if d <= M {
+            sum_w_q = sum_w_q + ((L - d) as f64) * q0[d]
+        }
+        d = d + 1
+    }
+    let constB1: f64 = k * EminA + k * (1.0 / ((L * L) as f64)) * sum_w_q
+
+    j = 1
+    while j <= M {
+        let mut ss: f64 = 0.0
+        d = 1
+        while d < L {
+            if d <= M {
+                ss = ss + ((L - d) as f64) * p0[d * (M + 1) + j]
+            }
+            d = d + 1
+        }
+        b1[j] = k * (1.0 / ((L * L) as f64)) * ss
+        j = j + 1
+    }
+
+    let A_mat: ptr<f64> = calloc(M * (M + 1), 8)
+    let b_vec: ptr<f64> = calloc(M, 8)
+    let sol: ptr<f64> = calloc(M, 8)
+
+    let mut t: i64 = 1
+    while t <= M {
+        let mut lt_low: i64 = A_low
+        let mut lt_high: i64 = A_high
+        if lt_high > t - 1 {
+            lt_high = t - 1
+        }
+        let sum_lt_a: f64 = arith_sum(lt_low, lt_high)
+        let mut gt_low: i64 = A_low
+        if gt_low < t + 1 {
+            gt_low = t + 1
+        }
+        let gt_high: i64 = A_high
+        let mut count_gt: i64 = gt_high - gt_low + 1
+        if count_gt < 0 {
+            count_gt = 0
+        }
+        let base_gt: f64 = (count_gt as f64) * (t as f64)
+        let mut const1: f64 = (sum_lt_a + base_gt) * invL
+        if A_low <= t {
+            if t <= A_high {
+                const1 = const1 + (t as f64) * invL
+            }
+        }
+        if gt_low <= gt_high {
+            let y_lo: i64 = gt_low - t
+            let y_hi: i64 = gt_high - t
+            let mut sub_q: f64 = 0.0
+            if y_lo > 1 {
+                sub_q = pref_q[y_lo - 1]
+            }
+            let Qgt: f64 = pref_q[y_hi] - sub_q
+            let mut j2: i64 = 1
+            while j2 <= M {
+                let mut sub_p: f64 = 0.0
+                if y_lo > 1 {
+                    sub_p = pref_p[j2 * (M + 1) + (y_lo - 1)]
+                }
+                let Pgt: f64 = pref_p[j2 * (M + 1) + y_hi] - sub_p
+                A_mat[(t - 1) * (M + 1) + (j2 - 1)] = A_mat[(t - 1) * (M + 1) + (j2 - 1)] - invL * Pgt
+                j2 = j2 + 1
+            }
+            let rhs_part: f64 = const1 + invL * Qgt
+            if A_low <= t {
+                if t <= A_high {
+                    let mut j3: i64 = 1
+                    while j3 <= M {
+                        A_mat[(t - 1) * (M + 1) + (j3 - 1)] = A_mat[(t - 1) * (M + 1) + (j3 - 1)] - invL * b1[j3]
+                        j3 = j3 + 1
+                    }
+                    b_vec[t - 1] = rhs_part + invL * constB1
+                }
+                else {
+                    b_vec[t - 1] = rhs_part
+                }
+            }
+            else {
+                b_vec[t - 1] = rhs_part
+            }
+        }
+        else {
+            let rhs_part: f64 = const1
+            if A_low <= t {
+                if t <= A_high {
+                    let mut j3: i64 = 1
+                    while j3 <= M {
+                        A_mat[(t - 1) * (M + 1) + (j3 - 1)] = A_mat[(t - 1) * (M + 1) + (j3 - 1)] - invL * b1[j3]
+                        j3 = j3 + 1
+                    }
+                    b_vec[t - 1] = rhs_part + invL * constB1
+                }
+                else {
+                    b_vec[t - 1] = rhs_part
+                }
+            }
+            else {
+                b_vec[t - 1] = rhs_part
+            }
+        }
+        A_mat[(t - 1) * (M + 1) + (t - 1)] = A_mat[(t - 1) * (M + 1) + (t - 1)] + 1.0
+        t = t + 1
+    }
+
+    gauss_solve(A_mat, b_vec, M, sol)
+
+    let mut j4: i64 = 1
+    while j4 <= M {
+        C1[j4] = sol[j4 - 1]
+        j4 = j4 + 1
+    }
+    let mut ss2: f64 = 0.0
+    d = 1
+    while d < L {
+        ss2 = ss2 + ((L - d) as f64) * 2.0 * C1[d]
+        d = d + 1
+    }
+    B0_out[0] = k * (EminA + ss2 / ((L * L) as f64))
+
+    free(q0)
+    free(p0)
+    free(pref_q)
+    free(pref_p)
+    free(b1)
+    free(b0_coeff)
+    free(A_mat)
+    free(b_vec)
+    free(sol)
+}
+
+function expected_game(m: i64, n: i64) -> f64 {
+    let L: i64 = m - n + 1
+    let M: i64 = m + 5
+    let C1: ptr<f64> = calloc(M + 1, 8)
+    let B0_arr: ptr<f64> = calloc(1, 8)
+    B0_arr[0] = 0.0
+    let mut used: i32 = 0
+    if L >= 25 {
+        used = compute_C1_iterative(n, m, C1, B0_arr)
+    }
+    if used == 0 {
+        compute_C1_direct(n, m, C1, B0_arr)
+    }
+    let B0: f64 = B0_arr[0]
+    let Emin0: f64 = expected_min_consecutive(n, m)
+    let mut s: f64 = B0 * (1.0 / (L as f64))
+    let denom: f64 = ((L * L) as f64)
+    let mut d: i64 = 1
+    while d < L {
+        s = s + (2.0 * ((L - d) as f64) / denom) * C1[d]
+        d = d + 1
+    }
+    free(C1)
+    free(B0_arr)
+    return Emin0 + s
 }
 
 function main() -> i32 {
-    printf("%.2f\n", pe589_answer())
+    let mut total: f64 = 0.0
+    let mut m: i64 = 2
+    while m <= 100 {
+        let mut n: i64 = 1
+        while n < m {
+            total = total + expected_game(m, n)
+            n = n + 1
+        }
+        m = m + 1
+    }
+    printf("%.2f\n", total)
     return 0
 }

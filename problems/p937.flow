@@ -1,11 +1,155 @@
 # Project Euler 937
-# Equiproduct Partition. Native C solver in problems/native/p937.c.
+# Equiproduct Partition. G(10^8) mod 1000000007.
 
 extern {
-    function p937_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+}
+
+const MOD: i64 = 1000000007
+
+function popcount64(x: i64) -> i32 {
+    let mut n: i64 = x
+    let mut count: i32 = 0
+    while n != 0 {
+        n = n & (n - 1)
+        count = count + 1
+    }
+    return count
+}
+
+function ctz64(x: i64) -> i32 {
+    if x == 0 {
+        return 64
+    }
+    let mut n: i64 = x
+    let mut count: i32 = 0
+    while (n & 1) == 0 {
+        count = count + 1
+        n = n >> 1
+    }
+    return count
+}
+
+function bit_mask(shift: i64) -> i64 {
+    if shift < 63 {
+        return (1 as i64) << shift
+    }
+    return -9223372036854775808
+}
+
+function delta_flip(delta: ptr<i64>, k: i64) -> void {
+    let word: i64 = k >> 6
+    let bit: i64 = bit_mask(k & 63)
+    delta[word] = delta[word] ^ bit
+}
+
+function delta_get(delta: ptr<i64>, k: i64) -> i32 {
+    let word: i64 = k >> 6
+    let shift: i64 = k & 63
+    let val: i64 = delta[word] >> shift
+    return (val & 1) as i32
+}
+
+function compute_G(n: i64) -> i64 {
+    # Build odd-prime sieve
+    let size: i64 = n / 2 + 1
+    let is_prime: ptr<i8> = malloc(size)
+    memset(is_prime, 1, size)
+    is_prime[0] = 0
+
+    let limit: i64 = sqrt(n as f64) as i64
+    let mut i: i64 = 1
+    while 2 * i + 1 <= limit {
+        if is_prime[i] != 0 {
+            let p: i64 = 2 * i + 1
+            let mut j: i64 = p * p
+            while j <= n {
+                is_prime[j / 2] = 0
+                j = j + 2 * p
+            }
+        }
+        i = i + 1
+    }
+
+    # Delta bit array (zero-filled by calloc)
+    let delta_words: i64 = (n + 64) / 64
+    let delta: ptr<i64> = calloc(delta_words, 8)
+
+    # Process p=2
+    let mut E2: i64 = 0
+    let mut par2: i32 = 0
+    let mut k2: i64 = 2
+    while k2 <= n {
+        let e: i32 = ctz64(k2)
+        E2 = E2 + (e as i64)
+        let new_par: i32 = popcount64(E2) & 1
+        if new_par != par2 {
+            delta_flip(delta, k2)
+            par2 = new_par
+        }
+        k2 = k2 + 2
+    }
+
+    # Process each relevant odd prime (p%8 in {5,7})
+    let mut idx: i64 = 1
+    while idx <= n / 2 {
+        if is_prime[idx] != 0 {
+            let p: i64 = 2 * idx + 1
+            let pm8: i64 = p & 7
+            if pm8 == 5 || pm8 == 7 {
+                let mut Ep: i64 = 0
+                let mut parp: i32 = 0
+                let mut m: i64 = 1
+                while m * p <= n {
+                    let k: i64 = m * p
+                    let mut e: i64 = 1
+                    let mut r: i64 = m
+                    while r % p == 0 {
+                        e = e + 1
+                        r = r / p
+                    }
+                    Ep = Ep + e
+                    let new_par: i32 = popcount64(Ep) & 1
+                    if new_par != parp {
+                        delta_flip(delta, k)
+                        parp = new_par
+                    }
+                    m = m + 1
+                }
+            }
+        }
+        idx = idx + 1
+    }
+
+    # Final pass: compute running parity and sum factorials
+    let mut fact: i64 = 1
+    let mut ans: i64 = 0
+    let mut running_par: i32 = 0
+    let mut k: i64 = 1
+    while k <= n {
+        fact = fact * k % MOD
+        if delta_get(delta, k) != 0 {
+            running_par = running_par ^ 1
+        }
+        if running_par == 0 {
+            ans = ans + fact
+            if ans >= MOD {
+                ans = ans - MOD
+            }
+        }
+        k = k + 1
+    }
+
+    free(is_prime)
+    free(delta)
+    return ans
 }
 
 function main() -> i32 {
-    printf("%lld\n", p937_native())
+    printf("%lld\n", compute_G(100000000))
     return 0
 }

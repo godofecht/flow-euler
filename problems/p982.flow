@@ -1,11 +1,509 @@
 # Project Euler 982
 # Dice game optimal strategy via linear programming.
+# Direct port of the C reference solver (two-phase simplex) to pure Flow.
 
 extern {
-    function p982_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function realloc(p: ptr<void>, n: i64) -> ptr<void>
+    function fabs(x: f64) -> f64
+    function memset(p: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+const EPS: f64 = 1e-9
+
+# Global tableau state: flat array tab[M*N], basis[M]
+let mut g_tab: ptr<f64> = null
+let mut g_basis: ptr<i64> = null
+let mut g_M: i64 = 0
+let mut g_N: i64 = 0
+let mut g_art_flags: ptr<i64> = null
+let mut g_num_art: i64 = 0
+let mut g_art_indices: ptr<i64> = null
+
+function tidx(i: i64, j: i64) -> i64 {
+    return i * g_N + j
+}
+
+function pivot_op(row: i64, col: i64) -> void {
+    let pv: f64 = g_tab[tidx(row, col)]
+    let inv: f64 = 1.0 / pv
+    let mut j: i64 = 0
+    while j < g_N {
+        g_tab[tidx(row, j)] = g_tab[tidx(row, j)] * inv
+        j = j + 1
+    }
+    let mut i: i64 = 0
+    while i < g_M {
+        if i == row { i = i + 1 } else {
+            let f: f64 = g_tab[tidx(i, col)]
+            if fabs(f) > EPS {
+                j = 0
+                while j < g_N {
+                    g_tab[tidx(i, j)] = g_tab[tidx(i, j)] - f * g_tab[tidx(row, j)]
+                    j = j + 1
+                }
+            }
+            i = i + 1
+        }
+    }
+    g_basis[row] = col
+}
+
+function simplex_max() -> i64 {
+    let m: i64 = g_M - 1
+    let n: i64 = g_N - 1
+    let mut iter: i64 = 0
+    while iter < 2000000 {
+        let mut entering: i64 = -1
+        let mut j: i64 = 0
+        while j < n {
+            if g_tab[tidx(m, j)] < -EPS { entering = j; j = n }
+            j = j + 1
+        }
+        if entering == -1 { return 1 }
+        let mut min_ratio: f64 = 1e18
+        let mut leaving: i64 = -1
+        let mut i: i64 = 0
+        while i < m {
+            let a: f64 = g_tab[tidx(i, entering)]
+            if a > EPS {
+                let ratio: f64 = g_tab[tidx(i, n)] / a
+                if ratio < min_ratio - EPS { min_ratio = ratio; leaving = i }
+            }
+            i = i + 1
+        }
+        if leaving == -1 { return 0 }
+        pivot_op(leaving, entering)
+        iter = iter + 1
+    }
+    return -1
+}
+
+function set_objective(c: ptr<f64>) -> void {
+    let m: i64 = g_M - 1
+    let n: i64 = g_N - 1
+    let mut j: i64 = 0
+    while j < g_N {
+        g_tab[tidx(m, j)] = 0.0
+        j = j + 1
+    }
+    j = 0
+    while j < n {
+        g_tab[tidx(m, j)] = -c[j]
+        j = j + 1
+    }
+    let mut i: i64 = 0
+    while i < m {
+        let cb: f64 = c[g_basis[i]]
+        if fabs(cb) > EPS {
+            j = 0
+            while j < g_N {
+                g_tab[tidx(m, j)] = g_tab[tidx(m, j)] + cb * g_tab[tidx(i, j)]
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+}
+
+# Constraint: coeffs[n_vars], sense (60='<', 62='>', 61='='), rhs
+# We pass constraint data via flat arrays:
+#   cons_coeffs: nc * n_vars flat array
+#   cons_sense: nc array
+#   cons_rhs: nc array
+function build_tableau(n_vars: i64, cons_coeffs: ptr<f64>, cons_sense: ptr<i64>, cons_rhs: ptr<f64>, nc: i64) -> void {
+    let mut n_total: i64 = n_vars
+    let mut ci: i64 = 0
+    while ci < nc {
+        let s: i64 = cons_sense[ci]
+        if s == 60 { n_total = n_total + 1 }
+        else {
+            if s == 62 { n_total = n_total + 2 }
+            else { n_total = n_total + 1 }
+        }
+        ci = ci + 1
+    }
+    g_M = nc
+    g_N = n_total + 1
+    g_tab = calloc(g_M * g_N, 8) as ptr<f64>
+    g_basis = calloc(g_M, 8) as ptr<i64>
+    g_art_flags = calloc(n_total, 8) as ptr<i64>
+    g_art_indices = calloc(n_total, 8) as ptr<i64>
+    g_num_art = 0
+
+    let mut cur: i64 = n_vars
+    ci = 0
+    while ci < nc {
+        let mut b: f64 = cons_rhs[ci]
+        let mut sense: i64 = cons_sense[ci]
+        if b < 0.0 {
+            let mut j: i64 = 0
+            while j < n_vars {
+                g_tab[tidx(ci, j)] = -cons_coeffs[ci * n_vars + j]
+                j = j + 1
+            }
+            b = -b
+            if sense == 60 { sense = 62 }
+            else {
+                if sense == 62 { sense = 60 }
+            }
+        } else {
+            let mut j: i64 = 0
+            while j < n_vars {
+                g_tab[tidx(ci, j)] = cons_coeffs[ci * n_vars + j]
+                j = j + 1
+            }
+        }
+        if sense == 60 {
+            g_tab[tidx(ci, cur)] = 1.0
+            g_basis[ci] = cur
+            cur = cur + 1
+        } else {
+            if sense == 62 {
+                g_tab[tidx(ci, cur)] = -1.0
+                cur = cur + 1
+                g_tab[tidx(ci, cur)] = 1.0
+                g_basis[ci] = cur
+                g_art_flags[cur] = 1
+                g_art_indices[g_num_art] = cur
+                g_num_art = g_num_art + 1
+                cur = cur + 1
+            } else {
+                g_tab[tidx(ci, cur)] = 1.0
+                g_basis[ci] = cur
+                g_art_flags[cur] = 1
+                g_art_indices[g_num_art] = cur
+                g_num_art = g_num_art + 1
+                cur = cur + 1
+            }
+        }
+        g_tab[tidx(ci, g_N - 1)] = b
+        ci = ci + 1
+    }
+}
+
+function remove_artificial() -> void {
+    let mut m: i64 = g_M
+    let n: i64 = g_N - 1
+
+    let mut i: i64 = 0
+    while i < m {
+        if g_art_flags[g_basis[i]] != 0 {
+            let mut pc: i64 = -1
+            let mut j: i64 = 0
+            while j < n {
+                if g_art_flags[j] != 0 { j = j + 1 } else {
+                    if fabs(g_tab[tidx(i, j)]) > EPS { pc = j; j = n }
+                    j = j + 1
+                }
+            }
+            if pc != -1 {
+                pivot_op(i, pc)
+                i = i + 1
+            } else {
+                # Redundant row: remove it by shifting down
+                let mut r: i64 = i
+                while r < m - 1 {
+                    let mut j2: i64 = 0
+                    while j2 < g_N {
+                        g_tab[tidx(r, j2)] = g_tab[tidx(r + 1, j2)]
+                        j2 = j2 + 1
+                    }
+                    g_basis[r] = g_basis[r + 1]
+                    r = r + 1
+                }
+                m = m - 1
+            }
+        } else {
+            i = i + 1
+        }
+    }
+
+    # Remove artificial columns
+    let mut n_keep: i64 = 0
+    let keep: ptr<i64> = calloc(n, 8)
+    let mut j: i64 = 0
+    while j < n {
+        if g_art_flags[j] == 0 { keep[n_keep] = j; n_keep = n_keep + 1 }
+        j = j + 1
+    }
+
+    let mapping: ptr<i64> = calloc(n, 8)
+    let mut new_idx: i64 = 0
+    j = 0
+    while j < n {
+        if g_art_flags[j] == 0 { mapping[j] = new_idx; new_idx = new_idx + 1 }
+        else { mapping[j] = -1 }
+        j = j + 1
+    }
+
+    let new_N: i64 = n_keep + 1
+    let new_tab: ptr<f64> = calloc(m * new_N, 8) as ptr<f64>
+    let mut r: i64 = 0
+    while r < m {
+        let mut j2: i64 = 0
+        while j2 < n_keep {
+            new_tab[r * new_N + j2] = g_tab[tidx(r, keep[j2])]
+            j2 = j2 + 1
+        }
+        new_tab[r * new_N + n_keep] = g_tab[tidx(r, n)]
+        g_basis[r] = mapping[g_basis[r]]
+        r = r + 1
+    }
+
+    free(g_tab as ptr<void>)
+    g_tab = new_tab
+    g_N = new_N
+    g_M = m
+    free(keep as ptr<void>)
+    free(mapping as ptr<void>)
+}
+
+# Returns result. obj is n_vars-length.
+function solve_lp(n_vars: i64, cons_coeffs: ptr<f64>, cons_sense: ptr<i64>, cons_rhs: ptr<f64>, nc: i64, obj: ptr<f64>) -> f64 {
+    build_tableau(n_vars, cons_coeffs, cons_sense, cons_rhs, nc)
+
+    if g_num_art > 0 {
+        # Phase I: maximize -sum(artificial)
+        let nt: i64 = g_N - 1
+        let c1: ptr<f64> = calloc(nt, 8) as ptr<f64>
+        let mut j: i64 = 0
+        while j < nt {
+            if g_art_flags[j] != 0 { c1[j] = -1.0 }
+            j = j + 1
+        }
+
+        # Add objective row
+        let obj_row: i64 = g_M
+        g_M = g_M + 1
+        # realloc tab to M*N
+        let new_tab: ptr<f64> = calloc(g_M * g_N, 8) as ptr<f64>
+        let mut i: i64 = 0
+        while i < obj_row {
+            let mut j2: i64 = 0
+            while j2 < g_N {
+                new_tab[i * g_N + j2] = g_tab[tidx(i, j2)]
+                j2 = j2 + 1
+            }
+            i = i + 1
+        }
+        free(g_tab as ptr<void>)
+        g_tab = new_tab
+        # basis also needs to grow
+        let new_basis: ptr<i64> = calloc(g_M, 8) as ptr<i64>
+        i = 0
+        while i < obj_row {
+            new_basis[i] = g_basis[i]
+            i = i + 1
+        }
+        free(g_basis as ptr<void>)
+        g_basis = new_basis
+
+        set_objective(c1)
+        simplex_max()
+
+        if g_tab[tidx(obj_row, g_N - 1)] < -1e-7 {
+            free(g_tab as ptr<void>)
+            free(g_basis as ptr<void>)
+            free(g_art_flags as ptr<void>)
+            free(g_art_indices as ptr<void>)
+            free(c1 as ptr<void>)
+            return -1e18
+        }
+
+        # Remove objective row
+        g_M = g_M - 1
+        # (we just stop using the last row; no need to actually free it)
+
+        remove_artificial()
+        free(c1 as ptr<void>)
+    }
+
+    # Phase II: minimize sum(obj[j]*x[j]) = maximize -sum(obj[j]*x[j])
+    let nt2: i64 = g_N - 1
+    let c2: ptr<f64> = calloc(nt2, 8) as ptr<f64>
+    let mut j: i64 = 0
+    while j < n_vars {
+        c2[j] = -obj[j]
+        j = j + 1
+    }
+
+    # Add objective row
+    let obj_row: i64 = g_M
+    g_M = g_M + 1
+    let new_tab2: ptr<f64> = calloc(g_M * g_N, 8) as ptr<f64>
+    let mut i: i64 = 0
+    while i < obj_row {
+        let mut j2: i64 = 0
+        while j2 < g_N {
+            new_tab2[i * g_N + j2] = g_tab[tidx(i, j2)]
+            j2 = j2 + 1
+        }
+        i = i + 1
+    }
+    free(g_tab as ptr<void>)
+    g_tab = new_tab2
+    let new_basis2: ptr<i64> = calloc(g_M, 8) as ptr<i64>
+    i = 0
+    while i < obj_row {
+        new_basis2[i] = g_basis[i]
+        i = i + 1
+    }
+    free(g_basis as ptr<void>)
+    g_basis = new_basis2
+
+    set_objective(c2)
+    simplex_max()
+
+    let result: f64 = -g_tab[tidx(obj_row, g_N - 1)]
+
+    free(g_tab as ptr<void>)
+    free(g_basis as ptr<void>)
+    free(g_art_flags as ptr<void>)
+    free(g_art_indices as ptr<void>)
+    free(c2 as ptr<void>)
+    return result
+}
+
+function build_and_solve(num_dice: i64) -> f64 {
+    let num_states: i64 = 1
+    let mut i: i64 = 0
+    while i < num_dice {
+        num_states = num_states * 6
+        i = i + 1
+    }
+
+    # states: num_states * 3 flat array
+    let states: ptr<i64> = calloc(num_states * 3, 8) as ptr<i64>
+    let mut s_idx: i64 = 0
+    let mut a: i64 = 0
+    while a < 6 {
+        let mut b: i64 = 0
+        while b < 6 {
+            let mut c: i64 = 0
+            while c < 6 {
+                states[s_idx * 3 + 0] = a + 1
+                states[s_idx * 3 + 1] = b + 1
+                states[s_idx * 3 + 2] = c + 1
+                s_idx = s_idx + 1
+                c = c + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    # signals: 21 pairs (a,b) with a<=b
+    let num_signals: i64 = 21
+    let sig_arr: ptr<i64> = calloc(num_signals * 2, 8) as ptr<i64>
+    let mut nsig: i64 = 0
+    a = 0
+    while a < 6 {
+        let mut b: i64 = a
+        while b < 6 {
+            sig_arr[nsig * 2 + 0] = a + 1
+            sig_arr[nsig * 2 + 1] = b + 1
+            nsig = nsig + 1
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let num_x: i64 = num_states * num_dice
+    let num_z: i64 = num_signals
+    let n_vars: i64 = num_x + num_z
+    let n_constraints: i64 = num_states + 2 * num_signals
+
+    let cons_coeffs: ptr<f64> = calloc(n_constraints * n_vars, 8) as ptr<f64>
+    let cons_sense: ptr<i64> = calloc(n_constraints, 8) as ptr<i64>
+    let cons_rhs: ptr<f64> = calloc(n_constraints, 8) as ptr<f64>
+    let mut nc: i64 = 0
+    let p_state: f64 = 1.0 / (num_states as f64)
+
+    # State constraints: sum_h x[si,h] = p_state
+    let mut si: i64 = 0
+    while si < num_states {
+        let mut h: i64 = 0
+        while h < num_dice {
+            cons_coeffs[nc * n_vars + si * num_dice + h] = 1.0
+            h = h + 1
+        }
+        cons_sense[nc] = 61
+        cons_rhs[nc] = p_state
+        nc = nc + 1
+        si = si + 1
+    }
+
+    # Signal constraints
+    let mut sig_i: i64 = 0
+    while sig_i < num_signals {
+        let b_val: i64 = sig_arr[sig_i * 2 + 1]
+        let z_idx: i64 = num_x + sig_i
+
+        cons_coeffs[nc * n_vars + z_idx] = -1.0
+        cons_coeffs[(nc + 1) * n_vars + z_idx] = -1.0
+
+        si = 0
+        while si < num_states {
+            let mut h: i64 = 0
+            while h < num_dice {
+                # revealed = the two dice values that are not h
+                let mut revealed0: i64 = 0
+                let mut revealed1: i64 = 0
+                let mut ri: i64 = 0
+                let mut ii: i64 = 0
+                while ii < num_dice {
+                    if ii != h {
+                        if ri == 0 { revealed0 = states[si * 3 + ii] }
+                        else { revealed1 = states[si * 3 + ii] }
+                        ri = ri + 1
+                    }
+                    ii = ii + 1
+                }
+                if revealed0 > revealed1 {
+                    let tmp: i64 = revealed0
+                    revealed0 = revealed1
+                    revealed1 = tmp
+                }
+                if revealed0 == sig_arr[sig_i * 2 + 0] && revealed1 == sig_arr[sig_i * 2 + 1] {
+                    let x_idx: i64 = si * num_dice + h
+                    cons_coeffs[nc * n_vars + x_idx] = cons_coeffs[nc * n_vars + x_idx] + (b_val as f64)
+                    cons_coeffs[(nc + 1) * n_vars + x_idx] = cons_coeffs[(nc + 1) * n_vars + x_idx] + (states[si * 3 + h] as f64)
+                }
+                h = h + 1
+            }
+            si = si + 1
+        }
+        cons_sense[nc] = 60
+        cons_rhs[nc] = 0.0
+        cons_sense[nc + 1] = 60
+        cons_rhs[nc + 1] = 0.0
+        nc = nc + 2
+        sig_i = sig_i + 1
+    }
+
+    let objective: ptr<f64> = calloc(n_vars, 8) as ptr<f64>
+    let mut j: i64 = 0
+    while j < num_z {
+        objective[num_x + j] = 1.0
+        j = j + 1
+    }
+
+    let result: f64 = solve_lp(n_vars, cons_coeffs, cons_sense, cons_rhs, n_constraints, objective)
+
+    free(cons_coeffs as ptr<void>)
+    free(cons_sense as ptr<void>)
+    free(cons_rhs as ptr<void>)
+    free(objective as ptr<void>)
+    free(states as ptr<void>)
+    free(sig_arr as ptr<void>)
+
+    return result
 }
 
 function main() -> i32 {
-    printf("%.6f\n", p982_native())
+    printf("%.6f\n", build_and_solve(3))
     return 0
 }

@@ -1,11 +1,206 @@
 # Project Euler 550
-# Divisor Game - native helper for correctness.
+# Divisor Game - nimber XOR convolution via FWHT.
 
 extern {
-    function p550_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 987654321
+
+function mod_pow(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut a: i64 = a0 % mod
+    if a < 0 { a = a + mod }
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (a as i128) % (mod as i128)) as i64
+        }
+        a = ((a as i128) * (a as i128) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function mod_inv(a0: i64, mod: i64) -> i64 {
+    let mut old_r: i64 = a0 % mod
+    let mut r: i64 = mod
+    let mut old_s: i64 = 1
+    let mut s: i64 = 0
+    if old_r < 0 { old_r = old_r + mod }
+    while r != 0 {
+        let q: i64 = old_r / r
+        let t: i64 = old_r - q * r
+        old_r = r
+        r = t
+        let t2: i64 = old_s - q * s
+        old_s = s
+        s = t2
+    }
+    if old_s < 0 { old_s = old_s + mod }
+    return old_s % mod
+}
+
+function fwht_xor(a: ptr<i64>, n: i64, mod: i64) -> void {
+    let mut h: i64 = 1
+    while h < n {
+        let step: i64 = h << 1
+        let mut i: i64 = 0
+        while i < n {
+            let mut j: i64 = i
+            while j < i + h {
+                let x: i64 = a[j]
+                let y: i64 = a[j + h]
+                let mut s: i64 = x + y
+                if s >= mod { s = s - mod }
+                let mut d: i64 = x - y
+                if d < 0 { d = d + mod }
+                a[j] = s
+                a[j + h] = d
+                j = j + 1
+            }
+            i = i + step
+        }
+        h = h << 1
+    }
+}
+
+function omega_counts_up_to(n: i64, counts: ptr<i64>) -> i64 {
+    let spf: ptr<i32> = calloc(n + 1, 4)
+    let omega: ptr<i8> = calloc(n + 1, 1)
+    let primes: ptr<i32> = calloc(700000, 4)
+    if spf == null || omega == null || primes == null {
+        free(spf); free(omega); free(primes)
+        return -1
+    }
+    let mut z: i64 = 0
+    while z < 32 {
+        counts[z] = 0
+        z = z + 1
+    }
+
+    let mut np: i64 = 0
+    let mut max_om: i64 = 0
+
+    let mut i: i64 = 2
+    while i <= n {
+        let si: i32 = spf[i]
+        let oi: i64
+        if si == 0 {
+            spf[i] = i as i32
+            primes[np] = i as i32
+            np = np + 1
+            omega[i] = 1
+            oi = 1
+        } else {
+            oi = omega[i] as i64
+        }
+        counts[oi] = counts[oi] + 1
+        if oi > max_om { max_om = oi }
+
+        let mut j: i64 = 0
+        while j < np {
+            let p: i64 = primes[j] as i64
+            let ip: i64 = i * p
+            if ip > n { break }
+            spf[ip] = p as i32
+            omega[ip] = (oi + 1) as i8
+            if p == (si as i64) { break }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    free(spf)
+    free(omega)
+    free(primes)
+    return max_om
+}
+
+function compute_h_sequence(tmax: i64, h: ptr<i64>) -> i64 {
+    if tmax <= 0 { return 0 }
+    h[1] = 0
+    let mut max_g: i64 = 0
+    let reachable: ptr<i64> = calloc(64, 8)
+    let mut t: i64 = 2
+    while t <= tmax {
+        let mut z: i64 = 0
+        while z < 64 {
+            reachable[z] = 0
+            z = z + 1
+        }
+        let mut i: i64 = 1
+        while i < t {
+            let mut j: i64 = 1
+            while j < t {
+                let v: i64 = h[i] ^ h[j]
+                let idx: i64 = (v >> 6) & 63
+                let bit: i64 = (1 as i64) << (v & 63)
+                reachable[idx] = reachable[idx] | bit
+                j = j + 1
+            }
+            i = i + 1
+        }
+        let mut mex: i64 = 0
+        while mex < 4096 {
+            let idx: i64 = (mex >> 6) & 63
+            let bit: i64 = (1 as i64) << (mex & 63)
+            if (reachable[idx] & bit) != 0 {
+                mex = mex + 1
+            } else {
+                break
+            }
+        }
+        h[t] = mex
+        if mex > max_g { max_g = mex }
+        t = t + 1
+    }
+    free(reachable)
+    return max_g
+}
+
+function f(n: i64, k: i64) -> i64 {
+    let counts: ptr<i64> = calloc(32, 8)
+    let max_om: i64 = omega_counts_up_to(n, counts)
+    if max_om < 0 { free(counts); return 0 }
+
+    let h: ptr<i64> = calloc(32, 8)
+    let max_g: i64 = compute_h_sequence(max_om, h)
+
+    let mut size: i64 = 1
+    while size <= max_g { size = size << 1 }
+
+    let arr: ptr<i64> = calloc(size, 8)
+    if arr == null { free(counts); free(h); return 0 }
+
+    let mut t: i64 = 1
+    while t <= max_om {
+        arr[h[t]] = (arr[h[t]] + counts[t]) % MOD
+        t = t + 1
+    }
+
+    fwht_xor(arr, size, MOD)
+
+    let mut s: i64 = 0
+    let mut i: i64 = 0
+    while i < size {
+        s = (s + mod_pow(arr[i], k, MOD)) % MOD
+        i = i + 1
+    }
+
+    let losing: i64 = ((s as i128) * (mod_inv(size, MOD) as i128) % (MOD as i128)) as i64
+    let total: i64 = mod_pow(n - 1, k, MOD)
+    let mut ans: i64 = (total - losing) % MOD
+    if ans < 0 { ans = ans + MOD }
+
+    free(arr)
+    free(counts)
+    free(h)
+    return ans
 }
 
 function main() -> i32 {
-    printf("%lld\n", p550_native())
+    printf("%lld\n", f(10000000, 1000000000000))
     return 0
 }

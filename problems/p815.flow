@@ -1,11 +1,267 @@
 # Project Euler 815
-# Group by Value — expected maximum piles (native C, float answer).
+# Group by Value — E(60) = expected maximum number of non-empty piles.
+# State model with combinatorial indexing, DP over sorted states.
 
 extern {
-    function p815_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function comb(n: i32, k: i32) -> i64 {
+    if k < 0 || k > n { return 0 }
+    let mut kk: i32 = k
+    if kk > n - kk { kk = n - kk }
+    let mut r: i64 = 1
+    let mut i: i32 = 0
+    while i < kk {
+        r = r * ((n - i) as i64) / ((i + 1) as i64)
+        i = i + 1
+    }
+    return r
+}
+
+struct Model {
+    n: i32
+    total: i64
+    max_rem: i32
+    inv: ptr<f64>
+    next0: ptr<i32>
+    next1: ptr<i32>
+    next2: ptr<i32>
+    next3: ptr<i32>
+    num0: ptr<i32>
+    num1: ptr<i32>
+    num2: ptr<i32>
+    num3: ptr<i32>
+    start: i32
+    sorted_states: ptr<i32>
+    state_remaining: ptr<i32>
+    state_active: ptr<i32>
+}
+
+function build_model(n: i32) -> Model {
+    let total: i64 = comb(n + 4, 4)
+    let max_rem: i32 = 4 * n
+
+    let inv: ptr<f64> = calloc(total, 8)
+    let next0: ptr<i32> = calloc(total, 4)
+    let next1: ptr<i32> = calloc(total, 4)
+    let next2: ptr<i32> = calloc(total, 4)
+    let next3: ptr<i32> = calloc(total, 4)
+    let num0: ptr<i32> = calloc(total, 4)
+    let num1: ptr<i32> = calloc(total, 4)
+    let num2: ptr<i32> = calloc(total, 4)
+    let num3: ptr<i32> = calloc(total, 4)
+    let state_remaining: ptr<i32> = calloc(total, 4)
+    let state_active: ptr<i32> = calloc(total, 4)
+
+    # prefix_s[s] = sum_{i=0..s-1} C(i+3, 3)
+    let prefix_s: ptr<i64> = calloc((n + 2) as i64, 8)
+    let mut s: i32 = 0
+    while s <= n {
+        prefix_s[s + 1] = prefix_s[s] + comb(s + 3, 3)
+        s = s + 1
+    }
+
+    # x0_pref flattened: row s has s+2 entries, row_start[s] = s*(s+3)/2
+    let x0_total: i32 = (n + 1) * (n + 4) / 2
+    let x0_pref: ptr<i64> = calloc(x0_total as i64, 8)
+    let row_start: ptr<i32> = calloc((n + 2) as i64, 4)
+    let mut rs: i32 = 0
+    while rs <= n {
+        row_start[rs] = rs * (rs + 3) / 2
+        rs = rs + 1
+    }
+
+    s = 0
+    while s <= n {
+        let mut running: i64 = 0
+        let mut x0: i32 = 0
+        while x0 <= s {
+            x0_pref[row_start[s] + x0] = running
+            let t: i32 = s - x0
+            running = running + comb(t + 2, 2)
+            x0 = x0 + 1
+        }
+        x0_pref[row_start[s] + s + 1] = running
+        s = s + 1
+    }
+
+    # Enumerate all states in order
+    let mut i: i32 = 0
+    s = 0
+    while s <= n {
+        let mut x0: i32 = 0
+        while x0 <= s {
+            let t: i32 = s - x0
+            let mut x1: i32 = 0
+            while x1 <= t {
+                let u: i32 = t - x1
+                let mut x2: i32 = 0
+                while x2 <= u {
+                    let x3: i32 = u - x2
+                    let remaining: i32 = 4 * x0 + 3 * x1 + 2 * x2 + x3
+                    let active: i32 = x1 + x2 + x3
+
+                    if remaining == 0 {
+                        inv[i] = 0.0
+                    } else {
+                        inv[i] = 1.0 / (remaining as f64)
+                    }
+                    state_remaining[i] = remaining
+                    state_active[i] = active
+
+                    if x0 > 0 {
+                        let ns: i32 = (x0 - 1) + (x1 + 1) + x2 + x3
+                        let nt: i32 = ns - (x0 - 1)
+                        let base: i64 = prefix_s[ns] + x0_pref[row_start[ns] + x0 - 1]
+                        let a_val: i64 = ((x1 + 1) as i64) * ((nt + 1) as i64)
+                        let b_val: i64 = ((x1 + 1) as i64) * (x1 as i64) / 2
+                        next0[i] = (base + a_val - b_val + (x2 as i64)) as i32
+                        num0[i] = 4 * x0
+                    }
+                    if x1 > 0 {
+                        let ns: i32 = x0 + (x1 - 1) + (x2 + 1) + x3
+                        let nt: i32 = ns - x0
+                        let base: i64 = prefix_s[ns] + x0_pref[row_start[ns] + x0]
+                        let a_val: i64 = ((x1 - 1) as i64) * ((nt + 1) as i64)
+                        let b_val: i64 = ((x1 - 1) as i64) * ((x1 - 2) as i64) / 2
+                        next1[i] = (base + a_val - b_val + ((x2 + 1) as i64)) as i32
+                        num1[i] = 3 * x1
+                    }
+                    if x2 > 0 {
+                        let ns: i32 = x0 + x1 + (x2 - 1) + (x3 + 1)
+                        let nt: i32 = ns - x0
+                        let base: i64 = prefix_s[ns] + x0_pref[row_start[ns] + x0]
+                        let a_val: i64 = (x1 as i64) * ((nt + 1) as i64)
+                        let b_val: i64 = (x1 as i64) * ((x1 - 1) as i64) / 2
+                        next2[i] = (base + a_val - b_val + ((x2 - 1) as i64)) as i32
+                        num2[i] = 2 * x2
+                    }
+                    if x3 > 0 {
+                        let ns: i32 = x0 + x1 + x2 + (x3 - 1)
+                        let nt: i32 = ns - x0
+                        let base: i64 = prefix_s[ns] + x0_pref[row_start[ns] + x0]
+                        let a_val: i64 = (x1 as i64) * ((nt + 1) as i64)
+                        let b_val: i64 = (x1 as i64) * ((x1 - 1) as i64) / 2
+                        next3[i] = (base + a_val - b_val + (x2 as i64)) as i32
+                        num3[i] = x3
+                    }
+
+                    i = i + 1
+                    x2 = x2 + 1
+                }
+                x1 = x1 + 1
+            }
+            x0 = x0 + 1
+        }
+        s = s + 1
+    }
+
+    # Start state: (n, 0, 0, 0)
+    let start_base: i64 = prefix_s[n] + x0_pref[row_start[n] + n]
+    let start_idx: i32 = start_base as i32
+
+    # Counting sort by remaining
+    let sorted_states: ptr<i32> = calloc(total, 4)
+    let count: ptr<i32> = calloc((max_rem + 2) as i64, 4)
+    let mut ci: i32 = 0
+    while ci < total as i32 {
+        count[state_remaining[ci] + 1] = count[state_remaining[ci] + 1] + 1
+        ci = ci + 1
+    }
+    let mut r: i32 = 0
+    while r <= max_rem {
+        count[r + 1] = count[r + 1] + count[r]
+        r = r + 1
+    }
+    ci = 0
+    while ci < total as i32 {
+        sorted_states[count[state_remaining[ci]]] = ci
+        count[state_remaining[ci]] = count[state_remaining[ci]] + 1
+        ci = ci + 1
+    }
+
+    free(prefix_s)
+    free(x0_pref)
+    free(row_start)
+    free(count)
+
+    return Model {
+        n: n,
+        total: total,
+        max_rem: max_rem,
+        inv: inv,
+        next0: next0,
+        next1: next1,
+        next2: next2,
+        next3: next3,
+        num0: num0,
+        num1: num1,
+        num2: num2,
+        num3: num3,
+        start: start_idx,
+        sorted_states: sorted_states,
+        state_remaining: state_remaining,
+        state_active: state_active
+    }
+}
+
+function prob_max_less_k(m: Model, k: i32, dp: ptr<f64>) -> f64 {
+    let total_i: i32 = m.total as i32
+    let mut ma: i32 = k - 1
+    if ma > m.n { ma = m.n }
+
+    let mut i: i32 = 0
+    while i < total_i {
+        dp[i] = 0.0
+        i = i + 1
+    }
+    dp[0] = 1.0
+
+    let mut idx: i32 = 0
+    while idx < total_i {
+        let s: i32 = m.sorted_states[idx]
+        let rem: i32 = m.state_remaining[s]
+        if rem != 0 {
+            let active: i32 = m.state_active[s]
+            if active <= ma {
+                let mut val: f64 = 0.0
+                if m.num0[s] > 0 { val = val + (m.num0[s] as f64) * dp[m.next0[s]] }
+                if m.num1[s] > 0 { val = val + (m.num1[s] as f64) * dp[m.next1[s]] }
+                if m.num2[s] > 0 { val = val + (m.num2[s] as f64) * dp[m.next2[s]] }
+                if m.num3[s] > 0 { val = val + (m.num3[s] as f64) * dp[m.next3[s]] }
+                dp[s] = val * m.inv[s]
+            }
+        }
+        idx = idx + 1
+    }
+
+    return dp[m.start]
 }
 
 function main() -> i32 {
-    printf("%.8f\n", p815_native())
+    let n: i32 = 60
+    let m: Model = build_model(n)
+
+    let dp: ptr<f64> = calloc(m.total, 8)
+    let mut total: f64 = 0.0
+
+    let mut k: i32 = 1
+    while k <= n {
+        let p: f64 = prob_max_less_k(m, k, dp)
+        total = total + (1.0 - p)
+        k = k + 1
+    }
+
+    printf("%.8f\n", total)
+
+    free(dp)
+    free(m.inv)
+    free(m.next0); free(m.next1); free(m.next2); free(m.next3)
+    free(m.num0); free(m.num1); free(m.num2); free(m.num3)
+    free(m.sorted_states)
+    free(m.state_remaining)
+    free(m.state_active)
     return 0
 }

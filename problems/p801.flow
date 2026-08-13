@@ -1,11 +1,322 @@
-# Project Euler 801
-# x^y = y^x (mod p)
+# Project Euler 801: x^y = y^x (mod p).
+# Sum of f(p) for primes p in [10^16, 10^16 + 10^6], mod 993353399.
+# Pure Flow port of the native C solver. Uses i128 for mulmod/powmod.
 
 extern {
-    function p801_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 993353399
+
+# 64-bit modular multiply via i128.
+function mulmod(a: i64, b: i64, m: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (m as i128)) as i64
+}
+
+function powmod(a0: i64, e0: i64, m: i64) -> i64 {
+    let mut r: i64 = 1 % m
+    let mut a: i64 = a0 % m
+    let mut e: i64 = e0
+    while e != 0 {
+        if e % 2 == 1 {
+            r = mulmod(r, a, m)
+        }
+        a = mulmod(a, a, m)
+        e = e / 2
+    }
+    return r
+}
+
+# Deterministic Miller-Rabin for 64-bit.
+function is_prime_64(n: i64) -> i32 {
+    if n < 2 {
+        return 0
+    }
+    # small primes trial
+    let sp: array<i64, 12> = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
+    let mut i: i64 = 0
+    while i < 12 {
+        if n == sp[i] {
+            return 1
+        }
+        if n % sp[i] == 0 {
+            return 0
+        }
+        i = i + 1
+    }
+    let mut d: i64 = n - 1
+    let mut s: i64 = 0
+    while d % 2 == 0 {
+        d = d / 2
+        s = s + 1
+    }
+    let bases: array<i64, 7> = [2, 325, 9375, 28178, 450775, 9780504, 1795265022]
+    let mut bi: i64 = 0
+    while bi < 7 {
+        let a: i64 = bases[bi]
+        if a % n == 0 {
+            bi = bi + 1
+        } else {
+            let mut x: i64 = powmod(a, d, n)
+            if x == 1 || x == n - 1 {
+                bi = bi + 1
+            } else {
+                let mut comp: i32 = 1
+                let mut j: i64 = 0
+                while j < s - 1 {
+                    x = mulmod(x, x, n)
+                    if x == n - 1 {
+                        comp = 0
+                        j = s
+                    }
+                    j = j + 1
+                }
+                if comp != 0 {
+                    return 0
+                }
+                bi = bi + 1
+            }
+        }
+    }
+    return 1
+}
+
+function gcd_u64(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+let mut rng_state: i64 = -7046029254386353131
+
+function rand64() -> i64 {
+    let mut x: i64 = rng_state
+    x = x ^ (x >> 12)
+    x = x ^ (x << 25)
+    x = x ^ (x >> 27)
+    rng_state = x
+    return x * 2685821657736338717
+}
+
+function pollard_rho(n: i64) -> i64 {
+    if n % 2 == 0 {
+        return 2
+    }
+    if n % 3 == 0 {
+        return 3
+    }
+    while true {
+        let c: i64 = rand64() % (n - 1) + 1
+        let mut x: i64 = rand64() % (n - 2) + 2
+        let mut y: i64 = x
+        let mut d: i64 = 1
+        while d == 1 {
+            x = (mulmod(x, x, n) + c) % n
+            y = (mulmod(y, y, n) + c) % n
+            y = (mulmod(y, y, n) + c) % n
+            let mut diff: i64 = x - y
+            if diff < 0 {
+                diff = -diff
+            }
+            d = gcd_u64(diff, n)
+        }
+        if d != n {
+            return d
+        }
+    }
+    return 0
+}
+
+# Factorize n into prime/exp arrays. Returns count.
+function factorize(n0: i64, fp: ptr<i64>, ep: ptr<i64>) -> i64 {
+    let mut outn: i64 = 0
+    let mut n: i64 = n0
+    if n <= 1 {
+        return 0
+    }
+    let mut p: i64 = 2
+    while p * p <= n && p <= 10000 {
+        if n % p == 0 {
+            let mut e: i64 = 0
+            while n % p == 0 {
+                n = n / p
+                e = e + 1
+            }
+            fp[outn] = p
+            ep[outn] = e
+            outn = outn + 1
+        }
+        p = p + 1
+    }
+    if n == 1 {
+        return outn
+    }
+    if is_prime_64(n) != 0 {
+        fp[outn] = n
+        ep[outn] = 1
+        outn = outn + 1
+        return outn
+    }
+    # Pollard-Rho with explicit stack
+    let stack: ptr<i64> = calloc(64, 8) as ptr<i64>
+    let mut sp: i64 = 0
+    stack[sp] = n
+    sp = sp + 1
+    while sp > 0 {
+        sp = sp - 1
+        let m: i64 = stack[sp]
+        if m == 1 {
+        } else {
+            if is_prime_64(m) != 0 {
+                let mut found: i32 = 0
+                let mut i: i64 = 0
+                while i < outn {
+                    if fp[i] == m {
+                        ep[i] = ep[i] + 1
+                        found = 1
+                        i = outn
+                    }
+                    i = i + 1
+                }
+                if found == 0 {
+                    fp[outn] = m
+                    ep[outn] = 1
+                    outn = outn + 1
+                }
+            } else {
+                let d: i64 = pollard_rho(m)
+                stack[sp] = d
+                sp = sp + 1
+                stack[sp] = m / d
+                sp = sp + 1
+            }
+        }
+    }
+    free(stack)
+    return outn
+}
+
+# powmod for small modulus (fits in 32 bits).
+function powmod_small(a0: i64, e0: i64, m: i64) -> i64 {
+    let mut r: i64 = 1 % m
+    let mut a: i64 = a0 % m
+    if a < 0 {
+        a = a + m
+    }
+    let mut e: i64 = e0
+    while e > 0 {
+        if e % 2 == 1 {
+            r = r * a % m
+        }
+        a = a * a % m
+        e = e / 2
+    }
+    return r
+}
+
+# g(q^e) mod.
+function g_prime_power_mod(q: i64, e: i64, modv: i64) -> i64 {
+    let qm: i64 = q % modv
+    let mut s: i64 = 0
+    let mut t: i64 = 1
+    while t <= e {
+        let expv: i64 = 3 * e - t - 2
+        let term: i64 = powmod_small(qm, expv, modv)
+        s = (s + (t * t) % modv * term) % modv
+        t = t + 1
+    }
+    let qm1: i64 = (q - 1) % modv
+    let term1: i64 = powmod_small(qm1, 3, modv) * s % modv
+    let inner: i64 = (e * (q - 1) + q) % modv
+    let term2: i64 = powmod_small(qm, 2 * e - 2, modv) * powmod_small(inner, 2, modv) % modv
+    return (term1 + term2) % modv
+}
+
+function g_from_factorization(fp: ptr<i64>, ep: ptr<i64>, nf: i64, modv: i64) -> i64 {
+    let mut g: i64 = 1 % modv
+    let mut i: i64 = 0
+    while i < nf {
+        g = g * g_prime_power_mod(fp[i], ep[i], modv) % modv
+        i = i + 1
+    }
+    return g
+}
+
+function f_of_prime(p: i64, modv: i64) -> i64 {
+    let m: i64 = p - 1
+    let fp: ptr<i64> = calloc(64, 8) as ptr<i64>
+    let ep: ptr<i64> = calloc(64, 8) as ptr<i64>
+    let nf: i64 = factorize(m, fp, ep)
+    let g: i64 = g_from_factorization(fp, ep, nf, modv)
+    free(fp)
+    free(ep)
+    let mm: i64 = m % modv
+    return (mm * mm + g) % modv
 }
 
 function main() -> i32 {
-    printf("%lld\n", p801_native())
+    let modv: i64 = MOD
+    let lo: i64 = 10000000000000000
+    let hi: i64 = lo + 1000000
+    let length: i64 = hi - lo + 1
+
+    let is_comp: ptr<i8> = calloc(length, 1) as ptr<i8>
+
+    # sieve small primes up to 200000
+    let limit: i64 = 200000
+    let sieve: ptr<i8> = calloc(limit + 1, 1) as ptr<i8>
+    let primes: ptr<i64> = calloc(20000, 8) as ptr<i64>
+    let mut pc: i64 = 0
+    let mut pp: i64 = 2
+    while pp <= limit {
+        if sieve[pp] == 0 {
+            primes[pc] = pp
+            pc = pc + 1
+            let mut j: i64 = pp * pp
+            while j <= limit {
+                sieve[j] = 1
+                j = j + pp
+            }
+        }
+        pp = pp + 1
+    }
+    free(sieve)
+
+    let mut i: i64 = 0
+    while i < pc {
+        let q: i64 = primes[i]
+        let mut offset: i64 = (q - (lo % q)) % q
+        let mut j: i64 = offset
+        while j < length {
+            is_comp[j] = 1
+            j = j + q
+        }
+        if lo <= q && q <= hi {
+            is_comp[q - lo] = 0
+        }
+        i = i + 1
+    }
+    free(primes)
+
+    let mut total: i64 = 0
+    let mut j: i64 = 0
+    while j < length {
+        if is_comp[j] == 0 {
+            let n: i64 = lo + j
+            if is_prime_64(n) != 0 {
+                total = (total + f_of_prime(n, modv)) % modv
+            }
+        }
+        j = j + 1
+    }
+
+    free(is_comp)
+    printf("%lld\n", total)
     return 0
 }
