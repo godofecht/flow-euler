@@ -1,11 +1,227 @@
 # Project Euler 725
-# Digit Sum Numbers — S(2020) mod 10^16.
+# Digit Sum Numbers, S(2020) mod 10^16.
+# Uses i128 modular arithmetic mod (2020 * 10^16) with Russian peasant mulmod
+# to avoid overflow, then divides by 2020 for exact result mod 10^16.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+const MOD: i64 = 10000000000000000
+const N: i32 = 2020
+const MAXP: i32 = 200
+
+# M = 2020 * 10^16, stored as i128
+const M_HI: i64 = 0  # M fits in i128 but not i64, so we use i128 directly
+# M = 20200000000000000000
+
+function m_add(a: i128, b: i128) -> i128 {
+    let s: i128 = a + b
+    let m: i128 = 20200000000000000000
+    if s >= m { return s - m }
+    if s < 0 { return s + m }
+    return s
+}
+
+# Russian peasant multiplication mod M to avoid i128 overflow
+function m_mul(a0: i128, b0: i128) -> i128 {
+    let m: i128 = 20200000000000000000
+    let mut a: i128 = a0 % m
+    if a < 0 { a = a + m }
+    let mut b: i128 = b0 % m
+    if b < 0 { b = b + m }
+    let mut result: i128 = 0
+    while b > 0 {
+        if (b & 1) != 0 {
+            result = result + a
+            if result >= m { result = result - m }
+        }
+        a = a + a
+        if a >= m { a = a - m }
+        b = b >> 1
+    }
+    return result
+}
+
+function m_pow(base0: i128, e: i32) -> i128 {
+    let m: i128 = 20200000000000000000
+    let mut r: i128 = 1
+    let mut b: i128 = base0 % m
+    let mut ee: i32 = e
+    while ee > 0 {
+        if (ee & 1) != 0 { r = m_mul(r, b) }
+        b = m_mul(b, b)
+        ee = ee >> 1
+    }
+    return r
+}
+
+function mod_add(a: i64, b: i64) -> i64 {
+    let s: i64 = a + b
+    if s >= MOD { return s - MOD }
+    if s < 0 { return s + MOD }
+    return s
+}
+
+function vp_factorial(p: i32, n: i32) -> i32 {
+    let mut e: i32 = 0
+    let mut pk: i32 = p
+    while pk <= n {
+        e = e + n / pk
+        pk = pk * p
+    }
+    return e
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let m: i128 = 20200000000000000000
+
+    # Sieve primes up to N
+    let sieve: ptr<i8> = calloc((N + 1) as i64, 1)
+    let mut i: i32 = 2
+    while i <= N {
+        sieve[i] = 1
+        i = i + 1
+    }
+    let mut p: i32 = 2
+    while p * p <= N {
+        if sieve[p] != 0 {
+            let mut mm: i32 = p * p
+            while mm <= N {
+                sieve[mm] = 0
+                mm = mm + p
+            }
+        }
+        p = p + 1
+    }
+    let primes: ptr<i32> = calloc(400, 4)
+    let mut nprimes: i32 = 0
+    let mut i2: i32 = 2
+    while i2 <= N {
+        if sieve[i2] != 0 {
+            primes[nprimes] = i2
+            nprimes = nprimes + 1
+        }
+        i2 = i2 + 1
+    }
+
+    # Build partitions
+    let lens: ptr<i32> = calloc(10 * MAXP, 4)
+    let digs: ptr<ptr<i32> > = calloc(10 * MAXP, 8)
+    let counts: ptr<i32> = calloc(10, 4)
+
+    counts[0] = 1
+    lens[0] = 0
+    digs[0] = calloc(20, 4)
+
+    let mut opt: i32 = 1
+    while opt <= 9 {
+        let mut i: i32 = 0
+        while i <= 9 - opt {
+            let pc: i32 = counts[i]
+            let mut pp: i32 = 0
+            while pp < pc {
+                let dst_idx: i32 = counts[i + opt]
+                let dst_d: ptr<i32> = calloc(20, 4)
+                let src_d: ptr<i32> = digs[i * MAXP + pp]
+                let src_len: i32 = lens[i * MAXP + pp]
+                let mut j: i32 = src_len
+                while j > 0 {
+                    dst_d[j] = src_d[j - 1]
+                    j = j - 1
+                }
+                dst_d[0] = opt
+                digs[(i + opt) * MAXP + dst_idx] = dst_d
+                lens[(i + opt) * MAXP + dst_idx] = src_len + 1
+                counts[i + opt] = dst_idx + 1
+                pp = pp + 1
+            }
+            i = i + 1
+        }
+        opt = opt + 1
+    }
+
+    # rep = 111...1 (2020 ones) mod M
+    let mut rep: i128 = 0
+    let mut i3: i32 = 0
+    while i3 < N {
+        rep = m_mul(rep, 10)
+        rep = m_add(rep, 1)
+        i3 = i3 + 1
+    }
+
+    let mut total: i64 = 0
+    let mut k: i32 = 0
+    while k <= 9 {
+        let mut pi: i32 = 0
+        while pi < counts[k] {
+            let p_len: i32 = lens[k * MAXP + pi]
+            let p_d: ptr<i32> = digs[k * MAXP + pi]
+            let d: ptr<i32> = calloc(10, 4)
+            let mut sumd: i32 = 0
+            let mut j: i32 = 0
+            while j < p_len {
+                d[p_d[j]] = d[p_d[j]] + 1
+                j = j + 1
+            }
+            d[k] = d[k] + 1
+            let mut j2: i32 = 1
+            while j2 <= 9 {
+                sumd = sumd + d[j2]
+                j2 = j2 + 1
+            }
+            d[0] = N - sumd
+            if d[0] >= 0 {
+                if p_len < N {
+                    # Compute multinomial mod M via prime factorization
+                    let mut comb: i128 = 1
+                    let mut pi2: i32 = 0
+                    while pi2 < nprimes {
+                        let pr: i32 = primes[pi2]
+                        let mut e: i32 = vp_factorial(pr, N)
+                        let mut v: i32 = 0
+                        while v < 10 {
+                            e = e - vp_factorial(pr, d[v])
+                            v = v + 1
+                        }
+                        if e > 0 {
+                            comb = m_mul(comb, m_pow((pr as i128), e))
+                        }
+                        pi2 = pi2 + 1
+                    }
+                    let mut val: i128 = m_mul(rep, comb)
+                    val = m_mul(val, ((2 * k) as i128))
+                    # Exact division by N=2020
+                    val = val / (N as i128)
+                    # Reduce mod 10^16
+                    let vmod: i64 = (val % (MOD as i128)) as i64
+                    total = mod_add(total, vmod)
+                }
+            }
+            free(d)
+            pi = pi + 1
+        }
+        k = k + 1
+    }
+
+    printf("%lld\n", total)
+
+    let mut i4: i32 = 0
+    while i4 < 10 {
+        let mut j4: i32 = 0
+        while j4 < counts[i4] {
+            free(digs[i4 * MAXP + j4])
+            j4 = j4 + 1
+        }
+        i4 = i4 + 1
+    }
+    free(lens)
+    free(digs)
+    free(counts)
+    free(sieve)
+    free(primes)
     return 0
 }
