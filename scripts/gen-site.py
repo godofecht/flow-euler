@@ -43,6 +43,15 @@ if skip_file.exists():
 FLOW_REPO = os.environ.get("FLOW_REPO", str(Path.home() / "flow"))
 FLOW_PY = str(Path(FLOW_REPO) / "src")
 
+# Load complexity data if available.
+COMPLEXITY = {}
+complexity_file = ROOT / "complexity.json"
+if complexity_file.exists():
+    import json
+    with open(complexity_file) as f:
+        for entry in json.load(f):
+            COMPLEXITY[entry["problem"]] = entry
+
 
 def transpile(src_path: Path, mode: str, out_path: Path) -> str:
     """Transpile a .flow file to C or MLIR. Returns the output text."""
@@ -113,6 +122,22 @@ def page_template(n: int, flow_src: str, c_src: str, mlir_src: str,
 
     native_note = '<p class="native-note">This problem uses a native C/C++ helper. MLIR is generated from the Flow wrapper only and may not run standalone.</p>' if native else ''
 
+    # Complexity metrics from complexity.json (if available).
+    cx = COMPLEXITY.get(n, {})
+    cx_rows = ""
+    if cx:
+        time_ms = cx.get("time_ms", -1)
+        rss_kb = cx.get("peak_rss_kb", -1)
+        comp = cx.get("complexity", {})
+        time_o = comp.get("time", "?")
+        space_o = comp.get("space", "?")
+        time_str = f"{time_ms} ms" if time_ms >= 0 else "n/a"
+        rss_str = f"{rss_kb} KB" if rss_kb >= 0 else "n/a"
+        cx_rows = f"""<tr><th>Runtime</th><td>{time_str}</td></tr>
+<tr><th>Peak memory</th><td>{rss_str}</td></tr>
+<tr><th>Time complexity</th><td><code>{esc(time_o)}</code> <span class="est-note">(estimated)</span></td></tr>
+<tr><th>Space complexity</th><td><code>{esc(space_o)}</code> <span class="est-note">(estimated)</span></td></tr>"""
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -129,6 +154,7 @@ def page_template(n: int, flow_src: str, c_src: str, mlir_src: str,
 <tr><th>Output</th><td><code>{esc(output)}</code></td></tr>
 <tr><th>Status</th><td class="status-{status.lower()}">{status}</td></tr>
 <tr><th>Native helper</th><td>{"yes" if native else "no"}</td></tr>
+{cx_rows}
 </table>
 {native_note}
 <h2>Flow source</h2>
@@ -147,12 +173,29 @@ def index_template(entries: list) -> str:
     for n, status, output, expected, native in entries:
         label = f"{n:03d}"
         cls = f"status-{status.lower()}"
+        cx = COMPLEXITY.get(n, {})
+        time_str = ""
+        rss_str = ""
+        time_o = ""
+        space_o = ""
+        if cx:
+            t = cx.get("time_ms", -1)
+            r = cx.get("peak_rss_kb", -1)
+            comp = cx.get("complexity", {})
+            time_str = f"{t} ms" if t >= 0 else ""
+            rss_str = f"{r} KB" if r >= 0 else ""
+            time_o = comp.get("time", "")
+            space_o = comp.get("space", "")
         rows.append(
             f'<tr><td><a href="problems/p{label}.html">{label}</a></td>'
             f'<td class="{cls}">{status}</td>'
             f'<td><code>{esc(output)}</code></td>'
             f'<td><code>{esc(expected)}</code></td>'
-            f'<td>{"native" if native else "flow"}</td></tr>'
+            f'<td>{"native" if native else "flow"}</td>'
+            f'<td>{time_str}</td>'
+            f'<td>{rss_str}</td>'
+            f'<td><code>{esc(time_o)}</code></td>'
+            f'<td><code>{esc(space_o)}</code></td></tr>'
         )
     body = "\n".join(rows)
     total = len(entries)
@@ -172,7 +215,7 @@ def index_template(entries: list) -> str:
 <p>Each problem page shows the Flow source, generated C, generated MLIR, and the program output.</p>
 <p>{passed} passed, {skipped} skipped, {total} total.</p>
 <table>
-<thead><tr><th>Problem</th><th>Status</th><th>Output</th><th>Expected</th><th>Type</th></tr></thead>
+<thead><tr><th>Problem</th><th>Status</th><th>Output</th><th>Expected</th><th>Type</th><th>Time</th><th>Memory</th><th>Time O</th><th>Space O</th></tr></thead>
 <tbody>
 {body}
 </tbody>
@@ -198,6 +241,7 @@ pre code { font-size: 0.8rem; }
 .status-diff { color: #c62828; font-weight: bold; }
 .status-skip { color: #666; }
 .native-note { color: #666; font-size: 0.85rem; font-style: italic; }
+.est-note { color: #999; font-size: 0.8rem; }
 a { color: #1565c0; text-decoration: none; }
 a:hover { text-decoration: underline; }
 """

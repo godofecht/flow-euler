@@ -36,6 +36,13 @@ jobs:
       - name: Install native dependencies
         run: brew install gmp mpfr
 
+      - name: Measure complexity
+        env:
+          FLOW_HOST: python
+        run: |
+          export FLOW_REPO="$HOME/flow"
+          python3 scripts/measure.py --out complexity.json --timeout 30
+
       - name: Generate site
         env:
           FLOW_HOST: python

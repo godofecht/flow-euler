@@ -1,0 +1,55 @@
+name: Complexity
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  measure:
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Checkout Flow compiler
+        run: |
+          git clone https://github.com/flooooooooooow/flow.git "$HOME/flow"
+
+      - name: Install Python dependencies
+        run: python3 -m pip install numpy
+
+      - name: Install native dependencies
+        run: |
+          brew install gmp mpfr
+
+      - name: Measure all solutions
+        env:
+          FLOW_HOST: python
+        run: |
+          export FLOW_REPO="$HOME/flow"
+          python3 scripts/measure.py --out complexity.json --timeout 60
+
+      - name: Upload complexity artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-json
+          path: complexity.json
+          retention-days: 30
+
+      - name: Commit complexity.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add complexity.json
+          if git diff --cached --quiet; then
+            echo "No changes to complexity.json"
+          else
+            git commit -m "Update complexity measurements [skip ci]"
+            git push
+          fi

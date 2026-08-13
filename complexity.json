@@ -1,0 +1,572 @@
+[
+  {
+    "problem": 1,
+    "label": "001",
+    "status": "pass",
+    "time_ms": 240,
+    "peak_rss_kb": 1312,
+    "output": "233168",
+    "expected": "233168",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(1)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 2,
+    "label": "002",
+    "status": "pass",
+    "time_ms": 120,
+    "peak_rss_kb": 1312,
+    "output": "4613732",
+    "expected": "4613732",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(1)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 3,
+    "label": "003",
+    "status": "pass",
+    "time_ms": 110,
+    "peak_rss_kb": 1296,
+    "output": "6857",
+    "expected": "6857",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(1)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 4,
+    "label": "004",
+    "status": "pass",
+    "time_ms": 100,
+    "peak_rss_kb": 1312,
+    "output": "906609",
+    "expected": "906609",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(1)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 5,
+    "label": "005",
+    "status": "pass",
+    "time_ms": 110,
+    "peak_rss_kb": 1312,
+    "output": "232792560",
+    "expected": "232792560",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(1)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 6,
+    "label": "006",
+    "status": "pass",
+    "time_ms": 110,
+    "peak_rss_kb": 1312,
+    "output": "25164150",
+    "expected": "25164150",
+    "native": false,
+    "complexity": {
+      "time": "O(1)",
+      "space": "O(1)",
+      "loop_depth": 0,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 7,
+    "label": "007",
+    "status": "pass",
+    "time_ms": 110,
+    "peak_rss_kb": 1312,
+    "output": "104743",
+    "expected": "104743",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(1)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 8,
+    "label": "008",
+    "status": "pass",
+    "time_ms": 110,
+    "peak_rss_kb": 1328,
+    "output": "23514624000",
+    "expected": "23514624000",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(1)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": true,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 9,
+    "label": "009",
+    "status": "pass",
+    "time_ms": 110,
+    "peak_rss_kb": 1312,
+    "output": "31875000",
+    "expected": "31875000",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(1)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 10,
+    "label": "010",
+    "status": "pass",
+    "time_ms": 120,
+    "peak_rss_kb": 3280,
+    "output": "142913828922",
+    "expected": "142913828922",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(n)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 11,
+    "label": "011",
+    "status": "pass",
+    "time_ms": 110,
+    "peak_rss_kb": 1312,
+    "output": "70600674",
+    "expected": "70600674",
+    "native": false,
+    "complexity": {
+      "time": "O(n^3)",
+      "space": "O(n)",
+      "loop_depth": 3,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 12,
+    "label": "012",
+    "status": "pass",
+    "time_ms": 150,
+    "peak_rss_kb": 1312,
+    "output": "76576500",
+    "expected": "76576500",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(1)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 13,
+    "label": "013",
+    "status": "pass",
+    "time_ms": 240,
+    "peak_rss_kb": 1296,
+    "output": "5537376230",
+    "expected": "5537376230",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(1)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 3
+    }
+  },
+  {
+    "problem": 14,
+    "label": "014",
+    "status": "pass",
+    "time_ms": 120,
+    "peak_rss_kb": 5280,
+    "output": "837799",
+    "expected": "837799",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(n)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 15,
+    "label": "015",
+    "status": "pass",
+    "time_ms": 110,
+    "peak_rss_kb": 1312,
+    "output": "137846528820",
+    "expected": "137846528820",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(1)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 16,
+    "label": "016",
+    "status": "pass",
+    "time_ms": 270,
+    "peak_rss_kb": 1296,
+    "output": "1366",
+    "expected": "1366",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(1)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 17,
+    "label": "017",
+    "status": "pass",
+    "time_ms": 230,
+    "peak_rss_kb": 1312,
+    "output": "21124",
+    "expected": "21124",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(1)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 18,
+    "label": "018",
+    "status": "pass",
+    "time_ms": 230,
+    "peak_rss_kb": 1296,
+    "output": "1074",
+    "expected": "1074",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(n)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 19,
+    "label": "019",
+    "status": "pass",
+    "time_ms": 230,
+    "peak_rss_kb": 1296,
+    "output": "171",
+    "expected": "171",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(1)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 20,
+    "label": "020",
+    "status": "pass",
+    "time_ms": 230,
+    "peak_rss_kb": 1312,
+    "output": "648",
+    "expected": "648",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(n)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": true,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 21,
+    "label": "021",
+    "status": "pass",
+    "time_ms": 230,
+    "peak_rss_kb": 1408,
+    "output": "31626",
+    "expected": "31626",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(n)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 22,
+    "label": "022",
+    "status": "pass",
+    "time_ms": 230,
+    "peak_rss_kb": 1680,
+    "output": "871198282",
+    "expected": "871198282",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(n)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 23,
+    "label": "023",
+    "status": "pass",
+    "time_ms": 240,
+    "peak_rss_kb": 1520,
+    "output": "4179871",
+    "expected": "4179871",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(n)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 4
+    }
+  },
+  {
+    "problem": 24,
+    "label": "024",
+    "status": "pass",
+    "time_ms": 230,
+    "peak_rss_kb": 1312,
+    "output": "2783915460",
+    "expected": "2783915460",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(1)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 25,
+    "label": "025",
+    "status": "pass",
+    "time_ms": 250,
+    "peak_rss_kb": 1328,
+    "output": "4782",
+    "expected": "4782",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(n)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 4
+    }
+  },
+  {
+    "problem": 26,
+    "label": "026",
+    "status": "pass",
+    "time_ms": 240,
+    "peak_rss_kb": 1568,
+    "output": "983",
+    "expected": "983",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(n)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 2
+    }
+  },
+  {
+    "problem": 27,
+    "label": "027",
+    "status": "pass",
+    "time_ms": 250,
+    "peak_rss_kb": 1328,
+    "output": "-59231",
+    "expected": "-59231",
+    "native": false,
+    "complexity": {
+      "time": "O(n^2)",
+      "space": "O(1)",
+      "loop_depth": 2,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 28,
+    "label": "028",
+    "status": "pass",
+    "time_ms": 240,
+    "peak_rss_kb": 1312,
+    "output": "669171001",
+    "expected": "669171001",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(1)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  },
+  {
+    "problem": 29,
+    "label": "029",
+    "status": "pass",
+    "time_ms": 280,
+    "peak_rss_kb": 3280,
+    "output": "9183",
+    "expected": "9183",
+    "native": false,
+    "complexity": {
+      "time": "O(n^4)",
+      "space": "O(n)",
+      "loop_depth": 4,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 4
+    }
+  },
+  {
+    "problem": 30,
+    "label": "030",
+    "status": "pass",
+    "time_ms": 240,
+    "peak_rss_kb": 1312,
+    "output": "443839",
+    "expected": "443839",
+    "native": false,
+    "complexity": {
+      "time": "O(n)",
+      "space": "O(1)",
+      "loop_depth": 1,
+      "has_recursion": false,
+      "has_sort": false,
+      "has_hashmap": false,
+      "allocs": 1
+    }
+  }
+]
