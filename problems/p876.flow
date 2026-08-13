@@ -1,12 +1,223 @@
-# Project Euler 876
-# Triplet Tricks: sum_{k=1}^{18} F(6^k, 10^k).
-# Native C helper for the divisor-pair enumeration.
+# Project Euler 876: Triplet Tricks.
+# Pure Flow port. Sum_{k=1}^{18} F(6^k, 10^k).
 
 extern {
-    function p876_native() -> i64
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function euclid_subtraction_steps(m_in: i64, n_in: i64) -> i64 {
+    let mut m: i64 = m_in
+    let mut n: i64 = n_in
+    let mut steps: i64 = 0
+    while n != 0 {
+        let q: i64 = m / n
+        steps = steps + q
+        let t: i64 = m - q * n
+        m = n
+        n = t
+    }
+    return steps
+}
+
+# Heapsort parallel arrays cs[i128] and ss[i64] by cs ascending.
+function heapsort_entries(cs: ptr<i128>, ss: ptr<i64>, cnt: i64) -> void {
+    let n: i64 = cnt
+    # build max-heap
+    let mut start: i64 = n / 2 - 1
+    while start >= 0 {
+        let mut root: i64 = start
+        while 2 * root + 1 < n {
+            let child: i64 = 2 * root + 1
+            let mut swap_idx: i64 = root
+            if cs[swap_idx] < cs[child] {
+                swap_idx = child
+            }
+            if child + 1 < n && cs[swap_idx] < cs[child + 1] {
+                swap_idx = child + 1
+            }
+            if swap_idx == root {
+                break
+            }
+            let tc: i128 = cs[root]
+            cs[root] = cs[swap_idx]
+            cs[swap_idx] = tc
+            let ts: i64 = ss[root]
+            ss[root] = ss[swap_idx]
+            ss[swap_idx] = ts
+            root = swap_idx
+        }
+        start = start - 1
+    }
+    # extract
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let tc: i128 = cs[0]
+        cs[0] = cs[end]
+        cs[end] = tc
+        let ts: i64 = ss[0]
+        ss[0] = ss[end]
+        ss[end] = ts
+        let mut root: i64 = 0
+        while 2 * root + 1 < end {
+            let child: i64 = 2 * root + 1
+            let mut swap_idx: i64 = root
+            if cs[swap_idx] < cs[child] {
+                swap_idx = child
+            }
+            if child + 1 < end && cs[swap_idx] < cs[child + 1] {
+                swap_idx = child + 1
+            }
+            if swap_idx == root {
+                break
+            }
+            let tc2: i128 = cs[root]
+            cs[root] = cs[swap_idx]
+            cs[swap_idx] = tc2
+            let ts2: i64 = ss[root]
+            ss[root] = ss[swap_idx]
+            ss[swap_idx] = ts2
+            root = swap_idx
+        }
+        end = end - 1
+    }
+}
+
+function compute_F_for_powers(k: i64) -> i64 {
+    let mut a: i64 = 1
+    let mut b: i64 = 1
+    let mut i: i64 = 0
+    while i < k {
+        a = a * 6
+        b = b * 10
+        i = i + 1
+    }
+
+    let p2: ptr<i64> = malloc(32 * 8)
+    let p3: ptr<i64> = malloc(32 * 8)
+    let p5: ptr<i64> = malloc(32 * 8)
+    p2[0] = 1
+    p3[0] = 1
+    p5[0] = 1
+    i = 0
+    while i < k {
+        p2[i + 1] = p2[i] * 2
+        p3[i + 1] = p3[i] * 3
+        p5[i + 1] = p5[i] * 5
+        i = i + 1
+    }
+
+    let na: i64 = (k + 1) * (k + 1)
+    let div_a: ptr<i64> = malloc(400 * 8)
+    let ua: ptr<i64> = malloc(400 * 8)
+    let mut ia: i64 = 0
+    i = 0
+    while i <= k {
+        let mut j: i64 = 0
+        while j <= k {
+            div_a[ia] = p2[i] * p3[j]
+            ua[ia] = a / div_a[ia]
+            ia = ia + 1
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let nb: i64 = (k + 1) * (k + 1)
+    let div_b: ptr<i64> = malloc(400 * 8)
+    let vb: ptr<i64> = malloc(400 * 8)
+    let mut ib: i64 = 0
+    i = 0
+    while i <= k {
+        let mut j: i64 = 0
+        while j <= k {
+            div_b[ib] = p2[i] * p5[j]
+            vb[ib] = b / div_b[ib]
+            ib = ib + 1
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let max_entries: i64 = na * nb * 2
+    let cs: ptr<i128> = malloc(max_entries * 16)
+    let ss: ptr<i64> = malloc(max_entries * 8)
+    let mut cnt: i64 = 0
+
+    i = 0
+    while i < na {
+        let x: i64 = div_a[i]
+        let u: i64 = ua[i]
+        let mut j: i64 = 0
+        while j < nb {
+            let y: i64 = div_b[j]
+            let v: i64 = vb[j]
+            let s: i64 = euclid_subtraction_steps(x, y)
+
+            let c1: i128 = ((x + y) as i128) * ((u + v) as i128)
+            cs[cnt] = c1
+            ss[cnt] = s
+            cnt = cnt + 1
+
+            let c2: i128 = ((x - y) as i128) * ((u - v) as i128)
+            if c2 > 0 {
+                let s2: i64 = s - 1
+                if s2 > 0 {
+                    cs[cnt] = c2
+                    ss[cnt] = s2
+                    cnt = cnt + 1
+                }
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    heapsort_entries(cs, ss, cnt)
+
+    let mut sum: i64 = 0
+    let mut prev_c: i128 = 0
+    let mut best_s: i64 = 0
+    let mut have: bool = false
+    i = 0
+    while i < cnt {
+        if have && cs[i] == prev_c {
+            if ss[i] < best_s {
+                best_s = ss[i]
+            }
+        } else {
+            if have {
+                sum = sum + best_s
+            }
+            prev_c = cs[i]
+            best_s = ss[i]
+            have = true
+        }
+        i = i + 1
+    }
+    if have {
+        sum = sum + best_s
+    }
+
+    free(p2)
+    free(p3)
+    free(p5)
+    free(div_a)
+    free(ua)
+    free(div_b)
+    free(vb)
+    free(cs)
+    free(ss)
+    return sum
 }
 
 function main() -> i32 {
-    printf("%lld\n", p876_native())
+    let mut total: i64 = 0
+    let mut k: i64 = 1
+    while k <= 18 {
+        total = total + compute_F_for_powers(k)
+        k = k + 1
+    }
+    printf("%lld\n", total)
     return 0
 }

@@ -1,12 +1,167 @@
 # Project Euler 980
-# Count ordered pairs of 50-letter {x,y,z} strings whose concatenation is
-# neutral, modelled as quaternion group Q8 products. Native C helper.
+# Count ordered pairs (i, j) with 0 <= i, j < N such that the
+# concatenation c(i)c(j) of 50-letter {x,y,z} strings is neutral.
+# Neutrality maps to the quaternion group Q8 product being +1 under
+# x -> i, y -> j, z -> -k.
 
 extern {
-    function p980_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function build_mul_table_q8(mul: ptr<i32>) -> void {
+    # Elements 0..7: 0:1, 1:i, 2:j, 3:k, 4:-1, 5:-i, 6:-j, 7:-k
+    # base[a][b] and sgn[a][b] stored as 4x4 arrays
+    let base: ptr<i32> = calloc(16, 4)
+    let sgn: ptr<i32> = calloc(16, 4)
+
+    let mut a: i32 = 0
+    while a < 4 {
+        let mut b: i32 = 0
+        while b < 4 {
+            if a == 0 {
+                base[a * 4 + b] = b
+                sgn[a * 4 + b] = 1
+            } else {
+                if b == 0 {
+                    base[a * 4 + b] = a
+                    sgn[a * 4 + b] = 1
+                } else {
+                    if a == b {
+                        base[a * 4 + b] = 0
+                        sgn[a * 4 + b] = -1
+                    } else {
+                        if a == 1 && b == 2 {
+                            base[a * 4 + b] = 3
+                            sgn[a * 4 + b] = 1
+                        } else {
+                            if a == 2 && b == 3 {
+                                base[a * 4 + b] = 1
+                                sgn[a * 4 + b] = 1
+                            } else {
+                                if a == 3 && b == 1 {
+                                    base[a * 4 + b] = 2
+                                    sgn[a * 4 + b] = 1
+                                } else {
+                                    if a == 2 && b == 1 {
+                                        base[a * 4 + b] = 3
+                                        sgn[a * 4 + b] = -1
+                                    } else {
+                                        if a == 3 && b == 2 {
+                                            base[a * 4 + b] = 1
+                                            sgn[a * 4 + b] = -1
+                                        } else {
+                                            if a == 1 && b == 3 {
+                                                base[a * 4 + b] = 2
+                                                sgn[a * 4 + b] = -1
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    let mut A: i32 = 0
+    while A < 8 {
+        let sa_val: i32 = if A < 4 { 1 } else { -1 }
+        let a_idx: i32 = A & 3
+        let mut B: i32 = 0
+        while B < 8 {
+            let sb_val: i32 = if B < 4 { 1 } else { -1 }
+            let b_idx: i32 = B & 3
+            let s: i32 = sa_val * sb_val * sgn[a_idx * 4 + b_idx]
+            let c: i32 = base[a_idx * 4 + b_idx]
+            if s == 1 {
+                mul[A * 8 + B] = c
+            } else {
+                mul[A * 8 + B] = c ^ 4
+            }
+            B = B + 1
+        }
+        A = A + 1
+    }
+
+    free(base)
+    free(sgn)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p980_native())
+    let mul: ptr<i32> = calloc(64, 4)
+    build_mul_table_q8(mul)
+
+    # x -> i (1), y -> j (2), z -> -k (7)
+    let gen: array<i32, 3> = [1, 2, 7]
+
+    # Right-multiply table: R[v*3 + b] = mul[v][gen[b]]
+    let R: ptr<i32> = calloc(24, 4)
+    let mut v: i64 = 0
+    while v < 8 {
+        let mut b: i64 = 0
+        while b < 3 {
+            R[v * 3 + b] = mul[v * 8 + (gen[b] as i64)]
+            b = b + 1
+        }
+        v = v + 1
+    }
+
+    # Inverses in Q8
+    let inv: ptr<i32> = calloc(8, 4)
+    let mut e: i64 = 0
+    while e < 8 {
+        let mut f: i64 = 0
+        while f < 8 {
+            if mul[e * 8 + f] == 0 && mul[f * 8 + e] == 0 {
+                inv[e] = f as i32
+                break
+            }
+            f = f + 1
+        }
+        e = e + 1
+    }
+
+    let MOD: i64 = 888888883
+    let MULT: i64 = 8888
+    let mut a: i64 = 88888888
+
+    let N: i64 = 1000000
+    let counts: ptr<i64> = calloc(8, 8)
+    let mut i: i64 = 0
+    while i < 8 {
+        counts[i] = 0
+        i = i + 1
+    }
+
+    i = 0
+    while i < N {
+        let mut qv: i64 = 0
+        let mut j: i64 = 0
+        while j < 50 {
+            qv = R[qv * 3 + (a % 3)] as i64
+            a = (a * MULT) % MOD
+            j = j + 1
+        }
+        counts[qv] = counts[qv] + 1
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut e2: i64 = 0
+    while e2 < 8 {
+        total = total + counts[e2] * counts[inv[e2] as i64]
+        e2 = e2 + 1
+    }
+
+    printf("%lld\n", total)
+    free(mul)
+    free(R)
+    free(inv)
+    free(counts)
     return 0
 }

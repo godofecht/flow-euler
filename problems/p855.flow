@@ -1,12 +1,16 @@
 # Project Euler 855
 # Delphi Paper: S(5,8) = (5!)^8 * (8!)^5 / (40!)^2, a tiny value ~6.88e-57.
-# Native C helper computes it in log-space to avoid overflow.
+# Computed in log-space via lgamma to avoid overflow, then exponentiated.
 
 extern {
-    function p855_native() -> f64
+    function lgamma(x: f64) -> f64
+    function exp(x: f64) -> f64
 }
 
 function main() -> i32 {
-    printf("%.10e\n", p855_native())
+    let a: f64 = 5.0
+    let b: f64 = 8.0
+    let log_s: f64 = b * lgamma(a + 1.0) + a * lgamma(b + 1.0) - 2.0 * lgamma(a * b + 1.0)
+    printf("%.10e\n", exp(log_s))
     return 0
 }

@@ -1,11 +1,89 @@
 # Project Euler 985
-# Telescoping triangles: minimum perimeter for 20 steps.
+# Telescoping triangles: minimum perimeter integer-sided triangle with 20 steps.
+# At each step, angles transform as A' = pi - 2B, B' = pi - 2C, C' = pi - 2A.
+# Count steps until an angle drops below epsilon.
 
 extern {
-    function p985_native() -> i64
+    function acos(x: f64) -> f64
+}
+
+const EPS: f64 = 1e-12
+
+# Compute the number of telescoping steps for a triangle with sides a, b, c.
+function num_steps(a: f64, b: f64, c: f64, max_steps: i32, pi: f64) -> i32 {
+    # Compute angles using law of cosines
+    let mut cosA: f64 = (b * b + c * c - a * a) / (2.0 * b * c)
+    let mut cosB: f64 = (a * a + c * c - b * b) / (2.0 * a * c)
+    let mut cosC: f64 = (a * a + b * b - c * c) / (2.0 * a * b)
+    if cosA < -1.0 { cosA = -1.0 }
+    if cosA > 1.0 { cosA = 1.0 }
+    if cosB < -1.0 { cosB = -1.0 }
+    if cosB > 1.0 { cosB = 1.0 }
+    if cosC < -1.0 { cosC = -1.0 }
+    if cosC > 1.0 { cosC = 1.0 }
+    let mut A: f64 = acos(cosA)
+    let mut B: f64 = acos(cosB)
+    let mut C: f64 = acos(cosC)
+
+    let mut steps: i32 = 0
+    let mut i: i32 = 0
+    while i < max_steps {
+        let nA: f64 = pi - 2.0 * B
+        let nB: f64 = pi - 2.0 * C
+        let nC: f64 = pi - 2.0 * A
+        A = nA
+        B = nB
+        C = nC
+        if A <= EPS || B <= EPS || C <= EPS { break }
+        steps = steps + 1
+        i = i + 1
+    }
+    return steps
 }
 
 function main() -> i32 {
-    printf("%lld\n", p985_native())
+    let PI: f64 = 3.14159265358979323846
+    let target_steps: i32 = 20
+    let mut best_perimeter: i64 = 0
+    let mut found: i32 = 0
+
+    let mut n: i32 = 2
+    while n <= 5000000 {
+        # Candidate 1: (n, n, n+1)
+        let a1: f64 = (n as f64)
+        let b1: f64 = (n as f64)
+        let c1: f64 = ((n + 1) as f64)
+        let s1: i32 = num_steps(a1, b1, c1, target_steps + 2, PI)
+        if s1 == target_steps {
+            let p: i64 = (n + n + n + 1) as i64
+            if found == 0 || p < best_perimeter {
+                best_perimeter = p
+                found = 1
+            }
+        }
+
+        # Candidate 2: (n, n+1, n+1)
+        let a2: f64 = (n as f64)
+        let b2: f64 = ((n + 1) as f64)
+        let c2: f64 = ((n + 1) as f64)
+        let s2: i32 = num_steps(a2, b2, c2, target_steps + 2, PI)
+        if s2 == target_steps {
+            let p2: i64 = (n + n + 1 + n + 1) as i64
+            if found == 0 || p2 < best_perimeter {
+                best_perimeter = p2
+                found = 1
+            }
+        }
+
+        if found != 0 {
+            let break_val: i64 = (3 * ((n + 1) as i64) + 1)
+            if break_val > best_perimeter {
+                break
+            }
+        }
+        n = n + 1
+    }
+
+    printf("%lld\n", best_perimeter)
     return 0
 }

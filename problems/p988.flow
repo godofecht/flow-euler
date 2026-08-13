@@ -1,11 +1,86 @@
 # Project Euler 988
 # frog_sum(19, 53) = 2727531976556215755
+# DP keyed by height (0..~48). Each entry holds (count, total).
 
 extern {
-    function p988_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
 }
 
+const MAXW: i64 = 64
+const MAXH: i64 = 64
+
 function main() -> i32 {
-    printf("%lld\n", p988_native())
+    let mut a: i64 = 19
+    let mut b: i64 = 53
+    if a > b {
+        let t: i64 = a
+        a = b
+        b = t
+    }
+    if a == 1 {
+        printf("%lld\n", 0)
+        return 0
+    }
+
+    let width: i64 = b - 1
+    let h: ptr<i64> = calloc(MAXW + 1, 8)
+    for i in 1..(width + 1) {
+        h[i] = (a * b - a * i - 1) / b
+    }
+
+    let cnt: ptr<i64> = calloc(MAXH + 1, 8)
+    let tot: ptr<i64> = calloc(MAXH + 1, 8)
+    let ncnt: ptr<i64> = calloc(MAXH + 1, 8)
+    let ntot: ptr<i64> = calloc(MAXH + 1, 8)
+
+    for t in 0..(h[1] + 1) {
+        cnt[t] = 1
+        tot[t] = 0
+    }
+
+    for i in 2..(width + 1) {
+        memset(ncnt, 0, (MAXH + 1) * 8)
+        memset(ntot, 0, (MAXH + 1) * 8)
+        for prev in 0..(MAXH + 1) {
+            if cnt[prev] == 0 && tot[prev] == 0 {
+                continue
+            }
+            let count: i64 = cnt[prev]
+            let total: i64 = tot[prev]
+            let limit: i64 = if prev < h[i] { prev } else { h[i] }
+            for cur in 0..(limit + 1) {
+                let mut add: i64 = 0
+                if prev > cur && prev > 0 {
+                    add = a * b - a * (i - 1) - b * prev
+                }
+                ncnt[cur] = ncnt[cur] + count
+                ntot[cur] = ntot[cur] + total + count * add
+            }
+        }
+        memcpy(cnt, ncnt, (MAXH + 1) * 8)
+        memcpy(tot, ntot, (MAXH + 1) * 8)
+    }
+
+    let mut answer: i64 = 0
+    let last_column: i64 = width
+    for prev in 0..(MAXH + 1) {
+        if cnt[prev] == 0 && tot[prev] == 0 {
+            continue
+        }
+        let mut add: i64 = 0
+        if prev > 0 {
+            add = a * b - a * last_column - b * prev
+        }
+        answer = answer + tot[prev] + cnt[prev] * add
+    }
+    printf("%lld\n", answer)
+    free(h)
+    free(cnt)
+    free(tot)
+    free(ncnt)
+    free(ntot)
     return 0
 }

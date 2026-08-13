@@ -1,11 +1,63 @@
 # Project Euler 726
-# Falling Bottles — S(10^4) mod 1000000033.
+# Falling Bottles: S(10^4) mod 1000000033.
+# Layered product with Mersenne prefix and odd-inverses.
+
+const MOD: i64 = 1000000033
 
 extern {
-    function pe_solve() -> i64
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(b: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut bb: i64 = b % MOD
+    let mut ee: i64 = e
+    while ee > 0 {
+        if (ee & 1) == 1 {
+            r = r * bb % MOD
+        }
+        bb = bb * bb % MOD
+        ee = ee >> 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let n: i64 = 10000
+    let inv_odd: ptr<i64> = malloc((n + 1) * 8)
+    let mut k: i64 = 1
+    while k <= n {
+        inv_odd[k] = modpow(2 * k - 1, MOD - 2)
+        k = k + 1
+    }
+
+    let mut cur_f: i64 = 1
+    let mut total: i64 = 1
+    let mut curN: i64 = 1
+    let mut pow2: i64 = 2
+    let mut mers_prefix: i64 = 1
+    let mut odd_inv_prefix: i64 = 1
+
+    let mut layer: i64 = 2
+    while layer <= n {
+        let start: i64 = curN + 1
+        let end: i64 = curN + layer
+        let mut x: i64 = start
+        while x <= end {
+            cur_f = cur_f * x % MOD
+            x = x + 1
+        }
+        curN = end
+        pow2 = pow2 * 2 % MOD
+        mers_prefix = mers_prefix * ((pow2 - 1 + MOD) % MOD) % MOD
+        odd_inv_prefix = odd_inv_prefix * inv_odd[layer] % MOD
+        cur_f = cur_f * mers_prefix % MOD * odd_inv_prefix % MOD
+        total = (total + cur_f) % MOD
+        layer = layer + 1
+    }
+
+    free(inv_odd)
+    printf("%lld\n", total)
     return 0
 }

@@ -1,15 +1,64 @@
 # Project Euler 770
 # Delphi Flip: g(1.9999), the smallest n where A guarantees at least 1.9999 g.
-#
-# Real solver in problems/native/p770.c (linked by scripts/run.sh).
-# The closed form needs a Stirling-series log comparison at n ~ 1.27e8,
-# which is cleaner in native C than in Flow.
+# F(n) = 2 / (1 + p_n), where p_n = C(2n,n) / 4^n.
+# Condition F(n) >= X is equivalent to p_n <= (2 - X) / X.
+# Uses lgamma for small n and Stirling series for huge n.
 
 extern {
-    function p770_native() -> i64
+    function log(x: f64) -> f64
+    function lgamma(x: f64) -> f64
+}
+
+const PI: f64 = 3.14159265358979323846
+
+# ln p_n via Stirling expansion for huge n:
+# ln p_n = -1/2 ln(pi n) - 1/(8n) + 1/(192 n^3) - 1/(640 n^5)
+function ln_p_stirling(n: f64) -> f64 {
+    let inv: f64 = 1.0 / n
+    let inv2: f64 = inv * inv
+    let inv3: f64 = inv2 * inv
+    let inv5: f64 = inv3 * inv2
+    return -0.5 * log(PI * n) - 0.125 * inv + (1.0 / 192.0) * inv3 - (1.0 / 640.0) * inv5
+}
+
+# ln(C(2n,n)/4^n) via lgamma. Fine for small n where no cancellation occurs.
+function ln_p_lgamma(n: i64) -> f64 {
+    let nf: f64 = n as f64
+    return lgamma(2.0 * nf + 1.0) - 2.0 * lgamma(nf + 1.0) - 2.0 * nf * log(2.0)
+}
+
+function g_for_fraction(x_num: i64, x_den: i64) -> i64 {
+    # r = (2 - X) / X = (2*x_den - x_num) / x_num
+    let r_num: i64 = 2 * x_den - x_num
+    let r_den: i64 = x_num
+
+    let r: f64 = (r_num as f64) / (r_den as f64)
+    let ln_r: f64 = log(r_num as f64) - log(r_den as f64)
+
+    # p_n ~ 1/sqrt(pi n)  =>  n ~ 1/(pi r^2)
+    let n_est: i64 = (1.0 / (PI * r * r)) as i64
+
+    if n_est < 20000 {
+        let mut n: i64 = 0
+        while ln_p_lgamma(n) > ln_r {
+            n = n + 1
+        }
+        return n
+    }
+
+    # Huge n: walk in log-space using the Stirling expansion.
+    let mut n: i64 = n_est - 10
+    if n < 1 { n = 1 }
+    while ln_p_stirling(n as f64) > ln_r {
+        n = n + 1
+    }
+    while n > 1 && ln_p_stirling((n - 1) as f64) <= ln_r {
+        n = n - 1
+    }
+    return n
 }
 
 function main() -> i32 {
-    printf("%lld\n", p770_native())
+    printf("%lld\n", g_for_fraction(19999, 10000))
     return 0
 }

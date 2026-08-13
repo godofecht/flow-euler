@@ -1,11 +1,104 @@
 # Project Euler 800
-# Hybrid Integers — C(800800,800800).
+# Hybrid Integers: C(800800, 800800).
+# Count pairs of primes p < q with p^q * q^p <= 800800^800800.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log10(x: f64) -> f64
+    function fabs(x: f64) -> f64
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let a: i64 = 800800
+    let b: i64 = 800800
+    let limit: f64 = log10(a as f64) * (b as f64)
+    let maxn: i64 = (limit / log10(2.0)) as i64 + 10000
+    let comp: ptr<i8> = calloc(maxn + 1, 1)
+    let mut i: i64 = 2
+    while i * i <= maxn {
+        if comp[i] == 0 {
+            let mut j: i64 = i * i
+            while j <= maxn {
+                comp[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let primes: ptr<i32> = malloc((maxn / 10) * 4)
+    let mut pc: i64 = 0
+    for x in 2..(maxn + 1) {
+        if comp[x] == 0 {
+            primes[pc] = x as i32
+            pc = pc + 1
+        }
+    }
+    let pp: ptr<i32> = malloc((maxn + 2) * 4)
+    let mut p_index: i64 = 0
+    for x in 1..(maxn + 1) {
+        while p_index < pc && (primes[p_index] as i64) <= x {
+            p_index = p_index + 1
+        }
+        pp[x] = p_index as i32
+    }
+
+    let mut count: i64 = 0
+    for pi in 0..pc {
+        let p: i64 = primes[pi] as i64
+        let p_log: f64 = log10(p as f64)
+        if 2.0 * (p as f64) * p_log > limit {
+            break
+        }
+        let mut lo: i64 = if pi + 1 < pc { primes[pi + 1] as i64 } else { p + 1 }
+        while lo <= maxn && comp[lo] != 0 {
+            lo = lo + 1
+        }
+        let mut hi: i64 = (limit / p_log) as i64
+        if hi > maxn {
+            hi = maxn
+        }
+        while lo < hi {
+            let q: i64 = (lo + hi) / 2
+            let q_log: f64 = log10(q as f64)
+            if (p as f64) * q_log + (q as f64) * p_log > limit {
+                hi = q
+            } else {
+                lo = q + 1
+            }
+        }
+        let mut q: i64 = lo
+        if q > maxn || comp[q] != 0 {
+            while q <= maxn && comp[q] != 0 {
+                q = q + 1
+            }
+            if q > maxn {
+                break
+            }
+        }
+        let q_log: f64 = log10(q as f64)
+        let val: f64 = (p as f64) * q_log + (q as f64) * p_log
+        if fabs(val - limit) < 1e-9 {
+            count = count + (pp[q] as i64) - (pp[p] as i64)
+        } else {
+            if val > limit {
+                count = count + (pp[q] as i64) - (pp[p] as i64) - 1
+            } else {
+                q = q + 1
+                while q <= maxn && comp[q] != 0 {
+                    q = q + 1
+                }
+                if q > maxn {
+                    break
+                }
+                count = count + (pp[q] as i64) - (pp[p] as i64) - 1
+            }
+        }
+    }
+    free(comp)
+    free(primes)
+    free(pp)
+    printf("%lld\n", count)
     return 0
 }

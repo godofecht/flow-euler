@@ -1,11 +1,98 @@
 # Project Euler 719
 # Number Splitting — T(10^12).
+# Ported from native C to pure Flow.
 
-extern {
-    function pe_solve() -> i64
+function digit_sum(n0: i64) -> i32 {
+    let mut n: i64 = n0
+    let mut s: i64 = 0
+    while n != 0 {
+        s = s + n % 10
+        n = n / 10
+    }
+    return s as i32
+}
+
+function dfs(num0: i64, target0: i64) -> i32 {
+    let mut num: i64 = num0
+    let mut target: i64 = target0
+    if target < 0 || target > num {
+        return 0
+    }
+    if num == target {
+        return 1
+    }
+    if num == 0 {
+        if target == 0 {
+            return 1
+        }
+        return 0
+    }
+    if (num - target) % 9 != 0 {
+        return 0
+    }
+    if target < 120 && (digit_sum(num) as i64) > target {
+        return 0
+    }
+    let mut pow10: i64 = 10
+    while pow10 <= num {
+        let suffix: i64 = num % pow10
+        if suffix > target {
+            break
+        }
+        let prefix: i64 = num / pow10
+        if prefix == 0 {
+            break
+        }
+        if dfs(prefix, target - suffix) == 1 {
+            return 1
+        }
+        pow10 = pow10 * 10
+    }
+    return 0
+}
+
+function is_s_root(root: i64) -> i32 {
+    let sq: i64 = root * root
+    if sq < 10 {
+        return 0
+    }
+    let mut pow10: i64 = 10
+    while pow10 <= sq {
+        let suffix: i64 = sq % pow10
+        if suffix > root {
+            break
+        }
+        let prefix: i64 = sq / pow10
+        if prefix == 0 {
+            break
+        }
+        if dfs(prefix, root - suffix) == 1 {
+            return 1
+        }
+        pow10 = pow10 * 10
+    }
+    return 0
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let limit: i64 = 1000000000000
+    let max_root: i64 = 1000000
+    let mut total: i64 = 0
+    for base in 0..2 {
+        let start: i64 = if base == 0 { 9 } else { 1 }
+        let mut r: i64 = start
+        while r <= max_root {
+            if r >= 4 {
+                let sq: i64 = r * r
+                if sq <= limit {
+                    if is_s_root(r) == 1 {
+                        total = total + sq
+                    }
+                }
+            }
+            r = r + 9
+        }
+    }
+    printf("%lld\n", total)
     return 0
 }

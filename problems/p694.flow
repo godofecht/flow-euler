@@ -1,11 +1,64 @@
 # Project Euler 694
 # Cube-full divisors: S(10^18) via DFS over p^3 | n cube-fulls.
+# Ported from native C to pure Flow.
 
 extern {
-    function pe694_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function cbrt(x: f64) -> f64
+}
+
+let mut N: i64 = 0
+let mut primes: ptr<i64> = null
+let mut pc: i64 = 0
+
+function generate(curr0: i64, idx: i64) -> i64 {
+    let mut total: i64 = 0
+    let p: i64 = primes[idx]
+    if curr0 > N / (p * p * p) {
+        return 0
+    }
+    let mut curr: i64 = curr0 * (p * p * p)
+    while curr <= N {
+        total = total + N / curr
+        for j in (idx + 1)..pc {
+            let t: i64 = generate(curr, j)
+            if t == 0 {
+                break
+            }
+            total = total + t
+        }
+        if curr > N / p {
+            break
+        }
+        curr = curr * p
+    }
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe694_answer())
+    N = 1000000000000000000
+    let lim: i64 = (cbrt(N as f64) + 2.0) as i64
+    let sieve: ptr<i8> = calloc(lim + 1, 1) as ptr<i8>
+    primes = calloc(lim, 8) as ptr<i64>
+    pc = 0
+    for i in 2..(lim + 1) {
+        if sieve[i] == 0 {
+            primes[pc] = i
+            pc = pc + 1
+            let mut j: i64 = i * i
+            while j <= lim {
+                sieve[j] = 1
+                j = j + i
+            }
+        }
+    }
+    let mut ans: i64 = N
+    for i in 0..pc {
+        ans = ans + generate(1, i)
+    }
+    free(sieve as ptr<void>)
+    free(primes as ptr<void>)
+    printf("%lld\n", ans)
     return 0
 }

@@ -1,11 +1,45 @@
 # Project Euler 731
-# Stoneham Number — 10 digits after 10^16-th place.
+# Stoneham Number: 10 digits after the 10^16-th place.
+# Sum of (10^(n-3^i-1) mod 3^i) / 3^i for i=1..limit, take fractional part.
 
 extern {
-    function pe_solve_print() -> void
+    function log(x: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+function modpow(b: i64, e: i64, m: i64) -> i64 {
+    let mut r: i64 = 1 % m
+    let mut bb: i64 = b % m
+    let mut ee: i64 = e
+    while ee > 0 {
+        if (ee & 1) == 1 {
+            r = ((r as i128) * (bb as i128) % (m as i128)) as i64
+        }
+        bb = ((bb as i128) * (bb as i128) % (m as i128)) as i64
+        ee = ee >> 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    pe_solve_print()
+    let n: i64 = 10000000000000000
+    let limit: i64 = (log(n as f64) / log(3.0)) as i64
+    let mut total: f64 = 0.0
+    let mut i: i64 = 1
+    while i <= limit {
+        let mut div: i64 = 1
+        let mut j: i64 = 0
+        while j < i {
+            div = div * 3
+            j = j + 1
+        }
+        let exp: i64 = n - div - 1
+        let temp: i64 = modpow(10, exp, div)
+        total = total + (temp as f64) / (div as f64)
+        i = i + 1
+    }
+    let frac: f64 = total - floor(total)
+    let digits: i64 = (frac * 10000000000.0) as i64
+    printf("%010lld\n", digits)
     return 0
 }

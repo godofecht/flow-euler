@@ -1,12 +1,77 @@
 # Project Euler 959
 # Asymmetric Random Walk: f(89, 97).
-# Real solver in problems/native/p959.c (linked by scripts/run.sh).
+# f(a,b) = 1/G where G = sum_{k>=0} C((a+b)k, ak) / 2^{(a+b)k},
+# computed in log space via lgamma.
 
 extern {
-    function p959_native() -> f64
+    function lgamma(x: f64) -> f64
+    function log(x: f64) -> f64
+    function exp(x: f64) -> f64
+}
+
+function gcd_l(x: i64, y: i64) -> i64 {
+    let mut a: i64 = x
+    let mut b: i64 = y
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    if a < 0 {
+        return -a
+    }
+    return a
+}
+
+function f_ab(a0: i64, b0: i64) -> f64 {
+    let g: i64 = gcd_l(a0, b0)
+    let mut a: i64 = a0 / g
+    let mut b: i64 = b0 / g
+
+    if a == b {
+        return 0.0
+    }
+    if a > b {
+        let t: i64 = a
+        a = b
+        b = t
+    }
+
+    let m: i64 = a + b
+    let log2: f64 = log(2.0)
+
+    let mut S: f64 = 0.0
+    let mut k: i64 = 0
+    while true {
+        let mk: i64 = m * k
+        let ak: i64 = a * k
+        let bk: i64 = b * k
+
+        let log_t: f64 = lgamma((mk + 1) as f64)
+                     - lgamma((ak + 1) as f64)
+                     - lgamma((bk + 1) as f64)
+                     - (mk as f64) * log2
+
+        if log_t < -700.0 {
+            break
+        }
+
+        let t: f64 = exp(log_t)
+        S = S + t
+
+        if t < 1e-17 * S {
+            break
+        }
+        k = k + 1
+        if k > 200000 {
+            break
+        }
+    }
+
+    return 1.0 / S
 }
 
 function main() -> i32 {
-    printf("%.9f\n", p959_native())
+    printf("%.9f\n", f_ab(89, 97))
     return 0
 }

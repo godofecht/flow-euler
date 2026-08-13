@@ -1,8 +1,131 @@
+# Project Euler 874
+# Maximal Prime Score
+# M(k, n): choose a_i in [0, k) with sum(a_i) divisible by k, maximize sum(p(a_i)).
+# Strategy: start from all a_i = k-1, find minimal reduction r = (-n) % k,
+# then minimize prime-score loss via unbounded knapsack.
+
 extern {
-    function p874_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function log(x: f64) -> f64
+}
+
+function first_n_primes(n: i64) -> ptr<i32> {
+    if n <= 0 { return null }
+    let mut limit: i64 = 0
+    if n < 6 {
+        limit = 15
+    } else {
+        let nn: f64 = n as f64
+        limit = (nn * (log(nn) + log(log(nn))) + 10.0) as i64
+    }
+
+    let mut found: bool = false
+    let mut primes: ptr<i32> = null
+    while !found {
+        let sieve: ptr<i8> = malloc(limit + 1)
+        memset(sieve, 1, limit + 1)
+        sieve[0] = 0
+        sieve[1] = 0
+        let mut i: i64 = 2
+        while i * i <= limit {
+            if sieve[i] != 0 {
+                let mut j: i64 = i * i
+                while j <= limit {
+                    sieve[j] = 0
+                    j = j + i
+                }
+            }
+            i = i + 1
+        }
+        let mut count: i64 = 0
+        i = 2
+        while i <= limit {
+            if sieve[i] != 0 { count = count + 1 }
+            i = i + 1
+        }
+        if count >= n {
+            primes = malloc(n * 4)
+            let mut idx: i64 = 0
+            i = 2
+            while i <= limit && idx < n {
+                if sieve[i] != 0 {
+                    primes[idx] = i as i32
+                    idx = idx + 1
+                }
+                i = i + 1
+            }
+            free(sieve)
+            found = true
+        } else {
+            free(sieve)
+            limit = limit * 2
+        }
+    }
+    return primes
+}
+
+function min_prime_loss(primes: ptr<i32>, k: i64, reduction: i64) -> i64 {
+    if reduction == 0 { return 0 }
+    let m: i64 = k - 1
+    let top: i64 = primes[m] as i64
+
+    # loss[d] = top - primes[m - d] for d = 1..reduction
+    let loss: ptr<i64> = malloc((reduction + 1) * 8)
+    let mut d: i64 = 1
+    while d <= reduction {
+        loss[d] = top - (primes[m - d] as i64)
+        d = d + 1
+    }
+
+    # dp[s] = minimal loss to achieve sum s
+    let INF: i64 = 1000000000000000000
+    let dp: ptr<i64> = malloc((reduction + 1) * 8)
+    dp[0] = 0
+    let mut s: i64 = 1
+    while s <= reduction {
+        dp[s] = INF
+        s = s + 1
+    }
+
+    d = 1
+    while d <= reduction {
+        let c: i64 = loss[d]
+        s = d
+        while s <= reduction {
+            let cand: i64 = dp[s - d] + c
+            if cand < dp[s] {
+                dp[s] = cand
+            }
+            s = s + 1
+        }
+        d = d + 1
+    }
+
+    let result: i64 = dp[reduction]
+    free(loss)
+    free(dp)
+    return result
+}
+
+function maximal_prime_score(k: i64, n: i64, primes: ptr<i32>) -> i64 {
+    if k == 1 { return n * 2 }
+    let top: i64 = primes[k - 1] as i64
+    # r = ((-n) % k + k) % k
+    let mut r: i64 = (0 - n) % k
+    if r < 0 { r = r + k }
+    let loss: i64 = min_prime_loss(primes, k, r)
+    return n * top - loss
 }
 
 function main() -> i32 {
-    printf("%lld\n", p874_native())
+    let k: i64 = 7000
+    let primes_7001: ptr<i32> = first_n_primes(k + 1)
+    let n: i64 = primes_7001[k] as i64
+    let ans: i64 = maximal_prime_score(k, n, primes_7001)
+    printf("%lld\n", ans)
+    free(primes_7001)
     return 0
 }

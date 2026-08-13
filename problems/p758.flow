@@ -2,13 +2,173 @@
 # Buckets of Water: sum over prime pairs p<q<1000 of the minimal pour
 # count P(2^{p^5}-1, 2^{q^5}-1), modulo 1e9+7.
 #
-# The native helper does the heavy modular continued-fraction work.
+# P(a,b) = 2*(pen_p + pen_q) - 2 where pen_p/pen_q is the penultimate
+# convergent of b/a.  For Mersenne arguments the Euclidean step reduces
+# to Euclid on the exponents, so CF terms are computed mod MOD.
 
-extern {
-    function p758_native() -> i64
+import euler.nt { mod_pow }
+
+const MOD: i64 = 1000000007
+
+function mulmod(a0: i64, b0: i64) -> i64 {
+    let a: i64 = a0 % MOD
+    let b: i64 = b0 % MOD
+    return a * b % MOD
+}
+
+function invmod(a: i64) -> i64 {
+    return mod_pow(a % MOD, MOD - 2, MOD)
+}
+
+# S = 1 + ratio + ... + ratio^(m-1) (mod MOD), m >= 1.
+function geom_sum_ratio(ratio0: i64, m: i64) -> i64 {
+    if m <= 0 {
+        return 0
+    }
+    let mut ratio: i64 = ratio0 % MOD
+    if ratio < 0 {
+        ratio = ratio + MOD
+    }
+    if ratio == 1 {
+        return m % MOD
+    }
+    let rm: i64 = mod_pow(ratio, m, MOD)
+    let mut num: i64 = (rm - 1) % MOD
+    if num < 0 {
+        num = num + MOD
+    }
+    return mulmod(num, invmod(ratio - 1))
+}
+
+# Continued-fraction terms of (2^e_large - 1)/(2^e_small - 1), each mod MOD.
+# Writes into terms[] and returns the count.
+function cf_terms_mersenne(e_small: i64, e_large: i64, terms: ptr<i64>, cap: i32) -> i32 {
+    let mut n: i32 = 0
+    let mut hi: i64 = e_large
+    let mut lo: i64 = e_small
+    while true {
+        let m: i64 = hi / lo
+        let r: i64 = hi % lo
+        let ratio: i64 = mod_pow(2, lo, MOD)
+        let shift: i64 = mod_pow(2, r, MOD)
+        let series: i64 = geom_sum_ratio(ratio, m)
+        let q_mod: i64 = mulmod(shift, series)
+        terms[n] = q_mod
+        n = n + 1
+        if r == 0 {
+            break
+        }
+        hi = lo
+        lo = r
+    }
+    return n
+}
+
+# Penultimate convergent (p, q) of the CF with the given terms, mod MOD.
+function pen_p(terms: ptr<i64>, n: i32) -> i64 {
+    let mut p_m2: i64 = 0
+    let mut p_m1: i64 = 1
+    let mut last_p: i64 = 0
+    let mut prev_p: i64 = 0
+    for i in 0..n {
+        let a: i64 = terms[i]
+        let p: i64 = (mulmod(a, p_m1) + p_m2) % MOD
+        prev_p = last_p
+        last_p = p
+        p_m2 = p_m1
+        p_m1 = p
+    }
+    if n == 1 {
+        return last_p
+    }
+    return prev_p
+}
+
+function pen_q(terms: ptr<i64>, n: i32) -> i64 {
+    let mut q_m2: i64 = 1
+    let mut q_m1: i64 = 0
+    let mut last_q: i64 = 0
+    let mut prev_q: i64 = 0
+    for i in 0..n {
+        let a: i64 = terms[i]
+        let q: i64 = (mulmod(a, q_m1) + q_m2) % MOD
+        prev_q = last_q
+        last_q = q
+        q_m2 = q_m1
+        q_m1 = q
+    }
+    if n == 1 {
+        return last_q
+    }
+    return prev_q
+}
+
+function P_mersenne_exponents(ea: i64, eb: i64, terms: ptr<i64>) -> i64 {
+    let n: i32 = cf_terms_mersenne(ea, eb, terms, 256)
+    let p: i64 = pen_p(terms, n)
+    let q: i64 = pen_q(terms, n)
+    let s: i64 = (p + q) % MOD
+    let mut result: i64 = (2 * s - 2) % MOD
+    if result < 0 {
+        result = result + MOD
+    }
+    return result
+}
+
+function primes_below(n: i32, out: ptr<i32>) -> i32 {
+    let sieve: ptr<i8> = calloc((n as i64), 1)
+    for i in 0..n {
+        sieve[i] = 1
+    }
+    let mut p: i32 = 2
+    while (p as i64) * (p as i64) < (n as i64) {
+        if sieve[p] != 0 {
+            let mut k: i32 = p * p
+            while k < n {
+                sieve[k] = 0
+                k = k + p
+            }
+        }
+        p = p + 1
+    }
+    let mut count: i32 = 0
+    for i in 0..n {
+        if i >= 2 {
+            if sieve[i] != 0 {
+                out[count] = i
+                count = count + 1
+            }
+        }
+    }
+    free(sieve)
+    return count
 }
 
 function main() -> i32 {
-    printf("%lld\n", p758_native())
+    let primes: ptr<i32> = calloc(1000, 4)
+    let np: i32 = primes_below(1000, primes)
+
+    let exps: ptr<i64> = calloc(1000, 8)
+    for i in 0..np {
+        let p: i64 = (primes[i] as i64)
+        let e: i64 = p * p * p * p * p
+        exps[i] = e
+    }
+
+    let terms: ptr<i64> = calloc(256, 8)
+
+    let mut total: i64 = 0
+    for i in 0..np {
+        for j in 0..np {
+            if j > i {
+                total = (total + P_mersenne_exponents(exps[i], exps[j], terms)) % MOD
+            }
+        }
+    }
+
+    printf("%lld\n", total)
+    free(primes)
+    free(exps)
+    free(terms)
     return 0
 }

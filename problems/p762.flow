@@ -1,11 +1,217 @@
 # Project Euler 762
-# Amoebas — C(100000) last nine digits.
+# Amoebas - C(100000) last nine digits.
+# Uses state DP with 35 states (4-tuples summing to <= 3),
+# transition weights, and layer rotation.
 
 extern {
-    function pe_solve_print() -> void
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+const MAXSTATES: i32 = 70
+const MAXTRANS: i32 = 16
+
+function pop4(m: i32) -> i32 {
+    return (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1)
 }
 
 function main() -> i32 {
-    pe_solve_print()
+    let states: ptr<i32> = calloc((MAXSTATES as i64) * 4, 4)
+    let idx: ptr<i32> = calloc(256, 4)
+    let to_nt_v: ptr<i32> = calloc((MAXSTATES as i64) * (MAXTRANS as i64), 4)
+    let to_nt_w: ptr<i32> = calloc((MAXSTATES as i64) * (MAXTRANS as i64), 4)
+    let to_nt_n: ptr<i32> = calloc(MAXSTATES as i64, 4)
+    let to_t_w: ptr<i32> = calloc((MAXSTATES as i64) * (MAXTRANS as i64), 4)
+    let to_t_n: ptr<i32> = calloc(MAXSTATES as i64, 4)
+    let order: ptr<i32> = calloc(MAXSTATES as i64, 4)
+    if states == null || idx == null || to_nt_v == null || to_nt_w == null
+        || to_nt_n == null || to_t_w == null || to_t_n == null || order == null {
+        return 1
+    }
+
+    # Initialize idx to -1
+    let mut ii: i32 = 0
+    while ii < 256 {
+        idx[ii] = -1
+        ii = ii + 1
+    }
+
+    # Enumerate states
+    let mut S: i32 = 0
+    let mut a0: i32 = 0
+    while a0 < 4 {
+        let mut a1: i32 = 0
+        while a1 < 4 - a0 {
+            let mut a2: i32 = 0
+            while a2 < 4 - a0 - a1 {
+                let mut a3: i32 = 0
+                while a3 < 4 - a0 - a1 - a2 {
+                    states[S * 4 + 0] = a0
+                    states[S * 4 + 1] = a1
+                    states[S * 4 + 2] = a2
+                    states[S * 4 + 3] = a3
+                    idx[a0 * 64 + a1 * 16 + a2 * 4 + a3] = S
+                    S = S + 1
+                    a3 = a3 + 1
+                }
+                a2 = a2 + 1
+            }
+            a1 = a1 + 1
+        }
+        a0 = a0 + 1
+    }
+
+    let terminal: i32 = idx[0 * 64 + 0 * 16 + 0 * 4 + 0]
+
+    # Compute transitions
+    let mut u: i32 = 0
+    while u < S {
+        if u == terminal {
+            u = u + 1
+            continue
+        }
+        let s0: i32 = states[u * 4 + 0]
+        let s1: i32 = states[u * 4 + 1]
+        let s2: i32 = states[u * 4 + 2]
+        let s3: i32 = states[u * 4 + 3]
+        let t0: i32 = s0 + s3
+        let t1: i32 = s1 + s0
+        let t2: i32 = s2 + s1
+        let t3: i32 = s3 + s2
+        let mut mask: i32 = 0
+        while mask < 16 {
+            let b0: i32 = mask & 1
+            let b1: i32 = (mask >> 1) & 1
+            let b2: i32 = (mask >> 2) & 1
+            let b3: i32 = (mask >> 3) & 1
+            let n0: i32 = t0 - b0
+            let n1: i32 = t1 - b1
+            let n2: i32 = t2 - b2
+            let n3: i32 = t3 - b3
+            if n0 < 0 || n1 < 0 || n2 < 0 || n3 < 0 || n0 > 3 || n1 > 3 || n2 > 3 || n3 > 3 {
+                mask = mask + 1
+                continue
+            }
+            if n0 + n1 + n2 + n3 > 3 {
+                mask = mask + 1
+                continue
+            }
+            let v: i32 = idx[n0 * 64 + n1 * 16 + n2 * 4 + n3]
+            if v < 0 {
+                mask = mask + 1
+                continue
+            }
+            let w: i32 = pop4(mask)
+            if v == terminal {
+                to_t_w[u * MAXTRANS + to_t_n[u]] = w
+                to_t_n[u] = to_t_n[u] + 1
+            } else {
+                to_nt_v[u * MAXTRANS + to_nt_n[u]] = v
+                to_nt_w[u * MAXTRANS + to_nt_n[u]] = w
+                to_nt_n[u] = to_nt_n[u] + 1
+            }
+            mask = mask + 1
+        }
+        u = u + 1
+    }
+
+    # Sort states by sum (descending)
+    let mut i: i32 = 0
+    while i < S {
+        order[i] = i
+        i = i + 1
+    }
+    i = 0
+    while i < S {
+        let mut j: i32 = i + 1
+        while j < S {
+            let si: i32 = states[order[i] * 4 + 0] + states[order[i] * 4 + 1]
+                + states[order[i] * 4 + 2] + states[order[i] * 4 + 3]
+            let sj: i32 = states[order[j] * 4 + 0] + states[order[j] * 4 + 1]
+                + states[order[j] * 4 + 2] + states[order[j] * 4 + 3]
+            if sj < si {
+                let tmp: i32 = order[i]
+                order[i] = order[j]
+                order[j] = tmp
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    # DP over layers
+    let max_n: i32 = 100000
+    let mmax: i32 = max_n + 1
+    let end_arr: ptr<i64> = calloc((mmax + 1) as i64, 8)
+    if end_arr == null { return 1 }
+
+    let mut L0: ptr<i64> = calloc(S as i64, 8)
+    let mut L1: ptr<i64> = calloc(S as i64, 8)
+    let mut L2: ptr<i64> = calloc(S as i64, 8)
+    let mut L3: ptr<i64> = calloc(S as i64, 8)
+    let mut L4: ptr<i64> = calloc(S as i64, 8)
+    if L0 == null || L1 == null || L2 == null || L3 == null || L4 == null { return 1 }
+
+    let start: i32 = idx[1 * 64 + 0 * 16 + 0 * 4 + 0]
+    L0[start] = 1
+
+    let mut m: i32 = 0
+    while m <= mmax {
+        let cur: ptr<i64> = L0
+        let mut oi: i32 = 0
+        while oi < S {
+            let uu: i32 = order[oi]
+            let val: i64 = cur[uu]
+            if val == 0 {
+                oi = oi + 1
+                continue
+            }
+            # Terminal transitions
+            let mut ti: i32 = 0
+            while ti < to_t_n[uu] {
+                let nm: i32 = m + to_t_w[uu * MAXTRANS + ti]
+                if nm <= mmax {
+                    end_arr[nm] = (end_arr[nm] + val) % MOD
+                }
+                ti = ti + 1
+            }
+            # Non-terminal transitions
+            let mut ni: i32 = 0
+            while ni < to_nt_n[uu] {
+                let v: i32 = to_nt_v[uu * MAXTRANS + ni]
+                let w: i32 = to_nt_w[uu * MAXTRANS + ni]
+                let nm: i32 = m + w
+                if nm > mmax {
+                    ni = ni + 1
+                    continue
+                }
+                if w == 0 {
+                    cur[v] = (cur[v] + val) % MOD
+                } else {
+                    if w == 1 { L1[v] = (L1[v] + val) % MOD }
+                    if w == 2 { L2[v] = (L2[v] + val) % MOD }
+                    if w == 3 { L3[v] = (L3[v] + val) % MOD }
+                    if w == 4 { L4[v] = (L4[v] + val) % MOD }
+                }
+                ni = ni + 1
+            }
+            oi = oi + 1
+        }
+        free(L0)
+        L0 = L1
+        L1 = L2
+        L2 = L3
+        L3 = L4
+        L4 = calloc(S as i64, 8)
+        if L4 == null { return 1 }
+        m = m + 1
+    }
+
+    printf("%09lld\n", end_arr[max_n + 1] % MOD)
+
+    free(states); free(idx); free(to_nt_v); free(to_nt_w); free(to_nt_n)
+    free(to_t_w); free(to_t_n); free(order); free(end_arr)
+    free(L4)
     return 0
 }

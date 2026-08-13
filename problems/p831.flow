@@ -1,11 +1,273 @@
 # Project Euler 831
-# Triple Product — first 10 base-7 digits of g(142857).
+# Triple Product - first 10 base-7 digits of g(142857).
+# Uses bignum arithmetic implemented in pure Flow for polynomial
+# multiplication and exponentiation with large coefficients.
 
 extern {
-    function pe_solve_print() -> void
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const CAP: i32 = 25000
+const DEG: i32 = 5
+const BASE: i64 = 1000000000
+
+# Set coefficient k to small int value
+function coeff_set_int(digits: ptr<i32>, lengths: ptr<i32>, k: i32, val: i32) -> void {
+    if val == 0 {
+        lengths[k] = 0
+        return
+    }
+    digits[k * CAP] = val
+    lengths[k] = 1
+}
+
+# Copy coefficient sk from src to dk in dst
+function coeff_copy(dd: ptr<i32>, dlen: ptr<i32>, dk: i32,
+                    sd: ptr<i32>, slen: ptr<i32>, sk: i32) -> void {
+    let mut i: i32 = 0
+    while i < slen[sk] {
+        dd[dk * CAP + i] = sd[sk * CAP + i]
+        i = i + 1
+    }
+    dlen[dk] = slen[sk]
+}
+
+# dst[dk] = a[ak] + b[bk], dst can alias a
+function coeff_add(dd: ptr<i32>, dlen: ptr<i32>, dk: i32,
+                   ad: ptr<i32>, alen: ptr<i32>, ak: i32,
+                   bd: ptr<i32>, blen: ptr<i32>, bk: i32) -> void {
+    let mut n: i32 = alen[ak]
+    if blen[bk] > n { n = blen[bk] }
+    let mut carry: i64 = 0
+    let mut i: i32 = 0
+    while i < n {
+        let mut s: i64 = carry
+        if i < alen[ak] { s = s + (ad[ak * CAP + i] as i64) }
+        if i < blen[bk] { s = s + (bd[bk * CAP + i] as i64) }
+        dd[dk * CAP + i] = (s % BASE) as i32
+        carry = s / BASE
+        i = i + 1
+    }
+    if carry > 0 {
+        dd[dk * CAP + i] = (carry) as i32
+        i = i + 1
+    }
+    dlen[dk] = i
+}
+
+# dst[dk] = a[ak] * b[bk], dst must not alias a or b
+function coeff_mul(dd: ptr<i32>, dlen: ptr<i32>, dk: i32,
+                   ad: ptr<i32>, alen: ptr<i32>, ak: i32,
+                   bd: ptr<i32>, blen: ptr<i32>, bk: i32) -> void {
+    let alen_v: i32 = alen[ak]
+    let blen_v: i32 = blen[bk]
+    if alen_v == 0 || blen_v == 0 {
+        dlen[dk] = 0
+        return
+    }
+    let total: i32 = alen_v + blen_v
+    let mut i: i32 = 0
+    while i < total {
+        dd[dk * CAP + i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i < alen_v {
+        let mut carry: i64 = 0
+        let mut j: i32 = 0
+        while j < blen_v {
+            let prod: i64 = (ad[ak * CAP + i] as i64) * (bd[bk * CAP + j] as i64)
+                + (dd[dk * CAP + i + j] as i64) + carry
+            dd[dk * CAP + i + j] = (prod % BASE) as i32
+            carry = prod / BASE
+            j = j + 1
+        }
+        let mut pos: i32 = i + blen_v
+        while carry > 0 {
+            let val: i64 = (dd[dk * CAP + pos] as i64) + carry
+            dd[dk * CAP + pos] = (val % BASE) as i32
+            carry = val / BASE
+            pos = pos + 1
+        }
+        i = i + 1
+    }
+    dlen[dk] = total
+    while dlen[dk] > 0 && dd[dk * CAP + dlen[dk] - 1] == 0 {
+        dlen[dk] = dlen[dk] - 1
+    }
+}
+
+# b[bk] = b[bk] / divisor, return remainder
+function coeff_divmod_small(bd: ptr<i32>, blen: ptr<i32>, bk: i32, divisor: i32) -> i32 {
+    let mut rem: i64 = 0
+    let mut i: i32 = blen[bk] - 1
+    while i >= 0 {
+        let cur: i64 = rem * BASE + (bd[bk * CAP + i] as i64)
+        bd[bk * CAP + i] = (cur / (divisor as i64)) as i32
+        rem = cur % (divisor as i64)
+        i = i - 1
+    }
+    while blen[bk] > 0 && bd[bk * CAP + blen[bk] - 1] == 0 {
+        blen[bk] = blen[bk] - 1
+    }
+    return (rem) as i32
+}
+
+# Check if coefficient k is nonzero
+function coeff_nonzero(bd: ptr<i32>, blen: ptr<i32>, bk: i32) -> bool {
+    return blen[bk] != 0
+}
+
+# Copy entire polynomial (6 coefficients)
+function poly_copy(dd: ptr<i32>, dlen: ptr<i32>, sd: ptr<i32>, slen: ptr<i32>) -> void {
+    let mut k: i32 = 0
+    while k <= DEG {
+        coeff_copy(dd, dlen, k, sd, slen, k)
+        k = k + 1
+    }
+}
+
+# poly_mul: dd = ad * bd (truncated to degree DEG)
+# td is a temporary with at least 1 coefficient slot
+function poly_mul(dd: ptr<i32>, dlen: ptr<i32>,
+                  ad: ptr<i32>, alen: ptr<i32>,
+                  bd: ptr<i32>, blen: ptr<i32>,
+                  td: ptr<i32>, tlen: ptr<i32>) -> void {
+    let mut k: i32 = 0
+    while k <= DEG {
+        dlen[k] = 0
+        k = k + 1
+    }
+    k = 0
+    while k <= DEG {
+        let mut i: i32 = 0
+        while i <= k {
+            let j: i32 = k - i
+            if i <= DEG && j <= DEG {
+                coeff_mul(td, tlen, 0, ad, alen, i, bd, blen, j)
+                coeff_add(dd, dlen, k, dd, dlen, k, td, tlen, 0)
+            }
+            i = i + 1
+        }
+        k = k + 1
+    }
+}
+
+# poly_pow: rd = qd^exp (truncated to degree DEG)
+# bd: base buffer, td1: temp output, td2: internal temp
+function poly_pow(rd: ptr<i32>, rlen: ptr<i32>, qd: ptr<i32>, qlen: ptr<i32>,
+                  exp0: i32, bd: ptr<i32>, blen: ptr<i32>,
+                  td1: ptr<i32>, tlen1: ptr<i32>,
+                  td2: ptr<i32>, tlen2: ptr<i32>) -> void {
+    coeff_set_int(rd, rlen, 0, 1)
+    let mut k: i32 = 1
+    while k <= DEG {
+        coeff_set_int(rd, rlen, k, 0)
+        k = k + 1
+    }
+    poly_copy(bd, blen, qd, qlen)
+    let mut e: i32 = exp0
+    while e > 0 {
+        if (e & 1) != 0 {
+            poly_mul(td1, tlen1, rd, rlen, bd, blen, td2, tlen2)
+            poly_copy(rd, rlen, td1, tlen1)
+        }
+        e = e >> 1
+        if e > 0 {
+            poly_mul(td1, tlen1, bd, blen, bd, blen, td2, tlen2)
+            poly_copy(bd, blen, td1, tlen1)
+        }
+    }
 }
 
 function main() -> i32 {
-    pe_solve_print()
+    let m: i32 = 142857
+    let six_cap: i64 = (6 * CAP) as i64
+
+    let qd: ptr<i32> = calloc(six_cap, 4)
+    let qlen: ptr<i32> = calloc(6, 4)
+    let ad: ptr<i32> = calloc(six_cap, 4)
+    let alen: ptr<i32> = calloc(6, 4)
+    let qmd: ptr<i32> = calloc(six_cap, 4)
+    let qmlen: ptr<i32> = calloc(6, 4)
+    let aqmd: ptr<i32> = calloc(six_cap, 4)
+    let aqmlen: ptr<i32> = calloc(6, 4)
+    let bd: ptr<i32> = calloc(six_cap, 4)
+    let blen: ptr<i32> = calloc(6, 4)
+    let td1: ptr<i32> = calloc(six_cap, 4)
+    let tlen1: ptr<i32> = calloc(6, 4)
+    let td2: ptr<i32> = calloc((CAP) as i64, 4)
+    let tlen2: ptr<i32> = calloc(1, 4)
+
+    if qd == null || qlen == null || ad == null || alen == null
+        || qmd == null || qmlen == null || aqmd == null || aqmlen == null
+        || bd == null || blen == null || td1 == null || tlen1 == null
+        || td2 == null || tlen2 == null { return 1 }
+
+    # Q = [1, 3, 5, 5, 3, 1]
+    coeff_set_int(qd, qlen, 0, 1)
+    coeff_set_int(qd, qlen, 1, 3)
+    coeff_set_int(qd, qlen, 2, 5)
+    coeff_set_int(qd, qlen, 3, 5)
+    coeff_set_int(qd, qlen, 4, 3)
+    coeff_set_int(qd, qlen, 5, 1)
+
+    # A = [1, 5, 10, 10, 5, 1]
+    coeff_set_int(ad, alen, 0, 1)
+    coeff_set_int(ad, alen, 1, 5)
+    coeff_set_int(ad, alen, 2, 10)
+    coeff_set_int(ad, alen, 3, 10)
+    coeff_set_int(ad, alen, 4, 5)
+    coeff_set_int(ad, alen, 5, 1)
+
+    # Qm = Q^m
+    poly_pow(qmd, qmlen, qd, qlen, m, bd, blen, td1, tlen1, td2, tlen2)
+
+    # AQm = A * Qm
+    poly_mul(aqmd, aqmlen, ad, alen, qmd, qmlen, td2, tlen2)
+
+    # Extract AQm[5] and convert to base 7
+    let cd: ptr<i32> = calloc((CAP) as i64, 4)
+    let clen: ptr<i32> = calloc(1, 4)
+    if cd == null || clen == null { return 1 }
+    coeff_copy(cd, clen, 0, aqmd, aqmlen, 5)
+
+    if coeff_nonzero(cd, clen, 0) == false {
+        printf("0000000000\n")
+        free(qd); free(qlen); free(ad); free(alen)
+        free(qmd); free(qmlen); free(aqmd); free(aqmlen)
+        free(bd); free(blen); free(td1); free(tlen1)
+        free(td2); free(tlen2); free(cd); free(clen)
+        return 0
+    }
+
+    # Convert to base 7
+    let digits7: ptr<i32> = calloc(250000, 4)
+    if digits7 == null { return 1 }
+    let mut n7: i32 = 0
+    while coeff_nonzero(cd, clen, 0) {
+        digits7[n7] = coeff_divmod_small(cd, clen, 0, 7)
+        n7 = n7 + 1
+    }
+
+    # Print first 10 digits (most significant first)
+    let mut o: i32 = 0
+    let mut i: i32 = n7 - 1
+    while i >= 0 && o < 10 {
+        printf("%lld", (digits7[i] as i64))
+        o = o + 1
+        i = i - 1
+    }
+    while o < 10 {
+        printf("0")
+        o = o + 1
+    }
+    printf("\n")
+
+    free(qd); free(qlen); free(ad); free(alen)
+    free(qmd); free(qmlen); free(aqmd); free(aqmlen)
+    free(bd); free(blen); free(td1); free(tlen1)
+    free(td2); free(tlen2); free(cd); free(clen); free(digits7)
     return 0
 }

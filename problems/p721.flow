@@ -1,11 +1,73 @@
 # Project Euler 721
-# High Powers of Irrational Numbers — G(5e6).
+# High Powers of Irrational Numbers: G(5e6) mod 999999937.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+const MOD: i64 = 999999937
+
+function clz64(n: i64) -> i32 {
+    if n == 0 { return 64 }
+    let mut count: i32 = 0
+    let mut x: i64 = n
+    if (x >> 32) == 0 { count = count + 32; x = x << 32 }
+    if (x >> 48) == 0 { count = count + 16; x = x << 16 }
+    if (x >> 56) == 0 { count = count + 8; x = x << 8 }
+    if (x >> 60) == 0 { count = count + 4; x = x << 4 }
+    if (x >> 62) == 0 { count = count + 2; x = x << 2 }
+    if (x >> 63) == 0 { count = count + 1 }
+    return count
+}
+
+function bin_exp(x: i64, a: i64, n: i64, out: ptr<i64>) -> void {
+    let mut A: i64 = x
+    let mut B: i64 = 1
+    let msb: i32 = 63 - clz64(n)
+    let mut i: i32 = msb - 1
+    while i >= 0 {
+        let na: i64 = (A * A + a % MOD * (B % MOD) % MOD * (B % MOD)) % MOD
+        let nb: i64 = (2 * A % MOD * B) % MOD
+        A = na
+        B = nb
+        if (n >> i) % 2 == 1 {
+            na = (x % MOD * A + a % MOD * B) % MOD
+            nb = (A + x % MOD * B) % MOD
+            A = na
+            B = nb
+        }
+        i = i - 1
+    }
+    out[0] = A
+    out[1] = B
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let n: i64 = 5000000
+    let mut total: i64 = 0
+    let out: ptr<i64> = calloc(2, 8)
+    let mut a: i64 = 1
+    while a <= n {
+        let mut ca: i64 = sqrt(a as f64) as i64
+        while (ca + 1) * (ca + 1) <= a {
+            ca = ca + 1
+        }
+        while ca * ca > a {
+            ca = ca - 1
+        }
+        if ca * ca == a {
+            bin_exp(ca, a, a * a, out)
+            total = total + 2 * out[0]
+        } else {
+            bin_exp(ca + 1, a, a * a, out)
+            total = total + 2 * out[0] - 1
+        }
+        total = total % MOD
+        a = a + 1
+    }
+    free(out)
+    printf("%lld\n", total)
     return 0
 }

@@ -1,11 +1,217 @@
 # Project Euler 821
-# 123-Separable — F(10^16).
+# 123-Separable: F(10^16).
+# Smooth numbers (2^a * 3^b), holes, and DP over small values.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function coprime6(m: i64) -> i64 {
+    if m <= 0 {
+        return 0
+    }
+    return m - m / 2 - m / 3 + m / 6
+}
+
+function sort_i64(arr: ptr<i64>, n: i64) -> void {
+    # insertion sort
+    let mut i: i64 = 1
+    while i < n {
+        let key: i64 = arr[i]
+        let mut j: i64 = i - 1
+        while j >= 0 && arr[j] > key {
+            arr[j + 1] = arr[j]
+            j = j - 1
+        }
+        arr[j + 1] = key
+        i = i + 1
+    }
+}
+
+function best_covered_small(limit: i64, vals: ptr<i64>, m: i64) -> i32 {
+    let mut best: i32 = 0
+    let S: ptr<i64> = calloc(32, 8)
+    let D: ptr<i64> = calloc(32, 8)
+    let T: ptr<i64> = calloc(32, 8)
+    let u: ptr<i64> = calloc(96, 8)
+    let mut mask: i64 = 0
+    while mask < (1 << m) {
+        let mut ns: i64 = 0
+        let mut nd: i64 = 0
+        let mut nt: i64 = 0
+        let mut ok: i32 = 1
+        for i in 0..m {
+            if ((mask >> i) & 1) != 0 {
+                let v: i64 = vals[i]
+                let dv: i64 = 2 * v
+                let tv: i64 = 3 * v
+                # check v not already in S, D, or T
+                for j in 0..nd {
+                    if S[j] == v || D[j] == v || T[j] == v {
+                        ok = 0
+                    }
+                }
+                # check disjoint: dv, tv not in S
+                for j in 0..ns {
+                    if S[j] == dv || S[j] == tv {
+                        ok = 0
+                    }
+                }
+                # check v, tv not in D
+                for j in 0..nd {
+                    if D[j] == v || D[j] == tv {
+                        ok = 0
+                    }
+                }
+                # check v, dv not in T
+                for j in 0..nt {
+                    if T[j] == v || T[j] == dv {
+                        ok = 0
+                    }
+                }
+                if ok == 0 {
+                    break
+                }
+                S[ns] = v
+                ns = ns + 1
+                D[nd] = dv
+                nd = nd + 1
+                T[nt] = tv
+                nt = nt + 1
+            }
+        }
+        if ok != 0 {
+            # count unique <= limit
+            let mut nu: i64 = 0
+            for i in 0..ns {
+                u[nu] = S[i]
+                nu = nu + 1
+            }
+            for i in 0..nd {
+                u[nu] = D[i]
+                nu = nu + 1
+            }
+            for i in 0..nt {
+                u[nu] = T[i]
+                nu = nu + 1
+            }
+            sort_i64(u, nu)
+            let mut covered: i32 = 0
+            for i in 0..nu {
+                if u[i] <= limit {
+                    if i == 0 || u[i] != u[i - 1] {
+                        covered = covered + 1
+                    }
+                }
+            }
+            if covered > best {
+                best = covered
+            }
+        }
+        mask = mask + 1
+    }
+    free(S)
+    free(D)
+    free(T)
+    free(u)
+    return best
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let n: i64 = 10000000000000000
+    let smooth: ptr<i64> = calloc(4096, 8)
+    let mut ns: i64 = 0
+    let mut p2: i64 = 1
+    while p2 <= n {
+        let mut p3: i64 = 1
+        while p2 * p3 <= n {
+            smooth[ns] = p2 * p3
+            ns = ns + 1
+            p3 = p3 * 3
+        }
+        if p2 > n / 2 {
+            break
+        }
+        p2 = p2 * 2
+    }
+    sort_i64(smooth, ns)
+    # unique
+    let mut w: i64 = 0
+    for i in 0..ns {
+        if i == 0 || smooth[i] != smooth[i - 1] {
+            smooth[w] = smooth[i]
+            w = w + 1
+        }
+    }
+    ns = w
+
+    let small_H: ptr<i32> = calloc(64, 4)
+    let vals: ptr<i64> = calloc(32, 8)
+    for i in 0..ns {
+        if smooth[i] > 48 {
+            break
+        }
+        let mut m: i64 = 0
+        for j in 0..(i + 1) {
+            vals[m] = smooth[j]
+            m = m + 1
+        }
+        small_H[i] = best_covered_small(smooth[i], vals, m)
+    }
+
+    let holes: ptr<i64> = calloc(256, 8)
+    let mut nh: i64 = 0
+    # fixed list: 6, 24, 54
+    holes[nh] = 6
+    nh = nh + 1
+    holes[nh] = 24
+    nh = nh + 1
+    holes[nh] = 54
+    nh = nh + 1
+    let mut x: i64 = 384
+    while x <= n {
+        holes[nh] = x
+        nh = nh + 1
+        x = x * 8
+    }
+    x = 243
+    while x <= n {
+        holes[nh] = x
+        nh = nh + 1
+        x = x * 27
+    }
+    sort_i64(holes, nh)
+
+    let hole_prefix: ptr<i32> = calloc(4096, 4)
+    let mut j: i64 = 0
+    let mut cnt: i64 = 0
+    for i in 0..ns {
+        while j < nh && holes[j] <= smooth[i] {
+            cnt = cnt + 1
+            j = j + 1
+        }
+        hole_prefix[i] = cnt as i32
+    }
+
+    let mut ans: i64 = 0
+    for i in 0..ns {
+        let L: i64 = smooth[i]
+        let R: i64 = if i + 1 == ns { n } else { if smooth[i + 1] - 1 < n { smooth[i + 1] - 1 } else { n } }
+        let k_low: i64 = n / (R + 1) + 1
+        let k_high: i64 = n / L
+        if k_low > k_high {
+            continue
+        }
+        let count_k: i64 = coprime6(k_high) - coprime6(k_low - 1)
+        let H: i64 = if L <= 48 { small_H[i] as i64 } else { (i + 1) - (hole_prefix[i] as i64) }
+        ans = ans + H * count_k
+    }
+    printf("%lld\n", ans)
+    free(smooth)
+    free(small_H)
+    free(vals)
+    free(holes)
+    free(hole_prefix)
     return 0
 }

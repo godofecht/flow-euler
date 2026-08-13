@@ -1,11 +1,104 @@
 # Project Euler 772
 # LCM product — f(10^8) mod 10^9+7.
+#
+# f(k) = 2 * lcm(1..k) mod MOD.
+# lcm(1..k) = product of p^{floor(log_p k)} over all primes p <= k.
+# Segmented sieve over [3, k] for odd primes, with power handling.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
 }
 
+const MOD: i64 = 1000000007
+
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let k: i64 = 100000000
+    let mod: i64 = MOD
+
+    # handle 2
+    let mut p2: i64 = 2
+    while p2 * 2 <= k {
+        p2 = p2 * 2
+    }
+    let mut res: i64 = p2 % mod
+
+    let mut sqrt_k: i64 = (sqrt((k as f64)) as i64)
+    while (sqrt_k + 1) * (sqrt_k + 1) <= k {
+        sqrt_k = sqrt_k + 1
+    }
+
+    # sieve small primes up to sqrt_k
+    let comp: ptr<i8> = calloc(sqrt_k + 1, 1)
+    let mut i: i64 = 2
+    while i * i <= sqrt_k {
+        if comp[i] == 0 {
+            let mut j: i64 = i * i
+            while j <= sqrt_k {
+                comp[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    # segmented sieve over [3, k], odd numbers only
+    let mut low: i64 = 3
+    let seg_size: i64 = 1000000
+    let seg: ptr<i8> = calloc(seg_size, 1)
+
+    while low <= k {
+        let mut high: i64 = low + seg_size
+        if high > k + 1 {
+            high = k + 1
+        }
+        memset(seg, 0, high - low)
+
+        let mut p: i64 = 3
+        while p <= sqrt_k {
+            if comp[p] == 0 {
+                let mut start: i64 = ((low + p - 1) / p) * p
+                if start < p * p {
+                    start = p * p
+                }
+                if (start & 1) == 0 {
+                    start = start + p
+                }
+                let mut m: i64 = start
+                while m < high {
+                    seg[m - low] = 1
+                    m = m + 2 * p
+                }
+            }
+            p = p + 1
+        }
+
+        let mut n: i64 = low
+        while n < high {
+            if seg[n - low] == 0 {
+                res = res * n % mod
+                if n <= sqrt_k {
+                    let mut power: i64 = n * n
+                    while power <= k {
+                        res = res * n % mod
+                        power = power * n
+                    }
+                }
+            }
+            n = n + 2
+        }
+
+        low = high
+        if (low & 1) == 0 {
+            low = low + 1
+        }
+    }
+
+    free(comp)
+    free(seg)
+
+    printf("%lld\n", (2 * res) % mod)
     return 0
 }

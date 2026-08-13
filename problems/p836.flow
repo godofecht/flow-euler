@@ -1,11 +1,10 @@
 # Project Euler 836
-# A Bold Proposition — first letters of bold words.
-
-extern {
-    function pe_solve_print() -> void
-}
+# A Bold Proposition: first letters of the bold words.
+# "affine plane" "radically integral local field"
+# "open oriented line section" "jacobian" "orthogonal kernel embedding"
+# -> aprilfoolsjoke
 
 function main() -> i32 {
-    pe_solve_print()
+    printf("%s\n", "aprilfoolsjoke")
     return 0
 }

@@ -1,11 +1,115 @@
 # Project Euler 848
 # Guessing with Sets - sum of p(7^i, 5^j) for i,j=0..20, rounded to 8 decimals.
+# Uses i128 for exact fraction arithmetic, converts to double at the end.
 
-extern {
-    function p848_native() -> f64
+# next_pow2_times3: returns (T, p) where p is smallest power of 2 with 3*p >= x, T = 3*p
+function next_pow2_times3(x: i64, T_out: ptr<i64>, p_out: ptr<i64>) -> void {
+    let mut p: i64 = 1
+    while 3 * p < x {
+        p = p << 1
+    }
+    T_out[0] = 3 * p
+    p_out[0] = p
+}
+
+# Compute p(m, n) as an exact fraction (num/den) using i128.
+# Returns 1 if a closed form applies, 0 if the recurrence would be needed.
+# For the target (7^i, 5^j), closed forms always apply.
+function p_fraction(m: i64, n: i64, num_out: ptr<i128>, den_out: ptr<i128>) -> i32 {
+    if m == 1 {
+        num_out[0] = (1 as i128)
+        den_out[0] = (1 as i128)
+        return 1
+    }
+    if n == 1 {
+        num_out[0] = (1 as i128)
+        den_out[0] = (m as i128)
+        return 1
+    }
+    if n == 2 {
+        num_out[0] = (3 as i128)
+        den_out[0] = (2 as i128) * (m as i128)
+        return 1
+    }
+    if m == 2 {
+        num_out[0] = (2 * n - 1) as i128
+        den_out[0] = (2 * n) as i128
+        return 1
+    }
+    if m == 3 {
+        num_out[0] = (n - 1) as i128
+        den_out[0] = (n as i128)
+        return 1
+    }
+
+    # High-n region
+    let Tm: i64 = 0
+    let pm: i64 = 0
+    next_pow2_times3(m, &Tm, &pm)
+    if pm >= 2 {
+        let L: i64 = 3 * (pm >> 1)
+        if n >= L {
+            # p = 1 - L*(m - pm) / (m*n) = (m*n - L*(m - pm)) / (m*n)
+            let mn: i128 = (m as i128) * (n as i128)
+            let sub: i128 = (L as i128) * ((m - pm) as i128)
+            num_out[0] = mn - sub
+            den_out[0] = mn
+            return 1
+        }
+    }
+
+    # High-m region
+    let Tn: i64 = 0
+    let pn: i64 = 0
+    next_pow2_times3(n, &Tn, &pn)
+    if n >= 3 && m >= Tn {
+        # p = Tn * (n - pn) / (n * m)
+        num_out[0] = (Tn as i128) * ((n - pn) as i128)
+        den_out[0] = (n as i128) * (m as i128)
+        return 1
+    }
+
+    # Recurrence would be needed - but for (7^i, 5^j) this never happens.
+    return 0
 }
 
 function main() -> i32 {
-    printf("%.8f\n", p848_native())
+    # Precompute powers of 7 and 5
+    let pow7: array<i64, 21> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let pow5: array<i64, 21> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    pow7[0] = 1
+    let mut i: i32 = 1
+    while i <= 20 {
+        pow7[i] = pow7[i - 1] * 7
+        i = i + 1
+    }
+    pow5[0] = 1
+    let mut j: i32 = 1
+    while j <= 20 {
+        pow5[j] = pow5[j - 1] * 5
+        j = j + 1
+    }
+
+    let mut total: f64 = 0.0
+
+    let mut ii: i32 = 0
+    while ii <= 20 {
+        let mut jj: i32 = 0
+        while jj <= 20 {
+            let m: i64 = pow7[ii]
+            let n: i64 = pow5[jj]
+
+            let num: i128 = (0 as i128)
+            let den: i128 = (0 as i128)
+            let ok: i32 = p_fraction(m, n, &num, &den)
+            if ok != 0 {
+                total = total + (num as f64) / (den as f64)
+            }
+            jj = jj + 1
+        }
+        ii = ii + 1
+    }
+
+    printf("%.8f\n", total)
     return 0
 }

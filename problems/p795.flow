@@ -1,11 +1,98 @@
 # Project Euler 795
 # Alternating GCD Sum — G(12345678).
+# Ported from native C to pure Flow. Uses i128 for prime power calculations.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+function pow_i(p: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    for i in 0..e {
+        r = r * p
+    }
+    return r
+}
+
+function a_prime_power(p: i64, e: i64) -> i64 {
+    if e == 0 {
+        return 1
+    }
+    if (e & 1) == 1 {
+        let k: i64 = e >> 1
+        return pow_i(p, e - 1) * (2 * pow_i(p, k + 1) - 1)
+    }
+    let k: i64 = e >> 1
+    return pow_i(p, e - 1) * ((p + 1) * pow_i(p, k) - 1)
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let N: i64 = 12345678
+    let limit: i64 = N / 2
+    let spf: ptr<i64> = calloc(limit + 1, 8) as ptr<i64>
+    let primes: ptr<i64> = malloc((limit + 1) * 8) as ptr<i64>
+    let mut pc: i64 = 0
+    for i in 2..(limit + 1) {
+        if spf[i] == 0 {
+            spf[i] = i
+            primes[pc] = i
+            pc = pc + 1
+        }
+        for j in 0..pc {
+            let p: i64 = primes[j]
+            let x: i64 = p * i
+            if x > limit || p > spf[i] {
+                break
+            }
+            spf[x] = p
+            if p == spf[i] {
+                break
+            }
+        }
+    }
+
+    let c2: ptr<i64> = calloc(65, 8) as ptr<i64>
+    for a in 1..65 {
+        if ((1 as i64) << a) > N {
+            break
+        }
+        c2[a] = a_prime_power(2, a) - ((1 as i64) << a)
+    }
+
+    let odd_cnt: i64 = (N + 1) / 2
+    let mut total: i64 = -(odd_cnt * odd_cnt)
+
+    let mut m: i64 = 1
+    while m <= limit {
+        let mut a_m: i64 = 1
+        if m != 1 {
+            let mut n: i64 = m
+            a_m = 1
+            while n > 1 {
+                let p: i64 = spf[n]
+                let mut e: i64 = 0
+                while n % p == 0 {
+                    n = n / p
+                    e = e + 1
+                }
+                a_m = a_m * a_prime_power(p, e)
+            }
+        }
+        let mut a: i64 = 1
+        let mut n: i64 = m << 1
+        while n <= N {
+            total = total + a_m * c2[a]
+            a = a + 1
+            n = n << 1
+        }
+        m = m + 2
+    }
+
+    printf("%lld\n", total)
+    free(spf as ptr<void>)
+    free(primes as ptr<void>)
+    free(c2 as ptr<void>)
     return 0
 }

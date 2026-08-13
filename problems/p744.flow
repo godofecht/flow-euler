@@ -1,11 +1,19 @@
 # Project Euler 744
-# What? Where? When? Native solver in problems/native/p744.c.
-
-extern {
-    function p744_native() -> f64
-}
+# What? Where? When?
+# f(n,p) = 1 - E[Q]/(2n+1) where E[Q] ~= n/max(p,1-p) for huge n.
+# n = 10^11, p = 0.4999.
 
 function main() -> i32 {
-    printf("%.10f\n", p744_native())
+    let n: i64 = 100000000000
+    let p: f64 = 0.4999
+    let q: f64 = 1.0 - p
+    let mut a: f64 = p
+    if q > p {
+        a = q
+    }
+    let eq: f64 = (n as f64) / a
+    let denom: f64 = ((2 * n + 1) as f64)
+    let result: f64 = 1.0 - eq / denom
+    printf("%.10f\n", result)
     return 0
 }

@@ -1,8 +1,21 @@
-extern {
-    function p909_native() -> i64
+# Project Euler 909
+# L-Expressions I: F(n) = g(g(n^2*(n+1))) where g(x) = x*(x+1), mod 10^9.
+# seed = F(1) = 42, ans = F(seed). Print last 9 digits zero-padded.
+
+const MOD: i64 = 1000000000
+
+function F_mod(n: i64, mod: i64) -> i64 {
+    let nn: i64 = n % mod
+    let mut a: i64 = nn * nn % mod
+    a = a * ((nn + 1) % mod) % mod
+    let b: i64 = a * ((a + 1) % mod) % mod
+    let c: i64 = b * ((b + 1) % mod) % mod
+    return c
 }
 
 function main() -> i32 {
-    printf("%lld\n", p909_native())
+    let seed: i64 = F_mod(1, MOD)
+    let ans: i64 = F_mod(seed, MOD)
+    printf("%09lld\n", ans)
     return 0
 }

@@ -1,11 +1,146 @@
 # Project Euler 784
-# Reciprocal Pairs — F(2e6).
+# Reciprocal Pairs: F(2e6).
+# For each r, count divisors d of (r-1)(r+1) with d <= r-1 and sum base+d+n/d.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function bitlen_lsb(x: i64) -> i32 {
+    let c: i32 = 0
+    let mut v: i64 = x & -x
+    while v != 0 {
+        v = v >> 1
+        c = c + 1
+    }
+    return c
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let N: i64 = 2000000
+    let spf: ptr<i64> = calloc(N + 2, 8)
+    let primes: ptr<i64> = malloc((N + 2) * 8)
+    let mut pc: i64 = 0
+    spf[1] = 1
+    for i in 2..(N + 2) {
+        if spf[i] == 0 {
+            spf[i] = i
+            primes[pc] = i
+            pc = pc + 1
+        }
+        for j in 0..pc {
+            let p: i64 = primes[j]
+            let ip: i64 = i * p
+            if ip > N + 1 || p > spf[i] {
+                break
+            }
+            spf[ip] = p
+        }
+    }
+
+    let mut total: i64 = 0
+    for r in 2..N {
+        let mut kmax: i64 = N - r
+        if kmax > r - 1 {
+            kmax = r - 1
+        }
+        if kmax <= 0 {
+            continue
+        }
+        let n_val: i64 = r * r - 1
+        let base: i64 = 2 * r
+        if kmax == 1 {
+            total = total + base + 1 + n_val
+            continue
+        }
+        let mut a: i64 = r - 1
+        let mut b: i64 = r + 1
+        let fac_p: ptr<i64> = malloc(64 * 8)
+        let fac_e: ptr<i64> = malloc(64 * 8)
+        let mut nf: i64 = 0
+        if (r & 1) != 0 {
+            let ea: i32 = bitlen_lsb(a) - 1
+            let eb: i32 = bitlen_lsb(b) - 1
+            let e2: i32 = ea + eb
+            a = a >> ea
+            b = b >> eb
+            if 2 <= kmax {
+                fac_p[nf] = 2
+                fac_e[nf] = e2 as i64
+                nf = nf + 1
+            }
+        }
+        let mut x: i64 = a
+        while x > 1 {
+            let p: i64 = spf[x]
+            if p > kmax {
+                break
+            }
+            let mut e: i64 = 0
+            while x > 1 && spf[x] == p {
+                x = x / p
+                e = e + 1
+            }
+            fac_p[nf] = p
+            fac_e[nf] = e
+            nf = nf + 1
+        }
+        x = b
+        while x > 1 {
+            let p: i64 = spf[x]
+            if p > kmax {
+                break
+            }
+            let mut e: i64 = 0
+            while x > 1 && spf[x] == p {
+                x = x / p
+                e = e + 1
+            }
+            fac_p[nf] = p
+            fac_e[nf] = e
+            nf = nf + 1
+        }
+
+        let divs: ptr<i64> = malloc(4096 * 8)
+        let newd: ptr<i64> = malloc(4096 * 8)
+        let mut nd: i64 = 1
+        divs[0] = 1
+        for fi in 0..nf {
+            let p: i64 = fac_p[fi]
+            let e: i64 = fac_e[fi]
+            let prev_n: i64 = nd
+            let mut pow_p: i64 = 1
+            let mut nn: i64 = 0
+            for ee in 0..(e + 1) {
+                for di in 0..prev_n {
+                    let v: i64 = divs[di] * pow_p
+                    if v <= kmax {
+                        newd[nn] = v
+                        nn = nn + 1
+                    }
+                }
+                pow_p = pow_p * p
+                if pow_p > kmax {
+                    break
+                }
+            }
+            for i in 0..nn {
+                divs[i] = newd[i]
+            }
+            nd = nn
+        }
+        for i in 0..nd {
+            total = total + base + divs[i] + n_val / divs[i]
+        }
+        free(fac_p)
+        free(fac_e)
+        free(divs)
+        free(newd)
+    }
+    free(spf)
+    free(primes)
+    printf("%lld\n", total)
     return 0
 }

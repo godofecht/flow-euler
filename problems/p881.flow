@@ -1,8 +1,168 @@
+# Project Euler 881: Divisor Graph Width
+# Pure Flow port. Branch-and-bound DFS over non-increasing exponent sequences.
+
 extern {
-    function p881_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+# Sieve primes up to limit, store into PRIMES array, return count.
+function sieve_primes(limit: i64, PRIMES: ptr<i64>) -> i64 {
+    let sieve: ptr<i8> = calloc(limit + 1, 1)
+    memset(sieve, 1, limit + 1)
+    sieve[0] = 0
+    sieve[1] = 0
+    let mut p: i64 = 2
+    while p * p <= limit {
+        if sieve[p] != 0 {
+            let mut m: i64 = p * p
+            while m <= limit {
+                sieve[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    let mut num: i64 = 0
+    let mut i: i64 = 2
+    while i <= limit {
+        if sieve[i] != 0 {
+            PRIMES[num] = i
+            num = num + 1
+        }
+        i = i + 1
+    }
+    free(sieve)
+    return num
+}
+
+# Convolve poly with (1 + x + ... + x^e), sliding window sum.
+# Returns new array; writes length into out_len_ptr.
+function convolve_with_ones(poly: ptr<i64>, poly_len: i64, e: i64, out_len_ptr: ptr<i64>) -> ptr<i64> {
+    let out_len: i64 = poly_len + e
+    out_len_ptr[0] = out_len
+    let out: ptr<i64> = calloc(out_len, 8)
+    let pref: ptr<i64> = calloc(poly_len + 1, 8)
+    let mut s: i64 = 0
+    let mut i: i64 = 0
+    while i < poly_len {
+        s = s + poly[i]
+        pref[i + 1] = s
+        i = i + 1
+    }
+    let mut j: i64 = 0
+    while j < out_len {
+        let mut lo: i64 = j - e
+        if lo < 0 { lo = 0 }
+        let mut hi: i64 = j
+        if hi >= poly_len { hi = poly_len - 1 }
+        if lo <= hi {
+            out[j] = pref[hi + 1] - pref[lo]
+        }
+        j = j + 1
+    }
+    free(pref)
+    return out
+}
+
+function max_array(arr: ptr<i64>, len: i64) -> i64 {
+    let mut m: i64 = arr[0]
+    let mut i: i64 = 1
+    while i < len {
+        if arr[i] > m {
+            m = arr[i]
+        }
+        i = i + 1
+    }
+    return m
+}
+
+# dfs with best_n passed as ptr<i128> (mutable global replacement).
+function dfs(idx: i64, prev_e: i64, poly: ptr<i64>, poly_len: i64, peak: i64, n: i128, target: i64, PRIMES: ptr<i64>, num_primes: i64, best_n_ptr: ptr<i128>) -> void {
+    if n >= best_n_ptr[0] { return }
+    if peak >= target {
+        best_n_ptr[0] = n
+        return
+    }
+    if idx >= num_primes { return }
+
+    let p: i64 = PRIMES[idx]
+
+    let mut max_e: i64 = 0
+    let mut t: i128 = n
+    while max_e < prev_e {
+        t = t * (p as i128)
+        if t >= best_n_ptr[0] { break }
+        max_e = max_e + 1
+    }
+    if max_e == 0 { return }
+
+    let powers: ptr<i128> = malloc(64 * 16)
+    powers[0] = 1
+    let mut e: i64 = 1
+    while e <= max_e {
+        powers[e] = powers[e - 1] * (p as i128)
+        e = e + 1
+    }
+
+    e = max_e
+    while e >= 1 {
+        let n2: i128 = n * powers[e]
+        if n2 < best_n_ptr[0] {
+            let out_len_ptr: ptr<i64> = malloc(8)
+            let poly2: ptr<i64> = convolve_with_ones(poly, poly_len, e, out_len_ptr)
+            let out_len: i64 = out_len_ptr[0]
+            let peak2: i64 = max_array(poly2, out_len)
+            dfs(idx + 1, e, poly2, out_len, peak2, n2, target, PRIMES, num_primes, best_n_ptr)
+            free(poly2)
+            free(out_len_ptr)
+        }
+        e = e - 1
+    }
+    free(powers)
+}
+
+function initial_upper_bound(target: i64, PRIMES: ptr<i64>) -> i128 {
+    let poly: ptr<i64> = malloc(8)
+    poly[0] = 1
+    let mut poly_len: i64 = 1
+    let mut n: i128 = 1
+    let mut i: i64 = 0
+    while true {
+        let out_len_ptr: ptr<i64> = malloc(8)
+        let poly2: ptr<i64> = convolve_with_ones(poly, poly_len, 1, out_len_ptr)
+        let out_len: i64 = out_len_ptr[0]
+        free(poly)
+        free(out_len_ptr)
+        poly = poly2
+        poly_len = out_len
+        n = n * (PRIMES[i] as i128)
+        i = i + 1
+        if max_array(poly, poly_len) >= target {
+            free(poly)
+            return n
+        }
+    }
+    return 0
 }
 
 function main() -> i32 {
-    printf("%lld\n", p881_native())
+    let PRIMES: ptr<i64> = malloc(400 * 8)
+    let num_primes: i64 = sieve_primes(400, PRIMES)
+
+    let target: i64 = 10000
+    let best_n_ptr: ptr<i128> = malloc(16)
+    best_n_ptr[0] = initial_upper_bound(target, PRIMES)
+
+    let initial_poly: ptr<i64> = malloc(8)
+    initial_poly[0] = 1
+    dfs(0, 60, initial_poly, 1, 1, 1, target, PRIMES, num_primes, best_n_ptr)
+    free(initial_poly)
+
+    printf("%lld\n", (best_n_ptr[0]) as i64)
+    free(PRIMES)
+    free(best_n_ptr)
     return 0
 }

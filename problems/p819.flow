@@ -1,12 +1,61 @@
 # Project Euler 819
-# Iterative Sampling - E(10^3), expected steps until all entries equal.
-# Real solver in native/p819.c.
+# Iterative Sampling - E(1000), expected steps until all entries equal.
+# The process is equivalent to repeated composition of random functions.
+# The chain is monotone non-increasing in m (image size), so the expected
+# hitting time to m=1 is computed by a triangular dynamic program.
 
 extern {
-    function p819_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
 }
 
 function main() -> i32 {
-    printf("%.6f\n", p819_native())
+    let n: i32 = 1000
+    if n <= 1 {
+        printf("0.000000\n")
+        return 0
+    }
+
+    let n64: i64 = (n + 1) as i64
+    let T: ptr<f64> = calloc(n64, 8)
+    let p: ptr<f64> = calloc(n64, 8)
+    if T == null || p == null { return 1 }
+
+    T[1] = 0.0
+    p[0] = 1.0
+    let inv_n: f64 = 1.0 / (n as f64)
+
+    let mut m: i32 = 1
+    while m <= n {
+        let mut k: i32 = m
+        while k >= 1 {
+            let kf: f64 = (k as f64)
+            let pk: f64 = p[k] * (kf * inv_n)
+            let pk1: f64 = p[k - 1] * (((n - k + 1) as f64) * inv_n)
+            p[k] = pk + pk1
+            k = k - 1
+        }
+        p[0] = 0.0
+
+        if m == 1 {
+            m = m + 1
+            continue
+        }
+
+        let stay: f64 = p[m]
+        let mut acc: f64 = 0.0
+        let mut kk: i32 = 1
+        while kk < m {
+            acc = acc + p[kk] * T[kk]
+            kk = kk + 1
+        }
+
+        T[m] = (1.0 + acc) / (1.0 - stay)
+        m = m + 1
+    }
+
+    printf("%.6f\n", T[n])
+    free(T)
+    free(p)
     return 0
 }

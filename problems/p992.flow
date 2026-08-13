@@ -1,12 +1,136 @@
 # Project Euler 992
 # Journey counting on a path graph modulo a prime.
-# Companion: problems/native/p992.c
 
 extern {
-    function p992_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 987898789
+
+function mod_pow(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut a: i64 = a0 % mod
+    if a < 0 { a = a + mod }
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r as i128) * (a as i128) % (mod as i128)) as i64
+        }
+        a = ((a as i128) * (a as i128) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function mod_inv(a: i64, mod: i64) -> i64 {
+    return mod_pow(a, mod - 2, mod)
+}
+
+# Global combinatorics arrays
+let g_fact: ptr<i64> = null
+let g_inv_fact: ptr<i64> = null
+
+function build_combinatorics(limit: i64, mod: i64) -> void {
+    g_fact[0] = 1 % mod
+    let mut i: i64 = 1
+    while i <= limit {
+        g_fact[i] = ((g_fact[i - 1] as i128) * (i as i128) % (mod as i128)) as i64
+        i = i + 1
+    }
+    g_inv_fact[limit] = mod_inv(g_fact[limit], mod)
+    i = limit
+    while i >= 1 {
+        g_inv_fact[i - 1] = ((g_inv_fact[i] as i128) * (i as i128) % (mod as i128)) as i64
+        i = i - 1
+    }
+}
+
+function comb(n: i64, r: i64) -> i64 {
+    if r < 0 || r > n { return 0 }
+    return ((g_fact[n] as i128) * (g_inv_fact[r] as i128) % (MOD as i128) * (g_inv_fact[n - r] as i128) % (MOD as i128)) as i64
+}
+
+function endpoint_count(n: i64, k: i64, end: i64) -> i64 {
+    if n == 0 { return 1 }
+
+    # right[i] for 0 <= i < n
+    let right: ptr<i64> = malloc(n * 8)
+    if end == 0 {
+        right[0] = k - 1
+    } else {
+        right[0] = k
+    }
+    if n >= 2 {
+        if end == 1 {
+            right[1] = 2 - 1
+        } else {
+            right[1] = 2
+        }
+    }
+    let mut i: i64 = 2
+    while i < n {
+        let mut val: i64 = 1 + right[i - 2]
+        if end == i { val = val - 1 }
+        right[i] = val
+        i = i + 1
+    }
+
+    let mut ways: i64 = 1
+    let mut v: i64 = 1
+    while v < n {
+        let mut out_degree: i64 = k + v
+        if end == v { out_degree = out_degree - 1 }
+        if v < end {
+            ways = ((ways as i128) * (comb(out_degree - 1, right[v] - 1) as i128) % (MOD as i128)) as i64
+        } else {
+            if v == end {
+                ways = ((ways as i128) * (comb(out_degree, right[v]) as i128) % (MOD as i128)) as i64
+            } else {
+                ways = ((ways as i128) * (comb(out_degree - 1, right[v]) as i128) % (MOD as i128)) as i64
+            }
+        }
+        v = v + 1
+    }
+    free(right)
+    return ways
+}
+
+function journey_count(n: i64, k: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut end: i64 = 0
+    while end <= n {
+        total = total + endpoint_count(n, k, end)
+        if total >= MOD { total = total - MOD }
+        end = end + 1
+    }
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p992_native())
+    let n: i64 = 500
+    let ks: array<i64, 5> = [1, 10, 100, 1000, 10000]
+    let mut max_k: i64 = 0
+    let mut i: i64 = 0
+    while i < 5 {
+        if ks[i] > max_k { max_k = ks[i] }
+        i = i + 1
+    }
+    g_fact = malloc((max_k + n + 1) * 8)
+    g_inv_fact = malloc((max_k + n + 1) * 8)
+    build_combinatorics(max_k + n, MOD)
+
+    let mut answer: i64 = 0
+    i = 0
+    while i < 5 {
+        answer = answer + journey_count(n, ks[i])
+        if answer >= MOD { answer = answer - MOD }
+        i = i + 1
+    }
+
+    printf("%lld\n", answer)
+    free(g_fact)
+    free(g_inv_fact)
     return 0
 }

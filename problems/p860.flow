@@ -1,11 +1,94 @@
-# Project Euler 860
-# Gold and Silver Coin Game - fair arrangements of 9898 stacks mod 989898989.
+# Project Euler 860 - Gold and Silver Coin Game
+# Count fair arrangements of 9898 stacks mod 989898989.
 
 extern {
-    function p860_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 989898989
+const N: i64 = 9898
+
+function modinv(a: i64, mod: i64) -> i64 {
+    let mut x: i64 = a % mod
+    if x < 0 {
+        x = x + mod
+    }
+    let mut t0: i64 = 0
+    let mut t1: i64 = 1
+    let mut r0: i64 = mod
+    let mut r1: i64 = x
+    while r1 != 0 {
+        let q: i64 = r0 / r1
+        let tmp_r: i64 = r0 - q * r1
+        r0 = r1
+        r1 = tmp_r
+        let tmp_t: i64 = t0 - q * t1
+        t0 = t1
+        t1 = tmp_t
+    }
+    return t0 % mod
 }
 
 function main() -> i32 {
-    printf("%lld\n", p860_native())
+    let fac: ptr<i64> = malloc((N + 1) * 8) as ptr<i64>
+    let inv_fac: ptr<i64> = malloc((N + 1) * 8) as ptr<i64>
+
+    fac[0] = 1
+    let mut i: i64 = 1
+    while i <= N {
+        fac[i] = fac[i - 1] * i % MOD
+        i = i + 1
+    }
+    inv_fac[N] = modinv(fac[N], MOD)
+    i = N
+    while i >= 1 {
+        inv_fac[i - 1] = inv_fac[i] * i % MOD
+        i = i - 1
+    }
+
+    let fac_n: i64 = fac[N]
+    let mut total: i64 = 0
+
+    let mut t: i64 = 0
+    while t <= N {
+        let s: i64 = N - t
+        if s % 2 == 1 {
+            t = t + 1
+            continue
+        }
+        let choose_nt: i64 = ((fac_n * inv_fac[t] % MOD) * inv_fac[s]) % MOD
+        let mut high: i64 = t
+        if t > s / 4 {
+            high = s / 4
+        }
+        let parity: i64 = t % 2
+        let mut inner: i64 = 0
+        let fac_t: i64 = fac[t]
+        let fac_s: i64 = fac[s]
+
+        let mut m: i64 = parity
+        while m <= high {
+            let k: i64 = (t + m) / 2
+            let r: i64 = (s - 4 * m) / 2
+            let ct: i64 = ((fac_t * inv_fac[k] % MOD) * inv_fac[t - k]) % MOD
+            let cs: i64 = ((fac_s * inv_fac[r] % MOD) * inv_fac[s - r]) % MOD
+            let term: i64 = ct * cs % MOD
+            if m == 0 {
+                inner = inner + term
+            } else {
+                inner = inner + term * 2
+            }
+            m = m + 2
+        }
+        total = (total + choose_nt * (inner % MOD)) % MOD
+        t = t + 1
+    }
+
+    printf("%lld\n", total)
+
+    free(fac as ptr<void>)
+    free(inv_fac as ptr<void>)
     return 0
 }

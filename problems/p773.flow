@@ -1,11 +1,81 @@
 # Project Euler 773
-# Riffle Shuffles — F(97) mod 1_000_000_007.
+# Riffle Shuffles: F(97) mod 1_000_000_007.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function modpow(b: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut bb: i64 = b % MOD
+    let mut ee: i64 = e
+    while ee > 0 {
+        if ee % 2 == 1 {
+            r = r * bb % MOD
+        }
+        bb = bb * bb % MOD
+        ee = ee / 2
+    }
+    return r
+}
+
+function is_prime_flow(n: i32) -> bool {
+    if n < 2 { return false }
+    let mut i: i32 = 2
+    while i * i <= n {
+        if n % i == 0 { return false }
+        i = i + 1
+    }
+    return true
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let k: i32 = 97
+    let primes: ptr<i64> = calloc(k as i64, 8)
+    let mut cnt: i32 = 0
+    let mut x: i32 = 7
+    while cnt < k {
+        if x % 10 == 7 && is_prime_flow(x) {
+            primes[cnt] = x as i64
+            cnt = cnt + 1
+        }
+        x = x + 2
+    }
+
+    let mut M_mod: i64 = 1
+    let mut phi_mod: i64 = 1
+    let mut i: i32 = 0
+    while i < k {
+        M_mod = M_mod * primes[i] % MOD
+        phi_mod = phi_mod * (primes[i] - 1) % MOD
+        i = i + 1
+    }
+
+    let q_table: array<i64, 4> = [7, 1, 3, 9]
+    let mut A: i64 = 0
+    let mut c: i64 = 1
+    let mut s: i32 = 0
+    while s <= k {
+        let term: i64 = c * q_table[s % 4] % MOD
+        if s % 2 == 1 {
+            A = (A - term) % MOD
+        } else {
+            A = (A + term) % MOD
+        }
+        if s < k {
+            c = c * ((k - s) as i64) % MOD
+            c = c * modpow((s + 1) as i64, MOD - 2) % MOD
+        }
+        s = s + 1
+    }
+    if A < 0 {
+        A = A + MOD
+    }
+    let result: i64 = M_mod * ((A + 5 * phi_mod) % MOD) % MOD
+    printf("%lld\n", result)
+    free(primes)
     return 0
 }

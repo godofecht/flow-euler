@@ -1,11 +1,98 @@
 # Project Euler 743
 # Window into a Matrix — A(1e8,1e16) mod 1e9+7.
+#
+# Sum over t=0..k/2 of C(k,2t) * 2^(2t) * prod_{j=0}^{2t-1}(k-j) / (2t)!
+# computed with batched modular inverses and prefix products.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+const BLOCK: i64 = 200000
+
+function modpow(b: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b2: i64 = b % MOD
+    let mut e2: i64 = e
+    while e2 > 0 {
+        if (e2 & 1) == 1 {
+            r = r * b2 % MOD
+        }
+        b2 = b2 * b2 % MOD
+        e2 = e2 >> 1
+    }
+    return r
+}
+
+function inv_range(start: i64, end: i64, out: ptr<i64>) -> void {
+    let l: i64 = end - start + 1
+    let mut prod: i64 = 1
+    let mut x: i64 = start
+    let mut i: i64 = 0
+    while i < l {
+        prod = prod * x % MOD
+        out[i] = prod
+        x = x + 1
+        i = i + 1
+    }
+    let inv_prod: i64 = modpow(prod, MOD - 2)
+    let mut suffix: i64 = inv_prod
+    x = end
+    let mut i2: i64 = l - 1
+    while i2 >= 0 {
+        let prev: i64 = 0
+        if i2 != 0 {
+            prev = out[i2 - 1]
+        }
+        else {
+            prev = 1
+        }
+        out[i2] = suffix * prev % MOD
+        suffix = suffix * x % MOD
+        x = x - 1
+        i2 = i2 - 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let k: i64 = 100000000
+    let n: i64 = 10000000000000000
+    let m: i64 = n / k
+    let base: i64 = modpow(2, n)
+    let pow2_2m: i64 = modpow(2, 2 * m)
+    let r: i64 = modpow(pow2_2m, MOD - 2)
+    let tmax: i64 = k / 2
+
+    let mut term: i64 = 1
+    let mut acc: i64 = 1
+    let mut a: i64 = k
+
+    let invs: ptr<i64> = malloc(BLOCK * 8)
+    let mut start: i64 = 1
+
+    while start <= tmax {
+        let mut end: i64 = start + BLOCK - 1
+        if end > tmax {
+            end = tmax
+        }
+        inv_range(start, end, invs)
+        let l: i64 = end - start + 1
+        let mut i: i64 = 0
+        while i < l {
+            let inv: i64 = invs[i]
+            let invsq_r: i64 = inv * inv % MOD * r % MOD
+            term = term * a % MOD * (a - 1) % MOD * invsq_r % MOD
+            acc = acc + term
+            a = a - 2
+            i = i + 1
+        }
+        start = end + 1
+    }
+
+    free(invs)
+    printf("%lld\n", base * (acc % MOD) % MOD)
     return 0
 }

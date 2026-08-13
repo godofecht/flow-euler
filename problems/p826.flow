@@ -1,11 +1,63 @@
 # Project Euler 826
-# Birds on a Wire - average painted fraction over primes, real solver in native/p826.c.
+# Birds on a Wire - average painted fraction over primes 3 <= p <= 10^6.
+# Conjecture: F(p) = (7p + 15) / (18(p + 1)). Answer is average of F(p)
+# over all primes p with 3 <= p <= 10^6, rounded to 10 decimal places.
 
 extern {
-    function p826_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function round(x: f64) -> f64
 }
 
 function main() -> i32 {
-    printf("%.10f\n", p826_native())
+    let limit: i64 = 1000000
+
+    # Sieve of Eratosthenes
+    let is_prime: ptr<i8> = calloc(limit + 1, 1)
+    if is_prime == null { return 1 }
+
+    # calloc zero-fills, so is_prime[i] == 0 means prime (like p010)
+    is_prime[0] = 1
+    is_prime[1] = 1
+    let mut i: i64 = 2
+    while i * i <= limit {
+        if is_prime[i] == 0 {
+            let mut j: i64 = i * i
+            while j <= limit {
+                is_prime[j] = 1
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    # Count primes and sum F(p) for p >= 3
+    let mut prime_count: i64 = 0
+    let mut total: f64 = 0.0
+    let mut p: i64 = 2
+    while p <= limit {
+        if is_prime[p] == 0 {
+            prime_count = prime_count + 1
+            if p >= 3 {
+                let pf: f64 = (p as f64)
+                let num: f64 = 7.0 * pf + 15.0
+                let den: f64 = 18.0 * (pf + 1.0)
+                total = total + num / den
+            }
+        }
+        p = p + 1
+    }
+
+    free(is_prime)
+
+    # Average over primes p >= 3 (exclude p = 2)
+    let denom: f64 = ((prime_count - 1) as f64)
+    let avg: f64 = total / denom
+
+    # Round to 10 decimal places
+    let scale: f64 = 10000000000.0
+    let rounded: f64 = round(avg * scale) / scale
+
+    printf("%.10f\n", rounded)
     return 0
 }

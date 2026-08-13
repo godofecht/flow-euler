@@ -1,12 +1,143 @@
 # Project Euler 956
 # Root-of-unity filter over prime exponents, mod 999999001.
-# Native C helper for modular exponentiation and sieve.
+# Ported from native C to pure Flow. Uses i128 for modular multiplication.
 
 extern {
-    function p956_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 999999001
+const ROOT: i64 = 17
+const N: i64 = 1000
+
+function mod_pow(a: i64, e: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut aa: i64 = a % mod
+    if aa < 0 {
+        aa = aa + mod
+    }
+    let mut ee: i64 = e
+    while ee > 0 {
+        if (ee & 1) == 1 {
+            r = ((r as i128) * (aa as i128) % (mod as i128)) as i64
+        }
+        aa = ((aa as i128) * (aa as i128) % (mod as i128)) as i64
+        ee = ee >> 1
+    }
+    return r
+}
+
+function mod_inv(a: i64, mod: i64) -> i64 {
+    return mod_pow(a, mod - 2, mod)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p956_native())
+    let N_lim: i64 = N
+
+    # Sieve primes up to N_lim
+    let is_prime: ptr<i8> = malloc((N_lim + 1) * 1) as ptr<i8>
+    let mut ii: i64 = 0
+    while ii <= N_lim {
+        is_prime[ii] = 1
+        ii = ii + 1
+    }
+    is_prime[0] = 0
+    is_prime[1] = 0
+
+    let primes: ptr<i64> = malloc(256 * 8) as ptr<i64>
+    let mut np: i64 = 0
+    let mut i: i64 = 2
+    while i <= N_lim {
+        if is_prime[i] == 1 {
+            primes[np] = i
+            np = np + 1
+            let mut j: i64 = i * i
+            while j <= N_lim {
+                is_prime[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    # Compute exponents for each prime
+    let exps: ptr<i64> = malloc(np * 8) as ptr<i64>
+    let vp_in_k: ptr<i32> = malloc((N_lim + 1) * 4) as ptr<i32>
+    let fact_vp: ptr<i64> = malloc((N_lim + 1) * 8) as ptr<i64>
+
+    let mut pi: i64 = 0
+    while pi < np {
+        let p: i64 = primes[pi]
+        let mut k: i64 = 0
+        while k <= N_lim {
+            vp_in_k[k] = 0
+            k = k + 1
+        }
+        k = 1
+        while k <= N_lim {
+            let mut x: i64 = k
+            let mut c: i32 = 0
+            while x % p == 0 {
+                x = x / p
+                c = c + 1
+            }
+            vp_in_k[k] = c
+            k = k + 1
+        }
+        fact_vp[0] = 0
+        k = 1
+        while k <= N_lim {
+            fact_vp[k] = fact_vp[k - 1] + (vp_in_k[k] as i64)
+            k = k + 1
+        }
+        let mut E: i64 = 0
+        k = 1
+        while k <= N_lim {
+            E = E + (N_lim + 1 - k) * fact_vp[k]
+            k = k + 1
+        }
+        exps[pi] = E
+        pi = pi + 1
+    }
+
+    let m: i64 = N_lim
+    let omega: i64 = mod_pow(ROOT, (MOD - 1) / m, MOD)
+    let inv_m: i64 = mod_inv(m, MOD)
+    let mut ans: i64 = 0
+    let mut w: i64 = 1
+    let mut t: i64 = 0
+    while t < m {
+        let mut prod: i64 = 1
+        let mut pi2: i64 = 0
+        while pi2 < np {
+            let p: i64 = primes[pi2]
+            let E: i64 = exps[pi2]
+            let r: i64 = ((p as i128) * (w as i128) % (MOD as i128)) as i64
+            let mut term: i64 = 0
+            if r == 1 {
+                term = (E + 1) % MOD
+            } else {
+                let num: i64 = (mod_pow(r, E + 1, MOD) - 1 + MOD) % MOD
+                let den: i64 = (r - 1 + MOD) % MOD
+                let den_inv: i64 = mod_inv(den, MOD)
+                term = ((num as i128) * (den_inv as i128) % (MOD as i128)) as i64
+            }
+            prod = ((prod as i128) * (term as i128) % (MOD as i128)) as i64
+            pi2 = pi2 + 1
+        }
+        ans = (ans + prod) % MOD
+        w = ((w as i128) * (omega as i128) % (MOD as i128)) as i64
+        t = t + 1
+    }
+    let result: i64 = ((ans as i128) * (inv_m as i128) % (MOD as i128)) as i64
+
+    free(is_prime)
+    free(primes)
+    free(exps)
+    free(vp_in_k)
+    free(fact_vp)
+    printf("%lld\n", result)
     return 0
 }

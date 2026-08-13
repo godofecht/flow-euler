@@ -1,11 +1,143 @@
 # Project Euler 679
-# FREEFAREA words: Aho-Corasick DP counting f(30).
+# FREEFAREA words: Aho-Corasick automaton DP counting f(30).
+# Patterns FREE, FARE, AREA, REEF over alphabet AEFR.
 
 extern {
-    function pe679_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe679_answer())
+    # alphabet = "AEFR", patterns = {"FREE", "FARE", "AREA", "REEF"}
+    # build trie
+    let next_map: ptr<i32> = calloc(64 * 4, 4)
+    let fail: ptr<i32> = calloc(64, 4)
+    let out: ptr<i32> = calloc(64, 4)
+    for i in 0..(64 * 4) {
+        next_map[i] = -1
+    }
+    let mut nodes: i32 = 1
+
+    # patterns as (char_index sequences)
+    # FREE: F=2, R=3, E=1, E=1
+    # FARE: F=2, A=0, R=3, E=1
+    # AREA: A=0, R=3, E=1, A=0
+    # REEF: R=3, E=1, E=1, F=2
+    let pat: ptr<i32> = calloc(16, 4)
+    # FREE
+    pat[0] = 2
+    pat[1] = 3
+    pat[2] = 1
+    pat[3] = 1
+    # FARE
+    pat[4] = 2
+    pat[5] = 0
+    pat[6] = 3
+    pat[7] = 1
+    # AREA
+    pat[8] = 0
+    pat[9] = 3
+    pat[10] = 1
+    pat[11] = 0
+    # REEF
+    pat[12] = 3
+    pat[13] = 1
+    pat[14] = 1
+    pat[15] = 2
+
+    for pi in 0..4 {
+        let mut v: i32 = 0
+        for ci in 0..4 {
+            let c: i32 = pat[pi * 4 + ci]
+            if next_map[v * 4 + c] < 0 {
+                next_map[v * 4 + c] = nodes
+                nodes = nodes + 1
+            }
+            v = next_map[v * 4 + c]
+        }
+        out[v] = out[v] | (1 << pi)
+    }
+
+    # fail links BFS
+    let q: ptr<i32> = calloc(64, 4)
+    let mut qh: i32 = 0
+    let mut qt: i32 = 0
+    for c in 0..4 {
+        if next_map[0 * 4 + c] >= 0 {
+            fail[next_map[0 * 4 + c]] = 0
+            q[qt] = next_map[0 * 4 + c]
+            qt = qt + 1
+        } else {
+            next_map[0 * 4 + c] = 0
+        }
+    }
+    while qh < qt {
+        let v: i32 = q[qh]
+        qh = qh + 1
+        out[v] = out[v] | out[fail[v]]
+        for c in 0..4 {
+            let u: i32 = next_map[v * 4 + c]
+            if u >= 0 {
+                fail[u] = next_map[fail[v] * 4 + c]
+                q[qt] = u
+                qt = qt + 1
+            } else {
+                next_map[v * 4 + c] = next_map[fail[v] * 4 + c]
+            }
+        }
+    }
+
+    let NS: i32 = nodes
+    let trans: ptr<i32> = calloc(64 * 4, 4)
+    for s in 0..NS {
+        for c in 0..4 {
+            trans[s * 4 + c] = next_map[s * 4 + c]
+        }
+    }
+
+    # DP: dp[node][mask], mask 0..15
+    let dp: ptr<i64> = calloc(NS * 16, 8)
+    let nd: ptr<i64> = calloc(NS * 16, 8)
+    dp[0 * 16 + 0] = 1
+    let N: i32 = 30
+    for len in 0..N {
+        memset(nd, 0, (NS * 16) * 8)
+        for s in 0..NS {
+            for mask in 0..16 {
+                let cur: i64 = dp[s * 16 + mask]
+                if cur == 0 {
+                    continue
+                }
+                for c in 0..4 {
+                    let ns2: i32 = trans[s * 4 + c]
+                    let o: i32 = out[ns2]
+                    if (o & mask) != 0 {
+                        continue
+                    }
+                    let nm: i32 = mask | o
+                    nd[ns2 * 16 + nm] = nd[ns2 * 16 + nm] + cur
+                }
+            }
+        }
+        # swap dp and nd
+        for i in 0..(NS * 16) {
+            dp[i] = nd[i]
+        }
+    }
+
+    let mut ans: i64 = 0
+    for s in 0..NS {
+        ans = ans + dp[s * 16 + 15]
+    }
+    printf("%lld\n", ans)
+    free(next_map)
+    free(fail)
+    free(out)
+    free(q)
+    free(pat)
+    free(trans)
+    free(dp)
+    free(nd)
     return 0
 }

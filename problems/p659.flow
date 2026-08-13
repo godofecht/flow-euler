@@ -1,11 +1,75 @@
 # Project Euler 659
 # Largest prime dividing successive n^2+k^2; sum P(k) for k<=1e7 mod 1e18.
+# f[x] = 4x^2+1. For each x, use f[x] as a divisor to sieve out factors
+# from f[curr] at positions curr = x mod div and curr = -x mod div.
 
 extern {
-    function pe659_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
 }
 
+const LIMIT: i64 = 10000000
+const MOD: i64 = 1000000000000000000
+
 function main() -> i32 {
-    printf("%lld\n", pe659_answer())
+    let f: ptr<i64> = calloc(LIMIT + 1, 8)
+    let maxelem: ptr<i64> = calloc(LIMIT + 1, 8)
+    if f == null || maxelem == null {
+        return 1
+    }
+    let mut x: i64 = 0
+    while x <= LIMIT {
+        f[x] = 4 * x * x + 1
+        x = x + 1
+    }
+    let mut xi: i64 = 1
+    while xi <= LIMIT {
+        let div: i64 = f[xi]
+        if div > 1 {
+            let mut curr: i64 = xi % div
+            while curr <= LIMIT {
+                if f[curr] % div == 0 {
+                    if maxelem[curr] < div {
+                        maxelem[curr] = div
+                    }
+                    while f[curr] % div == 0 {
+                        f[curr] = f[curr] / div
+                    }
+                }
+                curr = curr + div
+            }
+            let mut neg: i64 = (0 - xi) % div
+            if neg < 0 {
+                neg = neg + div
+            }
+            neg = neg % div
+            curr = neg
+            while curr <= LIMIT {
+                if curr == 0 {
+                    curr = curr + div
+                    continue
+                }
+                if f[curr] % div == 0 {
+                    if maxelem[curr] < div {
+                        maxelem[curr] = div
+                    }
+                    while f[curr] % div == 0 {
+                        f[curr] = f[curr] / div
+                    }
+                }
+                curr = curr + div
+            }
+        }
+        xi = xi + 1
+    }
+    let mut sum: i64 = 0
+    let mut i: i64 = 0
+    while i <= LIMIT {
+        sum = (sum + maxelem[i]) % MOD
+        i = i + 1
+    }
+    free(f as ptr<void>)
+    free(maxelem as ptr<void>)
+    printf("%lld\n", sum)
     return 0
 }

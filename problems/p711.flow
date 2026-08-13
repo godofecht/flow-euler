@@ -1,11 +1,73 @@
 # Project Euler 711
 # Binary Blackboard — S(12345678) mod 10^9+7.
+# Ported from native C to pure Flow.
 
-extern {
-    function pe_solve() -> i64
+const MOD: i64 = 1000000007
+
+function modpow(b0: i64, e0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = b0 % MOD
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = r * b % MOD
+        }
+        b = b * b % MOD
+        e = e >> 1
+    }
+    return r
+}
+
+function sum_pows_8(k: i64) -> i64 {
+    if k <= 0 {
+        return 0
+    }
+    return (modpow(8, k) - 1 + MOD) % MOD * modpow(7, MOD - 2) % MOD
+}
+
+function sum_pows_4_1_to_m(m: i64) -> i64 {
+    if m <= 0 {
+        return 0
+    }
+    return (modpow(4, m + 1) - 4 + MOD) % MOD * modpow(3, MOD - 2) % MOD
+}
+
+function sum_T_upto(K: i64) -> i64 {
+    if K <= 0 {
+        return 0
+    }
+    let mut T: i64 = 0
+    let mut s: i64 = 0
+    let mut pow2: i64 = 1
+    let mut pow4: i64 = 1
+    for i in 0..K {
+        let add: i64 = (pow2 + 2) % MOD * pow4 % MOD
+        T = (T + T + add) % MOD
+        s = s + T
+        if s >= MOD {
+            s = s - MOD
+        }
+        pow2 = (pow2 + pow2) % MOD
+        pow4 = pow4 * 4 % MOD
+    }
+    return s
+}
+
+function S(N: i64) -> i64 {
+    if N % 2 == 0 {
+        let m: i64 = N / 2
+        let A: i64 = (sum_pows_8(m) + sum_T_upto(m - 1)) % MOD
+        let B: i64 = (sum_pows_4_1_to_m(m) - m % MOD + MOD) % MOD
+        return (A + modpow(4, m) + B) % MOD
+    } else {
+        let m: i64 = (N - 1) / 2
+        let A: i64 = (sum_pows_8(m + 1) + sum_T_upto(m)) % MOD
+        let B: i64 = (sum_pows_4_1_to_m(m) - m % MOD + MOD) % MOD
+        return (A + B) % MOD
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    printf("%lld\n", S(12345678))
     return 0
 }

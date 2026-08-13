@@ -1,11 +1,121 @@
 # Project Euler 751
-# Concatenation Coincidence — 24 decimals of theta.
+# Concatenation Coincidence: 24 decimals of theta.
 
 extern {
-    function pe_solve_print() -> void
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function floor(x: f64) -> f64
+    function strtod(s: ptr<i8>, endp: ptr<void>) -> f64
+    function strlen(s: ptr<i8>) -> i64
+    function strcmp(a: ptr<i8>, b: ptr<i8>) -> i32
+}
+
+# Write integer n as decimal string into buf at position pos.
+# Returns new position.
+function int_to_str(n: i32, buf: ptr<i8>, pos: i32) -> i32 {
+    if n == 0 {
+        buf[pos] = 48
+        return pos + 1
+    }
+    let mut digits: array<i8, 16>
+    let mut len: i32 = 0
+    let mut v: i32 = n
+    while v > 0 {
+        digits[len] = (48 + (v % 10)) as i8
+        len = len + 1
+        v = v / 10
+    }
+    let mut i: i32 = len - 1
+    while i >= 0 {
+        buf[pos] = digits[i]
+        pos = pos + 1
+        i = i - 1
+    }
+    return pos
+}
+
+# Build the sequence string from theta into out, up to `length` chars.
+function sequence(theta: f64, length: i32, out: ptr<i8>) -> void {
+    let mut b1: f64 = theta
+    let mut pos: i32 = 0
+    pos = int_to_str(floor(b1) as i32, out, pos)
+    buf_set(out, pos, 46)
+    pos = pos + 1
+    while pos < length {
+        let floorb1: i32 = floor(b1) as i32
+        let bn: f64 = (floorb1 as f64) * (b1 - (floorb1 as f64) + 1.0)
+        pos = int_to_str(floor(bn) as i32, out, pos)
+        b1 = bn
+    }
+    buf_set(out, length, 0)
+}
+
+function buf_set(buf: ptr<i8>, idx: i32, val: i32) -> void {
+    buf[idx] = val as i8
+}
+
+function buf_get(buf: ptr<i8>, idx: i32) -> i32 {
+    return buf[idx] as i32
+}
+
+# Copy src into dst (null-terminated). Returns length.
+function str_copy(dst: ptr<i8>, src: ptr<i8>) -> i32 {
+    let mut i: i32 = 0
+    while buf_get(src, i) != 0 {
+        buf_set(dst, i, buf_get(src, i))
+        i = i + 1
+    }
+    buf_set(dst, i, 0)
+    return i
+}
+
+# Append digit d to null-terminated string at dst. Returns new length.
+function str_append_digit(dst: ptr<i8>, d: i32) -> i32 {
+    let mut i: i32 = 0
+    while buf_get(dst, i) != 0 {
+        i = i + 1
+    }
+    buf_set(dst, i, 48 + d)
+    buf_set(dst, i + 1, 0)
+    return i + 1
 }
 
 function main() -> i32 {
-    pe_solve_print()
+    let curr: ptr<i8> = calloc(64, 1)
+    let temp: ptr<i8> = calloc(64, 1)
+    let seq: ptr<i8> = calloc(64, 1)
+    # Initialize curr = "2."
+    buf_set(curr, 0, 50)
+    buf_set(curr, 1, 46)
+    buf_set(curr, 2, 0)
+    let length: i32 = 26
+    while strlen(curr) < (length as i64) {
+        let mut found: i32 = 0 - 1
+        let mut x: i32 = 0
+        while x < 10 {
+            str_copy(temp, curr)
+            str_append_digit(temp, x)
+            let theta: f64 = strtod(temp, null)
+            sequence(theta, strlen(temp) as i32, seq)
+            if strcmp(temp, seq) == 0 {
+                found = x
+                break
+            }
+            x = x + 1
+        }
+        if found < 0 {
+            printf("fail\n")
+            free(curr)
+            free(temp)
+            free(seq)
+            return 1
+        }
+        str_append_digit(curr, found)
+    }
+    buf_set(curr, length, 0)
+    printf("%s\n", curr)
+    free(curr)
+    free(temp)
+    free(seq)
     return 0
 }

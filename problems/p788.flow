@@ -1,11 +1,61 @@
 # Project Euler 788
-# Dominating Numbers — D(2022) mod 10^9+7.
+# Dominating Numbers: D(2022) mod 10^9+7.
+# A dominating number has more than half its digits equal.
+# Sum over n=1..2022 and m = majority digit count.
+
+const MOD: i64 = 1000000007
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function modpow(b: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut bb: i64 = b % MOD
+    let mut ee: i64 = e
+    while ee > 0 {
+        if (ee & 1) == 1 {
+            r = r * bb % MOD
+        }
+        bb = bb * bb % MOD
+        ee = ee >> 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let N: i64 = 2022
+    let fac: ptr<i64> = calloc(N + 1, 8)
+    fac[0] = 1
+    let mut x: i64 = 1
+    while x <= N {
+        fac[x] = fac[x - 1] * x % MOD
+        x = x + 1
+    }
+
+    let invfac: ptr<i64> = calloc(N + 1, 8)
+    invfac[N] = modpow(fac[N], MOD - 2)
+    let mut x2: i64 = N
+    while x2 >= 1 {
+        invfac[x2 - 1] = invfac[x2] * x2 % MOD
+        x2 = x2 - 1
+    }
+
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n <= N {
+        let mut m: i64 = n / 2 + 1
+        while m <= n {
+            let c: i64 = modpow(9, n - m + 1) * fac[n] % MOD * invfac[n - m] % MOD * invfac[m] % MOD
+            total = (total + c) % MOD
+            m = m + 1
+        }
+        n = n + 1
+    }
+
+    free(fac)
+    free(invfac)
+    printf("%lld\n", total)
     return 0
 }

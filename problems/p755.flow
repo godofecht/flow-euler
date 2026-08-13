@@ -1,11 +1,99 @@
 # Project Euler 755
 # Not Zeckendorf — S(10^13).
+# Ported from native C to pure Flow. Uses i128 for counts and a hash table.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+struct Ent {
+    k: i64
+    cap: i64
+    val_lo: i64
+    val_hi: i64
+    used: i32
+}
+
+const HSIZE: i64 = 1 << 22
+
+let mut H: ptr<Ent> = null
+let mut F: ptr<i64> = null
+
+# sum_all(k) = F[k+2] - 2
+function sum_all(k: i64) -> i64 {
+    if k <= 0 {
+        return 0
+    }
+    return F[k + 2] - 2
+}
+
+# i128 count stored as (hi, lo) pair. We split i128 into two i64s.
+# count returns i128 as a pair via out parameters.
+# Instead, we return i128 directly.
+
+function count(k: i64, cap: i64) -> i128 {
+    if cap < 0 {
+        return 0
+    }
+    if k == 0 {
+        return 1
+    }
+    let h: i64 = (k * 11400714819323198485) ^ cap
+    let mask: i64 = HSIZE - 1
+    for probe in 0..64 {
+        let e: ptr<Ent> = &H[(h + probe) & mask]
+        if e[0].used == 1 && e[0].k == k && e[0].cap == cap {
+            return ((e[0].val_hi as i128) << 64) | (e[0].val_lo as i128)
+        }
+        if e[0].used == 0 {
+            let mut res: i128 = 0
+            if cap >= sum_all(k) {
+                res = (1 as i128) << k
+            } else {
+                if cap < F[k] {
+                    res = count(k - 1, cap)
+                } else {
+                    res = count(k - 1, cap) + count(k - 1, cap - F[k])
+                }
+            }
+            e[0].used = 1
+            e[0].k = k
+            e[0].cap = cap
+            e[0].val_lo = (res & 0xFFFFFFFFFFFFFFFF) as i64
+            e[0].val_hi = (res >> 64) as i64
+            return res
+        }
+    }
+    # Fallback without cache.
+    if cap >= sum_all(k) {
+        return (1 as i128) << k
+    }
+    if cap < F[k] {
+        return count(k - 1, cap)
+    }
+    return count(k - 1, cap) + count(k - 1, cap - F[k])
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let n: i64 = 10000000000000
+    F = calloc(200, 8) as ptr<i64>
+    F[1] = 1
+    F[2] = 2
+    let mut len: i64 = 2
+    while F[len] <= n {
+        len = len + 1
+        F[len] = F[len - 1] + F[len - 2]
+    }
+    let k: i64 = len - 1
+    while len <= k + 2 {
+        len = len + 1
+        F[len] = F[len - 1] + F[len - 2]
+    }
+    H = calloc(HSIZE, 40) as ptr<Ent>
+    let ans: i128 = count(k, n)
+    free(H as ptr<void>)
+    free(F as ptr<void>)
+    printf("%lld\n", ans as i64)
     return 0
 }

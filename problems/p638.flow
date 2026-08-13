@@ -1,12 +1,80 @@
-# Project Euler 638
-# Weighted lattice paths via Gaussian binomials mod 1e9+7.
-# Native helper for correctness.
+# Project Euler 638 - Weighted Lattice Paths
+# sum_{k=1..7} [2*10^k+k choose 10^k+k]_q (mod 1e9+7)
+# Gaussian binomial coefficient via product formula.
 
-extern {
-    function p638_native() -> i64
+import euler.nt { mod_pow }
+
+const MOD: i64 = 1000000007
+
+# Gaussian binomial coefficient [m choose n]_q mod `mod`.
+function gaussian_binom(m: i64, n_in: i64, q: i64, mod: i64) -> i64 {
+    let mut n: i64 = n_in
+    if n < 0 || n > m {
+        return 0
+    }
+    if n == 0 || n == m {
+        return 1
+    }
+    if q % mod == 1 {
+        # regular binomial
+        if n > m - n {
+            n = m - n
+        }
+        if n == 0 {
+            return 1
+        }
+        let mut num: i64 = 1
+        let mut den: i64 = 1
+        let start: i64 = m - n
+        let mut i: i64 = 1
+        while i <= n {
+            num = ((num as i128) * ((start + i) % mod) % mod) as i64
+            den = ((den as i128) * (i % mod) % mod) as i64
+            i = i + 1
+        }
+        return ((num as i128) * mod_pow(den, mod - 2, mod) % mod) as i64
+    }
+    if n > m - n {
+        n = m - n
+    }
+    if n == 0 {
+        return 1
+    }
+    let b: i64 = m - n
+    let mut num_prod: i64 = 1
+    let mut den_prod: i64 = 1
+    let mut qmod: i64 = q % mod
+    if qmod < 0 {
+        qmod = qmod + mod
+    }
+    let mut pow_den: i64 = qmod
+    let mut pow_num: i64 = mod_pow(qmod, b + 1, mod)
+    let mut i: i64 = 0
+    while i < n {
+        num_prod = ((num_prod as i128) * (mod + 1 - pow_num) % mod) as i64
+        den_prod = ((den_prod as i128) * (mod + 1 - pow_den) % mod) as i64
+        pow_den = ((pow_den as i128) * qmod % mod) as i64
+        pow_num = ((pow_num as i128) * qmod % mod) as i64
+        i = i + 1
+    }
+    return ((num_prod as i128) * mod_pow(den_prod, mod - 2, mod) % mod) as i64
 }
 
 function main() -> i32 {
-    printf("%lld\n", p638_native())
+    let mod: i64 = MOD
+    let mut ans: i64 = 0
+    let mut k: i32 = 1
+    while k <= 7 {
+        let mut n: i64 = 1
+        let mut j: i32 = 0
+        while j < k {
+            n = n * 10
+            j = j + 1
+        }
+        n = n + (k as i64)
+        ans = (ans + gaussian_binom(2 * n, n, (k as i64), mod)) % mod
+        k = k + 1
+    }
+    printf("%lld\n", ans)
     return 0
 }

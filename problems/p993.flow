@@ -2,10 +2,106 @@
 # Banana game BB(n) with eventual periodicity.
 
 extern {
-    function p993_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
 }
 
+const PERIOD_START: i64 = 514
+const PERIOD: i64 = 71
+const OFFSET: i64 = 60000
+const ARR_SIZE: i64 = 120001
+
 function main() -> i32 {
-    printf("%lld\n", p993_native())
+    let bananas: ptr<i8> = calloc(ARR_SIZE, 1)
+    memset(bananas, 0, ARR_SIZE)
+
+    let limit: i64 = PERIOD_START + PERIOD
+    let bb: ptr<i64> = calloc(586, 8)
+    bb[0] = 0
+    let mut pos: i64 = 0
+    let mut carry: i64 = 0
+
+    let mut n: i64 = 1
+    while n <= limit {
+        carry = carry + 1
+        let mut stepped: bool = true
+        while stepped {
+            stepped = false
+            let p: i64 = pos
+            let hx: i8 = bananas[p + OFFSET]
+            let hx1: i8 = bananas[p + 1 + OFFSET]
+
+            if hx != 0 && hx1 != 0 {
+                bananas[p + 1 + OFFSET] = 0
+                pos = p - 1
+                carry = carry + 1
+                stepped = true
+            } else {
+                if hx != 0 && hx1 == 0 {
+                    bananas[p + OFFSET] = 0
+                    pos = p + 2
+                    carry = carry + 1
+                    stepped = true
+                } else {
+                    if hx == 0 && hx1 != 0 {
+                        bananas[p + 1 + OFFSET] = 0
+                        bananas[p + OFFSET] = 1
+                        pos = p + 2
+                        stepped = true
+                    } else {
+                        if carry >= 3 {
+                            bananas[p - 1 + OFFSET] = 1
+                            bananas[p + OFFSET] = 1
+                            bananas[p + 1 + OFFSET] = 1
+                            pos = p - 2
+                            carry = carry - 3
+                            stepped = true
+                        }
+                    }
+                }
+            }
+        }
+        bb[n] = pos
+        n = n + 1
+    }
+
+    let big_n: i64 = 1000000000000000000
+    let mut result: i64 = 0
+    if big_n <= PERIOD_START {
+        result = bb[big_n]
+    } else {
+        let remaining: i64 = big_n - PERIOD_START
+        let whole_periods: i64 = remaining / PERIOD
+        let tail: i64 = remaining % PERIOD
+
+        let delta: array<i32, 71> = [
+            17, -2, -8, -2, -2, -14, -2, -2, -17, -8, -5, -8, -5, -2, -2, -5, -8,
+            50, -8, 23, -13, -2, 67, -5, -2, -2, -5, -8, -5, 21, 29, -11, -2, -2,
+            6, -11, 31, -2, -11, 17, -2, -8, -2, -2, -14, -2, -2, -17, -8, -5, -8,
+            -8, 8, -13, -5, -2, -2, -5, -2, -11, -8, -8, -5, -2, -11, -8, -8, -5,
+            -2, -11, 216
+        ]
+
+        let mut pattern_sum: i64 = 0
+        let mut i: i64 = 0
+        while i < PERIOD {
+            pattern_sum = pattern_sum + (delta[i] as i64)
+            i = i + 1
+        }
+
+        let mut tail_sum: i64 = 0
+        i = 0
+        while i < tail {
+            tail_sum = tail_sum + (delta[i] as i64)
+            i = i + 1
+        }
+
+        result = bb[PERIOD_START] + whole_periods * pattern_sum + tail_sum
+    }
+
+    printf("%lld\n", result)
+    free(bananas)
+    free(bb)
     return 0
 }

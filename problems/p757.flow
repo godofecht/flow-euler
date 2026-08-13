@@ -1,11 +1,100 @@
 # Project Euler 757
 # Stealthy numbers: count distinct N = x(x+1)y(y+1) <= 10^14.
+# Ported from native C to pure Flow. Sorting implemented in Flow.
 
 extern {
-    function p757_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function realloc(p: ptr<void>, n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+}
+
+# In-place heapsort of arr[0..cnt).
+function heapsort(arr: ptr<i64>, cnt: i64) -> void {
+    # Build max heap.
+    let mut start: i64 = cnt / 2
+    while start > 0 {
+        start = start - 1
+        sift_down(arr, start, cnt)
+    }
+    # Sort down.
+    let mut end: i64 = cnt
+    while end > 1 {
+        end = end - 1
+        let tmp: i64 = arr[0]
+        arr[0] = arr[end]
+        arr[end] = tmp
+        sift_down(arr, 0, end)
+    }
+}
+
+function sift_down(arr: ptr<i64>, root0: i64, end: i64) -> void {
+    let mut root: i64 = root0
+    while true {
+        let child: i64 = root * 2 + 1
+        if child >= end {
+            break
+        }
+        let mut c: i64 = child
+        if child + 1 < end && arr[child + 1] > arr[child] {
+            c = child + 1
+        }
+        if arr[c] <= arr[root] {
+            break
+        }
+        let tmp: i64 = arr[root]
+        arr[root] = arr[c]
+        arr[c] = tmp
+        root = c
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p757_native())
+    let limit: i64 = 100000000000000
+    let mut cap: i64 = 1 << 24
+    let mut arr: ptr<i64> = malloc(cap * 8) as ptr<i64>
+    let mut cnt: i64 = 0
+
+    let mut x: i64 = 1
+    while true {
+        let xx: i64 = x * (x + 1)
+        if xx * xx > limit {
+            break
+        }
+        let rem: i64 = limit / xx
+        let mut ymax: i64 = ((sqrt((4 * rem + 1) as f64) - 1.0) / 2.0) as i64
+        while ymax * (ymax + 1) > rem {
+            ymax = ymax - 1
+        }
+        let mut y: i64 = x
+        while y <= ymax {
+            let n: i64 = xx * y * (y + 1)
+            if cnt >= cap {
+                cap = cap << 1
+                arr = realloc(arr as ptr<void>, cap * 8) as ptr<i64>
+            }
+            arr[cnt] = n
+            cnt = cnt + 1
+            y = y + 1
+        }
+        x = x + 1
+    }
+
+    heapsort(arr, cnt)
+
+    let mut nd: i64 = 0
+    let mut i: i64 = 0
+    while i < cnt {
+        nd = nd + 1
+        let mut j: i64 = i + 1
+        while j < cnt && arr[j] == arr[i] {
+            j = j + 1
+        }
+        i = j
+    }
+
+    printf("%lld\n", nd)
+    free(arr as ptr<void>)
     return 0
 }

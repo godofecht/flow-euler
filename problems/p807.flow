@@ -1,11 +1,280 @@
-# Project Euler 807
-# Loops of Ropes - P(n) = A(2n-1,n)/(2n-1)!, exact bignum solver in native/p807.c.
+# Project Euler 807 - Loops of Ropes
+# P(n) = A(2n-1, n) / (2n-1)! where A is an Eulerian number (OEIS A025585).
+# a(n) = sum_{j=0..n-1} (-1)^j * C(2n, j) * (n-j)^(2n-1)
+# Exact bignum arithmetic in Flow, then round half-up to 10 decimals.
 
 extern {
-    function p807_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const BASE: i64 = 1000000000
+const CAP: i64 = 60
+
+struct Big {
+    d: ptr<i64>
+    len: i64
+}
+
+function bn_alloc(cap: i64) -> Big {
+    let d: ptr<i64> = calloc(cap, 8) as ptr<i64>
+    return Big { d: d, len: 0 }
+}
+
+function bn_from_i64(v: i64) -> Big {
+    let b: Big = bn_alloc(CAP)
+    if v == 0 {
+        return b
+    }
+    let mut r: i64 = v
+    let mut i: i64 = 0
+    while r > 0 {
+        b.d[i] = r % BASE
+        r = r / BASE
+        i = i + 1
+    }
+    b.len = i
+    return b
+}
+
+function bn_copy(a: Big) -> Big {
+    let b: Big = bn_alloc(CAP)
+    let mut i: i64 = 0
+    while i < a.len {
+        b.d[i] = a.d[i]
+        i = i + 1
+    }
+    b.len = a.len
+    return b
+}
+
+# Compare a and b. Returns -1, 0, or 1.
+function bn_cmp(a: Big, b: Big) -> i32 {
+    if a.len < b.len { return -1 }
+    if a.len > b.len { return 1 }
+    if a.len == 0 { return 0 }
+    let mut i: i64 = a.len - 1
+    while i >= 0 {
+        if a.d[i] < b.d[i] { return -1 }
+        if a.d[i] > b.d[i] { return 1 }
+        i = i - 1
+    }
+    return 0
+}
+
+# a += b  (modifies a in place)
+function bn_add(a: ptr<Big>, b: Big) -> void {
+    let mut i: i64 = 0
+    let mut carry: i64 = 0
+    while i < a[0].len || i < b.len || carry > 0 {
+        let mut v: i64 = carry
+        if i < a[0].len {
+            v = v + a[0].d[i]
+        }
+        if i < b.len {
+            v = v + b.d[i]
+        }
+        a[0].d[i] = v % BASE
+        carry = v / BASE
+        i = i + 1
+    }
+    a[0].len = i
+    while a[0].len > 0 && a[0].d[a[0].len - 1] == 0 {
+        a[0].len = a[0].len - 1
+    }
+}
+
+# a -= b  (modifies a in place, assumes a >= b)
+function bn_sub(a: ptr<Big>, b: Big) -> void {
+    let mut i: i64 = 0
+    let mut borrow: i64 = 0
+    while i < a[0].len {
+        let mut v: i64 = a[0].d[i] - borrow
+        if i < b.len {
+            v = v - b.d[i]
+        }
+        if v < 0 {
+            v = v + BASE
+            borrow = 1
+        } else {
+            borrow = 0
+        }
+        a[0].d[i] = v
+        i = i + 1
+    }
+    while a[0].len > 0 && a[0].d[a[0].len - 1] == 0 {
+        a[0].len = a[0].len - 1
+    }
+}
+
+# a *= v  (modifies a in place)
+function bn_mul_small(a: ptr<Big>, v: i64) -> void {
+    if v == 0 {
+        a[0].len = 0
+        return
+    }
+    let mut carry: i64 = 0
+    let mut i: i64 = 0
+    while i < a[0].len {
+        let v128: i128 = (a[0].d[i] as i128) * (v as i128) + (carry as i128)
+        a[0].d[i] = (v128 % (BASE as i128)) as i64
+        carry = (v128 / (BASE as i128)) as i64
+        i = i + 1
+    }
+    while carry > 0 {
+        a[0].d[a[0].len] = carry % BASE
+        carry = carry / BASE
+        a[0].len = a[0].len + 1
+    }
+}
+
+# a /= v, returns remainder. (modifies a in place)
+function bn_div_small(a: ptr<Big>, v: i64) -> i64 {
+    let mut rem: i64 = 0
+    let mut i: i64 = a[0].len - 1
+    while i >= 0 {
+        let cur: i64 = rem * BASE + a[0].d[i]
+        a[0].d[i] = cur / v
+        rem = cur % v
+        i = i - 1
+    }
+    while a[0].len > 0 && a[0].d[a[0].len - 1] == 0 {
+        a[0].len = a[0].len - 1
+    }
+    return rem
+}
+
+# Returns a * b as a new Big.
+function bn_mul(a: Big, b: Big) -> Big {
+    let result: Big = bn_alloc(CAP)
+    let mut i: i64 = 0
+    while i < a.len {
+        let mut carry: i64 = 0
+        let mut k: i64 = 0
+        while k < b.len {
+            let idx: i64 = i + k
+            let v: i64 = result.d[idx] + a.d[i] * b.d[k] + carry
+            result.d[idx] = v % BASE
+            carry = v / BASE
+            k = k + 1
+        }
+        let mut idx: i64 = i + b.len
+        while carry > 0 {
+            let v: i64 = result.d[idx] + carry
+            result.d[idx] = v % BASE
+            carry = v / BASE
+            idx = idx + 1
+        }
+        i = i + 1
+    }
+    result.len = a.len + b.len
+    while result.len > 0 && result.d[result.len - 1] == 0 {
+        result.len = result.len - 1
+    }
+    return result
+}
+
+# Compute base^exp as a Big.
+function bn_pow_small(base: i64, exp: i64) -> Big {
+    let result: Big = bn_from_i64(1)
+    let mut i: i64 = 0
+    while i < exp {
+        bn_mul_small(&result, base)
+        i = i + 1
+    }
+    return result
 }
 
 function main() -> i32 {
-    printf("%.10f\n", p807_native())
+    let n: i64 = 80
+    let m: i64 = 2 * n - 1
+
+    # total = sum_{j=0..n-1} (-1)^j * C(2n, j) * (n-j)^m
+    # Split into pos (even j) and neg (odd j), then total = pos - neg.
+    let mut pos: Big = bn_from_i64(0)
+    let mut neg: Big = bn_from_i64(0)
+
+    # C(2n, j) computed incrementally as a bignum.
+    let mut binom: Big = bn_from_i64(1)
+
+    let mut j: i64 = 0
+    while j < n {
+        let power: Big = bn_pow_small(n - j, m)
+        let term: Big = bn_mul(binom, power)
+        free(power.d)
+
+        if j % 2 == 0 {
+            bn_add(&pos, term)
+        } else {
+            bn_add(&neg, term)
+        }
+        free(term.d)
+
+        # Update binom: C(2n, j+1) = C(2n, j) * (2n - j) / (j + 1)
+        if j + 1 < n {
+            bn_mul_small(&binom, 2 * n - j)
+            let rem: i64 = bn_div_small(&binom, j + 1)
+        }
+
+        j = j + 1
+    }
+
+    # total = pos - neg
+    let mut total: Big = bn_copy(pos)
+    bn_sub(&total, neg)
+    free(pos.d)
+    free(neg.d)
+    free(binom.d)
+
+    # den = m!
+    let mut den: Big = bn_from_i64(1)
+    let mut i: i64 = 2
+    while i <= m {
+        bn_mul_small(&den, i)
+        i = i + 1
+    }
+
+    # scaled = total * 10^10
+    let mut scaled: Big = bn_copy(total)
+    bn_mul_small(&scaled, 10000000000)
+    free(total.d)
+
+    # Binary search for q = floor(scaled / den)
+    let mut lo: i64 = 0
+    let mut hi: i64 = 100000000000
+    while lo < hi {
+        let mid: i64 = (lo + hi + 1) / 2
+        let temp: Big = bn_copy(den)
+        bn_mul_small(&temp, mid)
+        if bn_cmp(temp, scaled) <= 0 {
+            lo = mid
+        } else {
+            hi = mid - 1
+        }
+        free(temp.d)
+    }
+    let q: i64 = lo
+
+    # r = scaled - q * den
+    let qden: Big = bn_copy(den)
+    bn_mul_small(&qden, q)
+    let mut r: Big = bn_copy(scaled)
+    bn_sub(&r, qden)
+    free(qden.d)
+    free(scaled.d)
+
+    # Check if 2*r >= den -> round up
+    bn_mul_small(&r, 2)
+    let mut qv: i64 = q
+    if bn_cmp(r, den) >= 0 {
+        qv = q + 1
+    }
+
+    let int_part: i64 = qv / 10000000000
+    let frac_part: i64 = qv % 10000000000
+    printf("%lld.%010lld\n", int_part, frac_part)
+
+    free(r.d)
+    free(den.d)
     return 0
 }

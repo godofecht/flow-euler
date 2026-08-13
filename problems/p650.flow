@@ -1,11 +1,115 @@
 # Project Euler 650
 # Divisors of binomial product: track sigma(B_n) mod 1e9+7 up to n=20000.
 
+import euler.nt { mod_pow }
+
 extern {
-    function pe650_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
 }
 
+const LIMIT: i32 = 20000
+const MOD: i64 = 1000000007
+
 function main() -> i32 {
-    printf("%lld\n", pe650_answer())
+    let spf: ptr<i32> = calloc((LIMIT + 1) as i64, 4)
+    let primes: ptr<i32> = calloc(LIMIT as i64, 4)
+    let mut pc: i32 = 0
+
+    # Linear sieve
+    let mut x: i32 = 2
+    while x <= LIMIT {
+        if spf[x] == 0 {
+            spf[x] = x
+            primes[pc] = x
+            pc = pc + 1
+        }
+        let mut j: i32 = 0
+        while j < pc {
+            let y: i64 = (primes[j] as i64) * (x as i64)
+            if y > (LIMIT as i64) { break }
+            spf[y as i32] = primes[j]
+            if primes[j] == spf[x] { break }
+            j = j + 1
+        }
+        x = x + 1
+    }
+
+    let pidx: ptr<i32> = calloc((LIMIT + 1) as i64, 4)
+    let mut i: i32 = 0
+    while i < pc {
+        pidx[primes[i]] = i
+        i = i + 1
+    }
+
+    let prime_power: ptr<i64> = calloc(pc as i64, 8)
+    let inv_fact: ptr<i64> = calloc(pc as i64, 8)
+    let inv_prime: ptr<i64> = calloc(pc as i64, 8)
+    let sigma_den: ptr<i64> = calloc(pc as i64, 8)
+
+    let mut k: i32 = 0
+    while k < pc {
+        prime_power[k] = (primes[k] as i64) % MOD
+        inv_fact[k] = 1
+        inv_prime[k] = mod_pow(primes[k] as i64, MOD - 2, MOD)
+        sigma_den[k] = mod_pow((primes[k] as i64) - 1, MOD - 2, MOD)
+        k = k + 1
+    }
+
+    let mut active: i32 = 0
+    let mut total: i64 = 1
+
+    let mut n: i32 = 2
+    while n <= LIMIT {
+        while active < pc && primes[active] <= n {
+            active = active + 1
+        }
+
+        # Divide each active prime_power by its current factorial exponent
+        let mut a: i32 = 0
+        while a < active {
+            prime_power[a] = ((prime_power[a] as i128) * inv_fact[a] % MOD) as i64
+            a = a + 1
+        }
+
+        # Factor n and update prime_power and inv_fact
+        let mut xf: i32 = n
+        while xf > 1 {
+            let p: i32 = spf[xf]
+            let mut e: i32 = 0
+            while xf % p == 0 {
+                xf = xf / p
+                e = e + 1
+            }
+            let idx: i32 = pidx[p]
+            let pe: i64 = mod_pow(p as i64, ((n - 1) as i64) * (e as i64), MOD)
+            prime_power[idx] = ((prime_power[idx] as i128) * pe % MOD) as i64
+            let ipow: i64 = mod_pow(inv_prime[idx], e as i64, MOD)
+            inv_fact[idx] = ((inv_fact[idx] as i128) * ipow % MOD) as i64
+        }
+
+        # Compute divisor sum = product of (prime_power[i] - 1) / (prime[i] - 1)
+        let mut divisor_sum: i64 = 1
+        let mut b: i32 = 0
+        while b < active {
+            let mut t: i64 = (prime_power[b] - 1) % MOD
+            if t < 0 { t = t + MOD }
+            divisor_sum = ((divisor_sum as i128) * t % MOD * sigma_den[b] % MOD) as i64
+            b = b + 1
+        }
+
+        total = (total + divisor_sum) % MOD
+        n = n + 1
+    }
+
+    printf("%lld\n", total)
+
+    free(spf)
+    free(primes)
+    free(pidx)
+    free(prime_power)
+    free(inv_fact)
+    free(inv_prime)
+    free(sigma_den)
     return 0
 }

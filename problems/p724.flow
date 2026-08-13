@@ -1,11 +1,49 @@
 # Project Euler 724
 # Drone Delivery — E(10^8) rounded to nearest integer.
+#
+# E(n) = (n/2) * (H_n^2 + H_n^(2))
+# Uses asymptotic expansions for harmonic numbers.
 
 extern {
-    function p724_native() -> i64
+    function log(x: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+const EULER_GAMMA: f64 = 0.5772156649015328606065120900824024310421
+const PI: f64 = 3.1415926535897932384626433832795028841971
+
+function harmonic_asymptotic(n: f64) -> f64 {
+    let inv: f64 = 1.0 / n
+    let inv2: f64 = inv * inv
+    let inv4: f64 = inv2 * inv2
+    let inv6: f64 = inv4 * inv2
+    return log(n)
+        + EULER_GAMMA
+        + 0.5 * inv
+        - (1.0 / 12.0) * inv2
+        + (1.0 / 120.0) * inv4
+        - (1.0 / 252.0) * inv6
+}
+
+function harmonic2_asymptotic(n: f64) -> f64 {
+    let inv: f64 = 1.0 / n
+    let inv2: f64 = inv * inv
+    let inv3: f64 = inv2 * inv
+    let inv5: f64 = inv3 * inv2
+    let inv7: f64 = inv5 * inv2
+    return (PI * PI) / 6.0
+        - inv
+        + 0.5 * inv2
+        - (1.0 / 6.0) * inv3
+        + (1.0 / 30.0) * inv5
+        - (1.0 / 42.0) * inv7
 }
 
 function main() -> i32 {
-    printf("%lld\n", p724_native())
+    let n: f64 = 1e8
+    let h: f64 = harmonic_asymptotic(n)
+    let h2: f64 = harmonic2_asymptotic(n)
+    let e: f64 = 0.5 * n * (h * h + h2)
+    printf("%lld\n", (floor(e + 0.5) as i64))
     return 0
 }

@@ -1,12 +1,162 @@
 # Project Euler 857
 # Beautiful Graphs: G(10^7) mod (10^9+7).
-# Native C helper for the modular rolling recurrence.
+# Ported from native C to pure Flow.
 
-extern {
-    function p857_native() -> i64
+const MOD: i64 = 1000000007
+const TARGET_N: i64 = 10000000
+
+function mod_pow(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut a: i64 = a0 % mod
+    if a < 0 { a = a + mod }
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = (((r as i128) * (a as i128)) % (mod as i128)) as i64
+        }
+        a = (((a as i128) * (a as i128)) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function mod_inv(a: i64, mod: i64) -> i64 {
+    return mod_pow(a, mod - 2, mod)
+}
+
+# Count 2-colourings of edges of K_k with no monochromatic triangle.
+function count_no_mono_triangle(k: i32) -> i64 {
+    if k <= 1 { return 1 }
+
+    # edge index: (i,j) -> idx, i < j. Flat 6*6 array.
+    let mut edge: array<i32, 36> = [
+        -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1
+    ]
+    let mut m: i32 = 0
+    let mut i: i32 = 0
+    while i < k {
+        let mut j: i32 = i + 1
+        while j < k {
+            edge[i * 6 + j] = m
+            m = m + 1
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    # collect triangles as triples of edge indices. Flat 20*3 array.
+    let tris: array<i32, 60> = [
+        0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 0, 0,
+        0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 0, 0,
+        0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 0, 0,
+        0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 0, 0,
+        0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 0, 0
+    ]
+    let mut nt: i32 = 0
+    i = 0
+    while i < k {
+        let mut j: i32 = i + 1
+        while j < k {
+            let mut l: i32 = j + 1
+            while l < k {
+                tris[nt * 3] = edge[i * 6 + j]
+                tris[nt * 3 + 1] = edge[i * 6 + l]
+                tris[nt * 3 + 2] = edge[j * 6 + l]
+                nt = nt + 1
+                l = l + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let mut good: i64 = 0
+    let total: i64 = 1 << m
+    let mut mask: i64 = 0
+    while mask < total {
+        let mut ok: bool = true
+        let mut t: i32 = 0
+        while t < nt {
+            if ok {
+                let x: i32 = ((mask >> tris[t * 3]) & 1) as i32
+                let y: i32 = ((mask >> tris[t * 3 + 1]) & 1) as i32
+                let z: i32 = ((mask >> tris[t * 3 + 2]) & 1) as i32
+                if x == y {
+                    if x == z {
+                        ok = false
+                    }
+                }
+            }
+            t = t + 1
+        }
+        if ok {
+            good = good + 1
+        }
+        mask = mask + 1
+    }
+    return good
+}
+
+function G_mod(n: i64) -> i64 {
+    if n == 0 { return 1 }
+
+    # a[s] for s=1..5
+    let a: array<i64, 6> = [0, 0, 0, 0, 0, 0]
+    let mut s: i32 = 1
+    while s <= 5 {
+        a[s] = count_no_mono_triangle(s)
+        s = s + 1
+    }
+
+    # coeff[s] = a[s] / s!  (mod MOD)
+    let coeff: array<i64, 6> = [0, 0, 0, 0, 0, 0]
+    let mut fact_small: i64 = 1
+    s = 1
+    while s <= 5 {
+        fact_small = (((fact_small as i128) * (s as i128)) % (MOD as i128)) as i64
+        coeff[s] = (((a[s] as i128) * (mod_inv(fact_small, MOD) as i128)) % (MOD as i128)) as i64
+        s = s + 1
+    }
+
+    let c1: i64 = coeff[1]
+    let c2: i64 = coeff[2]
+    let c3: i64 = coeff[3]
+    let c4: i64 = coeff[4]
+    let c5: i64 = coeff[5]
+
+    # rolling recurrence: f1 = f_0 = 1, f2..f5 = 0 (lagged)
+    let mut f1: i64 = 1
+    let mut f2: i64 = 0
+    let mut f3: i64 = 0
+    let mut f4: i64 = 0
+    let mut f5: i64 = 0
+
+    let mut fact: i64 = 1
+    let mut i: i64 = 1
+    while i <= n {
+        let fn: i64 = ((((c1 as i128) * (f1 as i128) % (MOD as i128)
+                     + (c2 as i128) * (f2 as i128) % (MOD as i128)
+                     + (c3 as i128) * (f3 as i128) % (MOD as i128)
+                     + (c4 as i128) * (f4 as i128) % (MOD as i128)
+                     + (c5 as i128) * (f5 as i128) % (MOD as i128)) % (MOD as i128))) as i64
+        f5 = f4
+        f4 = f3
+        f3 = f2
+        f2 = f1
+        f1 = fn
+        fact = (((fact as i128) * (i as i128)) % (MOD as i128)) as i64
+        i = i + 1
+    }
+
+    return (((fact as i128) * (f1 as i128)) % (MOD as i128)) as i64
 }
 
 function main() -> i32 {
-    printf("%lld\n", p857_native())
+    printf("%lld\n", G_mod(TARGET_N))
     return 0
 }

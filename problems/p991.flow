@@ -1,11 +1,112 @@
 # Project Euler 991
 # Equation a/(b+c) + b/(c+a) + c/(a+c) = 4
+# Parameterized number theory search over two branches.
 
 extern {
-    function p991_native() -> i64
+    function sqrt(x: f64) -> f64
+}
+
+function gcd(a0: i32, b0: i32) -> i32 {
+    let mut a: i32 = a0
+    let mut b: i32 = b0
+    while b != 0 {
+        let t: i32 = a % b
+        a = b
+        b = t
+    }
+    if a < 0 {
+        return -a
+    }
+    return a
+}
+
+function isqrt_ll(n: i64) -> i32 {
+    if n < 0 {
+        return 0
+    }
+    let mut r: i64 = sqrt(n as f64) as i64
+    while r * r > n {
+        r = r - 1
+    }
+    while (r + 1) * (r + 1) <= n {
+        r = r + 1
+    }
+    return r as i32
 }
 
 function main() -> i32 {
-    printf("%lld\n", p991_native())
+    let limit: i64 = 10000000
+    let mut total: i64 = 0
+
+    # Plus branch: s = 6m^2 - n^2 + mn, n < 2m so s > 4m^2, m <= sqrt(limit/4)
+    let m_max: i32 = isqrt_ll(limit / 4) + 2
+    for m in 1..(m_max + 1) {
+        let n_min: i32 = isqrt_ll(3 * m * m) + 1
+        let n_max: i32 = 2 * m - 1
+        for n in n_min..(n_max + 1) {
+            if gcd(m, n) != 1 {
+                continue
+            }
+            let a: i64 = 4 * m * m - (n as i64) * (n as i64)
+            let c: i64 = (n as i64) * (n as i64) - 3 * m * m
+            let b: i64 = 5 * m * m - (n as i64) * (n as i64) + (m as i64) * (n as i64)
+            let s: i64 = a + b + c
+            if a <= 0 || b <= 0 || c <= 0 {
+                continue
+            }
+            if s <= limit {
+                let count: i64 = limit / s
+                total = total + s * count * (count + 1) / 2
+            }
+        }
+    }
+
+    # Minus branch: k = 2m - n, s = k(5m - k)
+    let alpha: f64 = 2.0 + sqrt(3.0)
+    let beta: f64 = (5.0 + sqrt(21.0)) / 2.0
+
+    let mut k: i32 = 1
+    while true {
+        let mut low: i32 = (alpha * (k as f64)) as i32 + 1
+        while (2 * low - k) * (2 * low - k) <= 3 * low * low {
+            low = low + 1
+        }
+
+        let mut high_pos: i32 = (beta * (k as f64)) as i32
+        while high_pos > 0 {
+            if -(high_pos as i64) * (high_pos as i64) + 5 * (high_pos as i64) * (k as i64) - (k as i64) * (k as i64) > 0 {
+                break
+            }
+            high_pos = high_pos - 1
+        }
+
+        let high_sum: i64 = (limit + (k as i64) * (k as i64)) / (5 * k)
+        let high: i32 = if high_pos < (high_sum as i32) { high_pos } else { high_sum as i32 }
+
+        if low > (high_sum as i32) {
+            break
+        }
+
+        for m in low..(high + 1) {
+            if gcd(m, k) != 1 {
+                continue
+            }
+            let n: i32 = 2 * m - k
+            let a: i64 = 4 * m * m - (n as i64) * (n as i64)
+            let c: i64 = (n as i64) * (n as i64) - 3 * m * m
+            let b: i64 = 5 * m * m - (n as i64) * (n as i64) - (m as i64) * (n as i64)
+            let s: i64 = a + b + c
+            if a <= 0 || b <= 0 || c <= 0 {
+                continue
+            }
+            if s <= limit {
+                let count: i64 = limit / s
+                total = total + s * count * (count + 1) / 2
+            }
+        }
+        k = k + 1
+    }
+
+    printf("%lld\n", total)
     return 0
 }

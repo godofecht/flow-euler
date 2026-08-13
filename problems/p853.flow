@@ -1,11 +1,57 @@
 # Project Euler 853
-# Pisano Periods - sum of n <= 10^9 with pi(n) = 120.
+# Pisano Periods - sum of all n <= 10^9 with pi(n) = 120.
 
-extern {
-    function p853_native() -> i64
+import euler.nt { gcd, lcm }
+
+let mut total_sum: i64 = 0
+
+const TARGET: i64 = 120
+const LIMIT: i64 = 1000000000
+const NPRIMES: i64 = 8
+
+# Generate all products of primes[idx..nprimes-1]^k (k=0..mult) within limit.
+# p = product so far, vpi = lcm of pisano periods so far.
+function gen(idx: i64, p: i64, vpi: i64, primes: array<i64, 8>, pivalues: array<i64, 8>, mults: array<i64, 8>) -> void {
+    if idx == NPRIMES {
+        if p > 1 && vpi == TARGET {
+            total_sum = total_sum + p
+        }
+        return
+    }
+    let pr: i64 = primes[idx]
+    let pv: i64 = pivalues[idx]
+    let mult: i64 = mults[idx]
+    let mut cur_p: i64 = 1
+    let mut cur_vpi: i64 = 1
+    let mut i: i64 = 0
+    while i <= mult {
+        if p * cur_p < LIMIT {
+            let new_vpi: i64 = 0
+            if cur_p == 1 {
+                new_vpi = vpi
+            } else {
+                new_vpi = lcm(vpi, cur_vpi)
+            }
+            gen(idx + 1, p * cur_p, new_vpi, primes, pivalues, mults)
+        }
+        if i == 0 {
+            cur_p = cur_p * pr
+            cur_vpi = cur_vpi * pv
+        } else {
+            cur_p = cur_p * pr
+            cur_vpi = cur_vpi * pr
+        }
+        i = i + 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p853_native())
+    let primes: array<i64, 8> = [2, 3, 5, 11, 31, 41, 61, 2521]
+    let pivalues: array<i64, 8> = [3, 8, 20, 10, 30, 40, 60, 120]
+    let mults: array<i64, 8> = [4, 2, 1, 1, 1, 1, 1, 1]
+
+    total_sum = 0
+    gen(0, 1, 1, primes, pivalues, mults)
+    printf("%lld\n", total_sum)
     return 0
 }

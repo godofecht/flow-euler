@@ -1,11 +1,40 @@
 # Project Euler 783
-# Urns — E(10^6,10) nearest integer.
-
-extern {
-    function pe_solve() -> i64
-}
+# Urns: E(10^6, 10) nearest integer.
+# Iterative expectation with Kahan summation.
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let n: i64 = 1000000
+    let k: i64 = 10
+    let m: f64 = 2.0 * (k as f64)
+    let mut mu: f64 = 0.0
+    let mut s2: f64 = 0.0
+    let mut M: f64 = (k as f64) * ((n + 1) as f64)
+    let mut total: f64 = 0.0
+    let mut comp: f64 = 0.0
+    let kf: f64 = k as f64
+
+    let mut i: i64 = 0
+    while i < n {
+        let Ey: f64 = mu + kf
+        let Ey2: f64 = s2 + 2.0 * kf * mu + kf * kf
+        let denom: f64 = M * (M - 1.0)
+        let c1: f64 = m * (M - m) / denom
+        let c2: f64 = m * (m - 1.0) / denom
+        let Eb2: f64 = c1 * Ey + c2 * Ey2
+        let y: f64 = Eb2 - comp
+        let t: f64 = total + y
+        comp = (t - total) - y
+        total = t
+        let alpha: f64 = (M - m) / M
+        let mu_next: f64 = alpha * Ey
+        let coeff_y2: f64 = 1.0 - 2.0 * m / M + c2
+        let s2_next: f64 = coeff_y2 * Ey2 + c1 * Ey
+        mu = mu_next
+        s2 = s2_next
+        M = M - kf
+        i = i + 1
+    }
+
+    printf("%lld\n", (total + 0.5) as i64)
     return 0
 }

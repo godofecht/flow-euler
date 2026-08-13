@@ -1,12 +1,130 @@
 # Project Euler 748
 # Upside Down Diophantine Equation: last 9 digits of S(10^16).
-# Native C helper for Gaussian integer parametrization.
+# Pure Flow port of the Gaussian integer parametrization.
 
-extern {
-    function p748_native() -> i64
+function gcd_ll(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    if x < 0 { x = 0 - x }
+    let mut y: i64 = b
+    if y < 0 { y = 0 - y }
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function isqrt128(n: i128) -> i128 {
+    if n == 0 { return 0 }
+    let mut x: i128 = n
+    let mut y: i128 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
+}
+
+function fourth_root_floor128(n: i128) -> i128 {
+    if n == 0 { return 0 }
+    let mut x: i128 = isqrt128(isqrt128(n))
+    let mut xp1: i128 = x + 1
+    while xp1 * xp1 * xp1 * xp1 <= n {
+        x = xp1
+        xp1 = x + 1
+    }
+    while x * x * x * x > n {
+        x = x - 1
+    }
+    return x
+}
+
+function isqrt64(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut x: i64 = n
+    let mut y: i64 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x
 }
 
 function main() -> i32 {
-    printf("%lld\n", p748_native())
+    let N: i64 = 10000000000000000
+    let modv: i64 = 1000000000
+
+    let Nsq: i128 = (N as i128) * (N as i128)
+    let val: i128 = 2 * Nsq / 13
+    let r_max: i64 = (fourth_root_floor128(val)) as i64
+
+    let m_max: i64 = isqrt64(r_max)
+
+    let mut total: i64 = 0
+    let THRESH: i64 = 1000000000000000000
+
+    let mut m: i64 = 1
+    while m <= m_max {
+        let mm: i64 = m * m
+        let n_max: i64 = isqrt64(r_max - mm)
+
+        let n_start: i64 = 0
+        if (m & 1) == 0 {
+            n_start = 1
+        }
+
+        let mut n: i64 = n_start
+        while n <= n_max {
+            if gcd_ll(m, n) != 1 {
+                n = n + 2
+                continue
+            }
+
+            let nn: i64 = n * n
+            let r: i64 = mm + nn
+
+            let u: i64 = mm - nn
+            let v: i64 = 2 * m * n
+
+            let mut a: i64 = 3 * u - 2 * v
+            if a < 0 { a = 0 - a }
+            let mut b: i64 = 3 * v + 2 * u
+            if b < 0 { b = 0 - b }
+
+            let mut p: i64 = a
+            let mut q: i64 = b
+            if a < b {
+                p = b
+                q = a
+            }
+
+            if p % 13 == 0 && q % 13 == 0 {
+                n = n + 2
+                continue
+            }
+
+            let x: i64 = q * r
+            let y: i64 = p * r
+            if x > N || y > N {
+                n = n + 2
+                continue
+            }
+            let z: i64 = p * q
+            if z > N {
+                n = n + 2
+                continue
+            }
+
+            total = total + x + y + z
+            if total >= THRESH {
+                total = total % modv
+            }
+            n = n + 2
+        }
+        m = m + 1
+    }
+
+    printf("%lld\n", total % modv)
     return 0
 }

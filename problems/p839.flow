@@ -1,11 +1,73 @@
 # Project Euler 839
-# Beans in Bowls — B(10^7).
+# Beans in Bowls: B(10^7).
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
 }
 
+const MODS: i64 = 50515093
+const S0: i64 = 290797
+const N: i32 = 10000000
+
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let lens: ptr<i32> = calloc(N as i64, 4)
+    let sums: ptr<i64> = calloc(N as i64, 8)
+    let mut size: i32 = 0
+    let mut s: i64 = S0
+    let mut prefix: i64 = 0
+    let mut initial_prefix_total: i64 = 0
+    let mut i: i32 = 0
+    while i < N {
+        let v: i64 = s
+        prefix = prefix + v
+        initial_prefix_total = initial_prefix_total + prefix
+        lens[size] = 1
+        sums[size] = v
+        size = size + 1
+        while size >= 2 {
+            let last: i32 = size - 1
+            let l_left: i64 = lens[last - 1] as i64
+            let t_left: i64 = sums[last - 1]
+            let l_right: i64 = lens[last] as i64
+            let t_right: i64 = sums[last]
+            let last_left: i64 = (t_left + l_left - 1) / l_left
+            let first_right: i64 = t_right / l_right
+            if last_left <= first_right {
+                break
+            }
+            lens[last - 1] = (l_left + l_right) as i32
+            sums[last - 1] = t_left + t_right
+            size = size - 1
+        }
+        s = s * s % MODS
+        i = i + 1
+    }
+
+    let mut final_prefix_total: i64 = 0
+    let mut running: i64 = 0
+    let mut idx: i32 = 0
+    while idx < size {
+        let L: i64 = lens[idx] as i64
+        let T: i64 = sums[idx]
+        let base: i64 = T / L
+        let rem: i64 = T % L
+        let mut j: i64 = 0
+        while j < L - rem {
+            running = running + base
+            final_prefix_total = final_prefix_total + running
+            j = j + 1
+        }
+        j = 0
+        while j < rem {
+            running = running + base + 1
+            final_prefix_total = final_prefix_total + running
+            j = j + 1
+        }
+        idx = idx + 1
+    }
+    free(lens)
+    free(sums)
+    printf("%lld\n", initial_prefix_total - final_prefix_total)
     return 0
 }

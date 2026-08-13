@@ -1,11 +1,60 @@
 # Project Euler 779
-# Prime factor and exponent. Native solver in problems/native/p779.c.
+# Prime factor and exponent.
+#
+# sum_{K>=1} bar(f_K) =
+#   sum_{p prime} prod_{q<p}(1 - 1/q) * 1 / (p * (p - 1)^2)
+#
+# Sieve up to 1e6, accumulate the running product of (p-1)/p.
 
 extern {
-    function p779_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+    function floor(x: f64) -> f64
+    function round(x: f64) -> f64
 }
 
+const SIEVE_LIMIT: i64 = 1000000
+
 function main() -> i32 {
-    printf("%.12f\n", p779_native())
+    let is_prime: ptr<i8> = calloc(SIEVE_LIMIT + 1, 1)
+    if is_prime == null {
+        return 1
+    }
+    memset(is_prime, 1, SIEVE_LIMIT + 1)
+    is_prime[0] = 0
+    is_prime[1] = 0
+
+    let limit: i64 = (floor(sqrt((SIEVE_LIMIT as f64))) as i64)
+    let mut i: i64 = 2
+    while i <= limit {
+        if is_prime[i] != 0 {
+            let mut j: i64 = i * i
+            while j <= SIEVE_LIMIT {
+                is_prime[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+
+    let mut total: f64 = 0.0
+    let mut curr: f64 = 1.0
+    let mut p: i64 = 2
+    while p <= SIEVE_LIMIT {
+        if is_prime[p] != 0 {
+            let dp: f64 = (p as f64)
+            let term: f64 = curr * (1.0 / (dp * (dp - 1.0) * (dp - 1.0)))
+            total = total + term
+            curr = curr * (dp - 1.0) / dp
+        }
+        p = p + 1
+    }
+
+    free(is_prime)
+
+    let result: f64 = round(total * 1e12) / 1e12
+    printf("%.12f\n", result)
     return 0
 }

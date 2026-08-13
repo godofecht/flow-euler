@@ -1,11 +1,146 @@
 # Project Euler 849
 # The Tournament — F(100) mod 10^9+7.
+#
+# DP over tournament steps with a sliding-window prefix sum.
+# State is (height, displacement) tracked in flat arrays.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
 }
 
+const MOD: i64 = 1000000007
+
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let n: i32 = 100
+    let vmax: i32 = 2 * (n - 1)
+    let off: i32 = vmax
+    let v: i32 = 2 * vmax + 1
+
+    let maxh: ptr<i32> = malloc(((n + 1) as i64) * 4)
+    let mut i: i32 = 0
+    while i <= n {
+        maxh[i] = 2 * i * (n - i)
+        i = i + 1
+    }
+
+    let mh: i32 = maxh[1]
+    let mut dp: ptr<i64> = calloc(((mh + 1) as i64) * ((v as i64)), 8)
+
+    let mut d: i32 = 0
+    while d <= vmax {
+        dp[((d as i64) * (v as i64)) + ((d + off) as i64)] = 1
+        d = d + 1
+    }
+
+    let mut step: i32 = 1
+    while step < n {
+        let mh_cur: i32 = maxh[step]
+        let mh_next: i32 = maxh[step + 1]
+        let nxt: ptr<i64> = calloc(((mh_next + 1) as i64) * ((v as i64)), 8)
+
+        let mut h: i32 = 0
+        while h <= mh_cur {
+            let row_base: i64 = (h as i64) * (v as i64)
+            let mut cum: i64 = 0
+            let base: i32 = h - off - 4
+            let mut vi_start: i32 = -base
+            if vi_start < 4 {
+                vi_start = 4
+            }
+            if vi_start > v {
+                vi_start = v
+            }
+            let mut vi_end: i32 = mh_next - base
+            if vi_end > v - 1 {
+                vi_end = v - 1
+            }
+
+            let mut vi: i32 = 0
+            while vi < vi_start {
+                cum = cum + dp[row_base + (vi as i64)]
+                if cum >= MOD {
+                    cum = cum - MOD
+                }
+                vi = vi + 1
+            }
+
+            if vi_start <= vi_end {
+                vi = vi_start
+                while vi <= vi_end {
+                    cum = cum + dp[row_base + (vi as i64)]
+                    if cum >= MOD {
+                        cum = cum - MOD
+                    }
+                    let h2: i32 = base + vi
+                    let idx2: i32 = vi - 4
+                    let val: i64 = nxt[((h2 as i64) * (v as i64)) + (idx2 as i64)] + cum
+                    let mut val2: i64 = val
+                    if val2 >= MOD {
+                        val2 = val2 - MOD
+                    }
+                    nxt[((h2 as i64) * (v as i64)) + (idx2 as i64)] = val2
+                    vi = vi + 1
+                }
+                vi = vi_end + 1
+                while vi < v {
+                    cum = cum + dp[row_base + (vi as i64)]
+                    if cum >= MOD {
+                        cum = cum - MOD
+                    }
+                    vi = vi + 1
+                }
+            }
+            else {
+                vi = vi_start
+                while vi < v {
+                    cum = cum + dp[row_base + (vi as i64)]
+                    if cum >= MOD {
+                        cum = cum - MOD
+                    }
+                    vi = vi + 1
+                }
+            }
+
+            let total: i64 = cum
+            if total != 0 {
+                let base_h: i32 = h - off
+                vi = v - 4
+                while vi < v {
+                    let h2: i32 = base_h + vi
+                    if 0 <= h2 && h2 <= mh_next {
+                        let val: i64 = nxt[((h2 as i64) * (v as i64)) + (vi as i64)] + total
+                        let mut val2: i64 = val
+                        if val2 >= MOD {
+                            val2 = val2 - MOD
+                        }
+                        nxt[((h2 as i64) * (v as i64)) + (vi as i64)] = val2
+                    }
+                    vi = vi + 1
+                }
+            }
+
+            h = h + 1
+        }
+
+        free(dp)
+        dp = nxt
+        step = step + 1
+    }
+
+    let mut ans: i64 = 0
+    let mut vi: i32 = 0
+    while vi < v {
+        ans = ans + dp[(vi as i64)]
+        if ans >= MOD {
+            ans = ans - MOD
+        }
+        vi = vi + 1
+    }
+
+    free(dp)
+    free(maxh)
+    printf("%lld\n", ans)
     return 0
 }

@@ -1,11 +1,100 @@
 # Project Euler 810
 # XOR-product primes — 5,000,000th xor-prime.
+#
+# Sieve using XOR-product: for each odd base found as prime,
+# mark all base * cofactor (XOR multiplication) as composite.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function bit_length(x: i64) -> i32 {
+    let mut c: i32 = 0
+    let mut v: i64 = x
+    while v != 0 {
+        v = v >> 1
+        c = c + 1
+    }
+    return c
+}
+
+function ctzll(x: i64) -> i32 {
+    # count trailing zeros of a nonzero i64
+    let mut count: i32 = 0
+    let mut v: i64 = x
+    while (v & 1) == 0 {
+        v = v >> 1
+        count = count + 1
+    }
+    return count
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let rank: i32 = 5000000
+    if rank == 1 {
+        printf("%lld\n", 2 as i64)
+        return 0
+    }
+
+    let mut bit_limit: i32 = 24
+    while bit_limit <= 34 {
+        let limit: i64 = (1 as i64) << bit_limit
+        let mark: ptr<i8> = calloc(limit >> 1, 1)
+        if mark == null {
+            bit_limit = bit_limit + 1
+            continue
+        }
+        mark[0] = 1
+        let mut found: i32 = 1
+        let mut ans: i64 = -1
+
+        let mut base: i64 = 3
+        while base < limit {
+            if mark[base >> 1] != 0 {
+                base = base + 2
+                continue
+            }
+            found = found + 1
+            if found == rank {
+                ans = base
+                break
+            }
+
+            let degree: i32 = bit_length(base) - 1
+            let max_cofactor_degree: i32 = bit_limit - degree - 1
+
+            let mut cofactor_degree: i32 = degree
+            while cofactor_degree <= max_cofactor_degree {
+                let mut product: i64 = (base << cofactor_degree) ^ base
+                if product < limit {
+                    mark[product >> 1] = 1
+                }
+                let variants: i64 = (1 as i64) << (cofactor_degree - 1)
+                let mut n: i64 = 1
+                while n < variants {
+                    let lsb: i64 = n & (0 - n)
+                    let toggled_bit: i32 = ctzll(lsb) + 1
+                    product = product ^ (base << toggled_bit)
+                    if product >= 0 && product < limit {
+                        mark[product >> 1] = 1
+                    }
+                    n = n + 1
+                }
+                cofactor_degree = cofactor_degree + 1
+            }
+
+            base = base + 2
+        }
+
+        free(mark)
+        if ans >= 0 {
+            printf("%lld\n", ans)
+            return 0
+        }
+        bit_limit = bit_limit + 1
+    }
+
+    printf("%lld\n", (-1) as i64)
     return 0
 }

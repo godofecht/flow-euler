@@ -1,11 +1,129 @@
 # Project Euler 778
-# Freshman Product — F(234567,765432) mod 10^9+9.
+# Freshman Product: F(234567,765432) mod 10^9+9.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, v: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000009
+
+function mat_mul(C: ptr<i64>, A: ptr<i64>, B: ptr<i64>) -> void {
+    let T: ptr<i64> = calloc(100, 8)
+    memset(T, 0, 800)
+    let mut i: i32 = 0
+    while i < 10 {
+        let mut k: i32 = 0
+        while k < 10 {
+            if A[i * 10 + k] != 0 {
+                let mut j: i32 = 0
+                while j < 10 {
+                    T[i * 10 + j] = (T[i * 10 + j] + A[i * 10 + k] * B[k * 10 + j]) % MOD
+                    j = j + 1
+                }
+            }
+            k = k + 1
+        }
+        i = i + 1
+    }
+    let mut idx: i32 = 0
+    while idx < 100 {
+        C[idx] = T[idx]
+        idx = idx + 1
+    }
+    free(T)
+}
+
+function mat_pow(R: ptr<i64>, A0: ptr<i64>, exp: i64) -> void {
+    let A: ptr<i64> = calloc(100, 8)
+    let mut idx: i32 = 0
+    while idx < 100 {
+        A[idx] = A0[idx]
+        idx = idx + 1
+    }
+    memset(R, 0, 800)
+    let mut i: i32 = 0
+    while i < 10 {
+        R[i * 10 + i] = 1
+        i = i + 1
+    }
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            mat_mul(R, R, A)
+        }
+        mat_mul(A, A, A)
+        e = e / 2
+    }
+    free(A)
+}
+
+function digit_counts(n: i64, pos: i32, counts: ptr<i64>) -> void {
+    let mut base: i64 = 1
+    let mut i: i32 = 0
+    while i < pos {
+        base = base * 10
+        i = i + 1
+    }
+    let higher: i64 = n / (base * 10)
+    let cur: i64 = (n / base) % 10
+    let lower: i64 = n % base
+    let mut d: i32 = 0
+    while d < 10 {
+        counts[d] = higher * base
+        d = d + 1
+    }
+    d = 0
+    while d < cur {
+        counts[d] = counts[d] + base
+        d = d + 1
+    }
+    counts[cur] = counts[cur] + lower + 1
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let R: i64 = 234567
+    let M: i64 = 765432
+    let mut max_digits: i32 = 0
+    let mut t: i64 = M
+    while t > 0 {
+        max_digits = max_digits + 1
+        t = t / 10
+    }
+    let mut ans: i64 = 0
+    let mut pow10: i64 = 1
+    let counts: ptr<i64> = calloc(10, 8)
+    let A: ptr<i64> = calloc(100, 8)
+    let P: ptr<i64> = calloc(100, 8)
+    let mut pos: i32 = 0
+    while pos < max_digits {
+        digit_counts(M, pos, counts)
+        memset(A, 0, 800)
+        let mut s: i32 = 0
+        while s < 10 {
+            let mut d: i32 = 0
+            while d < 10 {
+                let tt: i32 = (s * d) % 10
+                A[s * 10 + tt] = (A[s * 10 + tt] + counts[d]) % MOD
+                d = d + 1
+            }
+            s = s + 1
+        }
+        mat_pow(P, A, R)
+        let mut digit_sum: i64 = 0
+        let mut digit: i32 = 0
+        while digit < 10 {
+            digit_sum = (digit_sum + (digit as i64) * P[10 + digit]) % MOD
+            digit = digit + 1
+        }
+        ans = (ans + digit_sum * pow10) % MOD
+        pow10 = pow10 * 10 % MOD
+        pos = pos + 1
+    }
+    printf("%lld\n", ans)
+    free(counts)
+    free(A)
+    free(P)
     return 0
 }

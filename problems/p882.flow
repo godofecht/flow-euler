@@ -1,8 +1,172 @@
+# Project Euler 882: Removing Bits
+# Pure Flow port. Compute S(100000).
+
 extern {
-    function p882_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+function simplest_between(a_scaled: i64, b_scaled: i64, max_exp: i64) -> i64 {
+    let den: i64 = 1 << max_exp
+
+    if a_scaled == -1 {
+        if b_scaled == -1 {
+            return 0
+        }
+        return ((b_scaled - 1) / den) * den
+    }
+
+    if b_scaled == -1 {
+        return ((a_scaled / den) + 1) * den
+    }
+
+    let mut k: i64 = 0
+    while k <= max_exp {
+        let step: i64 = 1 << (max_exp - k)
+        let m_low: i64 = a_scaled / step + 1
+        let m_high: i64 = (b_scaled - 1) / step
+        if m_low <= m_high {
+            return m_low * step
+        }
+        k = k + 1
+    }
+    return 0
+}
+
+function compute_S(n: i64) -> i64 {
+    if n <= 1 { return n }
+
+    let mut max_exp: i64 = 0
+    let mut tmp: i64 = n
+    while tmp > 0 {
+        max_exp = max_exp + 1
+        tmp = tmp >> 1
+    }
+    let den: i64 = 1 << max_exp
+
+    let g: ptr<i64> = calloc(n + 1, 8)
+    let mut total_scaled: i64 = 0
+
+    let left_opts: ptr<i64> = malloc(64 * 8)
+    let right_opts: ptr<i64> = malloc(64 * 8)
+
+    let mut x: i64 = 1
+    while x <= n {
+        let mut left_count: i64 = 0
+        let mut right_count: i64 = 0
+
+        let mut bits: i64 = 0
+        let mut tmpx: i64 = x
+        while tmpx > 0 {
+            bits = bits + 1
+            tmpx = tmpx >> 1
+        }
+
+        let mut j: i64 = 0
+        while j < bits {
+            let bit: i64 = (x >> j) & 1
+            let higher: i64 = x >> (j + 1)
+            let lower: i64 = x & ((1 << j) - 1)
+            let y: i64 = (higher << j) | lower
+
+            if bit != 0 {
+                left_opts[left_count] = g[y]
+                left_count = left_count + 1
+            } else {
+                right_opts[right_count] = g[y]
+                right_count = right_count + 1
+            }
+            j = j + 1
+        }
+
+        let mut changed: bool = true
+        while changed {
+            changed = false
+            if right_count > 0 {
+                let mut min_r: i64 = right_opts[0]
+                let mut i: i64 = 1
+                while i < right_count {
+                    if right_opts[i] < min_r {
+                        min_r = right_opts[i]
+                    }
+                    i = i + 1
+                }
+                let mut new_left_count: i64 = 0
+                i = 0
+                while i < left_count {
+                    if left_opts[i] < min_r {
+                        left_opts[new_left_count] = left_opts[i]
+                        new_left_count = new_left_count + 1
+                    }
+                    i = i + 1
+                }
+                if new_left_count != left_count {
+                    left_count = new_left_count
+                    changed = true
+                }
+            }
+            if left_count > 0 {
+                let mut max_l: i64 = left_opts[0]
+                let mut i: i64 = 1
+                while i < left_count {
+                    if left_opts[i] > max_l {
+                        max_l = left_opts[i]
+                    }
+                    i = i + 1
+                }
+                let mut new_right_count: i64 = 0
+                i = 0
+                while i < right_count {
+                    if right_opts[i] > max_l {
+                        right_opts[new_right_count] = right_opts[i]
+                        new_right_count = new_right_count + 1
+                    }
+                    i = i + 1
+                }
+                if new_right_count != right_count {
+                    right_count = new_right_count
+                    changed = true
+                }
+            }
+        }
+
+        let mut max_l: i64 = -1
+        let mut min_r: i64 = -1
+        if left_count > 0 {
+            max_l = left_opts[0]
+            let mut i: i64 = 1
+            while i < left_count {
+                if left_opts[i] > max_l {
+                    max_l = left_opts[i]
+                }
+                i = i + 1
+            }
+        }
+        if right_count > 0 {
+            min_r = right_opts[0]
+            let mut i: i64 = 1
+            while i < right_count {
+                if right_opts[i] < min_r {
+                    min_r = right_opts[i]
+                }
+                i = i + 1
+            }
+        }
+
+        g[x] = simplest_between(max_l, min_r, max_exp)
+        total_scaled = total_scaled + x * g[x]
+        x = x + 1
+    }
+
+    free(left_opts)
+    free(right_opts)
+    free(g)
+
+    return (total_scaled + den - 1) / den
 }
 
 function main() -> i32 {
-    printf("%lld\n", p882_native())
+    printf("%lld\n", compute_S(100000))
     return 0
 }

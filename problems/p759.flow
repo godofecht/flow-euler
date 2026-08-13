@@ -1,11 +1,124 @@
 # Project Euler 759
 # Squared Recurrence — S(10^16) mod 10^9+7.
+# Ported from native C to pure Flow. Uses 3x3 matrix accumulation
+# over bit ranges with a recursive shift-and-add.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const MAXB: i64 = 60
+
+# Matrices stored as flat i64 arrays: 9 entries per matrix.
+# full is a heap array of (MAXB+1)*9 i64 values.
+
+# Global pointer to precomputed full matrices.
+let mut full: ptr<i64> = null
+
+function zero_arr(out: ptr<i64>) -> void {
+    for i in 0..9 {
+        out[i] = 0
+    }
+}
+
+function addm(out: ptr<i64>, a: ptr<i64>, b: ptr<i64>) -> void {
+    for i in 0..9 {
+        out[i] = (a[i] + b[i]) % MOD
+    }
+}
+
+function copy_mat(dst: ptr<i64>, src: ptr<i64>) -> void {
+    for i in 0..9 {
+        dst[i] = src[i]
+    }
+}
+
+# Shift a matrix's range by p: multiply columns by powers of p.
+function shift_range(out: ptr<i64>, mat: ptr<i64>, p0: i64) -> void {
+    let p: i64 = p0 % MOD
+    let p2: i64 = p * p % MOD
+    let two_p: i64 = 2 * p % MOD
+    # mats[t][d] = transformed row t of mat
+    let mats: array<i64, 9> = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    for t in 0..3 {
+        let s0: i64 = mat[t * 3 + 0] % MOD
+        let s1: i64 = mat[t * 3 + 1] % MOD
+        let s2: i64 = mat[t * 3 + 2] % MOD
+        mats[t * 3 + 0] = s0
+        mats[t * 3 + 1] = (p * s0 + s1) % MOD
+        mats[t * 3 + 2] = (p2 * s0 + two_p * s1 + s2) % MOD
+    }
+    # coeffs[j][k]
+    let coeffs: array<i32, 9> = [1, 0, 0, 1, 1, 0, 1, 2, 1]
+    zero_arr(out)
+    for j in 0..3 {
+        for d in 0..3 {
+            let mut acc: i64 = 0
+            for k in 0..3 {
+                let c: i64 = coeffs[j * 3 + k] as i64
+                acc = (acc + c * mats[k * 3 + d]) % MOD
+            }
+            out[j * 3 + d] = acc
+        }
+    }
+}
+
+function precompute(max_bits: i64) -> void {
+    full = calloc((max_bits + 1) * 9, 8) as ptr<i64>
+    # full[0] = identity-like: full[0][0][0] = 1
+    full[0] = 1
+    for m in 1..(max_bits + 1) {
+        let sh: array<i64, 9> = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+        shift_range(&sh[0], &full[(m - 1) * 9], (1 as i64) << (m - 1))
+        let fm: ptr<i64> = &full[m * 9]
+        let fmm1: ptr<i64> = &full[(m - 1) * 9]
+        addm(fm, fmm1, &sh[0])
+    }
+}
+
+# Returns floor(log2(n)) for n > 0, i.e. the position of the highest set bit.
+function highest_bit(n: i64) -> i64 {
+    let mut k: i64 = 0
+    let mut x: i64 = n
+    while x > 1 {
+        x = x >> 1
+        k = k + 1
+    }
+    return k
+}
+
+function calc_upto(out: ptr<i64>, n: i64) -> void {
+    if n < 0 {
+        zero_arr(out)
+        return
+    }
+    if n == 0 {
+        copy_mat(out, &full[0])
+        return
+    }
+    let k: i64 = highest_bit(n)
+    let p: i64 = (1 as i64) << k
+    if n == p - 1 {
+        copy_mat(out, &full[k * 9])
+        return
+    }
+    let left: array<i64, 9> = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    copy_mat(&left[0], &full[k * 9])
+    let right_in: array<i64, 9> = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    calc_upto(&right_in[0], n - p)
+    let sh: array<i64, 9> = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    shift_range(&sh[0], &right_in[0], p)
+    addm(out, &left[0], &sh[0])
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let n: i64 = 10000000000000000
+    precompute(60)
+    let m: array<i64, 9> = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    calc_upto(&m[0], n)
+    printf("%lld\n", m[8] % MOD)
+    free(full as ptr<void>)
     return 0
 }

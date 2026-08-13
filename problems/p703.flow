@@ -1,11 +1,135 @@
-# Project Euler 703
-# Circular Logic II — S(20) mod 1001001011.
+# Project Euler 703 - Circular Logic II
+# S(20) mod 1001001011. Functional graph with 2^20 states,
+# topological peel then cycle DP.
 
 extern {
-    function pe_solve() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
 }
 
+const MOD: i64 = 1001001011
+
 function main() -> i32 {
-    printf("%lld\n", pe_solve())
+    let n: i32 = 20
+    let N: i64 = 1 << n
+
+    let succ: ptr<i32> = malloc(N * 4) as ptr<i32>
+    let indeg: ptr<i32> = calloc(N, 4) as ptr<i32>
+
+    let mask: i32 = (1 << (n - 1)) - 1
+    let shift: i32 = n - 3
+
+    let mut s: i64 = 0
+    while s < N {
+        let t: i32 = (s as i32) >> shift
+        let newbit: i32 = ((t >> 2) & 1) & (((t >> 1) & 1) ^ (t & 1))
+        let ns: i32 = (((s as i32) & mask) << 1) | newbit
+        succ[s] = ns
+        indeg[ns] = indeg[ns] + 1
+        s = s + 1
+    }
+
+    let acc0: ptr<i64> = malloc(N * 8) as ptr<i64>
+    let acc1: ptr<i64> = malloc(N * 8) as ptr<i64>
+    let mut i: i64 = 0
+    while i < N {
+        acc0[i] = 1
+        acc1[i] = 1
+        i = i + 1
+    }
+
+    let in_cycle: ptr<i8> = malloc(N) as ptr<i8>
+    memset(in_cycle as ptr<void>, 1, N)
+
+    let q: ptr<i32> = malloc(N * 4) as ptr<i32>
+    let mut qh: i64 = 0
+    let mut qt: i64 = 0
+    let mut ii: i64 = 0
+    while ii < N {
+        if indeg[ii] == 0 {
+            q[qt] = ii as i32
+            qt = qt + 1
+        }
+        ii = ii + 1
+    }
+
+    while qh < qt {
+        let u: i64 = q[qh] as i64
+        qh = qh + 1
+        if in_cycle[u] == 0 {
+            continue
+        }
+        in_cycle[u] = 0
+        let p: i64 = succ[u] as i64
+        let dp0: i64 = acc0[u]
+        let dp1: i64 = acc1[u]
+        acc0[p] = ((acc0[p] as i128) * ((dp0 + dp1) % MOD) % MOD) as i64
+        acc1[p] = ((acc1[p] as i128) * dp0 % MOD) as i64
+        indeg[p] = indeg[p] - 1
+        if indeg[p] == 0 {
+            q[qt] = p as i32
+            qt = qt + 1
+        }
+    }
+
+    let visited: ptr<i8> = calloc(N, 1) as ptr<i8>
+    let mut ans: i64 = 1
+    let cycle: ptr<i32> = malloc(N * 4) as ptr<i32>
+
+    let mut v: i64 = 0
+    while v < N {
+        if in_cycle[v] == 1 && visited[v] == 0 {
+            let mut k: i64 = 0
+            let mut u: i64 = v
+            while visited[u] == 0 {
+                visited[u] = 1
+                cycle[k] = u as i32
+                k = k + 1
+                u = succ[u] as i64
+            }
+
+            # case1: cycle[0] contributes acc0
+            let mut prev0: i64 = acc0[cycle[0] as i64] % MOD
+            let mut prev1: i64 = 0
+            let mut ci: i64 = 1
+            while ci < k {
+                let cur0: i64 = (((prev0 + prev1) % MOD) * (acc0[cycle[ci] as i64] % MOD)) % MOD
+                let cur1: i64 = (prev0 * (acc1[cycle[ci] as i64] % MOD)) % MOD
+                prev0 = cur0
+                prev1 = cur1
+                ci = ci + 1
+            }
+            let case1: i64 = (prev0 + prev1) % MOD
+
+            # case2: cycle[0] contributes acc1
+            prev0 = 0
+            prev1 = acc1[cycle[0] as i64] % MOD
+            ci = 1
+            while ci < k {
+                let cur0: i64 = (((prev0 + prev1) % MOD) * (acc0[cycle[ci] as i64] % MOD)) % MOD
+                let cur1: i64 = (prev0 * (acc1[cycle[ci] as i64] % MOD)) % MOD
+                prev0 = cur0
+                prev1 = cur1
+                ci = ci + 1
+            }
+            let case2: i64 = prev0
+
+            ans = (ans * ((case1 + case2) % MOD)) % MOD
+        }
+        v = v + 1
+    }
+
+    printf("%lld\n", ans)
+
+    free(succ as ptr<void>)
+    free(indeg as ptr<void>)
+    free(acc0 as ptr<void>)
+    free(acc1 as ptr<void>)
+    free(in_cycle as ptr<void>)
+    free(q as ptr<void>)
+    free(visited as ptr<void>)
+    free(cycle as ptr<void>)
     return 0
 }

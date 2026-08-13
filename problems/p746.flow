@@ -1,11 +1,117 @@
 # Project Euler 746
-# A Messy Dinner — S(2021) = sum_{k=2..2021} M(k) mod 1e9+7.
+# A Messy Dinner - S(2021) = sum_{k=2..2021} M(k) mod 1e9+7.
+# Ported from native C to pure Flow.
 
 extern {
-    function p746_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+
+function modpow(b: i64, e: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut bb: i64 = b % MOD
+    let mut ee: i64 = e
+    while ee > 0 {
+        if (ee & 1) == 1 {
+            r = r * bb % MOD
+        }
+        bb = bb * bb % MOD
+        ee = ee >> 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%lld\n", p746_native())
+    let target: i64 = 2021
+    let max_n: i64 = target
+    if max_n < 10 {
+        max_n = 10
+    }
+    let n_max: i64 = 4 * max_n
+
+    let fact_arr: ptr<i64> = malloc((n_max + 1) * 8) as ptr<i64>
+    let invfact_arr: ptr<i64> = malloc((n_max + 1) * 8) as ptr<i64>
+    let inv_arr: ptr<i64> = calloc(max_n + 1, 8) as ptr<i64>
+    let pow4_arr: ptr<i64> = malloc((max_n + 1) * 8) as ptr<i64>
+
+    fact_arr[0] = 1
+    let mut i: i64 = 1
+    while i <= n_max {
+        fact_arr[i] = fact_arr[i - 1] * i % MOD
+        i = i + 1
+    }
+    invfact_arr[n_max] = modpow(fact_arr[n_max], MOD - 2)
+    i = n_max
+    while i >= 1 {
+        invfact_arr[i - 1] = invfact_arr[i] * i % MOD
+        i = i - 1
+    }
+
+    inv_arr[1] = 1
+    i = 2
+    while i <= max_n {
+        inv_arr[i] = MOD - (MOD / i) * inv_arr[MOD % i] % MOD
+        i = i + 1
+    }
+
+    pow4_arr[0] = 1
+    i = 1
+    while i <= max_n {
+        pow4_arr[i] = pow4_arr[i - 1] * 4 % MOD
+        i = i + 1
+    }
+
+    let mut acc: i64 = 0
+    let mut n: i64 = 2
+    while n <= target {
+        let mut total: i64 = 0
+        let mut nPk: i64 = 1
+        let mut k: i64 = 0
+        while k <= n {
+            if k > 0 {
+                nPk = nPk * (n - (k - 1)) % MOD
+            }
+            let mut D: i64 = 0
+            if k == 0 {
+                D = 1
+            } else {
+                D = (4 * n) % MOD
+                D = D * inv_arr[k] % MOD
+                let nk: i64 = 4 * n - 3 * k - 1
+                let nCk_val: i64 = fact_arr[nk] * invfact_arr[k - 1] % MOD * invfact_arr[nk - (k - 1)] % MOD
+                D = D * nCk_val % MOD
+            }
+            let rem: i64 = 2 * (n - k)
+            let ways_rest: i64 = fact_arr[rem] * fact_arr[rem] % MOD
+            let mut term: i64 = nPk
+            term = term * D % MOD
+            term = term * pow4_arr[k] % MOD
+            term = term * ways_rest % MOD
+            if (k & 1) == 1 {
+                total = (total - term) % MOD
+            } else {
+                total = (total + term) % MOD
+            }
+            k = k + 1
+        }
+        let Mn: i64 = (2 * total) % MOD
+        acc = acc + Mn
+        acc = acc % MOD
+        n = n + 1
+    }
+
+    let mut result: i64 = acc % MOD
+    if result < 0 {
+        result = result + MOD
+    }
+
+    free(fact_arr)
+    free(invfact_arr)
+    free(inv_arr)
+    free(pow4_arr)
+    printf("%lld\n", result)
     return 0
 }

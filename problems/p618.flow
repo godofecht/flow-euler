@@ -1,11 +1,63 @@
 # Project Euler 618
 # Numbers with given prime factor sum: knapsack over primes to F_24.
+# d[i] counts numbers whose prime factor sum is i, modulo 1e9.
+# Sum d[F_k] for Fibonacci numbers F_k up to 46368.
 
 extern {
-    function pe618_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
 }
 
+const LIMIT: i64 = 46368
+const MOD: i64 = 1000000000
+
 function main() -> i32 {
-    printf("%lld\n", pe618_answer())
+    let prime: ptr<i8> = calloc(LIMIT + 1, 1)
+    let d: ptr<i64> = calloc(LIMIT + 1, 8)
+    if prime == null || d == null {
+        return 1
+    }
+    let mut i: i64 = 0
+    while i <= LIMIT {
+        prime[i] = 1
+        i = i + 1
+    }
+    prime[0] = 0
+    prime[1] = 0
+    let mut j: i64 = 2
+    while j * j <= LIMIT {
+        if prime[j] == 1 {
+            let mut m: i64 = j * j
+            while m <= LIMIT {
+                prime[m] = 0
+                m = m + j
+            }
+        }
+        j = j + 1
+    }
+    d[0] = 1
+    let mut p: i64 = 2
+    while p <= LIMIT {
+        if prime[p] == 1 {
+            let mut idx: i64 = p
+            while idx <= LIMIT {
+                d[idx] = (d[idx] + p * d[idx - p]) % MOD
+                idx = idx + 1
+            }
+        }
+        p = p + 1
+    }
+    let mut total: i64 = 0
+    let mut a: i64 = 1
+    let mut b: i64 = 2
+    while b <= LIMIT {
+        total = (total + d[b]) % MOD
+        let c: i64 = a + b
+        a = b
+        b = c
+    }
+    free(prime as ptr<void>)
+    free(d as ptr<void>)
+    printf("%lld\n", total)
     return 0
 }
