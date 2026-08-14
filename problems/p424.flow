@@ -1,11 +1,1168 @@
-# Project Euler 424
-# Cryptic Kakuro: CSP + GAC over 200 puzzles in data/p424.txt.
+# Project Euler 424: Cryptic Kakuro CSP with GAC propagation.
+# Parses 200 puzzle lines from data/p424.txt, solves each as a CSP
+# with bitmask domains, all-different on letters, and run constraints.
+# Sums the 10-digit numbers from the solved letter mappings.
 
 extern {
-    function pe424_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function realloc(p: ptr<void>, n: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+    function fopen(path: ptr<i8>, mode: ptr<i8>) -> ptr<void>
+    function fgets(buf: ptr<i8>, n: i32, f: ptr<void>) -> ptr<i8>
+    function fclose(f: ptr<void>) -> i32
+    function abort() -> void
+}
+
+const ALL10: i32 = 1023
+const DIGITS_19: i32 = 1022
+const MAX_GRID: i32 = 400
+const MAX_RUNS: i32 = 200
+const MAX_VARS: i32 = 400
+const MAX_PERMS_TOTAL: i32 = 700000
+const MAX_LINE: i32 = 2048
+
+# Cell types
+const CT_X: i32 = 0
+const CT_O: i32 = 1
+const CT_L: i32 = 2
+const CT_C: i32 = 3
+
+# PERMS table: perms_count[L][S], perms_offset[L][S], perms_data (flat)
+# L=0..6, S=0..45
+let mut perms_count: ptr<i32> = 0 as ptr<i32>
+let mut perms_offset: ptr<i32> = 0 as ptr<i32>
+let mut perms_data: ptr<i32> = 0 as ptr<i32>
+let mut perms_total: i32 = 0
+let mut perms_init_done: i32 = 0
+
+# Grid (per puzzle)
+let mut g_type: ptr<i32> = 0 as ptr<i32>
+let mut g_letter: ptr<i32> = 0 as ptr<i32>
+let mut g_h_len: ptr<i32> = 0 as ptr<i32>
+let mut g_h_data: ptr<i8> = 0 as ptr<i8>
+let mut g_v_len: ptr<i32> = 0 as ptr<i32>
+let mut g_v_data: ptr<i8> = 0 as ptr<i8>
+let mut cell_to_var: ptr<i32> = 0 as ptr<i32>
+
+# CSP (per puzzle)
+let mut csp_domains: ptr<i32> = 0 as ptr<i32>
+let mut csp_nvars: i32 = 0
+let mut csp_nruns: i32 = 0
+# Run parallel arrays
+let mut run_cv_off: ptr<i32> = 0 as ptr<i32>
+let mut run_cv_data: ptr<i32> = 0 as ptr<i32>
+let mut run_cv_count: ptr<i32> = 0 as ptr<i32>
+let mut run_sl0: ptr<i32> = 0 as ptr<i32>
+let mut run_sl1: ptr<i32> = 0 as ptr<i32>
+let mut run_nsl: ptr<i32> = 0 as ptr<i32>
+let mut run_inv_off: ptr<i32> = 0 as ptr<i32>
+let mut run_inv_data: ptr<i32> = 0 as ptr<i32>
+let mut run_inv_count: ptr<i32> = 0 as ptr<i32>
+let mut run_inv_index: ptr<i32> = 0 as ptr<i32>
+let mut run_length: ptr<i32> = 0 as ptr<i32>
+let mut run_sums_off: ptr<i32> = 0 as ptr<i32>
+let mut run_sums_data: ptr<i32> = 0 as ptr<i32>
+let mut run_sums_count: ptr<i32> = 0 as ptr<i32>
+let mut run_dup: ptr<i32> = 0 as ptr<i32>
+let mut run_ssame: ptr<i32> = 0 as ptr<i32>
+# var_to_runs
+let mut v2r_off: ptr<i32> = 0 as ptr<i32>
+let mut v2r_data: ptr<i32> = 0 as ptr<i32>
+let mut v2r_count: ptr<i32> = 0 as ptr<i32>
+
+# Pool allocators
+let mut cv_pool: ptr<i32> = 0 as ptr<i32>
+let mut cv_pool_next: i32 = 0
+let mut inv_pool: ptr<i32> = 0 as ptr<i32>
+let mut inv_pool_next: i32 = 0
+let mut inv_idx_pool: ptr<i32> = 0 as ptr<i32>
+let mut inv_idx_pool_next: i32 = 0
+let mut sums_pool: ptr<i32> = 0 as ptr<i32>
+let mut sums_pool_next: i32 = 0
+let mut v2r_pool: ptr<i32> = 0 as ptr<i32>
+let mut v2r_pool_next: i32 = 0
+
+# Line buffer
+let mut line_buf: ptr<i8> = 0 as ptr<i8>
+
+# Temp buffer for a perm lookup
+let mut perm_buf: ptr<i32> = 0 as ptr<i32>
+
+function init_globals() -> void {
+    perms_count = calloc(7 * 46, 4) as ptr<i32>
+    perms_offset = calloc(7 * 46, 4) as ptr<i32>
+    perms_data = calloc(MAX_PERMS_TOTAL, 4) as ptr<i32>
+    g_type = calloc(MAX_GRID, 4) as ptr<i32>
+    g_letter = calloc(MAX_GRID, 4) as ptr<i32>
+    g_h_len = calloc(MAX_GRID, 4) as ptr<i32>
+    g_h_data = calloc(MAX_GRID * 4, 1) as ptr<i8>
+    g_v_len = calloc(MAX_GRID, 4) as ptr<i32>
+    g_v_data = calloc(MAX_GRID * 4, 1) as ptr<i8>
+    cell_to_var = calloc(MAX_GRID, 4) as ptr<i32>
+    csp_domains = calloc(MAX_VARS, 4) as ptr<i32>
+    run_cv_off = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_cv_data = calloc(MAX_RUNS * 20, 4) as ptr<i32>
+    run_cv_count = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_sl0 = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_sl1 = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_nsl = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_inv_off = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_inv_data = calloc(MAX_RUNS * 30, 4) as ptr<i32>
+    run_inv_count = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_inv_index = calloc(MAX_RUNS * 30, 4) as ptr<i32>
+    run_length = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_sums_off = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_sums_data = calloc(MAX_RUNS * 50, 4) as ptr<i32>
+    run_sums_count = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_dup = calloc(MAX_RUNS, 4) as ptr<i32>
+    run_ssame = calloc(MAX_RUNS, 4) as ptr<i32>
+    v2r_off = calloc(MAX_VARS, 4) as ptr<i32>
+    v2r_data = calloc(MAX_VARS * 50, 4) as ptr<i32>
+    v2r_count = calloc(MAX_VARS, 4) as ptr<i32>
+    cv_pool = calloc(5000, 4) as ptr<i32>
+    inv_pool = calloc(5000, 4) as ptr<i32>
+    inv_idx_pool = calloc(5000, 4) as ptr<i32>
+    sums_pool = calloc(10000, 4) as ptr<i32>
+    v2r_pool = calloc(20000, 4) as ptr<i32>
+    line_buf = calloc(MAX_LINE, 1) as ptr<i8>
+    perm_buf = calloc(10, 4) as ptr<i32>
+}
+
+function popcount(x: i32) -> i32 {
+    let mut c: i32 = 0
+    let mut v: i32 = x
+    while v > 0 {
+        c = c + 1
+        v = v & (v - 1)
+    }
+    return c
+}
+
+function ctz(x: i32) -> i32 {
+    if x == 0 { return 32 }
+    let mut n: i32 = 0
+    let mut v: i32 = x
+    while (v & 1) == 0 {
+        n = n + 1
+        v = v >> 1
+    }
+    return n
+}
+
+# Insertion sort for small arrays
+function sort_i32(arr: ptr<i32>, n: i32) -> void {
+    let mut i: i32 = 1
+    while i < n {
+        let key: i32 = arr[i]
+        let mut j: i32 = i - 1
+        while j >= 0 {
+            if arr[j] > key {
+                arr[j + 1] = arr[j]
+                j = j - 1
+            } else {
+                break
+            }
+        }
+        arr[j + 1] = key
+        i = i + 1
+    }
+}
+
+# Remove duplicates from sorted array, return new count
+function unique_i32(arr: ptr<i32>, n: i32) -> i32 {
+    if n <= 1 { return n }
+    let mut w: i32 = 1
+    let mut r: i32 = 1
+    while r < n {
+        if arr[r] != arr[r - 1] {
+            arr[w] = arr[r]
+            w = w + 1
+        }
+        r = r + 1
+    }
+    return w
+}
+
+# next_permutation on array, returns 1 if next exists, 0 if wrapped
+function next_perm(arr: ptr<i32>, n: i32) -> i32 {
+    if n <= 1 { return 0 }
+    let mut i: i32 = n - 2
+    while i >= 0 {
+        if arr[i] < arr[i + 1] { break }
+        i = i - 1
+    }
+    if i < 0 { return 0 }
+    let mut j: i32 = n - 1
+    while j > i {
+        if arr[j] > arr[i] { break }
+        j = j - 1
+    }
+    let tmp: i32 = arr[i]
+    arr[i] = arr[j]
+    arr[j] = tmp
+    # reverse i+1..n-1
+    let mut a: i32 = i + 1
+    let mut b: i32 = n - 1
+    while a < b {
+        let t2: i32 = arr[a]
+        arr[a] = arr[b]
+        arr[b] = t2
+        a = a + 1
+        b = b - 1
+    }
+    return 1
+}
+
+# Generate all permutations of digits 1-9 taken L at a time, grouped by sum
+function init_perms() -> void {
+    if perms_init_done == 1 { return }
+    perms_init_done = 1
+    let digits: ptr<i32> = perm_buf
+    let mut d: i32 = 0
+    while d < 9 {
+        digits[d] = d + 1
+        d = d + 1
+    }
+    let chosen: ptr<i32> = calloc(10, 4) as ptr<i32>
+    let mask: ptr<i32> = calloc(10, 4) as ptr<i32>
+    # Pass 1: count perms for each (L, S)
+    let mut L: i32 = 1
+    while L <= 6 {
+        let mut mi: i32 = 0
+        while mi < 9 {
+            if mi < 9 - L {
+                mask[mi] = 0
+            } else {
+                mask[mi] = 1
+            }
+            mi = mi + 1
+        }
+        let mut first: i32 = 1
+        while first == 1 || next_perm(mask, 9) == 1 {
+            first = 0
+            let mut ci: i32 = 0
+            let mut di: i32 = 0
+            while di < 9 {
+                if mask[di] == 1 {
+                    chosen[ci] = digits[di]
+                    ci = ci + 1
+                }
+                di = di + 1
+            }
+            sort_i32(chosen, L)
+            let mut first2: i32 = 1
+            while first2 == 1 || next_perm(chosen, L) == 1 {
+                first2 = 0
+                let mut s: i32 = 0
+                let mut pi: i32 = 0
+                while pi < L {
+                    s = s + chosen[pi]
+                    pi = pi + 1
+                }
+                let idx: i32 = L * 46 + s
+                perms_count[idx] = perms_count[idx] + 1
+                perms_total = perms_total + 1
+            }
+        }
+        L = L + 1
+    }
+    # Compute offsets
+    let mut acc: i32 = 0
+    let mut idx2: i32 = 0
+    while idx2 < 7 * 46 {
+        perms_offset[idx2] = acc
+        let curL: i32 = idx2 / 46
+        acc = acc + perms_count[idx2] * curL
+        idx2 = idx2 + 1
+    }
+    # Use a cursor array to track fill position for each (L, S)
+    let cursor: ptr<i32> = calloc(7 * 46, 4) as ptr<i32>
+    idx2 = 0
+    while idx2 < 7 * 46 {
+        cursor[idx2] = perms_offset[idx2]
+        idx2 = idx2 + 1
+    }
+    # Pass 2: fill perms_data grouped by (L, S)
+    L = 1
+    while L <= 6 {
+        let mut mi: i32 = 0
+        while mi < 9 {
+            if mi < 9 - L {
+                mask[mi] = 0
+            } else {
+                mask[mi] = 1
+            }
+            mi = mi + 1
+        }
+        let mut first: i32 = 1
+        while first == 1 || next_perm(mask, 9) == 1 {
+            first = 0
+            let mut ci: i32 = 0
+            let mut di: i32 = 0
+            while di < 9 {
+                if mask[di] == 1 {
+                    chosen[ci] = digits[di]
+                    ci = ci + 1
+                }
+                di = di + 1
+            }
+            sort_i32(chosen, L)
+            let mut first2: i32 = 1
+            while first2 == 1 || next_perm(chosen, L) == 1 {
+                first2 = 0
+                let mut s: i32 = 0
+                let mut pi: i32 = 0
+                while pi < L {
+                    s = s + chosen[pi]
+                    pi = pi + 1
+                }
+                let idx: i32 = L * 46 + s
+                let off: i32 = cursor[idx]
+                let mut pi2: i32 = 0
+                while pi2 < L {
+                    perms_data[off + pi2] = chosen[pi2]
+                    pi2 = pi2 + 1
+                }
+                cursor[idx] = off + L
+            }
+        }
+        L = L + 1
+    }
+    free(cursor)
+    free(chosen)
+    free(mask)
+}
+
+# Get perm p for length L, sum S, index k. Fills perm_buf[0..L-1].
+function get_perm(L: i32, S: i32, k: i32) -> void {
+    let idx: i32 = L * 46 + S
+    let off: i32 = perms_offset[idx] + k * L
+    let mut i: i32 = 0
+    while i < L {
+        perm_buf[i] = perms_data[off + i]
+        i = i + 1
+    }
+}
+
+# Split line by commas at depth 0. Fills token offsets and lengths.
+# Returns number of tokens. token_off[i], token_len[i] into line_buf.
+let mut token_off: ptr<i32> = 0 as ptr<i32>
+let mut token_len: ptr<i32> = 0 as ptr<i32>
+
+function split_tokens(line: ptr<i8>, line_len: i32) -> i32 {
+    if token_off == 0 as ptr<i32> {
+        token_off = calloc(200, 4) as ptr<i32>
+        token_len = calloc(200, 4) as ptr<i32>
+    }
+    let mut ntok: i32 = 0
+    let mut start: i32 = 0
+    let mut depth: i32 = 0
+    let mut i: i32 = 0
+    while i < line_len {
+        let ch: i8 = line[i]
+        if ch == 44 && depth == 0 {
+            token_off[ntok] = start
+            token_len[ntok] = i - start
+            ntok = ntok + 1
+            start = i + 1
+        } else {
+            if ch == 40 {
+                depth = depth + 1
+            } else {
+                if ch == 41 {
+                    depth = depth - 1
+                }
+            }
+        }
+        i = i + 1
+    }
+    token_off[ntok] = start
+    token_len[ntok] = line_len - start
+    ntok = ntok + 1
+    return ntok
+}
+
+# Parse integer from substring
+function parse_int(line: ptr<i8>, off: i32, len: i32) -> i32 {
+    let mut val: i32 = 0
+    let mut i: i32 = 0
+    while i < len {
+        let ch: i8 = line[off + i]
+        if ch >= 48 && ch <= 57 {
+            val = val * 10 + (ch as i32 - 48)
+        }
+        i = i + 1
+    }
+    return val
+}
+
+# Parse a puzzle line into grid. Returns n (grid size).
+let mut puzzle_n: i32 = 0
+let mut puzzle_ngrid: i32 = 0
+
+function parse_puzzle(line: ptr<i8>, line_len: i32) -> void {
+    let ntok: i32 = split_tokens(line, line_len)
+    puzzle_n = parse_int(line, token_off[0], token_len[0])
+    let n: i32 = puzzle_n
+    puzzle_ngrid = n * n
+    let mut gi: i32 = 0
+    while gi < n * n {
+        g_type[gi] = CT_X
+        g_letter[gi] = 0
+        g_h_len[gi] = 0
+        g_v_len[gi] = 0
+        gi = gi + 1
+    }
+    let mut ti: i32 = 1
+    let mut gidx: i32 = 0
+    while ti < ntok {
+        let off: i32 = token_off[ti]
+        let tlen: i32 = token_len[ti]
+        if tlen == 1 {
+            let ch: i8 = line[off]
+            if ch == 88 {
+                g_type[gidx] = CT_X
+            } else {
+                if ch == 79 {
+                    g_type[gidx] = CT_O
+                } else {
+                    if ch >= 65 && ch <= 74 {
+                        g_type[gidx] = CT_L
+                        g_letter[gidx] = ch as i32 - 65
+                    }
+                }
+            }
+        } else {
+            if tlen > 0 {
+                let first: i8 = line[off]
+                if first == 40 {
+                    g_type[gidx] = CT_C
+                    # Parse inside parentheses: substr(1, len-2)
+                    let inside_off: i32 = off + 1
+                    let inside_len: i32 = tlen - 2
+                    let mut pos: i32 = 0
+                    while pos < inside_len {
+                        # Find comma
+                        let mut comma: i32 = -1
+                        let mut pi: i32 = pos
+                        while pi < inside_len {
+                            if line[inside_off + pi] == 44 {
+                                comma = pi
+                                break
+                            }
+                            pi = pi + 1
+                        }
+                        let part_len: i32 = 0
+                        if comma < 0 {
+                            part_len = inside_len - pos
+                        } else {
+                            part_len = comma - pos
+                        }
+                        if part_len > 0 {
+                            let tag: i8 = line[inside_off + pos]
+                            if tag == 104 {
+                                # h followed by code
+                                g_h_len[gidx] = part_len - 1
+                                let mut ci: i32 = 0
+                                while ci < part_len - 1 {
+                                    g_h_data[gidx * 4 + ci] = line[inside_off + pos + 1 + ci]
+                                    ci = ci + 1
+                                }
+                            } else {
+                                if tag == 118 {
+                                    g_v_len[gidx] = part_len - 1
+                                    let mut ci: i32 = 0
+                                    while ci < part_len - 1 {
+                                        g_v_data[gidx * 4 + ci] = line[inside_off + pos + 1 + ci]
+                                        ci = ci + 1
+                                    }
+                                }
+                            }
+                        }
+                        if comma < 0 { break }
+                        pos = comma + 1
+                    }
+                }
+            }
+        }
+        gidx = gidx + 1
+        ti = ti + 1
+    }
+}
+
+# Build CSP from parsed grid
+function build_csp() -> void {
+    init_perms()
+    let n: i32 = puzzle_n
+    let ngrid: i32 = n * n
+    # Initialize letter domains
+    let mut i: i32 = 0
+    while i < 10 {
+        csp_domains[i] = ALL10
+        i = i + 1
+    }
+    # Letters get digits 1-9 only
+    let mut gi: i32 = 0
+    while gi < ngrid {
+        if g_type[gi] == CT_L {
+            csp_domains[g_letter[gi]] = csp_domains[g_letter[gi]] & DIGITS_19
+        }
+        gi = gi + 1
+    }
+    # Assign cell_to_var
+    let mut ocount: i32 = 0
+    let mut ci: i32 = 0
+    while ci < ngrid {
+        cell_to_var[ci] = -1
+        ci = ci + 1
+    }
+    let mut r: i32 = 0
+    while r < n {
+        let mut c: i32 = 0
+        while c < n {
+            let idx: i32 = r * n + c
+            if g_type[idx] == CT_O {
+                cell_to_var[idx] = 10 + ocount
+                ocount = ocount + 1
+            } else {
+                if g_type[idx] == CT_L {
+                    cell_to_var[idx] = g_letter[idx]
+                }
+            }
+            c = c + 1
+        }
+        r = r + 1
+    }
+    # Open cell domains
+    let mut oi: i32 = 0
+    while oi < ocount {
+        csp_domains[10 + oi] = DIGITS_19
+        oi = oi + 1
+    }
+    csp_nvars = 10 + ocount
+    csp_nruns = 0
+    cv_pool_next = 0
+    inv_pool_next = 0
+    inv_idx_pool_next = 0
+    sums_pool_next = 0
+
+    # Add runs
+    let mut r2: i32 = 0
+    while r2 < n {
+        let mut c2: i32 = 0
+        while c2 < n {
+            let idx2: i32 = r2 * n + c2
+            if g_type[idx2] == CT_C {
+                # Horizontal run
+                if g_h_len[idx2] > 0 {
+                    let mut cvs_count: i32 = 0
+                    let cc_start: i32 = cv_pool_next
+                    let mut cc: i32 = c2 + 1
+                    while cc < n {
+                        let gidx2: i32 = r2 * n + cc
+                        if g_type[gidx2] != CT_O && g_type[gidx2] != CT_L { break }
+                        cv_pool[cv_pool_next] = cell_to_var[gidx2]
+                        cv_pool_next = cv_pool_next + 1
+                        cvs_count = cvs_count + 1
+                        cc = cc + 1
+                    }
+                    if cvs_count > 0 {
+                        add_run(idx2, 0, cc_start, cvs_count)
+                    }
+                }
+                # Vertical run
+                if g_v_len[idx2] > 0 {
+                    let mut cvs_count2: i32 = 0
+                    let cc_start2: i32 = cv_pool_next
+                    let mut rr: i32 = r2 + 1
+                    while rr < n {
+                        let gidx3: i32 = rr * n + c2
+                        if g_type[gidx3] != CT_O && g_type[gidx3] != CT_L { break }
+                        cv_pool[cv_pool_next] = cell_to_var[gidx3]
+                        cv_pool_next = cv_pool_next + 1
+                        cvs_count2 = cvs_count2 + 1
+                        rr = rr + 1
+                    }
+                    if cvs_count2 > 0 {
+                        add_run(idx2, 1, cc_start2, cvs_count2)
+                    }
+                }
+            }
+            c2 = c2 + 1
+        }
+        r2 = r2 + 1
+    }
+
+    # Build var_to_runs
+    let mut vi: i32 = 0
+    while vi < csp_nvars {
+        v2r_count[vi] = 0
+        vi = vi + 1
+    }
+    let mut ri: i32 = 0
+    while ri < csp_nruns {
+        let inv_off: i32 = run_inv_off[ri]
+        let ic: i32 = run_inv_count[ri]
+        let mut j: i32 = 0
+        while j < ic {
+            let v: i32 = inv_pool[inv_off + j]
+            v2r_count[v] = v2r_count[v] + 1
+            j = j + 1
+        }
+        ri = ri + 1
+    }
+    # Compute offsets
+    let mut acc2: i32 = 0
+    let mut vi2: i32 = 0
+    while vi2 < csp_nvars {
+        v2r_off[vi2] = acc2
+        acc2 = acc2 + v2r_count[vi2]
+        v2r_count[vi2] = 0
+        vi2 = vi2 + 1
+    }
+    # Fill data
+    let mut ri2: i32 = 0
+    while ri2 < csp_nruns {
+        let inv_off2: i32 = run_inv_off[ri2]
+        let ic2: i32 = run_inv_count[ri2]
+        let mut j2: i32 = 0
+        while j2 < ic2 {
+            let v2: i32 = inv_pool[inv_off2 + j2]
+            v2r_data[v2r_off[v2] + v2r_count[v2]] = ri2
+            v2r_count[v2] = v2r_count[v2] + 1
+            j2 = j2 + 1
+        }
+        ri2 = ri2 + 1
+    }
+}
+
+# Add a run constraint. gidx = grid index, hv = 0 for h, 1 for v.
+function add_run(gidx: i32, hv: i32, cv_start: i32, cv_count: i32) -> void {
+    let ri: i32 = csp_nruns
+    csp_nruns = csp_nruns + 1
+    # cell_vars
+    run_cv_off[ri] = cv_start
+    run_cv_count[ri] = cv_count
+    run_length[ri] = cv_count
+    # sum_letters from code
+    let code_off: i32 = 0
+    let code_len: i32 = 0
+    if hv == 0 {
+        code_len = g_h_len[gidx]
+        code_off = gidx * 4
+    } else {
+        code_len = g_v_len[gidx]
+        code_off = gidx * 4
+    }
+    if code_len == 1 {
+        run_nsl[ri] = 1
+        run_sl0[ri] = g_h_data[code_off] as i32 - 65
+        if hv == 1 {
+            run_sl0[ri] = g_v_data[code_off] as i32 - 65
+        }
+        run_sl1[ri] = 0
+    } else {
+        run_nsl[ri] = 2
+        if hv == 0 {
+            run_sl0[ri] = g_h_data[code_off] as i32 - 65
+            run_sl1[ri] = g_h_data[code_off + 1] as i32 - 65
+        } else {
+            run_sl0[ri] = g_v_data[code_off] as i32 - 65
+            run_sl1[ri] = g_v_data[code_off + 1] as i32 - 65
+        }
+    }
+    # sums_list: all S where perms_count[L][S] > 0
+    let sums_start: i32 = sums_pool_next
+    let mut scount: i32 = 0
+    let L: i32 = run_length[ri]
+    let mut s: i32 = 1
+    while s <= 45 {
+        let pidx: i32 = L * 46 + s
+        if perms_count[pidx] > 0 {
+            sums_pool[sums_pool_next] = s
+            sums_pool_next = sums_pool_next + 1
+            scount = scount + 1
+        }
+        s = s + 1
+    }
+    run_sums_off[ri] = sums_start
+    run_sums_count[ri] = scount
+    # involved = cell_vars + sum_letters, sorted, unique
+    let inv_start: i32 = inv_pool_next
+    let mut icount: i32 = 0
+    let mut ci: i32 = 0
+    while ci < cv_count {
+        inv_pool[inv_pool_next] = cv_pool[cv_start + ci]
+        inv_pool_next = inv_pool_next + 1
+        icount = icount + 1
+        ci = ci + 1
+    }
+    inv_pool[inv_pool_next] = run_sl0[ri]
+    inv_pool_next = inv_pool_next + 1
+    icount = icount + 1
+    if run_nsl[ri] == 2 {
+        inv_pool[inv_pool_next] = run_sl1[ri]
+        inv_pool_next = inv_pool_next + 1
+        icount = icount + 1
+    }
+    sort_i32(inv_pool + inv_start, icount)
+    icount = unique_i32(inv_pool + inv_start, icount)
+    run_inv_off[ri] = inv_start
+    run_inv_count[ri] = icount
+    # inv_index: for each involved var, its index
+    let inv_idx_start: i32 = inv_idx_pool_next
+    let mut ii: i32 = 0
+    while ii < icount {
+        inv_idx_pool[inv_idx_pool_next] = ii
+        inv_idx_pool_next = inv_idx_pool_next + 1
+        ii = ii + 1
+    }
+    run_inv_index[ri] = inv_idx_start
+    # Wait, inv_index is a map from var -> index. We need to look up by var.
+    # Store as: for each involved var at position j, inv_index[j] = j.
+    # Actually the C++ code uses inv_index[var] = position. Since involved is sorted,
+    # we can binary search. Let's store involved and do binary search instead.
+    # dup_cells
+    let mut tmp_arr: ptr<i32> = calloc(cv_count, 4) as ptr<i32>
+    let mut di: i32 = 0
+    while di < cv_count {
+        tmp_arr[di] = cv_pool[cv_start + di]
+        di = di + 1
+    }
+    sort_i32(tmp_arr, cv_count)
+    let mut dup: i32 = 0
+    let mut di2: i32 = 1
+    while di2 < cv_count {
+        if tmp_arr[di2] == tmp_arr[di2 - 1] {
+            dup = 1
+            break
+        }
+        di2 = di2 + 1
+    }
+    run_dup[ri] = dup
+    free(tmp_arr)
+    # sum_same
+    if run_nsl[ri] == 2 && run_sl0[ri] == run_sl1[ri] {
+        run_ssame[ri] = 1
+    } else {
+        run_ssame[ri] = 0
+    }
+}
+
+# Binary search for var in involved list of run ri. Returns index or -1.
+function inv_index_lookup(ri: i32, v: i32) -> i32 {
+    let off: i32 = run_inv_off[ri]
+    let n: i32 = run_inv_count[ri]
+    let mut lo: i32 = 0
+    let mut hi: i32 = n - 1
+    while lo <= hi {
+        let mid: i32 = (lo + hi) / 2
+        let val: i32 = inv_pool[off + mid]
+        if val == v { return mid }
+        if val < v {
+            lo = mid + 1
+        } else {
+            hi = mid - 1
+        }
+    }
+    return -1
+}
+
+# enforce_all_diff: returns 1 if contradiction, 0 if ok. Fills changed list.
+let mut ad_changed: ptr<i32> = 0 as ptr<i32>
+let mut ad_changed_n: i32 = 0
+
+let mut ad_seen: ptr<i32> = 0 as ptr<i32>
+
+function enforce_all_diff(dom: ptr<i32>) -> i32 {
+    let mut fixed_mask: i32 = 0
+    if ad_seen == 0 as ptr<i32> {
+        ad_seen = calloc(10, 4) as ptr<i32>
+    }
+    let mut i: i32 = 0
+    while i < 10 {
+        ad_seen[i] = 0
+        i = i + 1
+    }
+    i = 0
+    while i < 10 {
+        if popcount(dom[i]) == 1 {
+            let d: i32 = ctz(dom[i])
+            if ad_seen[d] == 1 {
+                return 1
+            }
+            ad_seen[d] = 1
+            fixed_mask = fixed_mask | (1 << d)
+        }
+        i = i + 1
+    }
+    if ad_changed == 0 as ptr<i32> {
+        ad_changed = calloc(20, 4) as ptr<i32>
+    }
+    ad_changed_n = 0
+    i = 0
+    while i < 10 {
+        if popcount(dom[i]) > 1 {
+            let neu: i32 = dom[i] & (0 - 1 - fixed_mask)
+            if neu == 0 { return 1 }
+            if neu != dom[i] {
+                dom[i] = neu
+                ad_changed[ad_changed_n] = i
+                ad_changed_n = ad_changed_n + 1
+            }
+        }
+        i = i + 1
+    }
+    return 0
+}
+
+# process_run: returns 1 if contradiction, 0 if ok. Fills pr_changed.
+let mut pr_changed: ptr<i32> = 0 as ptr<i32>
+let mut pr_changed_n: i32 = 0
+let mut pr_support: ptr<i32> = 0 as ptr<i32>
+
+function process_run(ri: i32, dom: ptr<i32>) -> i32 {
+    if run_dup[ri] == 1 { return 1 }
+    let ninv: i32 = run_inv_count[ri]
+    if pr_support == 0 as ptr<i32> {
+        pr_support = calloc(40, 4) as ptr<i32>
+    }
+    if pr_changed == 0 as ptr<i32> {
+        pr_changed = calloc(40, 4) as ptr<i32>
+    }
+    let mut i: i32 = 0
+    while i < ninv {
+        pr_support[i] = 0
+        i = i + 1
+    }
+    let L: i32 = run_length[ri]
+    let cv_off: i32 = run_cv_off[ri]
+    let sums_off: i32 = run_sums_off[ri]
+    let sums_count: i32 = run_sums_count[ri]
+    if run_nsl[ri] == 1 {
+        let l: i32 = run_sl0[ri]
+        let li: i32 = inv_index_lookup(ri, l)
+        let doml: i32 = dom[l]
+        let mut si: i32 = 0
+        while si < sums_count {
+            let S: i32 = sums_pool[sums_off + si]
+            if S <= 9 {
+                if (doml & (1 << S)) != 0 {
+                    let pidx: i32 = L * 46 + S
+                    let mut pk: i32 = 0
+                    while pk < perms_count[pidx] {
+                        get_perm(L, S, pk)
+                        # Check all cells compatible
+                        let mut ok: i32 = 1
+                        let mut ci: i32 = 0
+                        while ci < L {
+                            let cv: i32 = cv_pool[cv_off + ci]
+                            if (dom[cv] & (1 << perm_buf[ci])) == 0 {
+                                ok = 0
+                                break
+                            }
+                            ci = ci + 1
+                        }
+                        if ok == 1 {
+                            # Mark support
+                            let mut ci2: i32 = 0
+                            while ci2 < L {
+                                let cv2: i32 = cv_pool[cv_off + ci2]
+                                let idx2: i32 = inv_index_lookup(ri, cv2)
+                                pr_support[idx2] = pr_support[idx2] | (1 << perm_buf[ci2])
+                                ci2 = ci2 + 1
+                            }
+                            pr_support[li] = pr_support[li] | (1 << S)
+                        }
+                        pk = pk + 1
+                    }
+                }
+            }
+            si = si + 1
+        }
+    } else {
+        let a: i32 = run_sl0[ri]
+        let b: i32 = run_sl1[ri]
+        let ai: i32 = inv_index_lookup(ri, a)
+        let bi: i32 = inv_index_lookup(ri, b)
+        if run_ssame[ri] == 1 {
+            let doma: i32 = dom[a]
+            let mut si: i32 = 0
+            while si < sums_count {
+                let S: i32 = sums_pool[sums_off + si]
+                if S >= 10 {
+                    let t: i32 = S / 10
+                    let o: i32 = S % 10
+                    if t == o {
+                        if (doma & (1 << t)) != 0 {
+                            let pidx: i32 = L * 46 + S
+                            let mut pk: i32 = 0
+                            while pk < perms_count[pidx] {
+                                get_perm(L, S, pk)
+                                if ri == 0 && S == 22 && pk < 3 {
+                                    printf("  S=22 pk=%d perm: %d %d %d %d\n", pk, perm_buf[0], perm_buf[1], perm_buf[2], perm_buf[3])
+                                }
+                                let mut ok: i32 = 1
+                                let mut ci: i32 = 0
+                                while ci < L {
+                                    let cv: i32 = cv_pool[cv_off + ci]
+                                    if (dom[cv] & (1 << perm_buf[ci])) == 0 {
+                                        ok = 0
+                                        break
+                                    }
+                                    ci = ci + 1
+                                }
+                                if ok == 1 {
+                                    let mut ci2: i32 = 0
+                                    while ci2 < L {
+                                        let cv2: i32 = cv_pool[cv_off + ci2]
+                                        let idx2: i32 = inv_index_lookup(ri, cv2)
+                                        pr_support[idx2] = pr_support[idx2] | (1 << perm_buf[ci2])
+                                        ci2 = ci2 + 1
+                                    }
+                                    pr_support[ai] = pr_support[ai] | (1 << t)
+                                }
+                                pk = pk + 1
+                            }
+                        }
+                    }
+                }
+                si = si + 1
+            }
+        } else {
+            let doma: i32 = dom[a]
+            let domb: i32 = dom[b]
+            let mut si: i32 = 0
+            while si < sums_count {
+                let S: i32 = sums_pool[sums_off + si]
+                if S >= 10 {
+                    let t: i32 = S / 10
+                    let o: i32 = S % 10
+                    if t != o {
+                        if (doma & (1 << t)) != 0 && (domb & (1 << o)) != 0 {
+                            let pidx: i32 = L * 46 + S
+                            let mut pk: i32 = 0
+                            while pk < perms_count[pidx] {
+                                get_perm(L, S, pk)
+                                let mut ok: i32 = 1
+                                let mut ci: i32 = 0
+                                while ci < L {
+                                    let cv: i32 = cv_pool[cv_off + ci]
+                                    if (dom[cv] & (1 << perm_buf[ci])) == 0 {
+                                        ok = 0
+                                        break
+                                    }
+                                    ci = ci + 1
+                                }
+                                if ok == 1 {
+                                    let mut ci2: i32 = 0
+                                    while ci2 < L {
+                                        let cv2: i32 = cv_pool[cv_off + ci2]
+                                        let idx2: i32 = inv_index_lookup(ri, cv2)
+                                        pr_support[idx2] = pr_support[idx2] | (1 << perm_buf[ci2])
+                                        ci2 = ci2 + 1
+                                    }
+                                    pr_support[ai] = pr_support[ai] | (1 << t)
+                                    pr_support[bi] = pr_support[bi] | (1 << o)
+                                }
+                                pk = pk + 1
+                            }
+                        }
+                    }
+                }
+                si = si + 1
+            }
+        }
+    }
+
+    # Apply support
+    pr_changed_n = 0
+    let mut i2: i32 = 0
+    while i2 < ninv {
+        let v: i32 = inv_pool[run_inv_off[ri] + i2]
+        let sup: i32 = pr_support[i2]
+        if sup == 0 { return 1 }
+        let neu: i32 = dom[v] & sup
+        if neu == 0 { return 1 }
+        if neu != dom[v] {
+            dom[v] = neu
+            pr_changed[pr_changed_n] = v
+            pr_changed_n = pr_changed_n + 1
+        }
+        i2 = i2 + 1
+    }
+    return 0
+}
+
+# Propagation queue
+let mut prop_q: ptr<i32> = 0 as ptr<i32>
+let mut prop_inq: ptr<i32> = 0 as ptr<i32>
+
+function propagate(dom: ptr<i32>) -> i32 {
+    if prop_q == 0 as ptr<i32> {
+        prop_q = calloc(MAX_RUNS + 100, 4) as ptr<i32>
+        prop_inq = calloc(MAX_RUNS + 100, 4) as ptr<i32>
+    }
+    let mut qhead: i32 = 0
+    let mut qtail: i32 = 0
+    let mut i: i32 = 0
+    while i < csp_nruns {
+        prop_inq[i] = 1
+        prop_q[qtail] = i
+        qtail = qtail + 1
+        i = i + 1
+    }
+    while 1 == 1 {
+        let fail: i32 = enforce_all_diff(dom)
+        if fail == 1 { return 0 }
+        let mut ci: i32 = 0
+        while ci < ad_changed_n {
+            let l: i32 = ad_changed[ci]
+            let mut ri: i32 = 0
+            while ri < v2r_count[l] {
+                let ridx: i32 = v2r_data[v2r_off[l] + ri]
+                if prop_inq[ridx] == 0 {
+                    prop_q[qtail] = ridx
+                    qtail = qtail + 1
+                    prop_inq[ridx] = 1
+                }
+                ri = ri + 1
+            }
+            ci = ci + 1
+        }
+        if qhead >= qtail { return 1 }
+        let ri2: i32 = prop_q[qhead]
+        qhead = qhead + 1
+        prop_inq[ri2] = 0
+        let fail2: i32 = process_run(ri2, dom)
+        if fail2 == 1 { return 0 }
+        let mut vi: i32 = 0
+        while vi < pr_changed_n {
+            let v: i32 = pr_changed[vi]
+            let mut rj: i32 = 0
+            while rj < v2r_count[v] {
+                let ridx2: i32 = v2r_data[v2r_off[v] + rj]
+                if prop_inq[ridx2] == 0 {
+                    prop_q[qtail] = ridx2
+                    qtail = qtail + 1
+                    prop_inq[ridx2] = 1
+                }
+                rj = rj + 1
+            }
+            vi = vi + 1
+        }
+    }
+    return 1
+}
+
+function select_var(dom: ptr<i32>) -> i32 {
+    let mut best: i32 = -1
+    let mut best_c: i32 = 999
+    let mut i: i32 = 0
+    while i < csp_nvars {
+        let c: i32 = popcount(dom[i])
+        if c > 1 {
+            if c < best_c {
+                best_c = c
+                best = i
+                if c == 2 { break }
+            }
+        }
+        i = i + 1
+    }
+    return best
+}
+
+# Recursive solve. dom is a copy. sol is filled on success.
+let mut sol_buf: ptr<i32> = 0 as ptr<i32>
+
+function solve_rec(dom: ptr<i32>) -> i32 {
+    let fail: i32 = propagate(dom)
+    if fail == 0 { return 0 }
+    let v: i32 = select_var(dom)
+    if v < 0 {
+        # Solution found, copy to sol_buf
+        let mut i: i32 = 0
+        while i < csp_nvars {
+            sol_buf[i] = dom[i]
+            i = i + 1
+        }
+        return 1
+    }
+    let mask: i32 = dom[v]
+    let mut d: i32 = 0
+    while d < 10 {
+        if (mask & (1 << d)) != 0 {
+            let dom2: ptr<i32> = calloc(csp_nvars, 4) as ptr<i32>
+            let mut i: i32 = 0
+            while i < csp_nvars {
+                dom2[i] = dom[i]
+                i = i + 1
+            }
+            dom2[v] = 1 << d
+            let res: i32 = solve_rec(dom2)
+            free(dom2)
+            if res == 1 { return 1 }
+        }
+        d = d + 1
+    }
+    return 0
+}
+
+function mapping_to_number(sol: ptr<i32>) -> i64 {
+    let mut num: i64 = 0
+    let mut i: i32 = 0
+    while i < 10 {
+        let d: i32 = ctz(sol[i])
+        num = num * 10 + (d as i64)
+        i = i + 1
+    }
+    return num
+}
+
+function solve_puzzle(line: ptr<i8>, line_len: i32) -> i64 {
+    parse_puzzle(line, line_len)
+    build_csp()
+    if sol_buf == 0 as ptr<i32> {
+        sol_buf = calloc(MAX_VARS, 4) as ptr<i32>
+    }
+    let res: i32 = solve_rec(csp_domains)
+    if res == 0 {
+        abort()
+    }
+    return mapping_to_number(sol_buf)
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe424_answer())
+    init_globals()
+    let f: ptr<void> = fopen("data/p424.txt", "r")
+    if f == 0 as ptr<void> {
+        printf("cannot open data/p424.txt\n")
+        return 1
+    }
+    let mut total: i64 = 0
+    while 1 == 1 {
+        let res: ptr<i8> = fgets(line_buf, MAX_LINE, f)
+        if res == 0 as ptr<i8> { break }
+        # Find line length, strip newline/CR
+        let mut len: i32 = 0
+        while len < MAX_LINE {
+            let ch: i8 = line_buf[len]
+            if ch == 0 { break }
+            if ch == 10 { break }
+            len = len + 1
+        }
+        if len > 0 {
+            if line_buf[len - 1] == 13 {
+                len = len - 1
+            }
+        }
+        if len > 0 {
+            total = total + solve_puzzle(line_buf, len)
+        }
+    }
+    fclose(f)
+    printf("%lld\n", total)
     return 0
 }
