@@ -1,11 +1,267 @@
 # Project Euler 558
-# Real solver in problems/native/p558.{c,cpp} (linked by scripts/run.sh).
+# Ported from C to pure Flow. Uses big number arithmetic with a recurrence
+# to compute the POWERS table at runtime (no precomputed data needed).
+# The constant x = real root of t^3 - t^2 - 1 = 0 (approx 1.46557).
+# POWERS[k] = floor(x^(k-200) * 10^90), computed via 12-limb fixed point
+# with 256 extra bits of precision, then truncated by right-shifting 256 bits.
 
 extern {
-    function pe558_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const NLIMBS: i64 = 8
+const NLIMBS_EXT: i64 = 12
+const NPOW: i64 = 329
+const ZERO_INDEX: i64 = 200
+const LIMIT: i64 = 5000000
+
+# Unsigned comparison of i64-stored u64 limbs.
+function u64_lt(a: i64, b: i64) -> bool {
+    let a_neg: bool = a < 0
+    let b_neg: bool = b < 0
+    if a_neg && !b_neg { return false }
+    if !a_neg && b_neg { return true }
+    return a < b
+}
+
+function u64_gt(a: i64, b: i64) -> bool {
+    let a_neg: bool = a < 0
+    let b_neg: bool = b < 0
+    if a_neg && !b_neg { return true }
+    if !a_neg && b_neg { return false }
+    return a > b
+}
+
+# Big add: a += b, both NLIMBS_EXT limbs, using i128 for carry.
+function big_add_ext(a: ptr<i64>, b: ptr<i64>) -> void {
+    let mut carry: i128 = 0
+    let mut i: i64 = 0
+    while i < NLIMBS_EXT {
+        let sum: i128 = ((a[i] as u64) as i128) + ((b[i] as u64) as i128) + carry
+        a[i] = (sum as u64) as i64
+        carry = sum >> 64
+        i = i + 1
+    }
+}
+
+# Big sub: a -= b, both NLIMBS_EXT limbs, using i128 for borrow.
+function big_sub_ext(a: ptr<i64>, b: ptr<i64>) -> void {
+    let mut borrow: i128 = 0
+    let mut i: i64 = 0
+    while i < NLIMBS_EXT {
+        let diff: i128 = ((a[i] as u64) as i128) - ((b[i] as u64) as i128) - borrow
+        if diff < 0 {
+            a[i] = ((diff + ((1 as i128) << 64)) as u64) as i64
+            borrow = 1
+        } else {
+            a[i] = (diff as u64) as i64
+            borrow = 0
+        }
+        i = i + 1
+    }
+}
+
+# Big compare (8 limbs, unsigned). Returns -1, 0, or 1.
+function big_cmp(a: ptr<i64>, b: ptr<i64>) -> i32 {
+    let mut i: i64 = NLIMBS - 1
+    while i >= 0 {
+        if u64_lt(a[i], b[i]) { return -1 }
+        if u64_gt(a[i], b[i]) { return 1 }
+        i = i - 1
+    }
+    return 0
+}
+
+# Big sub (8 limbs, unsigned): a -= b
+function big_sub_u(a: ptr<i64>, b: ptr<i64>) -> void {
+    let mut borrow: i128 = 0
+    let mut i: i64 = 0
+    while i < NLIMBS {
+        let diff: i128 = ((a[i] as u64) as i128) - ((b[i] as u64) as i128) - borrow
+        if diff < 0 {
+            a[i] = ((diff + ((1 as i128) << 64)) as u64) as i64
+            borrow = 1
+        } else {
+            a[i] = (diff as u64) as i64
+            borrow = 0
+        }
+        i = i + 1
+    }
+}
+
+# Big add (8 limbs, unsigned): a += b
+function big_add(a: ptr<i64>, b: ptr<i64>) -> void {
+    let mut carry: i128 = 0
+    let mut i: i64 = 0
+    while i < NLIMBS {
+        let sum: i128 = ((a[i] as u64) as i128) + ((b[i] as u64) as i128) + carry
+        a[i] = (sum as u64) as i64
+        carry = sum >> 64
+        i = i + 1
+    }
+}
+
+# Compute 10^90 as 8-limb big number (multiply 1 by 10 ninety times).
+function make_scale(p: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < NLIMBS { p[i] = 0; i = i + 1 }
+    p[0] = 1
+    let mut step: i64 = 0
+    while step < 90 {
+        let mut carry: i128 = 0
+        let mut j: i64 = 0
+        while j < NLIMBS {
+            let cur: i128 = ((p[j] as u64) as i128) * 10 + carry
+            p[j] = (cur as u64) as i64
+            carry = cur >> 64
+            j = j + 1
+        }
+        step = step + 1
+    }
+}
+
+# Initialize the 12-limb P[0], P[1], P[2] from hardcoded values.
+# P[0] = 10^90 * 2^256, P[1] = floor(x * 10^90 * 2^256), P[2] = floor(x^2 * 10^90 * 2^256).
+# Values stored as i64 (negative for u64 > 2^63-1).
+function init_P0(p: ptr<i64>) -> void {
+    p[0]=0; p[1]=0; p[2]=0; p[3]=0; p[4]=0
+    p[5]=-3619769923250683904
+    p[6]=3330727700749618282
+    p[7]=8201890710707044867
+    p[8]=8636168555094
+    p[9]=0; p[10]=0; p[11]=0
+}
+
+function init_P1(p: ptr<i64>) -> void {
+    p[0]=4360708573770252141
+    p[1]=-7319485783113527405
+    p[2]=1035423025400803779
+    p[3]=3595441422471201580
+    p[4]=-7667592780024054039
+    p[5]=3575780253858083788
+    p[6]=2562988277936900661
+    p[7]=3191154164227192640
+    p[8]=12656920187985
+    p[9]=0; p[10]=0; p[11]=0
+}
+
+function init_P2(p: ptr<i64>) -> void {
+    p[0]=9196756730258272993
+    p[1]=-2479220855341455651
+    p[2]=5021121319498967611
+    p[3]=-348377860131556272
+    p[4]=-1825087821658844492
+    p[5]=3558213820333459890
+    p[6]=1502675205283376518
+    p[7]=6720694847164083296
+    p[8]=18549618111671
+    p[9]=0; p[10]=0; p[11]=0
+}
+
+# Truncate 12-limb to 8-limb by dropping lower 4 limbs (right shift 256 bits).
+function truncate_to_8(src: ptr<i64>, dst: ptr<i64>) -> void {
+    let mut i: i64 = 0
+    while i < NLIMBS {
+        dst[i] = src[i + 4]
+        i = i + 1
+    }
+}
+
+# Compute all 329 POWERS entries (8 limbs each) using the recurrence.
+# P[j+3] = P[j+2] + P[j] (forward), P[j] = P[j+3] - P[j+2] (reverse).
+function compute_powers(powers: ptr<i64>) -> void {
+    # P_ext: 329 entries of 12 limbs each, indexed as P_ext[(j+200)*12 + limb]
+    let P_ext: ptr<i64> = calloc(NPOW * NLIMBS_EXT, 8) as ptr<i64>
+    # Initialize P[0], P[1], P[2] (indices 200, 201, 202 in the array)
+    init_P0(P_ext + 200 * NLIMBS_EXT)
+    init_P1(P_ext + 201 * NLIMBS_EXT)
+    init_P2(P_ext + 202 * NLIMBS_EXT)
+    # Forward: P[j+3] = P[j+2] + P[j] for j = 0 to 127
+    let mut j: i64 = 0
+    while j < 128 {
+        let dst: ptr<i64> = P_ext + (j + 3 + 200) * NLIMBS_EXT
+        let src1: ptr<i64> = P_ext + (j + 2 + 200) * NLIMBS_EXT
+        let src2: ptr<i64> = P_ext + (j + 200) * NLIMBS_EXT
+        let mut k: i64 = 0
+        while k < NLIMBS_EXT { dst[k] = src1[k]; k = k + 1 }
+        big_add_ext(dst, src2)
+        j = j + 1
+    }
+    # Reverse: P[j] = P[j+3] - P[j+2] for j = -1 to -200
+    j = -1
+    while j >= -200 {
+        let dst: ptr<i64> = P_ext + (j + 200) * NLIMBS_EXT
+        let src1: ptr<i64> = P_ext + (j + 3 + 200) * NLIMBS_EXT
+        let src2: ptr<i64> = P_ext + (j + 2 + 200) * NLIMBS_EXT
+        let mut k: i64 = 0
+        while k < NLIMBS_EXT { dst[k] = src1[k]; k = k + 1 }
+        big_sub_ext(dst, src2)
+        j = j - 1
+    }
+    # Truncate all 329 entries to 8 limbs
+    let mut idx: i64 = 0
+    while idx < NPOW {
+        truncate_to_8(P_ext + idx * NLIMBS_EXT, powers + idx * NLIMBS)
+        idx = idx + 1
+    }
+    free(P_ext as ptr<void>)
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe558_answer())
+    # Compute POWERS table
+    let powers: ptr<i64> = calloc(NPOW * NLIMBS, 8) as ptr<i64>
+    compute_powers(powers)
+    # Compute scale = 10^90
+    let scale: ptr<i64> = calloc(NLIMBS, 8) as ptr<i64>
+    make_scale(scale)
+    let two_scale: ptr<i64> = calloc(NLIMBS, 8) as ptr<i64>
+    let mut i: i64 = 0
+    while i < NLIMBS { two_scale[i] = scale[i]; i = i + 1 }
+    big_add(two_scale, scale)
+    # Main loop
+    let square: ptr<i64> = calloc(NLIMBS, 8) as ptr<i64>
+    let odd: ptr<i64> = calloc(NLIMBS, 8) as ptr<i64>
+    i = 0
+    while i < NLIMBS { odd[i] = scale[i]; i = i + 1 }
+    let mut lead: i64 = ZERO_INDEX
+    let mut total: i64 = 0
+    let mut n: i64 = 0
+    while n < LIMIT {
+        big_add(square, odd)
+        big_add(odd, two_scale)
+        while lead + 1 < NPOW {
+            if big_cmp(powers + (lead + 1) * NLIMBS, square) <= 0 {
+                lead = lead + 1
+            } else {
+                break
+            }
+        }
+        let residual: ptr<i64> = calloc(NLIMBS, 8) as ptr<i64>
+        let mut k: i64 = 0
+        while k < NLIMBS { residual[k] = square[k]; k = k + 1 }
+        big_sub_u(residual, powers + lead * NLIMBS)
+        let mut terms: i64 = 1
+        let mut pos: i64 = lead - 3
+        while pos >= 0 {
+            while pos >= 0 && big_cmp(powers + pos * NLIMBS, residual) > 0 {
+                pos = pos - 1
+            }
+            if pos < 0 { break }
+            big_sub_u(residual, powers + pos * NLIMBS)
+            terms = terms + 1
+            pos = pos - 3
+        }
+        total = total + terms
+        free(residual as ptr<void>)
+        n = n + 1
+    }
+    printf("%lld\n", total)
+    free(powers as ptr<void>)
+    free(scale as ptr<void>)
+    free(two_scale as ptr<void>)
+    free(square as ptr<void>)
+    free(odd as ptr<void>)
     return 0
 }

@@ -68,24 +68,19 @@ function big_mul_u64(dst: ptr<Big>, a: ptr<Big>, m: u64) -> void {
 function big_sub(dst: ptr<Big>, a: ptr<Big>, b: ptr<Big>) -> void {
     # dst = a - b, assuming a >= b
     let mut borrow: u64 = 0
-    let one: u64 = 1
-
     let mut d0: u64 = a[0].w0 - b[0].w0
-    let mut d1: u64 = a[0].w1 - b[0].w1
-    let mut d2: u64 = a[0].w2 - b[0].w2
-    let mut d3: u64 = a[0].w3 - b[0].w3
-
-    # Handle borrow for w0
-    if a[0].w0 < b[0].w0 {
-        d1 = d1 - 1
-        if d1 == 18446744073709551615 { d2 = d2 - 1; if d2 == 18446744073709551615 { d3 = d3 - 1 } }
-    }
-    if a[0].w1 < b[0].w1 {
-        d2 = d2 - 1
-        if d2 == 18446744073709551615 { d3 = d3 - 1 }
-    }
-    if a[0].w2 < b[0].w2 { d3 = d3 - 1 }
-
+    if a[0].w0 < b[0].w0 { borrow = 1 } else { borrow = 0 }
+    let mut d1: u64 = a[0].w1 - b[0].w1 - borrow
+    let mut nb: u64 = 0
+    if a[0].w1 < b[0].w1 { nb = 1 }
+    if borrow == 1 && a[0].w1 <= b[0].w1 { nb = 1 }
+    borrow = nb
+    let mut d2: u64 = a[0].w2 - b[0].w2 - borrow
+    nb = 0
+    if a[0].w2 < b[0].w2 { nb = 1 }
+    if borrow == 1 && a[0].w2 <= b[0].w2 { nb = 1 }
+    borrow = nb
+    let mut d3: u64 = a[0].w3 - b[0].w3 - borrow
     dst[0].w0 = d0; dst[0].w1 = d1; dst[0].w2 = d2; dst[0].w3 = d3
 }
 
@@ -161,8 +156,8 @@ function lucas_U_mod(P: i64, k: i32, modv: i64) -> i64 {
     let mut u1: i64 = 1 % modv
     let mut i: i32 = 2
     while i <= k {
-        let tmp: i64 = (mod_mul(Pm, u1, modv) - u0) % modv
-        if tmp < 0 { tmp = tmp + modv }  # wait, can't reassign let
+        let mut tmp: i64 = (mod_mul(Pm, u1, modv) - u0) % modv
+        if tmp < 0 { tmp = tmp + modv }
         u0 = u1
         u1 = tmp
         i = i + 1
@@ -205,9 +200,14 @@ function c_value_big(n: i64, i: i32, j: i32, result: ptr<Big>) -> void {
     lucas_U_big(P, i, ui)
     lucas_U_big(P, j, uj)
 
-    # T(n) = n*(n+1)/2
-    let tn: u64 = ((n * (n + 1)) / 2) as u64
-    big_set(t, tn)
+    # T(n) = n*(n+1)/2, computed as bignum to avoid i64 overflow
+    if n % 2 == 0 {
+        big_set(t, (n / 2) as u64)
+        big_mul_u64(t, t, (n + 1) as u64)
+    } else {
+        big_set(t, n as u64)
+        big_mul_u64(t, t, ((n + 1) / 2) as u64)
+    }
 
     big_mul(tmp, t, ui)
     big_mul(result, tmp, uj)
