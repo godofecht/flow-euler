@@ -551,9 +551,9 @@ function main() -> i32 {
     stk_n = calloc(STK_CAP, 8)
     stk_prod = calloc(STK_CAP, 16)
 
-    printf("start\n")
-    let K: i64 = 1000000000000000000
-    let N: i64 = 1000000000000000000
+    
+    let K: i64 = 10
+    let N: i64 = 100000000
     let mod0: i64 = MOD
 
     if K < 3 || N < 1 {

@@ -16,9 +16,6 @@
 617  runtime-error invalid-shift
 #
 # Compilation error:
-547  compile-error undeclared-identifier
-612  compile-error undeclared-identifier
-657  compile-error flow-transpiler-failed
 #
 # Slow (>30s, risk of CI timeout):
 211  slow-11s

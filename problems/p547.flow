@@ -127,9 +127,9 @@ function cross_integral(outer_w: i64, outer_h: i64, inner_w: i64, inner_h: i64, 
         total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, -bottom, top, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
         total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, top, outer_h - bottom, -1.0, (outer_h - bottom) as f64, A, F3, P5, off, size, max_n)
     }
-    total = total + seg_term(-left, right, 0.0, inner_h as f64, -(bottom + inner_h), -bottom, 1.0, (bottom + inner_h) as f64, A, F3, P5, off, size, max_n)
-    total = total + seg_term(-left, right, 0.0, inner_h as f64, -bottom, top, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
-    total = total + seg_term(-left, right, 0.0, inner_h as f64, top, outer_h - bottom, -1.0, (outer_h - bottom) as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(-left, right, 0.0, inner_w as f64, -(bottom + inner_h), -bottom, 1.0, (bottom + inner_h) as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(-left, right, 0.0, inner_w as f64, -bottom, top, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(-left, right, 0.0, inner_w as f64, top, outer_h - bottom, -1.0, (outer_h - bottom) as f64, A, F3, P5, off, size, max_n)
     total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, -(bottom + inner_h), -bottom, 1.0, (bottom + inner_h) as f64, A, F3, P5, off, size, max_n)
     total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, -bottom, top, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
     total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, top, outer_h - bottom, -1.0, (outer_h - bottom) as f64, A, F3, P5, off, size, max_n)
