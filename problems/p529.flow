@@ -251,8 +251,9 @@ function main() -> i32 {
         t = t + 1
     }
     # Berlekamp-Massey
-    let C: ptr<i64> = calloc(1024, 8)
-    let B: ptr<i64> = calloc(1024, 8)
+    let bm_cap: i64 = nterms as i64 + 10
+    let C: ptr<i64> = calloc(bm_cap, 8)
+    let B: ptr<i64> = calloc(bm_cap, 8)
     C[0] = 1
     B[0] = 1
     let mut clen: i64 = 1
@@ -273,7 +274,7 @@ function main() -> i32 {
             m = m + 1
         } else {
             let coef: i64 = ((d as i128) * (modpow(bval, MOD - 2, MOD) as i128) % (MOD as i128)) as i64
-            let T: ptr<i64> = calloc(1024, 8)
+            let T: ptr<i64> = calloc(bm_cap, 8)
             let tlen: i64 = clen
             jj = 0
             while jj < tlen { T[jj] = C[jj]; jj = jj + 1 }
