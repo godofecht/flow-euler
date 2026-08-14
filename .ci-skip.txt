@@ -3,7 +3,6 @@
 # Format: NNN reason
 #
 # Timeout (>120s) on local scan:
-353  timeout
 535  timeout
 542  timeout
 #

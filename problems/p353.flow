@@ -45,6 +45,14 @@ function pack3(a: i64, b: i64, c: i64) -> i64 {
     return ((a + o) << 40) | ((b + o) << 20) | (c + o)
 }
 
+function cellhash(cx: i64, cy: i64, cz: i64, cap: i64) -> i64 {
+    # mix all three coords into low bits so cells do not collide by z-slice
+    let h: i64 = (cx + 200000) * 2654435761 + (cy + 200000) * 40503 + (cz + 200000) * 65599
+    let mut s: i64 = h
+    if s < 0 { s = 0 - s }
+    return s & (cap - 1)
+}
+
 function choose_L(r: i64) -> i64 {
     if r <= 512 { return 2 * r }
     if r < 8191 { return 256 }
@@ -405,9 +413,7 @@ function main() -> i32 {
             if (ys[i] as i64) < 0 && (ys[i] as i64) % L != 0 { cy2 = cy - 1 }
             if (zs[i] as i64) < 0 && (zs[i] as i64) % L != 0 { cz2 = cz - 1 }
             let key: i64 = pack3(cx2, cy2, cz2)
-            let mut slot: i64 = key
-            if slot < 0 { slot = 0 - slot }
-            slot = slot & (HCAP - 1)
+            let mut slot: i64 = cellhash(cx2, cy2, cz2, HCAP)
             while hused[slot] != 0 && hkeys[slot] != key {
                 slot = (slot + 1) & (HCAP - 1)
             }
@@ -421,48 +427,49 @@ function main() -> i32 {
             i = i + 1
         }
 
-        # Dijkstra
+        # Dijkstra with indexed binary heap (decrease-key, no stale entries)
         let INF: f64 = 1.0e100
         let dist: ptr<f64> = calloc(np, 8)
+        let heap_v: ptr<i32> = calloc(np, 4)
+        let heap_pos: ptr<i32> = calloc(np, 4)
         i = 0
         while i < np {
             dist[i] = INF
+            heap_pos[i] = -1
             i = i + 1
         }
         dist[start] = 0.0
-        let HEAP_CAP: i64 = np * 64 + 1024
-        let heap_d: ptr<f64> = calloc(HEAP_CAP, 8)
-        let heap_v: ptr<i32> = calloc(HEAP_CAP, 4)
-        heap_d[0] = 0.0
         heap_v[0] = start as i32
+        heap_pos[start] = 0
         let mut hs: i64 = 1
         let mut best: f64 = 0.5
 
         while hs > 0 {
-            let d: f64 = heap_d[0]
             let u: i64 = heap_v[0] as i64
+            let d: f64 = dist[u]
             hs = hs - 1
+            heap_pos[u] = -1
             if hs > 0 {
-                heap_d[0] = heap_d[hs]
-                heap_v[0] = heap_v[hs]
+                let last: i64 = heap_v[hs] as i64
+                heap_v[0] = last as i32
+                heap_pos[last] = 0
                 let mut idx: i64 = 0
                 while true {
                     let l: i64 = 2 * idx + 1
                     let rr: i64 = l + 1
                     let mut smallest: i64 = idx
-                    if l < hs && heap_d[l] < heap_d[smallest] { smallest = l }
-                    if rr < hs && heap_d[rr] < heap_d[smallest] { smallest = rr }
+                    if l < hs && dist[heap_v[l] as i64] < dist[heap_v[smallest] as i64] { smallest = l }
+                    if rr < hs && dist[heap_v[rr] as i64] < dist[heap_v[smallest] as i64] { smallest = rr }
                     if smallest == idx { break }
-                    let td: f64 = heap_d[idx]
-                    let tv: i32 = heap_v[idx]
-                    heap_d[idx] = heap_d[smallest]
-                    heap_v[idx] = heap_v[smallest]
-                    heap_d[smallest] = td
-                    heap_v[smallest] = tv
+                    let a: i64 = heap_v[idx] as i64
+                    let b: i64 = heap_v[smallest] as i64
+                    heap_v[idx] = b as i32
+                    heap_v[smallest] = a as i32
+                    heap_pos[a] = smallest as i32
+                    heap_pos[b] = idx as i32
                     idx = smallest
                 }
             }
-            if d != dist[u] { continue }
             if 2.0 * d >= best { break }
             let z0: i64 = zs[u] as i64
             let cand: f64 = 2.0 * d + ref_risk[z0]
@@ -482,9 +489,7 @@ function main() -> i32 {
                     let mut dzcell: i64 = 0 - 1
                     while dzcell <= 1 {
                         let key: i64 = pack3(cx + dxcell, cy + dycell, cz + dzcell)
-                        let mut slot: i64 = key
-                        if slot < 0 { slot = 0 - slot }
-                        slot = slot & (HCAP - 1)
+                        let mut slot: i64 = cellhash(cx + dxcell, cy + dycell, cz + dzcell, HCAP)
                         let mut found: i64 = 0
                         while hused[slot] != 0 {
                             if hkeys[slot] == key { found = 1; break }
@@ -507,20 +512,35 @@ function main() -> i32 {
                                         let nd: f64 = d + w
                                         if nd < dist[v] - 1.0e-15 {
                                             dist[v] = nd
-                                            let mut idx: i64 = hs
-                                            heap_d[idx] = nd
-                                            heap_v[idx] = v as i32
-                                            hs = hs + 1
-                                            while idx > 0 {
-                                                let par: i64 = (idx - 1) / 2
-                                                if heap_d[par] <= heap_d[idx] { break }
-                                                let td: f64 = heap_d[par]
-                                                let tv: i32 = heap_v[par]
-                                                heap_d[par] = heap_d[idx]
-                                                heap_v[par] = heap_v[idx]
-                                                heap_d[idx] = td
-                                                heap_v[idx] = tv
-                                                idx = par
+                                            if heap_pos[v] >= 0 {
+                                                let mut idx: i64 = heap_pos[v] as i64
+                                                while idx > 0 {
+                                                    let par: i64 = (idx - 1) / 2
+                                                    if dist[heap_v[par] as i64] <= dist[heap_v[idx] as i64] { break }
+                                                    let a: i64 = heap_v[par] as i64
+                                                    let b: i64 = heap_v[idx] as i64
+                                                    heap_v[par] = b as i32
+                                                    heap_v[idx] = a as i32
+                                                    heap_pos[a] = idx as i32
+                                                    heap_pos[b] = par as i32
+                                                    idx = par
+                                                }
+                                            } else {
+                                                let mut idx: i64 = hs
+                                                heap_v[idx] = v as i32
+                                                heap_pos[v] = idx as i32
+                                                hs = hs + 1
+                                                while idx > 0 {
+                                                    let par: i64 = (idx - 1) / 2
+                                                    if dist[heap_v[par] as i64] <= dist[heap_v[idx] as i64] { break }
+                                                    let a: i64 = heap_v[par] as i64
+                                                    let b: i64 = heap_v[idx] as i64
+                                                    heap_v[par] = b as i32
+                                                    heap_v[idx] = a as i32
+                                                    heap_pos[a] = idx as i32
+                                                    heap_pos[b] = par as i32
+                                                    idx = par
+                                                }
                                             }
                                         }
                                     }
@@ -536,7 +556,7 @@ function main() -> i32 {
             }
         }
         total = total + best
-        free(heap_v); free(heap_d); free(dist)
+        free(heap_pos); free(heap_v); free(dist)
         free(nextp); free(hused); free(hhead); free(hkeys)
         free(ref_risk); free(zs); free(ys); free(xs)
         nbit = nbit + 1

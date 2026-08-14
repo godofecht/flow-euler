@@ -1,0 +1,130 @@
+# Project Euler 535 - diagnostic v3 - better hash
+
+import euler.nt { isqrt }
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000000
+const CAP: i64 = 2097152
+
+let mut g_calls: i64 = 0
+let mut g_misses: i64 = 0
+let mut phi_calls: i64 = 0
+let mut phi_misses: i64 = 0
+let mut max_probe: i64 = 0
+
+function sum_1_to_m(m: i64) -> i64 {
+    if m <= 0 { return 0 }
+    return m * (m + 1) / 2
+}
+
+function sum_floor_sqrt(m: i64) -> i64 {
+    if m <= 0 { return 0 }
+    let t: i64 = isqrt(m)
+    let full: i64 = t - 1
+    if full <= 0 {
+        return t * (m - t * t + 1)
+    }
+    let s1: i64 = full * (full + 1) / 2
+    let s2: i64 = full * (full + 1) * (2 * full + 1) / 6
+    let mut total: i64 = 2 * s2 + s1
+    total = total + t * (m - t * t + 1)
+    return total
+}
+
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
+    let mut h: i64 = key
+    h = h ^ (h >> 32)
+    h = h ^ (h >> 16)
+    h = h ^ (h >> 8)
+    h = h & (CAP - 1)
+    let mut probes: i64 = 0
+    while used[h] == 1 && keys[h] != key {
+        h = h + 1
+        probes = probes + 1
+        if h == CAP { h = 0 }
+    }
+    if probes > max_probe { max_probe = probes }
+    return h
+}
+
+function G(n: i64, gk: ptr<i64>, gv: ptr<i64>, gu: ptr<i8>,
+          pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>) -> i64
+
+function phi(n: i64, gk: ptr<i64>, gv: ptr<i64>, gu: ptr<i8>,
+             pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>) -> i64 {
+    phi_calls = phi_calls + 1
+    if n <= 1 { return 0 }
+    let s: i64 = hslot(n, pk, pu)
+    if pu[s] == 1 { return pv[s] }
+    phi_misses = phi_misses + 1
+    let mut lo: i64 = 0
+    let mut hi: i64 = n
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if mid + G(mid, gk, gv, gu, pk, pv, pu) <= n {
+            lo = mid
+        } else {
+            hi = mid
+        }
+    }
+    pu[s] = 1
+    pk[s] = n
+    pv[s] = lo
+    return lo
+}
+
+function G(n: i64, gk: ptr<i64>, gv: ptr<i64>, gu: ptr<i8>,
+           pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>) -> i64 {
+    g_calls = g_calls + 1
+    if n == 0 { return 0 }
+    let s: i64 = hslot(n, gk, gu)
+    if gu[s] == 1 { return gv[s] }
+    g_misses = g_misses + 1
+    let r: i64 = phi(n, gk, gv, gu, pk, pv, pu)
+    let m: i64 = n - r
+    let val: i64 = G(r, gk, gv, gu, pk, pv, pu) + sum_floor_sqrt(m)
+    gu[s] = 1
+    gk[s] = n
+    gv[s] = val
+    return val
+}
+
+function T(n: i64, tk: ptr<i64>, tv: ptr<i64>, tu: ptr<i8>,
+           gk: ptr<i64>, gv: ptr<i64>, gu: ptr<i8>,
+           pk: ptr<i64>, pv: ptr<i64>, pu: ptr<i8>) -> i64 {
+    if n == 0 { return 0 }
+    let s: i64 = hslot(n, tk, tu)
+    if tu[s] == 1 { return tv[s] }
+    let r: i64 = phi(n, gk, gv, gu, pk, pv, pu)
+    let m: i64 = n - r
+    let val: i64 = T(r, tk, tv, tu, gk, gv, gu, pk, pv, pu) + sum_1_to_m(m)
+    tu[s] = 1
+    tk[s] = n
+    tv[s] = val
+    return val
+}
+
+function main() -> i32 {
+    let gk: ptr<i64> = calloc(CAP, 8)
+    let gv: ptr<i64> = calloc(CAP, 8)
+    let gu: ptr<i8> = calloc(CAP, 1)
+    let pk: ptr<i64> = calloc(CAP, 8)
+    let pv: ptr<i64> = calloc(CAP, 8)
+    let pu: ptr<i8> = calloc(CAP, 1)
+    let tk: ptr<i64> = calloc(CAP, 8)
+    let tv: ptr<i64> = calloc(CAP, 8)
+    let tu: ptr<i8> = calloc(CAP, 1)
+    if gk == null || gv == null || gu == null || pk == null || pv == null || pu == null
+        || tk == null || tv == null || tu == null {
+        return 1
+    }
+    let mut ans: i64 = T(20000000000000, tk, tv, tu, gk, gv, gu, pk, pv, pu) % MOD
+    if ans < 0 { ans = ans + MOD }
+    printf("ans=%lld g_calls=%lld g_misses=%lld phi_calls=%lld phi_misses=%lld max_probe=%lld\n", ans, g_calls, g_misses, phi_calls, phi_misses, max_probe)
+    free(gk); free(gv); free(gu); free(pk); free(pv); free(pu); free(tk); free(tv); free(tu)
+    return 0
+}
