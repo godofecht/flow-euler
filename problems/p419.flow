@@ -1,11 +1,412 @@
-# Project Euler 419
-# Look-and-say A(n),B(n),C(n) mod 2^30 for n=10^12 via Conway decay matrices.
+# Project Euler 419 — Look and Say via Conway element-decay matrices mod 2^30.
+# Ported from C++. Uses string manipulation and matrix exponentiation.
+# Conway's cosmological theorem limits distinct elements to ~92.
 
 extern {
-    function pe419_answer_print() -> void
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+    function strlen(s: ptr<i8>) -> i64
+    function strcmp(a: ptr<i8>, b: ptr<i8>) -> i32
+    function strcpy(dst: ptr<i8>, src: ptr<i8>) -> ptr<i8>
+    function strcat(dst: ptr<i8>, src: ptr<i8>) -> ptr<i8>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+const MOD_MASK: u32 = 1073741823
+const MAX_ELEMS: i32 = 200
+const MAX_ELEM_LEN: i32 = 128
+const MAX_STR: i32 = 70000
+const MAX_SPLIT: i32 = 10000
+
+# String buffer for look-and-say generation
+let mut g_buf1: ptr<i8> = null
+let mut g_buf2: ptr<i8> = null
+
+# Element table: flat MAX_ELEMS * MAX_ELEM_LEN bytes
+let mut g_elems: ptr<i8> = null
+let mut g_nelems: i32 = 0
+
+function elem_ptr(i: i32) -> ptr<i8> {
+    return g_elems + ((i as i64) * (MAX_ELEM_LEN as i64))
+}
+
+function find_or_add(e: ptr<i8>) -> i32 {
+    let mut i: i32 = 0
+    while i < g_nelems {
+        if strcmp(elem_ptr(i), e) == 0 { return i }
+        i = i + 1
+    }
+    let j: i32 = g_nelems
+    g_nelems = g_nelems + 1
+    strcpy(elem_ptr(j), e)
+    return j
+}
+
+# Look-and-say: read input, write output to out
+function say(input: ptr<i8>, out: ptr<i8>) -> void {
+    let n: i64 = strlen(input)
+    let mut i: i64 = 0
+    let mut op: i64 = 0
+    while i < n {
+        let ch: i8 = input[i]
+        let mut j: i64 = i + 1
+        while j < n && input[j] == ch { j = j + 1 }
+        let count: i64 = j - i
+        # Write count as decimal
+        let digits: ptr<i8> = calloc(20, 1)
+        let mut dc: i32 = 0
+        let mut c: i64 = count
+        if c == 0 {
+            digits[0] = 48
+            dc = 1
+        }
+        while c > 0 {
+            digits[dc] = ((c % 10) as i8) + 48
+            dc = dc + 1
+            c = c / 10
+        }
+        # Reverse digits into out
+        let mut d: i32 = dc - 1
+        while d >= 0 {
+            out[op] = digits[d]
+            op = op + 1
+            d = d - 1
+        }
+        free(digits as ptr<void>)
+        out[op] = ch
+        op = op + 1
+        i = j
+    }
+    out[op] = 0
+}
+
+# spl00_at: check if position j is a split point for the "00" sub-pattern
+function spl00_at(s: ptr<i8>, j: i64) -> i32 {
+    let n: i64 = strlen(s)
+    if j + 2 < n && s[j] == 49 && s[j + 1] == 49 && s[j + 2] == 49 { return 1 }
+    if j == n - 1 && s[j] == 49 { return 0 }
+    if j + 1 < n && s[j] == 49 && s[j + 1] == 49 { return 0 }
+    if j + 2 < n && s[j] == 49 && s[j + 1] == 50 && s[j + 2] == 50 { return 0 }
+    if j + 2 < n && s[j] == 49 && s[j + 1] == 51 && s[j + 2] == 51 { return 0 }
+    if j < n && s[j] == 50 { return 0 }
+    if j + 3 < n && s[j] == 51 && s[j + 1] == 49 && s[j + 2] == 49 && s[j + 3] == 49 { return 0 }
+    if j + 3 < n && s[j] == 51 && s[j + 1] == 50 && s[j + 2] == 50 && s[j + 3] == 50 { return 0 }
+    if j + 1 < n && s[j] == 51 && s[j + 1] == 51 { return 0 }
+    return 1
+}
+
+function spl0_at(s: ptr<i8>, i: i64) -> i32 {
+    let n: i64 = strlen(s)
+    let ch: i8 = s[i]
+    if ch == 49 && i == n - 1 { return 1 }
+    if ch == 49 && i + 2 < n && s[i + 1] == 50 && s[i + 2] == 50 {
+        return spl00_at(s, i + 3)
+    }
+    if ch == 50 { return spl00_at(s, i + 1) }
+    if ch == 51 && i == n - 1 { return 1 }
+    if ch == 51 && i + 2 < n && s[i + 1] == 50 && s[i + 2] == 50 {
+        return spl00_at(s, i + 3)
+    }
+    return 0
+}
+
+# Split string into elements, return count and fill indices array
+# Each element is written to the out_elems buffer as null-terminated strings
+function split_elements(s: ptr<i8>, out_count: ptr<i32>, out_elems: ptr<i8>) -> void {
+    let n: i64 = strlen(s)
+    if n == 0 { out_count[0] = 0
+        return
+    }
+    let mut start: i64 = 0
+    let mut count: i32 = 0
+    let mut i: i64 = 0
+    while i < n {
+        if spl0_at(s, i) == 1 {
+            # Copy s[start..i+1] to out_elems[count]
+            let dst: ptr<i8> = out_elems + ((count as i64) * (MAX_ELEM_LEN as i64))
+            let mut k: i64 = start
+            while k <= i {
+                dst[k - start] = s[k]
+                k = k + 1
+            }
+            dst[i + 1 - start] = 0
+            count = count + 1
+            start = i + 1
+        }
+        i = i + 1
+    }
+    if start < n {
+        let dst2: ptr<i8> = out_elems + ((count as i64) * (MAX_ELEM_LEN as i64))
+        let mut k2: i64 = start
+        while k2 < n {
+            dst2[k2 - start] = s[k2]
+            k2 = k2 + 1
+        }
+        dst2[n - start] = 0
+        count = count + 1
+    }
+    out_count[0] = count
+}
+
+# Matrix multiply mod 2^30. Matrices are flat m*m arrays of u32.
+function mat_mul(A: ptr<u32>, B: ptr<u32>, out: ptr<u32>, m: i32) -> void {
+    memset_zero_u32(out, (m as i64) * (m as i64))
+    let mut i: i32 = 0
+    while i < m {
+        let mut k: i32 = 0
+        while k < m {
+            let a: u32 = A[i * m + k]
+            if a == 0 { k = k + 1
+                continue
+            }
+            let mut j: i32 = 0
+            while j < m {
+                out[i * m + j] = ((out[i * m + j] as u64) + ((a as u64) * (B[k * m + j] as u64))) as u32 & MOD_MASK
+                j = j + 1
+            }
+            k = k + 1
+        }
+        i = i + 1
+    }
+}
+
+# Vector * matrix mod 2^30
+function vec_mul(v: ptr<u32>, M: ptr<u32>, out: ptr<u32>, m: i32) -> void {
+    memset_zero_u32(out, m as i64)
+    let mut i: i32 = 0
+    while i < m {
+        let a: u32 = v[i]
+        if a == 0 { i = i + 1
+            continue
+        }
+        let mut j: i32 = 0
+        while j < m {
+            out[j] = ((out[j] as u64) + ((a as u64) * (M[i * m + j] as u64))) as u32 & MOD_MASK
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+function memset_zero_u32(arr: ptr<u32>, n: i64) -> void {
+    let mut i: i64 = 0
+    while i < n {
+        arr[i] = 0
+        i = i + 1
+    }
+}
+
+# Vector * M^exp using binary exponentiation
+function vec_mul_pow(v: ptr<u32>, M: ptr<u32>, exp: i64, m: i32, out: ptr<u32>) -> void {
+    let cur_v: ptr<u32> = calloc((m as i64), 4)
+    memcpy(cur_v as ptr<void>, v as ptr<void>, (m as i64) * 4)
+    let cur_M: ptr<u32> = calloc((m as i64) * (m as i64), 4)
+    memcpy(cur_M as ptr<void>, M as ptr<void>, (m as i64) * (m as i64) * 4)
+    let tmp_v: ptr<u32> = calloc((m as i64), 4)
+    let tmp_M: ptr<u32> = calloc((m as i64) * (m as i64), 4)
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) == 1 {
+            vec_mul(cur_v, cur_M, tmp_v, m)
+            memcpy(cur_v as ptr<void>, tmp_v as ptr<void>, (m as i64) * 4)
+        }
+        e = e >> 1
+        if e > 0 {
+            mat_mul(cur_M, cur_M, tmp_M, m)
+            memcpy(cur_M as ptr<void>, tmp_M as ptr<void>, (m as i64) * (m as i64) * 4)
+        }
+    }
+    memcpy(out as ptr<void>, cur_v as ptr<void>, (m as i64) * 4)
+    free(cur_v as ptr<void>)
+    free(cur_M as ptr<void>)
+    free(tmp_v as ptr<void>)
+    free(tmp_M as ptr<void>)
+}
+
+function counts_in_term(term: ptr<i8>, outA: ptr<u32>, outB: ptr<u32>, outC: ptr<u32>) -> void {
+    let mut A: u32 = 0
+    let mut B: u32 = 0
+    let mut C: u32 = 0
+    let n: i64 = strlen(term)
+    let mut i: i64 = 0
+    while i < n {
+        let ch: i8 = term[i]
+        if ch == 49 { A = A + 1 }
+        else {
+            if ch == 50 { B = B + 1 }
+            else {
+                if ch == 51 { C = C + 1 }
+            }
+        }
+        i = i + 1
+    }
+    outA[0] = A
+    outB[0] = B
+    outC[0] = C
 }
 
 function main() -> i32 {
-    pe419_answer_print()
+    let n: i64 = 1000000000000
+
+    g_buf1 = calloc((MAX_STR as i64), 1)
+    g_buf2 = calloc((MAX_STR as i64), 1)
+    g_elems = calloc((MAX_SPLIT as i64) * (MAX_ELEM_LEN as i64), 1)
+
+    # Start with "1"
+    g_buf1[0] = 49
+    g_buf1[1] = 0
+
+    let steps: i32 = 39
+    if n - 1 < (steps as i64) { steps = (n - 1) as i32 }
+
+    let mut i: i32 = 0
+    while i < steps {
+        say(g_buf1, g_buf2)
+        memcpy(g_buf1 as ptr<void>, g_buf2 as ptr<void>, (MAX_STR as i64))
+        i = i + 1
+    }
+
+    if n <= 40 {
+        let Aptr: ptr<u32> = calloc(1, 4)
+        let Bptr: ptr<u32> = calloc(1, 4)
+        let Cptr: ptr<u32> = calloc(1, 4)
+        counts_in_term(g_buf1, Aptr, Bptr, Cptr)
+        printf("%u,%u,%u\n", Aptr[0], Bptr[0], Cptr[0])
+        free(Aptr as ptr<void>)
+        free(Bptr as ptr<void>)
+        free(Cptr as ptr<void>)
+        free(g_buf1 as ptr<void>)
+        free(g_buf2 as ptr<void>)
+        free(g_elems as ptr<void>)
+        return 0
+    }
+
+    # Split seed elements
+    let seed_buf: ptr<i8> = calloc((MAX_SPLIT as i64) * (MAX_ELEM_LEN as i64), 1)
+    let seed_count_ptr: ptr<i32> = calloc(1, 4)
+    split_elements(g_buf1, seed_count_ptr, seed_buf)
+    let seed_count: i32 = seed_count_ptr[0]
+    free(seed_count_ptr as ptr<void>)
+
+    # Add seed elements to global table
+    let mut si: i32 = 0
+    while si < seed_count {
+        let e: ptr<i8> = seed_buf + ((si as i64) * (MAX_ELEM_LEN as i64))
+        find_or_add(e)
+        si = si + 1
+    }
+
+    # Add children of each element
+    let child_buf: ptr<i8> = calloc((MAX_SPLIT as i64) * (MAX_ELEM_LEN as i64), 1)
+    let child_count_ptr: ptr<i32> = calloc(1, 4)
+    let mut p: i32 = 0
+    while p < g_nelems {
+        let ep: ptr<i8> = elem_ptr(p)
+        say(ep, g_buf2)
+        split_elements(g_buf2, child_count_ptr, child_buf)
+        let cc: i32 = child_count_ptr[0]
+        let mut ci: i32 = 0
+        while ci < cc {
+            let ce: ptr<i8> = child_buf + ((ci as i64) * (MAX_ELEM_LEN as i64))
+            find_or_add(ce)
+            ci = ci + 1
+        }
+        p = p + 1
+    }
+    free(child_count_ptr as ptr<void>)
+    free(child_buf as ptr<void>)
+
+    let m: i32 = g_nelems
+
+    # Build transition matrix M
+    let M: ptr<u32> = calloc((m as i64) * (m as i64), 4)
+    let dec_buf: ptr<i8> = calloc((MAX_SPLIT as i64) * (MAX_ELEM_LEN as i64), 1)
+    let dec_count_ptr: ptr<i32> = calloc(1, 4)
+    let mut mi: i32 = 0
+    while mi < m {
+        say(elem_ptr(mi), g_buf2)
+        split_elements(g_buf2, dec_count_ptr, dec_buf)
+        let dc: i32 = dec_count_ptr[0]
+        let mut di: i32 = 0
+        while di < dc {
+            let de: ptr<i8> = dec_buf + ((di as i64) * (MAX_ELEM_LEN as i64))
+            let idx: i32 = find_or_add(de)
+            # But find_or_add may have increased m! We need to handle this.
+            # Actually, all elements should already be in the table from the pre-pass.
+            M[mi * m + idx] = M[mi * m + idx] + 1
+            di = di + 1
+        }
+        mi = mi + 1
+    }
+    free(dec_count_ptr as ptr<void>)
+    free(dec_buf as ptr<void>)
+
+    # Recompute m in case new elements were added (shouldn't happen)
+    let m2: i32 = g_nelems
+    # If m2 != m, we'd need to rebuild. But cosmological theorem guarantees closure.
+
+    # Count 1s, 2s, 3s in each element
+    let ones: ptr<u32> = calloc((m as i64), 4)
+    let twos: ptr<u32> = calloc((m as i64), 4)
+    let threes: ptr<u32> = calloc((m as i64), 4)
+    let mut ci2: i32 = 0
+    while ci2 < m {
+        let ep2: ptr<i8> = elem_ptr(ci2)
+        let len: i64 = strlen(ep2)
+        let mut k: i64 = 0
+        while k < len {
+            let ch: i8 = ep2[k]
+            if ch == 49 { ones[ci2] = ones[ci2] + 1 }
+            else {
+                if ch == 50 { twos[ci2] = twos[ci2] + 1 }
+                else {
+                    if ch == 51 { threes[ci2] = threes[ci2] + 1 }
+                }
+            }
+            k = k + 1
+        }
+        ci2 = ci2 + 1
+    }
+
+    # Build initial vector from seed elements
+    let v: ptr<u32> = calloc((m as i64), 4)
+    let mut si2: i32 = 0
+    while si2 < seed_count {
+        let e: ptr<i8> = seed_buf + ((si2 as i64) * (MAX_ELEM_LEN as i64))
+        let found: i32 = find_or_add(e)
+        v[found] = v[found] + 1
+        si2 = si2 + 1
+    }
+    free(seed_buf as ptr<void>)
+
+    # v = v * M^(n-40)
+    let v_final: ptr<u32> = calloc((m as i64), 4)
+    vec_mul_pow(v, M, n - 40, m, v_final)
+
+    let mut A: u32 = 0
+    let mut B: u32 = 0
+    let mut C: u32 = 0
+    let mut ri: i32 = 0
+    while ri < m {
+        if v_final[ri] != 0 {
+            A = ((A as u64) + ((v_final[ri] as u64) * (ones[ri] as u64))) as u32 & MOD_MASK
+            B = ((B as u64) + ((v_final[ri] as u64) * (twos[ri] as u64))) as u32 & MOD_MASK
+            C = ((C as u64) + ((v_final[ri] as u64) * (threes[ri] as u64))) as u32 & MOD_MASK
+        }
+        ri = ri + 1
+    }
+
+    printf("%u,%u,%u\n", A, B, C)
+
+    free(M as ptr<void>)
+    free(ones as ptr<void>)
+    free(twos as ptr<void>)
+    free(threes as ptr<void>)
+    free(v as ptr<void>)
+    free(v_final as ptr<void>)
+    free(g_buf1 as ptr<void>)
+    free(g_buf2 as ptr<void>)
+    free(g_elems as ptr<void>)
     return 0
 }
