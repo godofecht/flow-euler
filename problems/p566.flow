@@ -552,7 +552,7 @@ function solvePermutation(nxt: ptr<i32>, flip: ptr<i32>, N: i32, m: i32) -> i64 
         ci = ci + 1
     }
 
-    let sols: ptr<i64> = calloc(100000, 8) as ptr<i64>
+    let sols: ptr<i64> = calloc(1000000, 8) as ptr<i64>
     sols[0] = 0
     let solCnt: ptr<i32> = calloc(1, 4) as ptr<i32>
     solCnt[0] = 1
@@ -663,7 +663,7 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
     let thrP: array<i64, 3> = [thr0.P, thr1.P, thr2.P]
     let thrQ: array<i64, 3> = [thr0.Q, thr1.Q, thr2.Q]
 
-    let CAP: i32 = 8192
+    let CAP: i32 = 2097152
     let MASK: i32 = CAP - 1
 
     let hashP0: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
@@ -903,8 +903,13 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
 }
 
 function F(a: i32, b: i32, c: i32) -> i64 {
-    if isSquare(c) { return F_square(a, b, c) }
-    return F_nonsquare(a, b, c)
+    let result: i64 = 0
+    if isSquare(c) {
+        result = F_square(a, b, c)
+    } else {
+        result = F_nonsquare(a, b, c)
+    }
+    return result
 }
 
 function computeG(n: i32) -> i64 {
@@ -936,8 +941,11 @@ function validate_samples() -> bool {
 }
 
 function main() -> i32 {
-    printf("start F(9,10,11)\n")
-    let r1: i64 = F(9, 10, 11)
-    printf("F(9,10,11) = %lld\n", r1)
+    if !validate_samples() {
+        printf("Validation failed.\n")
+        return 1
+    }
+    let result: i64 = computeG(53)
+    printf("%lld\n", result)
     return 0
 }
