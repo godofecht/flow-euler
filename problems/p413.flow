@@ -1,11 +1,767 @@
-# Project Euler 413
-# One-child numbers: digit DP with 2/5-adic and coprime moduli.
+# Project Euler 413: One-child numbers F(10^19).
+# Ported from C++. Uses sorted-array maps for DP states.
 
 extern {
-    function pe413_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+const MAX_STATES: i32 = 2000000
+const MAX_TRANS: i32 = 20000000
+
+function sort_kv(keys: ptr<i64>, vals: ptr<i64>, lo: i32, hi: i32, tk: ptr<i64>, tv: ptr<i64>) -> void {
+    if hi - lo <= 1 { return }
+    let mid: i32 = (lo + hi) / 2
+    sort_kv(keys, vals, lo, mid, tk, tv)
+    sort_kv(keys, vals, mid, hi, tk, tv)
+    let mut i: i32 = lo
+    let mut j: i32 = mid
+    let mut k: i32 = lo
+    while i < mid && j < hi {
+        if keys[i] <= keys[j] {
+            tk[k] = keys[i]
+            tv[k] = vals[i]
+            i = i + 1
+        } else {
+            tk[k] = keys[j]
+            tv[k] = vals[j]
+            j = j + 1
+        }
+        k = k + 1
+    }
+    while i < mid {
+        tk[k] = keys[i]
+        tv[k] = vals[i]
+        i = i + 1
+        k = k + 1
+    }
+    while j < hi {
+        tk[k] = keys[j]
+        tv[k] = vals[j]
+        j = j + 1
+        k = k + 1
+    }
+    let mut x: i32 = lo
+    while x < hi {
+        keys[x] = tk[x]
+        vals[x] = tv[x]
+        x = x + 1
+    }
+}
+
+function sort_and_merge(keys: ptr<i64>, vals: ptr<i64>, count: i32, tk: ptr<i64>, tv: ptr<i64>) -> i32 {
+    if count <= 1 { return count }
+    sort_kv(keys, vals, 0, count, tk, tv)
+    let mut j: i32 = 0
+    let mut i: i32 = 1
+    while i < count {
+        if keys[i] == keys[j] {
+            vals[j] = vals[j] + vals[i]
+        } else {
+            j = j + 1
+            keys[j] = keys[i]
+            vals[j] = vals[i]
+        }
+        i = i + 1
+    }
+    return j + 1
+}
+
+function v_factor(n: i32, p: i32) -> i32 {
+    let mut x: i32 = n
+    let mut c: i32 = 0
+    while x % p == 0 {
+        x = x / p
+        c = c + 1
+    }
+    return c
+}
+
+function mod_pow(a: i64, e: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut x: i64 = a % mod
+    let mut ee: i64 = e
+    while ee > 0 {
+        if (ee & 1) == 1 { r = r * x % mod }
+        x = x * x % mod
+        ee = ee >> 1
+    }
+    return r
+}
+
+function mod_inv(a: i64, mod: i64) -> i64 {
+    return mod_pow(a, mod - 2, mod)
+}
+
+function compute_total3(m: i32) -> i32 {
+    let mm: i32 = if m <= 0 { 1 } else { m }
+    let mut total: i32 = 1
+    let mut i: i32 = 0
+    while i < mm {
+        total = total * 3
+        i = i + 1
+    }
+    return total
+}
+
+function precompute_counts(m: i32, count_val: ptr<i32>, inc_code: ptr<i32>) -> void {
+    let mm: i32 = if m <= 0 { 1 } else { m }
+    let mut total: i32 = 1
+    let mut i: i32 = 0
+    while i < mm {
+        total = total * 3
+        i = i + 1
+    }
+    let pow3: ptr<i32> = calloc((mm + 1) as i64, 4)
+    pow3[0] = 1
+    let mut i2: i32 = 1
+    while i2 <= mm {
+        pow3[i2] = pow3[i2 - 1] * 3
+        i2 = i2 + 1
+    }
+    let counts: ptr<i32> = calloc(mm as i64, 4)
+    let mut code: i32 = 0
+    while code < total {
+        let mut tmp: i32 = code
+        let mut i3: i32 = 0
+        while i3 < mm {
+            counts[i3] = tmp % 3
+            tmp = tmp / 3
+            i3 = i3 + 1
+        }
+        let mut i4: i32 = 0
+        while i4 < mm {
+            count_val[code * mm + i4] = counts[i4]
+            let neu: i32 = counts[i4] + 1
+            let nn: i32 = if neu > 2 { 2 } else { neu }
+            inc_code[code * mm + i4] = code + (nn - counts[i4]) * pow3[i4]
+            i4 = i4 + 1
+        }
+        code = code + 1
+    }
+    free(pow3 as ptr<void>)
+    free(counts as ptr<void>)
+}
+
+function count_one_child_coprime(d: i32) -> i64 {
+    let inv10: i64 = mod_inv(10, d as i64)
+    let w: ptr<i64> = calloc((d + 1) as i64, 8)
+    w[1] = inv10 % (d as i64)
+    let mut i: i32 = 2
+    while i <= d {
+        w[i] = w[i - 1] * inv10 % (d as i64)
+        i = i + 1
+    }
+
+    let dc_delta: ptr<i32> = calloc((d * 10) as i64, 4)
+    let dc_count: ptr<i32> = calloc((d * 10) as i64, 4)
+    let dc_n: ptr<i32> = calloc(d as i64, 4)
+    let mut pos: i32 = 1
+    while pos <= d {
+        let dmap: ptr<i32> = calloc(d as i64, 4)
+        let lo: i32 = if pos == 1 { 1 } else { 0 }
+        let mut digit: i32 = lo
+        while digit <= 9 {
+            let delta: i32 = ((digit as i64) * w[pos] % (d as i64)) as i32
+            dmap[delta] = dmap[delta] + 1
+            digit = digit + 1
+        }
+        let mut k: i32 = 0
+        let mut delta_val: i32 = 0
+        while delta_val < d {
+            if dmap[delta_val] > 0 {
+                dc_delta[(pos - 1) * 10 + k] = delta_val
+                dc_count[(pos - 1) * 10 + k] = dmap[delta_val]
+                k = k + 1
+            }
+            delta_val = delta_val + 1
+        }
+        dc_n[pos - 1] = k
+        free(dmap as ptr<void>)
+        pos = pos + 1
+    }
+
+    let dp0k: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let dp0v: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let mut dp0n: i32 = 0
+    let dp1k: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let dp1v: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let mut dp1n: i32 = 0
+
+    dp0k[0] = 32
+    dp0v[0] = 1
+    dp0n = 1
+
+    let n0k: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n0v: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n1k: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n1v: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let tk: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let tv: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+
+    let mut step: i32 = 0
+    while step < d {
+        let mut nn0: i32 = 0
+        let mut nn1: i32 = 0
+
+        let mut si: i32 = 0
+        while si < dp0n {
+            let key: i64 = dp0k[si]
+            let ways: i64 = dp0v[si]
+            let mask: i64 = key >> 5
+            let r: i32 = (key & 31) as i32
+            let mut k: i32 = 0
+            while k < dc_n[step] {
+                let delta: i32 = dc_delta[step * 10 + k]
+                let cnt: i32 = dc_count[step * 10 + k]
+                let r2: i32 = r + delta
+                if r2 >= d { r2 = r2 - d }
+                let bit: i64 = 1 << r2
+                if (mask & bit) != 0 {
+                    n1k[nn1] = (mask << 5) | (r2 as i64)
+                    n1v[nn1] = ways * (cnt as i64)
+                    nn1 = nn1 + 1
+                } else {
+                    n0k[nn0] = ((mask | bit) << 5) | (r2 as i64)
+                    n0v[nn0] = ways * (cnt as i64)
+                    nn0 = nn0 + 1
+                }
+                k = k + 1
+            }
+            si = si + 1
+        }
+
+        let mut si2: i32 = 0
+        while si2 < dp1n {
+            let key: i64 = dp1k[si2]
+            let ways: i64 = dp1v[si2]
+            let mask: i64 = key >> 5
+            let r: i32 = (key & 31) as i32
+            let mut k: i32 = 0
+            while k < dc_n[step] {
+                let delta: i32 = dc_delta[step * 10 + k]
+                let cnt: i32 = dc_count[step * 10 + k]
+                let r2: i32 = r + delta
+                if r2 >= d { r2 = r2 - d }
+                let bit: i64 = 1 << r2
+                if (mask & bit) != 0 {
+                    k = k + 1
+                    continue
+                  }
+                n1k[nn1] = ((mask | bit) << 5) | (r2 as i64)
+                n1v[nn1] = ways * (cnt as i64)
+                nn1 = nn1 + 1
+                k = k + 1
+            }
+            si2 = si2 + 1
+        }
+
+        dp0n = sort_and_merge(n0k, n0v, nn0, tk, tv)
+        dp1n = sort_and_merge(n1k, n1v, nn1, tk, tv)
+
+        let mut ci: i32 = 0
+        while ci < dp0n {
+            dp0k[ci] = n0k[ci]
+            dp0v[ci] = n0v[ci]
+            ci = ci + 1
+        }
+        let mut ci2: i32 = 0
+        while ci2 < dp1n {
+            dp1k[ci2] = n1k[ci2]
+            dp1v[ci2] = n1v[ci2]
+            ci2 = ci2 + 1
+        }
+
+        step = step + 1
+    }
+
+    let mut total: i64 = 0
+    let mut si3: i32 = 0
+    while si3 < dp1n {
+        total = total + dp1v[si3]
+        si3 = si3 + 1
+    }
+
+    free(w as ptr<void>)
+    free(dc_delta as ptr<void>)
+    free(dc_count as ptr<void>)
+    free(dc_n as ptr<void>)
+    free(dp0k as ptr<void>)
+    free(dp0v as ptr<void>)
+    free(dp1k as ptr<void>)
+    free(dp1v as ptr<void>)
+    free(n0k as ptr<void>)
+    free(n0v as ptr<void>)
+    free(n1k as ptr<void>)
+    free(n1v as ptr<void>)
+    free(tk as ptr<void>)
+    free(tv as ptr<void>)
+
+    return total
+}
+
+# L == 1 case: 3 DP maps with key = (counts_code << 20) | q
+function count_one_child_L1(d: i32, t: i32, m: i32) -> i64 {
+    let mm: i32 = if m <= 0 { 1 } else { m }
+    let total3: i32 = compute_total3(mm)
+    let cv: ptr<i32> = calloc((total3 * mm) as i64, 4)
+    let ic: ptr<i32> = calloc((total3 * mm) as i64, 4)
+    precompute_counts(mm, cv, ic)
+
+    let w: ptr<i64> = calloc((d + 1) as i64, 8)
+    if m > 1 {
+        let inv10: i64 = mod_inv(10, m as i64)
+        w[1] = inv10 % (m as i64)
+        let mut i: i32 = 2
+        while i <= d {
+            w[i] = w[i - 1] * inv10 % (m as i64)
+            i = i + 1
+        }
+    }
+
+    # 3 DP maps, each with its own keys/vals arrays
+    let dp0k: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let dp0v: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let mut dp0n: i32 = 0
+    let dp1k: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let dp1v: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let mut dp1n: i32 = 0
+    let dp2k: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let dp2v: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let mut dp2n: i32 = 0
+
+    let start_code: i32 = ic[0]
+    dp0k[0] = (start_code as i64) << 20
+    dp0v[0] = 1
+    dp0n = 1
+
+    let n0k: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n0v: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n1k: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n1v: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n2k: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n2v: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let tk: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let tv: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+
+    let mut pos: i32 = 1
+    while pos <= d {
+        let mut nn0: i32 = 0
+        let mut nn1: i32 = 0
+        let mut nn2: i32 = 0
+        let lo: i32 = if pos == 1 { 1 } else { 0 }
+        let wi: i64 = w[pos]
+
+        # Process dp0
+        let mut si: i32 = 0
+        while si < dp0n {
+            let key: i64 = dp0k[si]
+            let ways: i64 = dp0v[si]
+            let cc: i32 = (key >> 20) as i32
+            let q: i32 = (key & 0xFFFFF) as i32
+            let mut digit: i32 = lo
+            while digit <= 9 {
+                let qn: i32 = if m > 1 { ((q as i64 + (digit as i64) * wi) % (m as i64)) as i32 } else { 0 }
+                let mut nd: i32 = 0
+                if digit % t == 0 { nd = cv[cc * mm + qn] }
+                let nt: i32 = nd
+                if nt > 2 { nt = 2 }
+                let ncc: i32 = ic[cc * mm + qn]
+                let nkey: i64 = ((ncc as i64) << 20) | (qn as i64)
+                if nt == 0 {
+                    n0k[nn0] = nkey
+                    n0v[nn0] = ways
+                    nn0 = nn0 + 1
+                  }
+                if nt == 1 {
+                    n1k[nn1] = nkey
+                    n1v[nn1] = ways
+                    nn1 = nn1 + 1
+                  }
+                if nt == 2 {
+                    n2k[nn2] = nkey
+                    n2v[nn2] = ways
+                    nn2 = nn2 + 1
+                  }
+                digit = digit + 1
+            }
+            si = si + 1
+        }
+
+        # Process dp1
+        let mut si2: i32 = 0
+        while si2 < dp1n {
+            let key: i64 = dp1k[si2]
+            let ways: i64 = dp1v[si2]
+            let cc: i32 = (key >> 20) as i32
+            let q: i32 = (key & 0xFFFFF) as i32
+            let mut digit: i32 = lo
+            while digit <= 9 {
+                let qn: i32 = if m > 1 { ((q as i64 + (digit as i64) * wi) % (m as i64)) as i32 } else { 0 }
+                let mut nd: i32 = 0
+                if digit % t == 0 { nd = cv[cc * mm + qn] }
+                let nt: i32 = 1 + nd
+                if nt > 2 { nt = 2 }
+                let ncc: i32 = ic[cc * mm + qn]
+                let nkey: i64 = ((ncc as i64) << 20) | (qn as i64)
+                if nt == 1 {
+                    n1k[nn1] = nkey
+                    n1v[nn1] = ways
+                    nn1 = nn1 + 1
+                  }
+                if nt == 2 {
+                    n2k[nn2] = nkey
+                    n2v[nn2] = ways
+                    nn2 = nn2 + 1
+                  }
+                digit = digit + 1
+            }
+            si2 = si2 + 1
+        }
+
+        # Process dp2
+        let mut si3: i32 = 0
+        while si3 < dp2n {
+            let key: i64 = dp2k[si3]
+            let ways: i64 = dp2v[si3]
+            let cc: i32 = (key >> 20) as i32
+            let q: i32 = (key & 0xFFFFF) as i32
+            let mut digit: i32 = lo
+            while digit <= 9 {
+                let qn: i32 = if m > 1 { ((q as i64 + (digit as i64) * wi) % (m as i64)) as i32 } else { 0 }
+                let mut nd: i32 = 0
+                if digit % t == 0 { nd = cv[cc * mm + qn] }
+                let nt: i32 = 2 + nd
+                if nt > 2 { nt = 2 }
+                let ncc: i32 = ic[cc * mm + qn]
+                let nkey: i64 = ((ncc as i64) << 20) | (qn as i64)
+                n2k[nn2] = nkey
+                n2v[nn2] = ways
+                nn2 = nn2 + 1
+                digit = digit + 1
+            }
+            si3 = si3 + 1
+        }
+
+        dp0n = sort_and_merge(n0k, n0v, nn0, tk, tv)
+        dp1n = sort_and_merge(n1k, n1v, nn1, tk, tv)
+        dp2n = sort_and_merge(n2k, n2v, nn2, tk, tv)
+
+        let mut ci: i32 = 0
+        while ci < dp0n {
+            dp0k[ci] = n0k[ci]
+            dp0v[ci] = n0v[ci]
+            ci = ci + 1
+          }
+        let mut ci2: i32 = 0
+        while ci2 < dp1n {
+            dp1k[ci2] = n1k[ci2]
+            dp1v[ci2] = n1v[ci2]
+            ci2 = ci2 + 1
+          }
+        let mut ci3: i32 = 0
+        while ci3 < dp2n {
+            dp2k[ci3] = n2k[ci3]
+            dp2v[ci3] = n2v[ci3]
+            ci3 = ci3 + 1
+          }
+
+        pos = pos + 1
+    }
+
+    let mut total: i64 = 0
+    let mut si4: i32 = 0
+    while si4 < dp1n {
+        total = total + dp1v[si4]
+        si4 = si4 + 1
+    }
+
+    free(cv as ptr<void>)
+    free(ic as ptr<void>)
+    free(w as ptr<void>)
+    free(dp0k as ptr<void>)
+    free(dp0v as ptr<void>)
+    free(dp1k as ptr<void>)
+    free(dp1v as ptr<void>)
+    free(dp2k as ptr<void>)
+    free(dp2v as ptr<void>)
+    free(n0k as ptr<void>)
+    free(n0v as ptr<void>)
+    free(n1k as ptr<void>)
+    free(n1v as ptr<void>)
+    free(n2k as ptr<void>)
+    free(n2v as ptr<void>)
+    free(tk as ptr<void>)
+    free(tv as ptr<void>)
+
+    return total
+}
+
+# L > 1 case: key = (counts_code << 40) | (recent << 10) | (rlen << 6) | tail
+function count_one_child_Lgt1(d: i32, t: i32, m: i32, L: i32) -> i64 {
+    let mm: i32 = if m <= 0 { 1 } else { m }
+    let total3: i32 = compute_total3(mm)
+    let cv: ptr<i32> = calloc((total3 * mm) as i64, 4)
+    let ic: ptr<i32> = calloc((total3 * mm) as i64, 4)
+    precompute_counts(mm, cv, ic)
+
+    let w: ptr<i64> = calloc((d + 1) as i64, 8)
+    if m > 1 {
+        let inv10: i64 = mod_inv(10, m as i64)
+        w[1] = inv10 % (m as i64)
+        let mut i: i32 = 2
+        while i <= d {
+            w[i] = w[i - 1] * inv10 % (m as i64)
+            i = i + 1
+        }
+    }
+
+    let mut mod10L: i32 = 1
+    let mut i2: i32 = 0
+    while i2 < L {
+        mod10L = mod10L * 10
+        i2 = i2 + 1
+    }
+
+    let next_tail: ptr<i32> = calloc((mod10L * 10) as i64, 4)
+    let short_mask: ptr<i32> = calloc(mod10L as i64, 4)
+    let pow10: ptr<i32> = calloc((L + 1) as i64, 4)
+    let long_ok: ptr<i8> = calloc(mod10L as i64, 1)
+    pow10[0] = 1
+    let mut i3: i32 = 1
+    while i3 <= L {
+        pow10[i3] = pow10[i3 - 1] * 10
+        i3 = i3 + 1
+    }
+
+    let mut tail: i32 = 0
+    while tail < mod10L {
+        long_ok[tail] = if tail % t == 0 { 1 } else { 0 }
+        let mut mask: i32 = 0
+        let mut l: i32 = 1
+        while l < L {
+            if (tail % pow10[l]) % t == 0 { mask = mask | (1 << (l - 1)) }
+            l = l + 1
+        }
+        short_mask[tail] = mask
+        let base: i32 = (tail * 10) % mod10L
+        let mut digit: i32 = 0
+        while digit < 10 {
+            next_tail[tail * 10 + digit] = (base + digit) % mod10L
+            digit = digit + 1
+        }
+        tail = tail + 1
+    }
+
+    let dp0k: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let dp0v: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let mut dp0n: i32 = 0
+    let dp1k: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let dp1v: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let mut dp1n: i32 = 0
+    let dp2k: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let dp2v: ptr<i64> = calloc(MAX_STATES as i64, 8)
+    let mut dp2n: i32 = 0
+
+    # Initial: key = (0 << 40) | (0 << 10) | (1 << 6) | 0
+    dp0k[0] = 1048576
+    dp0v[0] = 1
+    dp0n = 1
+
+    let n0k: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n0v: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n1k: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n1v: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n2k: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let n2v: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let tk: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+    let tv: ptr<i64> = calloc(MAX_TRANS as i64, 8)
+
+    let mut pos: i32 = 1
+    while pos <= d {
+        let mut nn0: i32 = 0
+        let mut nn1: i32 = 0
+        let mut nn2: i32 = 0
+        let lo: i32 = if pos == 1 { 1 } else { 0 }
+        let wi: i64 = w[pos]
+
+        let mut dc: i32 = 0
+        while dc < 3 {
+            let dpn: i32 = if dc == 0 { dp0n } else { if dc == 1 { dp1n } else { dp2n } }
+            let dpk: ptr<i64> = if dc == 0 { dp0k } else { if dc == 1 { dp1k } else { dp2k } }
+            let dpv: ptr<i64> = if dc == 0 { dp0v } else { if dc == 1 { dp1v } else { dp2v } }
+
+            let mut si: i32 = 0
+            while si < dpn {
+                let key: i64 = dpk[si]
+                let ways: i64 = dpv[si]
+                let cc: i32 = (key >> 54) as i32
+                let recent: i64 = (key >> 24) & 0x3FFFFFFF
+                let rlen: i32 = ((key >> 20) & 0xF) as i32
+                let tail2: i32 = (key & 0xFFFFF) as i32
+                let current_q: i32 = if rlen > 0 {
+                    (recent % 32) as i32
+                } else { 0 }
+                let mut max_l: i32 = L - 1
+                if pos < max_l { max_l = pos }
+
+                let mut digit: i32 = lo
+                while digit <= 9 {
+                    let q_next: i32 = if m > 1 { ((current_q as i64 + (digit as i64) * wi) % (m as i64)) as i32 } else { 0 }
+                    let new_tail: i32 = next_tail[tail2 * 10 + digit]
+                    let mask: i32 = short_mask[new_tail]
+                    let mut new_div: i32 = 0
+                    if mask != 0 {
+                        let mut l: i32 = 1
+                        while l <= max_l {
+                            if (mask & (1 << (l - 1))) != 0 {
+                                let mut p: i64 = recent
+                                let mut i7: i32 = 0
+                                while i7 < l - 1 {
+                                    p = p / 32
+                                    i7 = i7 + 1
+                                  }
+                                if (p % 32) as i32 == q_next { new_div = new_div + 1 }
+                            }
+                            l = l + 1
+                        }
+                    }
+                    if pos >= L && long_ok[new_tail] != 0 {
+                        new_div = new_div + cv[cc * mm + q_next]
+                    }
+                    if new_div > 2 { new_div = 2 }
+                    let new_total: i32 = dc + new_div
+                    if new_total > 2 { new_total = 2 }
+
+                    let new_recent: i64 = recent * 32 + (q_next as i64)
+                    let new_rlen: i32 = rlen + 1
+                    let mut final_recent: i64 = new_recent
+                    let mut final_rlen: i32 = new_rlen
+                    let mut final_cc: i32 = cc
+                    if new_rlen > L - 1 {
+                        let mut div: i64 = 1
+                        let mut i8_idx: i32 = 1
+                        while i8_idx < new_rlen {
+                            div = div * 32
+                            i8_idx = i8_idx + 1
+                          }
+                        let oldest: i32 = (new_recent / div) as i32
+                        final_recent = new_recent % div
+                        final_rlen = new_rlen - 1
+                        final_cc = ic[cc * mm + oldest]
+                    }
+
+                    let nkey: i64 = ((final_cc as i64) << 54) | ((final_recent as i64) << 24) | ((final_rlen as i64) << 20) | (new_tail as i64)
+                    if new_total == 0 {
+                        n0k[nn0] = nkey
+                        n0v[nn0] = ways
+                        nn0 = nn0 + 1
+                      }
+                    if new_total == 1 {
+                        n1k[nn1] = nkey
+                        n1v[nn1] = ways
+                        nn1 = nn1 + 1
+                      }
+                    if new_total == 2 {
+                        n2k[nn2] = nkey
+                        n2v[nn2] = ways
+                        nn2 = nn2 + 1
+                      }
+                    digit = digit + 1
+                }
+                si = si + 1
+            }
+            dc = dc + 1
+        }
+
+        dp0n = sort_and_merge(n0k, n0v, nn0, tk, tv)
+        dp1n = sort_and_merge(n1k, n1v, nn1, tk, tv)
+        dp2n = sort_and_merge(n2k, n2v, nn2, tk, tv)
+
+        let mut ci: i32 = 0
+        while ci < dp0n {
+            dp0k[ci] = n0k[ci]
+            dp0v[ci] = n0v[ci]
+            ci = ci + 1
+          }
+        let mut ci2: i32 = 0
+        while ci2 < dp1n {
+            dp1k[ci2] = n1k[ci2]
+            dp1v[ci2] = n1v[ci2]
+            ci2 = ci2 + 1
+          }
+        let mut ci3: i32 = 0
+        while ci3 < dp2n {
+            dp2k[ci3] = n2k[ci3]
+            dp2v[ci3] = n2v[ci3]
+            ci3 = ci3 + 1
+          }
+
+        pos = pos + 1
+    }
+
+    let mut total: i64 = 0
+    let mut si4: i32 = 0
+    while si4 < dp1n {
+        total = total + dp1v[si4]
+        si4 = si4 + 1
+    }
+
+    free(cv as ptr<void>)
+    free(ic as ptr<void>)
+    free(w as ptr<void>)
+    free(next_tail as ptr<void>)
+    free(short_mask as ptr<void>)
+    free(pow10 as ptr<void>)
+    free(long_ok as ptr<void>)
+    free(dp0k as ptr<void>)
+    free(dp0v as ptr<void>)
+    free(dp1k as ptr<void>)
+    free(dp1v as ptr<void>)
+    free(dp2k as ptr<void>)
+    free(dp2v as ptr<void>)
+    free(n0k as ptr<void>)
+    free(n0v as ptr<void>)
+    free(n1k as ptr<void>)
+    free(n1v as ptr<void>)
+    free(n2k as ptr<void>)
+    free(n2v as ptr<void>)
+    free(tk as ptr<void>)
+    free(tv as ptr<void>)
+
+    return total
+}
+
+function count_one_child(d: i32) -> i64 {
+    if d == 1 { return 9 }
+    if d % 2 != 0 && d % 5 != 0 { return count_one_child_coprime(d) }
+    let a: i32 = v_factor(d, 2)
+    let b: i32 = v_factor(d, 5)
+    let mut t: i32 = 1
+    let mut i: i32 = 0
+    while i < a {
+        t = t * 2
+        i = i + 1
+      }
+    let mut i2: i32 = 0
+    while i2 < b {
+        t = t * 5
+        i2 = i2 + 1
+      }
+    let m: i32 = d / t
+    let L: i32 = if a > b { a } else { b }
+    if L == 1 { return count_one_child_L1(d, t, m) }
+    return count_one_child_Lgt1(d, t, m, L)
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe413_answer())
+    let mut total: i64 = 0
+    let mut d: i32 = 1
+    while d < 20 {
+        total = total + count_one_child(d)
+        d = d + 1
+    }
+    printf("%lld\n", total)
     return 0
 }
