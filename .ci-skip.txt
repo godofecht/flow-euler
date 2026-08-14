@@ -12,8 +12,6 @@
 634  timeout
 #
 # Runtime crash / abort:
-534  runtime-error invalid-shift
-617  runtime-error invalid-shift
 #
 # Compilation error:
 #

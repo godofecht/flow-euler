@@ -7,7 +7,6 @@ extern {
 }
 
 const N: i64 = 14
-const CAP: i64 = 1048576
 
 function ipow(base: i64, exp: i64) -> i64 {
     let mut r: i128 = 1 as i128
@@ -54,12 +53,15 @@ function nqueens_classic(n: i64) -> i64 {
     return total
 }
 
-function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
-    let mut h: i64 = key % CAP
-    if h < 0 { h = h + CAP }
+function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>, cap: i64) -> i64 {
+    let mut h: i64 = key % cap
+    if h < 0 { h = h + cap }
+    let mut probes: i64 = 0
     while used[h] == 1 && keys[h] != key {
         h = h + 1
-        if h == CAP { h = 0 }
+        if h == cap { h = 0 }
+        probes = probes + 1
+        if probes > cap { return -1 }
     }
     return h
 }
@@ -70,17 +72,19 @@ function count_by_L(n: i64, L: i64, attack: ptr<i64>) -> i64 {
     let all: i64 = (1 << n) - 1
     let shift: i64 = 4
     let keep: i64 = ((1 as i64) << (shift * L)) - 1
-    let keys: ptr<i64> = calloc(CAP, 8)
-    let vals: ptr<i64> = calloc(CAP, 8)
-    let used: ptr<i8> = calloc(CAP, 1)
-    let nkeys: ptr<i64> = calloc(CAP, 8)
-    let nvals: ptr<i64> = calloc(CAP, 8)
-    let nused: ptr<i8> = calloc(CAP, 1)
+    let mut cap: i64 = 1048576
+    if L > 6 { cap = 33554432 }
+    let keys: ptr<i64> = calloc(cap, 8)
+    let vals: ptr<i64> = calloc(cap, 8)
+    let used: ptr<i8> = calloc(cap, 1)
+    let nkeys: ptr<i64> = calloc(cap, 8)
+    let nvals: ptr<i64> = calloc(cap, 8)
+    let nused: ptr<i8> = calloc(cap, 1)
     if keys == null || vals == null { return 0 }
     let half: i64 = n / 2
     let mut c0: i64 = 0
     while c0 < half {
-        let slot: i64 = hslot(c0, keys, used)
+        let slot: i64 = hslot(c0, keys, used, cap)
         used[slot] = 1
         keys[slot] = c0
         vals[slot] = 1
@@ -94,9 +98,9 @@ function count_by_L(n: i64, L: i64, attack: ptr<i64>) -> i64 {
         let mut mn: i32 = 0
         if r + 1 >= L { mn = 1 }
         ci = 0
-        while ci < CAP { nused[ci] = 0; ci = ci + 1 }
+        while ci < cap { nused[ci] = 0; ci = ci + 1 }
         ci = 0
-        while ci < CAP {
+        while ci < cap {
             if used[ci] == 1 {
                 let state: i64 = keys[ci]
                 let cnt: i64 = vals[ci]
@@ -106,7 +110,7 @@ function count_by_L(n: i64, L: i64, attack: ptr<i64>) -> i64 {
                 while dist <= m_prev {
                     let pc: i64 = s & 0xF
                     s = s >> shift
-                    forbid = forbid | attack[pc * (L + 1) + dist]
+                    forbid = forbid | attack[pc * (n + 1) + dist]
                     dist = dist + 1
                 }
                 let mut avail: i64 = all & ~forbid
@@ -118,7 +122,7 @@ function count_by_L(n: i64, L: i64, attack: ptr<i64>) -> i64 {
                     while tmp > 1 { tmp = tmp >> 1; cc = cc + 1 }
                     let mut ns: i64 = (state << shift) | cc
                     if mn == 1 { ns = ns & keep }
-                    let sl: i64 = hslot(ns, nkeys, nused)
+                    let sl: i64 = hslot(ns, nkeys, nused, cap)
                     if nused[sl] == 0 {
                         nused[sl] = 1
                         nkeys[sl] = ns
@@ -131,7 +135,7 @@ function count_by_L(n: i64, L: i64, attack: ptr<i64>) -> i64 {
             ci = ci + 1
         }
         ci = 0
-        while ci < CAP {
+        while ci < cap {
             used[ci] = nused[ci]
             keys[ci] = nkeys[ci]
             vals[ci] = nvals[ci]
@@ -142,12 +146,12 @@ function count_by_L(n: i64, L: i64, attack: ptr<i64>) -> i64 {
     }
     let mut total: i64 = 0
     ci = 0
-    while ci < CAP {
+    while ci < cap {
         if used[ci] == 1 { total = total + vals[ci] }
         ci = ci + 1
     }
     free(keys); free(vals); free(used); free(nkeys); free(nvals); free(nused)
-    return total
+    return total * 2
 }
 
 function main() -> i32 {
