@@ -11,21 +11,22 @@ extern {
 
 # min(base^exp, cap+1) with early stop
 function pow_capped(base0: i64, exp0: i64, cap: i64) -> i64 {
-    let mut result: i64 = 1
-    let mut a: i64 = base0
+    let mut result: i128 = 1 as i128
+    let mut a: i128 = base0 as i128
     let mut e: i64 = exp0
+    let cap128: i128 = cap as i128
     while e > 0 {
         if e % 2 == 1 {
             result = result * a
-            if result > cap { return cap + 1 }
+            if result > cap128 { return cap + 1 }
         }
         e = e / 2
         if e > 0 {
             a = a * a
-            if a > cap { a = cap + 1 }
+            if a > cap128 { a = cap128 + 1 }
         }
     }
-    return result
+    return result as i64
 }
 
 # floor(n^(1/k)) via binary search

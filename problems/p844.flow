@@ -208,7 +208,8 @@ function max_k_a3(N: i64, K: i64) -> i64 {
         return 2
     }
     N_val = N
-    return max_k_a3_inner(K, 3)
+    let r: i64 = max_k_a3_inner(K, 3)
+    return r
 }
 
 # ---- mk_sum via DFS ----
@@ -361,15 +362,25 @@ function mk_sum(k: i64, N: i64, mod0: i64) -> i64 {
 
     while stk_sp > 0 {
         stk_sp = stk_sp - 1
-        let base: i64 = stk_sp * MAX_NONONES
         let non_ones_n: i64 = stk_n[stk_sp]
         let prod_non_ones: i128 = stk_prod[stk_sp]
         let ones: i64 = k - non_ones_n
 
+        # Save current state to local buffer: pushing new states reuses the
+        # popped slot, which would overwrite stk_state[base] and corrupt
+        # subsequent jump-value processing.
+        let mut cur_state: [i64; 8]
+        let mut si: i64 = 0
+        let cur_base: i64 = stk_sp * MAX_NONONES
+        while si < MAX_NONONES {
+            cur_state[si] = stk_state[cur_base + si]
+            si = si + 1
+        }
+
         # Record coordinates
         let mut i2: i64 = 0
         while i2 < non_ones_n {
-            let v: i64 = stk_state[base + i2]
+            let v: i64 = cur_state[i2]
             if v <= N && !num_contains(v) {
                 num_insert(v)
                 s = madd(s, v % mod0)
@@ -381,8 +392,8 @@ function mk_sum(k: i64, N: i64, mod0: i64) -> i64 {
         let mut n_jump: i64 = 0
         let mut i3: i64 = 0
         while i3 < non_ones_n {
-            if i3 == 0 || stk_state[base + i3] != stk_state[base + i3 - 1] {
-                jump_vals[n_jump] = stk_state[base + i3]
+            if i3 == 0 || cur_state[i3] != cur_state[i3 - 1] {
+                jump_vals[n_jump] = cur_state[i3]
                 n_jump = n_jump + 1
             }
             i3 = i3 + 1
@@ -441,13 +452,13 @@ function mk_sum(k: i64, N: i64, mod0: i64) -> i64 {
                 # copy existing state values first
                 let mut j0: i64 = 0
                 while j0 < non_ones_n {
-                    new_vals[j0] = stk_state[base + j0]
+                    new_vals[j0] = cur_state[j0]
                     j0 = j0 + 1
                 }
                 let mut pos: i64 = non_ones_n
                 let mut j2: i64 = 0
                 while j2 < non_ones_n {
-                    if new_val < (stk_state[base + j2] as i128) {
+                    if new_val < (cur_state[j2] as i128) {
                         pos = j2
                         break
                     }
@@ -483,7 +494,7 @@ function mk_sum(k: i64, N: i64, mod0: i64) -> i64 {
                 let mut found: i64 = -1
                 let mut j2: i64 = 0
                 while j2 < non_ones_n {
-                    if stk_state[base + j2] == v {
+                    if cur_state[j2] == v {
                         found = j2
                         break
                     }
@@ -498,7 +509,7 @@ function mk_sum(k: i64, N: i64, mod0: i64) -> i64 {
                 let mut j3: i64 = 0
                 while j3 < non_ones_n {
                     if j3 != found {
-                        new_vals[idx] = stk_state[base + j3]
+                        new_vals[idx] = cur_state[j3]
                         idx = idx + 1
                     }
                     j3 = j3 + 1
@@ -551,7 +562,6 @@ function main() -> i32 {
     stk_n = calloc(STK_CAP, 8)
     stk_prod = calloc(STK_CAP, 16)
 
-    printf("start\n")
     let K: i64 = 1000000000000000000
     let N: i64 = 1000000000000000000
     let mod0: i64 = MOD
