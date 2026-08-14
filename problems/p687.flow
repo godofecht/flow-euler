@@ -1,11 +1,446 @@
 # Project Euler 687
 # Shuffling cards: P(#perfect ranks is prime) to 10 decimals.
+# Uses base-10^9 bignum for exact integer arithmetic.
 
 extern {
-    function pe687_answer() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+const B: i64 = 1000000000
+const RANKS: i32 = 13
+const N: i32 = 52
+const CB: i32 = 24
+const MAXD: i32 = 40
+
+# Bignum: ptr<i64>, base 10^9, little-endian. Length tracked explicitly.
+
+function bn_zero(a: ptr<i64>, cap: i32) -> void {
+    let mut i: i32 = 0
+    while i < cap { a[i] = 0; i = i + 1 }
+}
+
+# a += b * v (v >= 0). Returns new length.
+function bn_addmul_small(a: ptr<i64>, a_len: i32, b: ptr<i64>, b_len: i32, v: i64) -> i32 {
+    if v == 0 { return a_len }
+    let mut carry: i64 = 0
+    let mut i: i32 = 0
+    let mut n: i32 = a_len
+    if b_len > n { n = b_len }
+    while i < n {
+        let ai: i64 = if i < a_len { a[i] } else { 0 }
+        let bi: i64 = if i < b_len { b[i] } else { 0 }
+        let s: i128 = (carry as i128) + (ai as i128) + (bi as i128) * (v as i128)
+        a[i] = (s % (B as i128)) as i64
+        carry = (s / (B as i128)) as i64
+        i = i + 1
+    }
+    while carry > 0 {
+        a[n] = carry % B
+        carry = carry / B
+        n = n + 1
+    }
+    while n > 0 && a[n - 1] == 0 { n = n - 1 }
+    return n
+}
+
+# a += b * v (v >= 0, i128). Returns new length.
+function bn_addmul_i128(a: ptr<i64>, a_len: i32, b: ptr<i64>, b_len: i32, v: i128) -> i32 {
+    if v == 0 { return a_len }
+    # Split v into high and low 32-bit parts to avoid overflow
+    let vh: i64 = (v >> 32) as i64
+    let vl: i64 = (v & 0xFFFFFFFF) as i64
+    # a += b * vl
+    let tmp: ptr<i64> = calloc(40, 8)
+    let tl: i32 = bn_addmul_small(tmp, 0, b, b_len, vl)
+    # tmp *= 2^32 (shift left by 32 bits = multiply by 4294967296)
+    # tmp = tmp * vh * 2^32 + tmp * vl... no, this is wrong.
+    # Actually: b * v = b * (vh * 2^32 + vl) = b * vh * 2^32 + b * vl
+    # We already have tmp = b * vl. Now compute b * vh, shift left 32, and add.
+    # But shifting a bignum left by 32 bits is complex.
+    # Simpler: just do the multiplication directly with i128 arithmetic.
+    free(tmp as ptr<void>)
+    let mut carry: i128 = 0
+    let mut i: i32 = 0
+    let mut n: i32 = a_len
+    if b_len > n { n = b_len }
+    while i < n {
+        let ai: i128 = if i < a_len { a[i] as i128 } else { 0 }
+        let bi: i128 = if i < b_len { b[i] as i128 } else { 0 }
+        let s: i128 = carry + ai + bi * v
+        a[i] = (s % (B as i128)) as i64
+        carry = s / (B as i128)
+        i = i + 1
+    }
+    while carry > 0 {
+        a[n] = (carry % (B as i128)) as i64
+        carry = carry / (B as i128)
+        n = n + 1
+    }
+    while n > 0 && a[n - 1] == 0 { n = n - 1 }
+    return n
+}
+function bn_mul_small(dst: ptr<i64>, a: ptr<i64>, a_len: i32, v: i64) -> i32 {
+    let mut carry: i64 = 0
+    let mut i: i32 = 0
+    let mut n: i32 = a_len
+    while i < n {
+        let prod: i128 = (a[i] as i128) * (v as i128) + carry
+        dst[i] = (prod % (B as i128)) as i64
+        carry = (prod / (B as i128)) as i64
+        i = i + 1
+    }
+    while carry > 0 {
+        dst[n] = carry % B
+        carry = carry / B
+        n = n + 1
+    }
+    return n
+}
+
+# q = a / v (v > 0). Returns quotient length. rem in *rem_ptr.
+function bn_div_small(q: ptr<i64>, a: ptr<i64>, a_len: i32, v: i64) -> i32 {
+    let mut rem: i64 = 0
+    let mut n: i32 = a_len
+    let mut i: i32 = a_len - 1
+    while i >= 0 {
+        let cur: i128 = (rem as i128) * (B as i128) + (a[i] as i128)
+        q[i] = (cur / (v as i128)) as i64
+        rem = (cur % (v as i128)) as i64
+        i = i - 1
+    }
+    while n > 0 && q[n - 1] == 0 { n = n - 1 }
+    return n
+}
+
+# dst = a - b (a >= b). Returns length.
+function bn_sub(dst: ptr<i64>, a: ptr<i64>, a_len: i32, b: ptr<i64>, b_len: i32) -> i32 {
+    let mut borrow: i64 = 0
+    let mut i: i32 = 0
+    let mut n: i32 = a_len
+    while i < n {
+        let mut s: i64 = a[i] - borrow
+        if i < b_len { s = s - b[i] }
+        if s < 0 { s = s + B; borrow = 1 } else { borrow = 0 }
+        dst[i] = s
+        i = i + 1
+    }
+    while n > 0 && dst[n - 1] == 0 { n = n - 1 }
+    return n
+}
+
+# Compare a and b. Returns 1 if a > b, -1 if a < b, 0 if equal.
+function bn_cmp(a: ptr<i64>, a_len: i32, b: ptr<i64>, b_len: i32) -> i32 {
+    if a_len != b_len {
+        if a_len > b_len { return 1 }
+        return -1
+    }
+    let mut i: i32 = a_len - 1
+    while i >= 0 {
+        if a[i] != b[i] {
+            if a[i] > b[i] { return 1 }
+            return -1
+        }
+        i = i - 1
+    }
+    return 0
+}
+
+# Copy a to dst, zero rest up to cap.
+function bn_copy(dst: ptr<i64>, a: ptr<i64>, a_len: i32, cap: i32) -> void {
+    let mut i: i32 = 0
+    while i < a_len { dst[i] = a[i]; i = i + 1 }
+    while i < cap { dst[i] = 0; i = i + 1 }
+}
+
+# Convert to f64 (for final output).
+function bn_to_f64(a: ptr<i64>, a_len: i32) -> f64 {
+    if a_len == 0 { return 0.0 }
+    let mut result: f64 = 0.0
+    let mut i: i32 = a_len - 1
+    while i >= 0 {
+        result = result * 1000000000.0 + (a[i] as f64)
+        i = i - 1
+    }
+    return result
+}
+
+function comb_l(n: i64, k: i64) -> i64 {
+    if k < 0 || k > n { return 0 }
+    let mut kk: i64 = k
+    if kk > n - kk { kk = n - kk }
+    let mut r: i64 = 1
+    let mut i: i64 = 1
+    while i <= kk {
+        r = r * (n - kk + i) / i
+        i = i + 1
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%.10f\n", pe687_answer())
+    # Build Qpow[m] polynomial coefficients (i128, can be large)
+    let Qpow: ptr<ptr<i128> > = calloc(14, 8)
+    let deg: ptr<i32> = calloc(14, 4)
+    let mut m: i32 = 0
+    while m <= RANKS {
+        Qpow[m] = calloc(MAXD, 16)
+        m = m + 1
+    }
+    Qpow[0][0] = 1
+    deg[0] = 0
+    let Q: ptr<i64> = calloc(4, 8)
+    Q[0] = 1
+    Q[1] = -12
+    Q[2] = 36
+    Q[3] = -24
+    m = 1
+    while m <= RANKS {
+        let pd: i32 = deg[m - 1]
+        deg[m] = pd + 3
+        let mut i: i32 = 0
+        while i <= pd {
+            let mut j: i32 = 0
+            while j < 4 {
+                Qpow[m][i + j] = Qpow[m][i + j] + Qpow[m - 1][i] * (Q[j] as i128)
+                j = j + 1
+            }
+            i = i + 1
+        }
+        m = m + 1
+    }
+
+    # Compute factorials as bignums (base 10^9)
+    # 52! has about 68 digits, so 8 base-10^9 digits
+    let fact: ptr<ptr<i64> > = calloc((N + 1) as i64, 8)
+    let fact_len: ptr<i32> = calloc((N + 1) as i64, 4)
+    fact[0] = calloc(20, 8)
+    fact[0][0] = 1
+    fact_len[0] = 1
+    let mut i: i32 = 1
+    while i <= N {
+        fact[i] = calloc(20, 8)
+        fact_len[i] = bn_mul_small(fact[i], fact[i - 1], fact_len[i - 1], (i as i64))
+        i = i + 1
+    }
+
+    # denom = 24^13 as bignum
+    let denom: ptr<i64> = calloc(20, 8)
+    denom[0] = 1
+    let mut dn: i32 = 1
+    let mut i2: i32 = 0
+    while i2 < RANKS {
+        let tmp: ptr<i64> = calloc(20, 8)
+        let nl: i32 = bn_mul_small(tmp, denom, dn, (CB as i64))
+        bn_copy(denom, tmp, nl, 20)
+        dn = nl
+        free(tmp as ptr<void>)
+        i2 = i2 + 1
+    }
+
+    # nval[m] = sum_{B} fact[N-B] * Qpow[m][B] / denom
+    # Split into positive and negative parts, then subtract.
+    let nval: ptr<ptr<i64> > = calloc(14, 8)
+    let nval_len: ptr<i32> = calloc(14, 4)
+    m = 0
+    while m <= RANKS {
+        let pos: ptr<i64> = calloc(30, 8)
+        let mut plen: i32 = 0
+        let neg: ptr<i64> = calloc(30, 8)
+        let mut nlen: i32 = 0
+        let mut B2: i32 = 0
+        while B2 <= deg[m] {
+            let coef: i128 = Qpow[m][B2]
+            if coef > 0 {
+                plen = bn_addmul_i128(pos, plen, fact[N - B2], fact_len[N - B2], coef)
+            } else {
+                if coef < 0 {
+                    nlen = bn_addmul_i128(neg, nlen, fact[N - B2], fact_len[N - B2], 0 - coef)
+                }
+            }
+            B2 = B2 + 1
+        }
+        # num = pos - neg (should be >= 0)
+        let num: ptr<i64> = calloc(30, 8)
+        let num_len: i32 = bn_sub(num, pos, plen, neg, nlen)
+        # nval[m] = num / denom = num / 24^13
+        # Divide by 24 thirteen times.
+        nval[m] = calloc(20, 8)
+        let mut remaining: ptr<i64> = calloc(30, 8)
+        bn_copy(remaining, num, num_len, 30)
+        let mut rlen: i32 = num_len
+        let mut d: i32 = 0
+        while d < RANKS {
+            let tmp2: ptr<i64> = calloc(30, 8)
+            rlen = bn_div_small(tmp2, remaining, rlen, (CB as i64))
+            bn_copy(remaining, tmp2, rlen, 30)
+            free(tmp2 as ptr<void>)
+            d = d + 1
+        }
+        bn_copy(nval[m], remaining, rlen, 20)
+        nval_len[m] = rlen
+        free(pos as ptr<void>)
+        free(neg as ptr<void>)
+        free(num as ptr<void>)
+        free(remaining as ptr<void>)
+        m = m + 1
+    }
+
+    # total = nval[0]
+    let total: ptr<i64> = calloc(20, 8)
+    let mut total_len: i32 = nval_len[0]
+    bn_copy(total, nval[0], total_len, 20)
+
+    # good = sum over primes k of C(13,k) * z_k
+    # z_k = sum_{m=k..13} (-1)^(m-k) C(13-k, m-k) * nval[m]
+    # nval[m] are bignums, C(13,k) and C(13-k,m-k) are small i64.
+    let good: ptr<i64> = calloc(30, 8)
+    let mut good_len: i32 = 0
+    let primes: ptr<i32> = calloc(6, 4)
+    primes[0] = 2
+    primes[1] = 3
+    primes[2] = 5
+    primes[3] = 7
+    primes[4] = 11
+    primes[5] = 13
+    let mut ki: i32 = 0
+    while ki < 6 {
+        let k: i32 = primes[ki]
+        # z = sum_{m=k..13} (-1)^(m-k) C(13-k, m-k) * nval[m]
+        # Split into pos and neg since cc can be negative
+        let z: ptr<i64> = calloc(30, 8)
+        let mut zlen: i32 = 0
+        let zneg: ptr<i64> = calloc(30, 8)
+        let mut znlen: i32 = 0
+        let mut m3: i32 = k
+        while m3 <= RANKS {
+            let c: i64 = comb_l((RANKS - k) as i64, (m3 - k) as i64)
+            if ((m3 - k) & 1) != 0 {
+                znlen = bn_addmul_small(zneg, znlen, nval[m3], nval_len[m3], c)
+            } else {
+                zlen = bn_addmul_small(z, zlen, nval[m3], nval_len[m3], c)
+            }
+            m3 = m3 + 1
+        }
+        # z = zpos - zneg
+        let zfinal: ptr<i64> = calloc(30, 8)
+        let zf_len: i32 = bn_sub(zfinal, z, zlen, zneg, znlen)
+        # good += zfinal * C(13, k)
+        let ck: i64 = comb_l((RANKS as i64), (k as i64))
+        good_len = bn_addmul_small(good, good_len, zfinal, zf_len, ck)
+        free(z as ptr<void>)
+        free(zneg as ptr<void>)
+        free(zfinal as ptr<void>)
+        ki = ki + 1
+    }
+
+    # q = (good * 10^11 + total/2) / total + 5, then / 10
+    # good * 10^11
+    let good_scaled: ptr<i64> = calloc(30, 8)
+    let gs_len: i32 = bn_mul_small(good_scaled, good, good_len, 100000000000)
+    # total / 2
+    let half_total: ptr<i64> = calloc(20, 8)
+    let ht_len: i32 = bn_div_small(half_total, total, total_len, 2)
+    # good_scaled + half_total
+    let numerator: ptr<i64> = calloc(30, 8)
+    let num_len: i32 = bn_addmul_small(numerator, 0, good_scaled, gs_len, 1)
+    let num_len2: i32 = bn_addmul_small(numerator, num_len, half_total, ht_len, 1)
+    # numerator / total = integer quotient q
+    # Then ans = (q + 5) / 10 / 10^10
+    # We need exact integer division. Use long division.
+    # numerator and total are bignums. The quotient fits in ~20 digits.
+    # Convert both to f64 for an approximate quotient, then adjust.
+    # Actually, let's do proper bignum division.
+    # Since the quotient is small (~10 digits), we can compute it digit by digit.
+    # Or: convert numerator and total to high-precision f64 and divide.
+    # The issue is f64 has ~15.9 significant digits, but we need 11.
+    # Let's use the top 2-3 digits of each for the division.
+    # numerator has ~25 digits, total has ~50 digits.
+    # quotient = numerator / total ~ 3.28 * 10^10
+    # We need 11 significant digits.
+    # Use long division: find q such that q * total <= numerator < (q+1) * total
+    # q fits in i64 (it's ~3.28 * 10^10).
+    # Approximate with f64, then adjust by multiplying back.
+    let num_f: f64 = bn_to_f64(numerator, num_len2)
+    let total_f: f64 = bn_to_f64(total, total_len)
+    let q_approx: i64 = (num_f / total_f) as i64
+    # Adjust: check q_approx * total vs numerator
+    # q * total
+    let qprod: ptr<i64> = calloc(30, 8)
+    let qp_len: i32 = bn_mul_small(qprod, total, total_len, q_approx)
+    let cmp: i32 = bn_cmp(qprod, qp_len, numerator, num_len2)
+    let mut q_final: i64 = q_approx
+    if cmp < 0 {
+        # qprod < numerator, might need to increase q
+        # Try q+1, q+2, etc.
+        let mut q_try: i64 = q_approx + 1
+        let mut found: i32 = 0
+        while found == 0 {
+            let qp2: ptr<i64> = calloc(30, 8)
+            let qp2_len: i32 = bn_mul_small(qp2, total, total_len, q_try)
+            let cmp2: i32 = bn_cmp(qp2, qp2_len, numerator, num_len2)
+            free(qp2 as ptr<void>)
+            if cmp2 > 0 {
+                found = 1
+            } else {
+                q_try = q_try + 1
+                if q_try > q_approx + 100 { found = 1 }
+            }
+        }
+        q_final = q_try - 1
+    } else {
+        if cmp > 0 {
+            # qprod > numerator, need to decrease q
+            let mut q_try: i64 = q_approx - 1
+            let mut found: i32 = 0
+            while found == 0 && q_try >= 0 {
+                let qp2: ptr<i64> = calloc(30, 8)
+                let qp2_len: i32 = bn_mul_small(qp2, total, total_len, q_try)
+                let cmp2: i32 = bn_cmp(qp2, qp2_len, numerator, num_len2)
+                free(qp2 as ptr<void>)
+                if cmp2 <= 0 {
+                    found = 1
+                } else {
+                    q_try = q_try - 1
+                    if q_try < q_approx - 100 { found = 1 }
+                }
+            }
+            q_final = q_try
+        }
+    }
+    # ans = (q_final + 5) / 10 / 10^10
+    let q_with_5: i64 = q_final + 5
+    let q_div_10: i64 = q_with_5 / 10
+    let ans: f64 = (q_div_10 as f64) / 10000000000.0
+
+    printf("%.10f\n", ans)
+
+    # Cleanup
+    let mut m4: i32 = 0
+    while m4 <= RANKS {
+        free(Qpow[m4] as ptr<void>)
+        free(nval[m4] as ptr<void>)
+        m4 = m4 + 1
+    }
+    free(Qpow as ptr<void>)
+    free(deg as ptr<void>)
+    free(Q as ptr<void>)
+    let mut i3: i32 = 0
+    while i3 <= N {
+        free(fact[i3] as ptr<void>)
+        i3 = i3 + 1
+    }
+    free(fact as ptr<void>)
+    free(fact_len as ptr<void>)
+    free(denom as ptr<void>)
+    free(nval_len as ptr<void>)
+    free(total as ptr<void>)
+    free(good as ptr<void>)
+    free(primes as ptr<void>)
+    free(good_scaled as ptr<void>)
+    free(half_total as ptr<void>)
+    free(numerator as ptr<void>)
+    free(qprod as ptr<void>)
     return 0
 }
