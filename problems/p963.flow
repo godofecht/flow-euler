@@ -344,6 +344,7 @@ function main() -> i32 {
     let mut m: i64 = 1 << (ceil(log(N as f64) / log(3.0)) as i64)
     if m < 1 { m = 1 }
     build_B(m)
+    printf("Flow: m=%lld\n", m)
 
     # Allocate key arrays
     key_len = malloc(N * 4) as ptr<i32>
@@ -356,6 +357,18 @@ function main() -> i32 {
     while n <= N {
         compute_key(n, n - 1)
         n = n + 1
+    }
+
+    # Debug: print first 5 keys
+    let mut di: i64 = 0
+    while di < 5 {
+        printf("Flow: key[%lld] len=%d parity=%d bval=%f\n", di, key_len[di], key_parity[di], key_bval[di])
+        let mut dj: i64 = 0
+        while dj < (key_len[di] as i64) {
+            printf("  L[%lld]=%d\n", dj, key_L[di * LMAX + dj])
+            dj = dj + 1
+        }
+        di = di + 1
     }
 
     # Sort keys using index array
@@ -411,6 +424,7 @@ function main() -> i32 {
     }
 
     free(key_idx as ptr<void>)
+    printf("Flow: nkeys=%lld\n", nkeys)
 
     # Now use unique arrays as key arrays for combine_key
     # Save original key arrays, point key_ to unique arrays
@@ -454,6 +468,18 @@ function main() -> i32 {
     free(orig_key_parity as ptr<void>)
     free(orig_key_bval as ptr<void>)
 
+    # Debug: print first 5 combo keys
+    let mut dci: i64 = 0
+    while dci < 5 {
+        printf("Flow: combo[%lld] len=%d parity=%d bval=%f count=%lld\n", dci, combo_len[dci], combo_parity[dci], combo_bval[dci], combo_count[dci])
+        let mut dcj: i64 = 0
+        while dcj < (combo_len[dci] as i64) {
+            printf("  L[%lld]=%d\n", dcj, combo_L[dci * LMAX + dcj])
+            dcj = dcj + 1
+        }
+        dci = dci + 1
+    }
+
     # Sort combos using index array
     let combo_idx: ptr<i64> = malloc(total_combos * 8) as ptr<i64>
     let mut i3: i64 = 0
@@ -463,9 +489,39 @@ function main() -> i32 {
     }
     combo_heapsort_idx(combo_idx, total_combos)
 
+    # Debug: print first 10 sorted combos
+    let mut di2: i64 = 0
+    while di2 < 10 {
+        let si: i64 = combo_idx[di2]
+        printf("Flow: sorted[%lld] idx=%lld len=%d par=%d bval=%f cnt=%lld\n", di2, si, combo_len[si], combo_parity[si], combo_bval[si], combo_count[si])
+        di2 = di2 + 1
+    }
+
+    # Debug: verify sort
+    let mut sort_ok: i64 = 1
+    let mut si: i64 = 1
+    while si < total_combos {
+        if cmp_combo_idx(combo_idx[si - 1], combo_idx[si]) > 0 {
+            sort_ok = 0
+            break
+        }
+        si = si + 1
+    }
+    printf("Flow: sort_ok=%lld\n", sort_ok)
+
+    # Debug: print total count sum
+    let mut dbg_sum: i128 = 0
+    let mut dbg_i: i64 = 0
+    while dbg_i < total_combos {
+        dbg_sum = dbg_sum + (combo_count[dbg_i] as i128)
+        dbg_i = dbg_i + 1
+    }
+    printf("Flow: combo_count_sum=%lld\n", dbg_sum as i64)
+
     # Merge identical keys and sum counts
     let mut ans: i128 = 0
     let mut k: i64 = 0
+    let mut ngroups: i64 = 0
     while k < total_combos {
         let mut j: i64 = k + 1
         while j < total_combos && combos_equal_idx(combo_idx[k], combo_idx[j]) {
@@ -478,10 +534,13 @@ function main() -> i32 {
             x = x + 1
         }
         ans = ans + v * v
+        ngroups = ngroups + 1
         k = j
     }
+    printf("Flow: ngroups=%lld raw_ans=%lld\n", ngroups, ans as i64)
     ans = ans / 4
 
+    printf("Flow: ans=%lld\n", ans as i64)
     printf("%lld\n", ans as i64)
 
     # Cleanup

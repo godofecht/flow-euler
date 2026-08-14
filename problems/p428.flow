@@ -1,11 +1,516 @@
 # Project Euler 428
 # Necklace of Circles T(10^9) via Min_25-style summatory F,G over (m,6)=1.
 
+import euler.nt { isqrt }
+
 extern {
-    function pe428_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# ---- PrimeTables (Min_25 style) ----
+
+let mut PT_N: i64 = 0
+let mut PT_V: i32 = 0
+let mut PT_vals: ptr<i64> = null
+let mut PT_vals_len: i64 = 0
+let mut PT_id1: ptr<i32> = null
+let mut PT_id2: ptr<i32> = null
+let mut PT_pi_tbl: ptr<i64> = null
+let mut PT_chi_tbl: ptr<i64> = null
+let mut PT_primes: ptr<i32> = null
+let mut PT_primes_len: i64 = 0
+
+# ---- Summatory ----
+let mut S_rec_primes: ptr<i32> = null
+let mut S_rec_len: i64 = 0
+
+# cacheF / cacheG: open-addressing hash tables
+let mut cF_keys: ptr<i64> = null
+let mut cF_vals: ptr<i64> = null
+let mut cF_used: ptr<i8> = null
+let mut cF_cap: i64 = 0
+
+let mut cG_keys: ptr<i64> = null
+let mut cG_vals: ptr<i64> = null
+let mut cG_used: ptr<i8> = null
+let mut cG_cap: i64 = 0
+
+# F_cache / G_cache for T()
+let mut FC_keys: ptr<i64> = null
+let mut FC_vals: ptr<i64> = null
+let mut FC_used: ptr<i8> = null
+let mut FC_cap: i64 = 0
+
+let mut GC_keys: ptr<i64> = null
+let mut GC_vals: ptr<i64> = null
+let mut GC_used: ptr<i8> = null
+let mut GC_cap: i64 = 0
+
+function chi_mod3(n: i64) -> i32 {
+    let r: i32 = (n % 3) as i32
+    if r == 0 { return 0 }
+    if r == 1 { return 1 }
+    return 0 - 1
+}
+
+function chi_prefix_integers(x: i64) -> i64 {
+    return (x + 2) / 3 - (x + 1) / 3
+}
+
+function pt_idx_of(x: i64) -> i64 {
+    if x <= (PT_V as i64) {
+        return (PT_id1[x as i32]) as i64
+    }
+    return (PT_id2[(PT_N / x) as i32]) as i64
+}
+
+function pt_pi(x: i64) -> i64 {
+    return PT_pi_tbl[pt_idx_of(x)]
+}
+
+function pt_chi_prime_sum(x: i64) -> i64 {
+    return PT_chi_tbl[pt_idx_of(x)]
+}
+
+function build_prime_tables(N: i64) -> void {
+    PT_N = N
+    PT_V = isqrt(N) as i32
+
+    # Collect distinct values of N/i
+    let mut vals_buf: ptr<i64> = calloc(70000, 8)
+    let mut vlen: i64 = 0
+    let mut i: i64 = 1
+    while i <= N {
+        let v: i64 = N / i
+        vals_buf[vlen] = v
+        vlen = vlen + 1
+        i = N / v + 1
+    }
+    PT_vals = vals_buf
+    PT_vals_len = vlen
+
+    let V: i32 = PT_V
+    PT_id1 = calloc((V + 1) as i64, 4)
+    PT_id2 = calloc((V + 1) as i64, 4)
+
+    let mut idx: i64 = 0
+    while idx < vlen {
+        let v: i64 = vals_buf[idx]
+        if v <= (V as i64) {
+            PT_id1[v as i32] = idx as i32
+        } else {
+            PT_id2[(N / v) as i32] = idx as i32
+        }
+        idx = idx + 1
+    }
+
+    PT_pi_tbl = calloc(vlen, 8)
+    PT_chi_tbl = calloc(vlen, 8)
+
+    let mut j: i64 = 0
+    while j < vlen {
+        PT_pi_tbl[j] = vals_buf[j] - 1
+        PT_chi_tbl[j] = chi_prefix_integers(vals_buf[j]) - 1
+        j = j + 1
+    }
+
+    # Sieve primes up to V
+    let sieve: ptr<i8> = calloc((V + 1) as i64, 1)
+    let mut k: i32 = 0
+    while k <= V {
+        sieve[k] = 1
+        k = k + 1
+    }
+    if V >= 0 { sieve[0] = 0 }
+    if V >= 1 { sieve[1] = 0 }
+    let lim: i32 = isqrt(V as i64) as i32
+    let mut p: i32 = 2
+    while p <= lim {
+        if sieve[p] != 0 {
+            let mut j2: i32 = p * p
+            while j2 <= V {
+                sieve[j2] = 0
+                j2 = j2 + p
+            }
+        }
+        p = p + 1
+    }
+
+    # Count and collect primes
+    let mut pcount: i64 = 0
+    let mut p2: i32 = 2
+    while p2 <= V {
+        if sieve[p2] != 0 { pcount = pcount + 1 }
+        p2 = p2 + 1
+    }
+    PT_primes = calloc(pcount, 4)
+    PT_primes_len = pcount
+    let mut pi: i64 = 0
+    let mut p3: i32 = 2
+    while p3 <= V {
+        if sieve[p3] != 0 {
+            PT_primes[pi] = p3
+            pi = pi + 1
+        }
+        p3 = p3 + 1
+    }
+
+    # chi_prime_pref
+    let chi_pref: ptr<i64> = calloc(pcount + 1, 8)
+    let mut s: i64 = 0
+    let mut ci: i64 = 0
+    while ci < pcount {
+        s = s + (chi_mod3(PT_primes[ci] as i64) as i64)
+        chi_pref[ci + 1] = s
+        ci = ci + 1
+    }
+
+    # Min_25 sieve for pi and chi
+    let mut pi_idx: i64 = 0
+    while pi_idx < pcount {
+        let pr: i32 = PT_primes[pi_idx]
+        let p2v: i64 = (pr as i64) * (pr as i64)
+        if p2v > N { break }
+        let pi_before: i64 = pi_idx
+        let chi_before: i64 = chi_pref[pi_idx]
+        let cp: i32 = chi_mod3(pr as i64)
+
+        let mut idx2: i64 = 0
+        while idx2 < vlen {
+            if vals_buf[idx2] < p2v { break }
+            let t: i64 = vals_buf[idx2] / (pr as i64)
+            let j3: i64 = pt_idx_of(t)
+            PT_pi_tbl[idx2] = PT_pi_tbl[idx2] - (PT_pi_tbl[j3] - pi_before)
+            PT_chi_tbl[idx2] = PT_chi_tbl[idx2] - (cp as i64) * (PT_chi_tbl[j3] - chi_before)
+            idx2 = idx2 + 1
+        }
+        pi_idx = pi_idx + 1
+    }
+
+    free(sieve as ptr<void>)
+    free(chi_pref as ptr<void>)
+}
+
+function build_summatory(N: i64) -> void {
+    build_prime_tables(N)
+
+    # rec_primes = primes >= 5
+    let mut rlen: i64 = 0
+    let mut i: i64 = 0
+    while i < PT_primes_len {
+        if PT_primes[i] >= 5 { rlen = rlen + 1 }
+        i = i + 1
+    }
+    S_rec_primes = calloc(rlen, 4)
+    S_rec_len = rlen
+    let mut j: i64 = 0
+    let mut k: i64 = 0
+    while j < PT_primes_len {
+        if PT_primes[j] >= 5 {
+            S_rec_primes[k] = PT_primes[j]
+            k = k + 1
+        }
+        j = j + 1
+    }
+
+    # Init hash tables for cacheF and cacheG
+    cF_cap = 1 << 21
+    cF_keys = calloc(cF_cap, 8)
+    cF_vals = calloc(cF_cap, 8)
+    cF_used = calloc(cF_cap, 1)
+
+    cG_cap = 1 << 21
+    cG_keys = calloc(cG_cap, 8)
+    cG_vals = calloc(cG_cap, 8)
+    cG_used = calloc(cG_cap, 1)
+}
+
+function hkey(n: i64, idx: i64) -> i64 {
+    return (n << 20) | idx
+}
+
+function hf_get(n: i64, idx: i64) -> i64 {
+    let key: i64 = hkey(n, idx)
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cF_cap - 1)
+    while cF_used[slot] != 0 {
+        if cF_keys[slot] == key { return cF_vals[slot] }
+        slot = (slot + 1) & (cF_cap - 1)
+    }
+    return 0 - 1
+}
+
+function hf_put(n: i64, idx: i64, val: i64) -> void {
+    let key: i64 = hkey(n, idx)
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cF_cap - 1)
+    while cF_used[slot] != 0 && cF_keys[slot] != key {
+        slot = (slot + 1) & (cF_cap - 1)
+    }
+    cF_used[slot] = 1
+    cF_keys[slot] = key
+    cF_vals[slot] = val
+}
+
+function hg_get(n: i64, idx: i64) -> i64 {
+    let key: i64 = hkey(n, idx)
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cG_cap - 1)
+    while cG_used[slot] != 0 {
+        if cG_keys[slot] == key { return cG_vals[slot] }
+        slot = (slot + 1) & (cG_cap - 1)
+    }
+    return 0 - 1
+}
+
+function hg_put(n: i64, idx: i64, val: i64) -> void {
+    let key: i64 = hkey(n, idx)
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cG_cap - 1)
+    while cG_used[slot] != 0 && cG_keys[slot] != key {
+        slot = (slot + 1) & (cG_cap - 1)
+    }
+    cG_used[slot] = 1
+    cG_keys[slot] = key
+    cG_vals[slot] = val
+}
+
+function prime_sum_F(x: i64) -> i64 {
+    let pi: i64 = pt_pi(x)
+    let c23: i64 = 0
+    if x >= 2 { c23 = c23 + 1 }
+    if x >= 3 { c23 = c23 + 1 }
+    return 3 * (pi - c23)
+}
+
+function prime_sum_G(x: i64) -> i64 {
+    let pi: i64 = pt_pi(x)
+    let c23: i64 = 0
+    if x >= 2 { c23 = c23 + 1 }
+    if x >= 3 { c23 = c23 + 1 }
+    let chi_p: i64 = pt_chi_prime_sum(x)
+    let chi_excl: i64 = chi_p
+    if x >= 2 { chi_excl = chi_excl + 1 }
+    return (pi - c23) + 2 * chi_excl
+}
+
+function val_F(p: i32, e: i32) -> i64 {
+    return 2 * (e as i64) + 1
+}
+
+function val_G(p: i32, e: i32) -> i64 {
+    if p % 3 == 1 { return 2 * (e as i64) + 1 }
+    if (e & 1) == 1 { return 0 - 1 }
+    return 1
+}
+
+function H_F(n: i64, idx: i64) -> i64 {
+    let cached: i64 = hf_get(n, idx)
+    if cached >= 0 { return cached }
+
+    let prev: i64 = 0
+    if idx > 0 { prev = S_rec_primes[idx - 1] as i64 } else { prev = 1 }
+
+    if idx >= S_rec_len {
+        let r: i64 = prime_sum_F(n) - prime_sum_F(prev)
+        hf_put(n, idx, r)
+        return r
+    }
+    if (S_rec_primes[idx] as i64) * (S_rec_primes[idx] as i64) > n {
+        let r: i64 = prime_sum_F(n) - prime_sum_F(prev)
+        hf_put(n, idx, r)
+        return r
+    }
+
+    let mut res: i64 = prime_sum_F(n) - prime_sum_F(prev)
+    let mut k: i64 = idx
+    while k < S_rec_len {
+        let p: i32 = S_rec_primes[k]
+        if (p as i64) * (p as i64) > n { break }
+        let mut pe: i64 = p as i64
+        let mut e: i32 = 1
+        while pe * (p as i64) <= n {
+            res = res + val_F(p, e) * H_F(n / pe, k + 1)
+            res = res + val_F(p, e + 1)
+            pe = pe * (p as i64)
+            e = e + 1
+        }
+        k = k + 1
+    }
+    hf_put(n, idx, res)
+    return res
+}
+
+function H_G(n: i64, idx: i64) -> i64 {
+    let cached: i64 = hg_get(n, idx)
+    if cached >= 0 { return cached }
+
+    let prev: i64 = 0
+    if idx > 0 { prev = S_rec_primes[idx - 1] as i64 } else { prev = 1 }
+
+    if idx >= S_rec_len {
+        let r: i64 = prime_sum_G(n) - prime_sum_G(prev)
+        hg_put(n, idx, r)
+        return r
+    }
+    if (S_rec_primes[idx] as i64) * (S_rec_primes[idx] as i64) > n {
+        let r: i64 = prime_sum_G(n) - prime_sum_G(prev)
+        hg_put(n, idx, r)
+        return r
+    }
+
+    let mut res: i64 = prime_sum_G(n) - prime_sum_G(prev)
+    let mut k: i64 = idx
+    while k < S_rec_len {
+        let p: i32 = S_rec_primes[k]
+        if (p as i64) * (p as i64) > n { break }
+        let mut pe: i64 = p as i64
+        let mut e: i32 = 1
+        while pe * (p as i64) <= n {
+            res = res + val_G(p, e) * H_G(n / pe, k + 1)
+            res = res + val_G(p, e + 1)
+            pe = pe * (p as i64)
+            e = e + 1
+        }
+        k = k + 1
+    }
+    hg_put(n, idx, res)
+    return res
+}
+
+function sum_F(x: i64) -> i64 {
+    if x <= 0 { return 0 }
+    return 1 + H_F(x, 0)
+}
+
+function sum_G(x: i64) -> i64 {
+    if x <= 0 { return 0 }
+    return 1 + H_G(x, 0)
+}
+
+# ---- F_cache / G_cache for T() ----
+
+function fc_init(cap: i64) -> void {
+    FC_cap = cap
+    FC_keys = calloc(cap, 8)
+    FC_vals = calloc(cap, 8)
+    FC_used = calloc(cap, 1)
+}
+
+function fc_get(key: i64) -> i64 {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (FC_cap - 1)
+    while FC_used[slot] != 0 {
+        if FC_keys[slot] == key { return FC_vals[slot] }
+        slot = (slot + 1) & (FC_cap - 1)
+    }
+    return 0 - 1
+}
+
+function fc_put(key: i64, val: i64) -> void {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (FC_cap - 1)
+    while FC_used[slot] != 0 && FC_keys[slot] != key {
+        slot = (slot + 1) & (FC_cap - 1)
+    }
+    FC_used[slot] = 1
+    FC_keys[slot] = key
+    FC_vals[slot] = val
+}
+
+function gc_init(cap: i64) -> void {
+    GC_cap = cap
+    GC_keys = calloc(cap, 8)
+    GC_vals = calloc(cap, 8)
+    GC_used = calloc(cap, 1)
+}
+
+function gc_get(key: i64) -> i64 {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (GC_cap - 1)
+    while GC_used[slot] != 0 {
+        if GC_keys[slot] == key { return GC_vals[slot] }
+        slot = (slot + 1) & (GC_cap - 1)
+    }
+    return 0 - 1
+}
+
+function gc_put(key: i64, val: i64) -> void {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (GC_cap - 1)
+    while GC_used[slot] != 0 && GC_keys[slot] != key {
+        slot = (slot + 1) & (GC_cap - 1)
+    }
+    GC_used[slot] = 1
+    GC_keys[slot] = key
+    GC_vals[slot] = val
+}
+
+function F_cached(x: i64) -> i64 {
+    let hit: i64 = fc_get(x)
+    if hit >= 0 { return hit }
+    let v: i64 = sum_F(x)
+    fc_put(x, v)
+    return v
+}
+
+function G_cached(x: i64) -> i64 {
+    let hit: i64 = gc_get(x)
+    if hit >= 0 { return hit }
+    let v: i64 = sum_G(x)
+    gc_put(x, v)
+    return v
+}
+
+function T(n: i64) -> i64 {
+    build_summatory(n)
+    fc_init(1 << 16)
+    gc_init(1 << 16)
+
+    let mut total: i64 = 0
+    let mut pow2: i64 = 1
+    let mut i: i64 = 0
+    while pow2 <= n {
+        let mut pow3: i64 = 1
+        let mut j: i64 = 0
+        while pow2 * pow3 <= n {
+            let x: i64 = n / (pow2 * pow3)
+            let Fx: i64 = F_cached(x)
+            total = total + (2 * i + 2) * (2 * j + 1) * Fx
+            total = total + (2 * i + 3) * (2 * j + 2) * Fx
+            if j >= 1 {
+                total = total + (2 * j - 1) * (2 * i + 3) * Fx
+            }
+            pow3 = pow3 * 3
+            j = j + 1
+        }
+        pow2 = pow2 * 2
+        i = i + 1
+    }
+
+    pow2 = 1
+    i = 0
+    while pow2 <= n {
+        let x: i64 = n / pow2
+        let sign: i64 = 0
+        if i % 2 == 0 { sign = 1 } else { sign = 0 - 1 }
+        total = total + ((2 * i + 3) * F_cached(x) - sign * G_cached(x)) / 2
+        pow2 = pow2 * 2
+        i = i + 1
+    }
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe428_answer())
+    printf("%lld\n", T(1000000000))
     return 0
 }

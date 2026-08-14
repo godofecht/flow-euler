@@ -1,9 +1,675 @@
-# Wrapper for native C solver.
+# Project Euler 829
+# Integral Fusion - sum_{n=2..31} M(n) where M(n) is smallest integer whose
+# factor tree has the same shape as T(n!!).
+# Uses Miller-Rabin, Pollard rho, shape trees, and min-heap sequence generation.
+
+import euler.nt { isqrt }
+
 extern {
-    function p829_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function realloc(p: ptr<void>, n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+# ---- Miller-Rabin ----
+
+function mulmod_u64(a: u64, b: u64, m: u64) -> u64 {
+    return ((a as i128 * b as i128) % (m as i128)) as u64
+}
+
+function powmod_u64(a0: u64, d0: u64, n: u64) -> u64 {
+    let mut r: u64 = 1
+    let mut a: u64 = a0 % n
+    let mut d: u64 = d0
+    while d != 0 {
+        if d % 2 == 1 { r = mulmod_u64(r, a, n) }
+        a = mulmod_u64(a, a, n)
+        d = d >> 1
+    }
+    return r
+}
+
+function is_prime_u64(n: u64) -> bool {
+    if n < 2 { return false }
+    let sp: ptr<u64> = calloc(12, 8) as ptr<u64>
+    sp[0]=2; sp[1]=3; sp[2]=5; sp[3]=7; sp[4]=11; sp[5]=13
+    sp[6]=17; sp[7]=19; sp[8]=23; sp[9]=29; sp[10]=31; sp[11]=37
+    let mut i: i32 = 0
+    while i < 12 {
+        if n == sp[i] { free(sp as ptr<void>); return true }
+        if n % sp[i] == 0 { free(sp as ptr<void>); return false }
+        i = i + 1
+    }
+    free(sp as ptr<void>)
+    let mut d: u64 = n - 1
+    let mut s: i32 = 0
+    while d % 2 == 0 { d = d / 2; s = s + 1 }
+    let bases: ptr<u64> = calloc(7, 8) as ptr<u64>
+    bases[0]=2; bases[1]=325; bases[2]=9375; bases[3]=28178
+    bases[4]=450775; bases[5]=9780504; bases[6]=1795265022
+    let mut bi: i32 = 0
+    while bi < 7 {
+        let a: u64 = bases[bi] % n
+        if a == 0 { bi = bi + 1; continue }
+        let mut x: u64 = powmod_u64(a, d, n)
+        if x == 1 || x == n - 1 { bi = bi + 1; continue }
+        let mut found: bool = false
+        let mut j: i32 = 0
+        while j < s - 1 {
+            x = mulmod_u64(x, x, n)
+            if x == n - 1 { found = true; break }
+            j = j + 1
+        }
+        if !found { free(bases as ptr<void>); return false }
+        bi = bi + 1
+    }
+    free(bases as ptr<void>)
+    return true
+}
+
+function gcd_u64(a0: u64, b0: u64) -> u64 {
+    let mut a: u64 = a0
+    let mut b: u64 = b0
+    while b != 0 {
+        let t: u64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function pollard_rho_u64(n: u64) -> u64 {
+    if n % 2 == 0 { return 2 }
+    if n % 3 == 0 { return 3 }
+    let c_vals: ptr<u64> = calloc(9, 8) as ptr<u64>
+    c_vals[0]=1; c_vals[1]=3; c_vals[2]=5; c_vals[3]=7; c_vals[4]=11
+    c_vals[5]=13; c_vals[6]=17; c_vals[7]=19; c_vals[8]=23
+    let mut ci: i32 = 0
+    while ci < 9 {
+        let c: u64 = c_vals[ci]
+        let mut y: u64 = 2
+        let mut x: u64 = 0
+        let mut ys: u64 = 0
+        let mut g: u64 = 1
+        let mut q: u64 = 1
+        let mut r: u64 = 1
+        let m: u64 = 128
+        while g == 1 {
+            x = y
+            let mut i2: u64 = 0
+            while i2 < r {
+                y = (mulmod_u64(y, y, n) + c) % n
+                i2 = i2 + 1
+            }
+            let mut k: u64 = 0
+            while k < r && g == 1 {
+                ys = y
+                let lim: u64 = if m < r - k { m } else { r - k }
+                let mut i3: u64 = 0
+                while i3 < lim {
+                    y = (mulmod_u64(y, y, n) + c) % n
+                    let diff: u64 = if x > y { x - y } else { y - x }
+                    q = mulmod_u64(q, diff, n)
+                    i3 = i3 + 1
+                }
+                g = gcd_u64(q, n)
+                k = k + m
+            }
+            r = r << 1
+        }
+        if g == n {
+            g = 1
+            y = ys
+            while g == 1 {
+                y = (mulmod_u64(y, y, n) + c) % n
+                let diff: u64 = if x > y { x - y } else { y - x }
+                g = gcd_u64(diff, n)
+            }
+        }
+        if 1 < g && g < n {
+            free(c_vals as ptr<void>)
+            return g
+        }
+        ci = ci + 1
+    }
+    free(c_vals as ptr<void>)
+    let mut d: u64 = 5
+    while d <= 1000000 && d * d <= n {
+        if n % d == 0 { return d }
+        d = d + 2
+    }
+    return n
+}
+
+struct Factor {
+    p: u64,
+    e: i32
+}
+
+function factorize_u64(n0: u64, out: ptr<Factor>) -> i32 {
+    let mut n: u64 = n0
+    let mut nf: i32 = 0
+    let sp: ptr<u64> = calloc(12, 8) as ptr<u64>
+    sp[0]=2; sp[1]=3; sp[2]=5; sp[3]=7; sp[4]=11; sp[5]=13
+    sp[6]=17; sp[7]=19; sp[8]=23; sp[9]=29; sp[10]=31; sp[11]=37
+    let mut i: i32 = 0
+    while i < 12 {
+        if n % sp[i] == 0 {
+            let mut e: i32 = 0
+            while n % sp[i] == 0 { n = n / sp[i]; e = e + 1 }
+            out[nf].p = sp[i]
+            out[nf].e = e
+            nf = nf + 1
+        }
+        i = i + 1
+    }
+    free(sp as ptr<void>)
+    let stack: ptr<u64> = calloc(64, 8) as ptr<u64>
+    let mut sp2: i32 = 0
+    if n > 1 { stack[sp2] = n; sp2 = sp2 + 1 }
+    while sp2 > 0 {
+        sp2 = sp2 - 1
+        let m: u64 = stack[sp2]
+        if m == 1 { continue }
+        if is_prime_u64(m) {
+            let mut found: bool = false
+            let mut i2: i32 = 0
+            while i2 < nf {
+                if out[i2].p == m { out[i2].e = out[i2].e + 1; found = true; break }
+                i2 = i2 + 1
+            }
+            if !found { out[nf].p = m; out[nf].e = 1; nf = nf + 1 }
+            continue
+        }
+        let d: u64 = pollard_rho_u64(m)
+        if d == m {
+            let mut found: bool = false
+            let mut i3: i32 = 0
+            while i3 < nf {
+                if out[i3].p == m { out[i3].e = out[i3].e + 1; found = true; break }
+                i3 = i3 + 1
+            }
+            if !found { out[nf].p = m; out[nf].e = 1; nf = nf + 1 }
+            continue
+        }
+        stack[sp2] = d; sp2 = sp2 + 1
+        stack[sp2] = m / d; sp2 = sp2 + 1
+    }
+    free(stack as ptr<void>)
+    return nf
+}
+
+function isqrt_u64(n: u64) -> u64 {
+    return isqrt(n as i64) as u64
+}
+
+function gen_divisors(fac: ptr<Factor>, nf: i32, divs: ptr<u64>, max_divs: i32) -> i32 {
+    let mut nd: i32 = 1
+    divs[0] = 1
+    let mut i: i32 = 0
+    while i < nf {
+        let cur: i32 = nd
+        let mut pe: u64 = 1
+        let mut e: i32 = 1
+        while e <= fac[i].e {
+            pe = pe * fac[i].p
+            let mut j: i32 = 0
+            while j < cur {
+                if nd >= max_divs { return nd }
+                divs[nd] = divs[j] * pe
+                nd = nd + 1
+                j = j + 1
+            }
+            e = e + 1
+        }
+        i = i + 1
+    }
+    # Insertion sort
+    i = 1
+    while i < nd {
+        let key: u64 = divs[i]
+        let mut j: i32 = i - 1
+        while j >= 0 && divs[j] > key {
+            divs[j + 1] = divs[j]
+            j = j - 1
+        }
+        divs[j + 1] = key
+        i = i + 1
+    }
+    return nd
+}
+
+function best_divisor_le_sqrt(n: u64) -> u64 {
+    let fac: ptr<Factor> = calloc(20, 16) as ptr<Factor>
+    let nf: i32 = factorize_u64(n, fac)
+    let divs: ptr<u64> = calloc(20000, 8) as ptr<u64>
+    let nd: i32 = gen_divisors(fac, nf, divs, 20000)
+    let root: u64 = isqrt_u64(n)
+    let mut best: u64 = 1
+    let mut i: i32 = 0
+    while i < nd {
+        if divs[i] <= root && divs[i] > best { best = divs[i] }
+        i = i + 1
+    }
+    free(fac as ptr<void>)
+    free(divs as ptr<void>)
+    return best
+}
+
+# ---- Shape tree ----
+
+struct ShapeNode {
+    is_leaf: i32,
+    left: ptr<ShapeNode>,
+    right: ptr<ShapeNode>
+}
+
+let mut leaf_node: ptr<ShapeNode> = null
+
+function new_shape(is_leaf: i32, l: ptr<ShapeNode>, r: ptr<ShapeNode>) -> ptr<ShapeNode> {
+    let n: ptr<ShapeNode> = malloc(24) as ptr<ShapeNode>
+    n[0].is_leaf = is_leaf
+    n[0].left = l
+    n[0].right = r
+    return n
+}
+
+function shape_eq(a: ptr<ShapeNode>, b: ptr<ShapeNode>) -> bool {
+    if a == b { return true }
+    if a[0].is_leaf != b[0].is_leaf { return false }
+    if a[0].is_leaf != 0 { return true }
+    return shape_eq(a[0].left, b[0].left) && shape_eq(a[0].right, b[0].right)
+}
+
+struct SCacheEntry {
+    key: u64,
+    val: ptr<ShapeNode>
+}
+
+let mut scache: ptr<SCacheEntry> = null
+let mut scache_count: i32 = 0
+
+function get_shape(n: u64) -> ptr<ShapeNode> {
+    let mut i: i32 = 0
+    while i < scache_count {
+        if scache[i].key == n { return scache[i].val }
+        i = i + 1
+    }
+    let result: ptr<ShapeNode>
+    if is_prime_u64(n) {
+        result = leaf_node
+    } else {
+        let d: u64 = best_divisor_le_sqrt(n)
+        let mut a: u64 = d
+        let mut b: u64 = n / d
+        if a > b { let t: u64 = a; a = b; b = t }
+        result = new_shape(0, get_shape(a), get_shape(b))
+    }
+    if scache_count < 8192 {
+        scache[scache_count].key = n
+        scache[scache_count].val = result
+        scache_count = scache_count + 1
+    }
+    return result
+}
+
+function count_leaves(sh: ptr<ShapeNode>) -> i32 {
+    if sh[0].is_leaf != 0 { return 1 }
+    return count_leaves(sh[0].left) + count_leaves(sh[0].right)
+}
+
+function shape_matches(n: u64, sh: ptr<ShapeNode>) -> bool {
+    if sh[0].is_leaf != 0 { return is_prime_u64(n) }
+    if is_prime_u64(n) { return false }
+    let d: u64 = best_divisor_le_sqrt(n)
+    let mut a: u64 = d
+    let mut b: u64 = n / d
+    if a > b { let t: u64 = a; a = b; b = t }
+    return shape_eq(get_shape(a), sh[0].left) && shape_eq(get_shape(b), sh[0].right)
+}
+
+function next_prime(p: u64) -> u64 {
+    if p < 2 { return 2 }
+    if p == 2 { return 3 }
+    let mut c: u64 = p + 2
+    while !is_prime_u64(c) { c = c + 2 }
+    return c
+}
+
+# ---- Min-heap ----
+
+struct HeapEntry {
+    val: u64,
+    data: i32
+}
+
+# ---- Seq struct ----
+
+struct Seq {
+    sh: ptr<ShapeNode>,
+    maxval: u64,
+    next_prime_val: u64,
+    left_idx: i32,
+    right_idx: i32,
+    heap: ptr<HeapEntry>,
+    heap_size: i32,
+    heap_cap: i32,
+    seen_pairs: ptr<i32>,
+    seen_count: i32,
+    seen_cap: i32,
+    values: ptr<u64>,
+    val_count: i32,
+    val_cap: i32
+}
+
+let mut seqs: ptr<ptr<Seq> > = null
+let mut seqs_count: i32 = 0
+
+function find_seq(sh: ptr<ShapeNode>) -> ptr<Seq> {
+    let mut i: i32 = 0
+    while i < seqs_count {
+        if seqs[i][0].sh == sh { return seqs[i] }
+        i = i + 1
+    }
+    return null
+}
+
+# Forward declarations needed for mutual recursion
+# get_value is called by ensure_right_ge, try_push, next_candidate
+# next_value is called by get_value
+# next_candidate is called by next_value
+
+function hpush(s: ptr<Seq>, val: u64, data: i32) -> void {
+    if s[0].heap_size >= s[0].heap_cap {
+        s[0].heap_cap = s[0].heap_cap * 2
+        s[0].heap = realloc(s[0].heap as ptr<void>, (s[0].heap_cap as i64) * 16) as ptr<HeapEntry>
+    }
+    let pos: i32 = s[0].heap_size
+    s[0].heap_size = s[0].heap_size + 1
+    s[0].heap[pos].val = val
+    s[0].heap[pos].data = data
+    let mut p: i32 = pos
+    while p > 0 {
+        let pp: i32 = (p - 1) / 2
+        if s[0].heap[pp].val <= s[0].heap[p].val { break }
+        let t: HeapEntry = s[0].heap[pp]
+        s[0].heap[pp] = s[0].heap[p]
+        s[0].heap[p] = t
+        p = pp
+    }
+}
+
+function hpop(s: ptr<Seq>, val: ptr<u64>, data: ptr<i32>) -> void {
+    val[0] = s[0].heap[0].val
+    data[0] = s[0].heap[0].data
+    s[0].heap_size = s[0].heap_size - 1
+    if s[0].heap_size > 0 {
+        s[0].heap[0] = s[0].heap[s[0].heap_size]
+        let mut pos: i32 = 0
+        let mut cont: bool = true
+        while cont {
+            let l: i32 = 2 * pos + 1
+            let r: i32 = 2 * pos + 2
+            let mut sm: i32 = pos
+            if l < s[0].heap_size && s[0].heap[l].val < s[0].heap[sm].val { sm = l }
+            if r < s[0].heap_size && s[0].heap[r].val < s[0].heap[sm].val { sm = r }
+            if sm == pos {
+                cont = false
+            } else {
+                let t: HeapEntry = s[0].heap[pos]
+                s[0].heap[pos] = s[0].heap[sm]
+                s[0].heap[sm] = t
+                pos = sm
+            }
+        }
+    }
+}
+
+function seen_contains(s: ptr<Seq>, i: i32, j: i32) -> bool {
+    let mut k: i32 = 0
+    while k < s[0].seen_count {
+        if s[0].seen_pairs[k * 2] == i && s[0].seen_pairs[k * 2 + 1] == j { return true }
+        k = k + 1
+    }
+    return false
+}
+
+function seen_add(s: ptr<Seq>, i: i32, j: i32) -> void {
+    if s[0].seen_count >= s[0].seen_cap {
+        s[0].seen_cap = s[0].seen_cap * 2
+        s[0].seen_pairs = realloc(s[0].seen_pairs as ptr<void>, (s[0].seen_cap as i64) * 8) as ptr<i32>
+    }
+    s[0].seen_pairs[s[0].seen_count * 2] = i
+    s[0].seen_pairs[s[0].seen_count * 2 + 1] = j
+    s[0].seen_count = s[0].seen_count + 1
+}
+
+# Mutual recursion: get_value, next_value, next_candidate, ensure_right_ge, try_push
+
+function get_value(sh: ptr<ShapeNode>, idx: i32) -> u64
+
+function ensure_right_ge(s: ptr<Seq>, x: u64) -> i32 {
+    let rs: ptr<Seq> = find_seq(s[0].sh[0].right)
+    if rs == null { return -1 }
+    if rs[0].val_count == 0 {
+        let v: u64 = get_value(s[0].sh[0].right, 0)
+        if v == 0 || v > s[0].maxval { return -1 }
+    }
+    while rs[0].values[rs[0].val_count - 1] < x {
+        let v: u64 = get_value(s[0].sh[0].right, rs[0].val_count)
+        if v == 0 || v > s[0].maxval { break }
+    }
+    if rs[0].values[rs[0].val_count - 1] < x { return -1 }
+    let mut lo: i32 = 0
+    let mut hi: i32 = rs[0].val_count - 1
+    while lo < hi {
+        let mid: i32 = (lo + hi) / 2
+        if rs[0].values[mid] < x { lo = mid + 1 } else { hi = mid }
+    }
+    return lo
+}
+
+function try_push(s: ptr<Seq>, i: i32, j: i32) -> void {
+    if seen_contains(s, i, j) { return }
+    let a: u64 = get_value(s[0].sh[0].left, i)
+    let b: u64 = get_value(s[0].sh[0].right, j)
+    if a == 0 || b == 0 { return }
+    if a > b { return }
+    let prod: u64 = a * b
+    if prod > s[0].maxval { return }
+    seen_add(s, i, j)
+    hpush(s, prod, i * 1000000 + j)
+}
+
+function next_candidate(s: ptr<Seq>) -> u64 {
+    if s[0].left_idx == 0 && s[0].heap_size == 0 {
+        let a0: u64 = get_value(s[0].sh[0].left, 0)
+        if a0 == 0 { return 0 }
+        let j0: i32 = ensure_right_ge(s, a0)
+        if j0 >= 0 { try_push(s, 0, j0) }
+        s[0].left_idx = 1
+    }
+
+    let val_ptr: ptr<u64> = calloc(1, 8) as ptr<u64>
+    let data_ptr: ptr<i32> = calloc(1, 4) as ptr<i32>
+
+    while true {
+        if s[0].heap_size == 0 {
+            let a: u64 = get_value(s[0].sh[0].left, s[0].left_idx)
+            if a == 0 { free(val_ptr as ptr<void>); free(data_ptr as ptr<void>); return 0 }
+            if a * a > s[0].maxval {
+                free(val_ptr as ptr<void>); free(data_ptr as ptr<void>); return 0
+            }
+            let j0: i32 = ensure_right_ge(s, a)
+            if j0 < 0 { free(val_ptr as ptr<void>); free(data_ptr as ptr<void>); return 0 }
+            try_push(s, s[0].left_idx, j0)
+            s[0].left_idx = s[0].left_idx + 1
+            continue
+        }
+        hpop(s, val_ptr, data_ptr)
+        let prod: u64 = val_ptr[0]
+        let ij: i32 = data_ptr[0]
+        let i: i32 = ij / 1000000
+        let j: i32 = ij % 1000000
+
+        # Maybe add more i values
+        while true {
+            let a: u64 = get_value(s[0].sh[0].left, s[0].left_idx)
+            if a == 0 { break }
+            if a * a > prod && s[0].heap_size > 0 { break }
+            let j0: i32 = ensure_right_ge(s, a)
+            if j0 >= 0 { try_push(s, s[0].left_idx, j0) }
+            s[0].left_idx = s[0].left_idx + 1
+        }
+
+        try_push(s, i, j + 1)
+        free(val_ptr as ptr<void>)
+        free(data_ptr as ptr<void>)
+        return prod
+    }
+    free(val_ptr as ptr<void>)
+    free(data_ptr as ptr<void>)
+    return 0
+}
+
+function next_value(s: ptr<Seq>) -> u64 {
+    if s[0].sh[0].is_leaf != 0 {
+        let p: u64 = s[0].next_prime_val
+        if p > s[0].maxval { return 0 }
+        s[0].next_prime_val = next_prime(p)
+        return p
+    }
+    let last: u64 = if s[0].val_count > 0 { s[0].values[s[0].val_count - 1] } else { 0 }
+    while true {
+        let cand: u64 = next_candidate(s)
+        if cand == 0 { return 0 }
+        if last != 0 && cand == last { continue }
+        if shape_matches(cand, s[0].sh) { return cand }
+    }
+    return 0
+}
+
+function get_value(sh: ptr<ShapeNode>, idx: i32) -> u64 {
+    let s: ptr<Seq> = find_seq(sh)
+    if s == null { return 0 }
+    while s[0].val_count <= idx {
+        let v: u64 = next_value(s)
+        if v == 0 { return 0 }
+        if s[0].val_count >= s[0].val_cap {
+            s[0].val_cap = s[0].val_cap * 2
+            s[0].values = realloc(s[0].values as ptr<void>, (s[0].val_cap as i64) * 8) as ptr<u64>
+        }
+        s[0].values[s[0].val_count] = v
+        s[0].val_count = s[0].val_count + 1
+    }
+    return s[0].values[idx]
+}
+
+# Collect all unique subshapes
+let mut all_shapes_arr: ptr<ptr<ShapeNode> > = null
+let mut all_shapes_arr_count: i32 = 0
+let mut all_shapes_arr_cap: i32 = 0
+
+function collect_shape(sh: ptr<ShapeNode>) -> void {
+    let mut i: i32 = 0
+    while i < all_shapes_arr_count {
+        if all_shapes_arr[i] == sh { return }
+        i = i + 1
+    }
+    if all_shapes_arr_count >= all_shapes_arr_cap {
+        if all_shapes_arr_cap == 0 { all_shapes_arr_cap = 64 } else { all_shapes_arr_cap = all_shapes_arr_cap * 2 }
+        all_shapes_arr = realloc(all_shapes_arr as ptr<void>, (all_shapes_arr_cap as i64) * 8) as ptr<ptr<ShapeNode> >
+    }
+    all_shapes_arr[all_shapes_arr_count] = sh
+    all_shapes_arr_count = all_shapes_arr_count + 1
+    if sh[0].is_leaf == 0 {
+        collect_shape(sh[0].left)
+        collect_shape(sh[0].right)
+    }
+}
+
+function double_factorial(n: i32) -> u64 {
+    let mut r: u64 = 1
+    let mut k: i32 = n
+    while k > 1 {
+        r = r * (k as u64)
+        k = k - 2
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%lld\n", p829_native())
+    leaf_node = new_shape(1, null, null)
+
+    let max_n: i32 = 31
+    let maxval: u64 = double_factorial(max_n)
+
+    # Shape cache
+    scache = calloc(8192, 16) as ptr<SCacheEntry>
+    scache_count = 0
+
+    let targets: ptr<ptr<ShapeNode> > = calloc(32, 8) as ptr<ptr<ShapeNode> >
+    let mut n: i32 = 2
+    while n <= max_n {
+        targets[n] = get_shape(double_factorial(n))
+        n = n + 1
+    }
+
+    all_shapes_arr = null
+    all_shapes_arr_count = 0
+    all_shapes_arr_cap = 0
+    n = 2
+    while n <= max_n {
+        collect_shape(targets[n])
+        n = n + 1
+    }
+
+    # Sort by leaf count (insertion sort)
+    let mut i: i32 = 1
+    while i < all_shapes_arr_count {
+        let key: ptr<ShapeNode> = all_shapes_arr[i]
+        let mut j: i32 = i - 1
+        while j >= 0 && count_leaves(all_shapes_arr[j]) > count_leaves(key) {
+            all_shapes_arr[j + 1] = all_shapes_arr[j]
+            j = j - 1
+        }
+        all_shapes_arr[j + 1] = key
+        i = i + 1
+    }
+
+    # Create sequences
+    seqs = malloc((all_shapes_arr_count as i64) * 8) as ptr<ptr<Seq> >
+    seqs_count = 0
+    i = 0
+    while i < all_shapes_arr_count {
+        let s: ptr<Seq> = calloc(1, 80) as ptr<Seq>
+        s[0].sh = all_shapes_arr[i]
+        s[0].maxval = maxval
+        s[0].next_prime_val = 2
+        s[0].left_idx = 0
+        s[0].heap_cap = 4096
+        s[0].heap = malloc((s[0].heap_cap as i64) * 16) as ptr<HeapEntry>
+        s[0].heap_size = 0
+        s[0].seen_cap = 256
+        s[0].seen_pairs = malloc((s[0].seen_cap as i64) * 8) as ptr<i32>
+        s[0].seen_count = 0
+        s[0].val_cap = 256
+        s[0].values = malloc((s[0].val_cap as i64) * 8) as ptr<u64>
+        s[0].val_count = 0
+        seqs[seqs_count] = s
+        seqs_count = seqs_count + 1
+        i = i + 1
+    }
+
+    let mut total: u64 = 0
+    n = 2
+    while n <= max_n {
+        let m: u64 = get_value(targets[n], 0)
+        total = total + m
+        n = n + 1
+    }
+
+    printf("%lld\n", total as i64)
     return 0
 }

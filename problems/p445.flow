@@ -1,11 +1,306 @@
 # Project Euler 445
-# Retractions A: S(10^7)=sum R(C(N,k)) mod 10^9+7 via unitary sigma*.
+# Retractions A: S(10^7) mod 10^9+7 via unitary sigma*.
+# Ported from native C++ to pure Flow.
+
+import euler.nt { isqrt }
 
 extern {
-    function pe445_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function modpow(a0: i64, e0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut a: i64 = a0 % MOD
+    let mut e: i64 = e0
+    while e > 0 {
+        if e % 2 == 1 { r = r * a % MOD }
+        a = a * a % MOD
+        e = e / 2
+    }
+    return r
+}
+
+# ---- Sieve state (globals) ----
+let mut g_spf: ptr<i32> = null
+let mut g_prime_idx: ptr<i32> = null
+let mut g_primes: ptr<i32> = null
+let mut g_num_primes: i64 = 0
+
+function sieve_spf(n: i64) -> void {
+    g_spf = calloc(n + 1, 4) as ptr<i32>
+    g_prime_idx = calloc(n + 1, 4) as ptr<i32>
+    g_primes = calloc(n / 10 + 10000, 4) as ptr<i32>
+    g_num_primes = 0
+    # calloc zeroes, so spf and prime_idx are already 0
+    g_spf[0] = 1
+    g_spf[1] = 1
+    if n >= 2 {
+        g_spf[2] = 2
+        g_primes[0] = 2
+        g_num_primes = 1
+        g_prime_idx[2] = 1
+        let mut x: i64 = 4
+        while x <= n {
+            g_spf[x] = 2
+            x = x + 2
+        }
+    }
+    let limit: i64 = isqrt(n)
+    let mut i: i64 = 3
+    while i <= n {
+        if g_spf[i] == 0 {
+            g_spf[i] = i as i32
+            g_primes[g_num_primes] = i as i32
+            g_num_primes = g_num_primes + 1
+            g_prime_idx[i] = g_num_primes as i32
+            if i <= limit {
+                let step: i64 = 2 * i
+                let mut j: i64 = i * i
+                while j <= n {
+                    if g_spf[j] == 0 { g_spf[j] = i as i32 }
+                    j = j + step
+                }
+            }
+        }
+        i = i + 2
+    }
+}
+
+function inverses_upto(n: i64) -> ptr<i64> {
+    let inv: ptr<i64> = calloc(n + 1, 8) as ptr<i64>
+    inv[1] = 1
+    let mut i: i64 = 2
+    while i <= n {
+        inv[i] = MOD - (MOD / i) * inv[MOD % i] % MOD
+        i = i + 1
+    }
+    return inv
+}
+
+# Batch inverse: writes inverses of vals[0..n-1] to out[base..base+n-1]
+function batch_inverse(vals: ptr<i64>, n: i64, out: ptr<i64>, base: i64) -> void {
+    let idxs: ptr<i64> = calloc(n, 8) as ptr<i64>
+    let prefix: ptr<i64> = calloc(n, 8) as ptr<i64>
+    let mut count: i64 = 0
+    let mut prod: i64 = 1
+    let mut i: i64 = 0
+    while i < n {
+        if vals[i] != 0 {
+            prod = prod * vals[i] % MOD
+            idxs[count] = i
+            prefix[count] = prod
+            count = count + 1
+        }
+        i = i + 1
+    }
+    if count == 0 {
+        free(idxs)
+        free(prefix)
+        return
+    }
+    let mut inv_all: i64 = modpow(prod, MOD - 2)
+    let mut j: i64 = count - 1
+    while j >= 0 {
+        let i2: i64 = idxs[j]
+        let prev: i64 = if j > 0 { prefix[j - 1] } else { 1 }
+        out[base + i2] = inv_all * prev % MOD
+        inv_all = inv_all * vals[i2] % MOD
+        j = j - 1
+    }
+    free(idxs)
+    free(prefix)
+}
+
+# ---- apply_factor state (globals) ----
+let mut g_exp: ptr<i64> = null
+let mut g_p_pow: ptr<i64> = null
+let mut g_inv_terms: ptr<i64> = null
+let mut g_offset: ptr<i64> = null
+let mut g_inv_num: ptr<i64> = null
+let mut g_prod: i64 = 1
+let mut g_zero_count: i64 = 0
+
+function apply_factor(x0: i64, sign: i64) -> void {
+    let mut x: i64 = x0
+    while x > 1 {
+        let p: i64 = g_spf[x] as i64
+        let pi: i64 = g_prime_idx[p] as i64 - 1
+        let mut cnt: i64 = 0
+        while x > 1 && (g_spf[x] as i64) == p {
+            x = x / p
+            cnt = cnt + 1
+        }
+        let old_e: i64 = g_exp[pi]
+        if sign > 0 {
+            if old_e != 0 {
+                let mut term_old: i64 = g_p_pow[pi] + 1
+                if term_old == MOD { term_old = 0 }
+                if term_old != 0 {
+                    g_prod = g_prod * g_inv_terms[g_offset[pi] + old_e - 1] % MOD
+                } else {
+                    g_zero_count = g_zero_count - 1
+                }
+            }
+            let new_e: i64 = old_e + cnt
+            g_exp[pi] = new_e
+            if cnt == 1 {
+                g_p_pow[pi] = g_p_pow[pi] * p % MOD
+            } else {
+                if cnt == 2 {
+                    g_p_pow[pi] = g_p_pow[pi] * p % MOD * p % MOD
+                } else {
+                    g_p_pow[pi] = g_p_pow[pi] * modpow(p, cnt) % MOD
+                }
+            }
+            let mut term_new: i64 = g_p_pow[pi] + 1
+            if term_new == MOD { term_new = 0 }
+            if term_new != 0 {
+                g_prod = g_prod * term_new % MOD
+            } else {
+                g_zero_count = g_zero_count + 1
+            }
+        } else {
+            let mut term_old: i64 = g_p_pow[pi] + 1
+            if term_old == MOD { term_old = 0 }
+            if term_old != 0 {
+                g_prod = g_prod * g_inv_terms[g_offset[pi] + old_e - 1] % MOD
+            } else {
+                g_zero_count = g_zero_count - 1
+            }
+            let new_e2: i64 = old_e - cnt
+            g_exp[pi] = new_e2
+            let invp: i64 = g_inv_num[p]
+            if cnt == 1 {
+                g_p_pow[pi] = g_p_pow[pi] * invp % MOD
+            } else {
+                if cnt == 2 {
+                    g_p_pow[pi] = g_p_pow[pi] * invp % MOD * invp % MOD
+                } else {
+                    g_p_pow[pi] = g_p_pow[pi] * modpow(invp, cnt) % MOD
+                }
+            }
+            if new_e2 != 0 {
+                let mut term_new2: i64 = g_p_pow[pi] + 1
+                if term_new2 == MOD { term_new2 = 0 }
+                if term_new2 != 0 {
+                    g_prod = g_prod * term_new2 % MOD
+                } else {
+                    g_zero_count = g_zero_count + 1
+                }
+            }
+        }
+    }
+}
+
+function solve(N: i64) -> i64 {
+    sieve_spf(N)
+    let inv_num: ptr<i64> = inverses_upto(N)
+    g_inv_num = inv_num
+
+    let num_primes: i64 = g_num_primes
+    let max_exp: ptr<i64> = calloc(num_primes, 8) as ptr<i64>
+    let offset: ptr<i64> = calloc(num_primes, 8) as ptr<i64>
+    let mut total_terms: i64 = 0
+    let mut idx: i64 = 0
+    while idx < num_primes {
+        let p: i64 = g_primes[idx] as i64
+        let mut t: i64 = N
+        let mut e: i64 = 0
+        while t != 0 {
+            t = t / p
+            e = e + t
+        }
+        max_exp[idx] = e
+        offset[idx] = total_terms
+        total_terms = total_terms + e
+        idx = idx + 1
+    }
+
+    let inv_terms: ptr<i64> = calloc(total_terms, 8) as ptr<i64>
+    g_inv_terms = inv_terms
+    g_offset = offset
+
+    let CHUNK: i64 = 1000000
+    let vals: ptr<i64> = calloc(CHUNK, 8) as ptr<i64>
+    let mut vals_count: i64 = 0
+    let mut write_pos: i64 = 0
+    idx = 0
+    while idx < num_primes {
+        let p: i64 = g_primes[idx] as i64
+        let m: i64 = max_exp[idx]
+        let mut pow_val: i64 = p % MOD
+        let mut k: i64 = 0
+        while k < m {
+            vals[vals_count] = (pow_val + 1) % MOD
+            vals_count = vals_count + 1
+            pow_val = pow_val * p % MOD
+            if vals_count >= CHUNK {
+                batch_inverse(vals, vals_count, inv_terms, write_pos)
+                write_pos = write_pos + vals_count
+                vals_count = 0
+            }
+            k = k + 1
+        }
+        idx = idx + 1
+    }
+    if vals_count > 0 {
+        batch_inverse(vals, vals_count, inv_terms, write_pos)
+        write_pos = write_pos + vals_count
+    }
+
+    let exp_arr: ptr<i64> = calloc(num_primes, 8) as ptr<i64>
+    let p_pow_arr: ptr<i64> = calloc(num_primes, 8) as ptr<i64>
+    let mut pii: i64 = 0
+    while pii < num_primes {
+        p_pow_arr[pii] = 1
+        pii = pii + 1
+    }
+    g_exp = exp_arr
+    g_p_pow = p_pow_arr
+    g_prod = 1
+    g_zero_count = 0
+
+    let mid: i64 = N / 2
+    let even: bool = (N % 2 == 0)
+    let mut sum_sigma: i64 = 0
+    let mut k2: i64 = 1
+    while k2 <= mid {
+        let numer: i64 = N - k2 + 1
+        let denom: i64 = k2
+        apply_factor(numer, 1)
+        apply_factor(denom, -1)
+        let sigma_val: i64 = if g_zero_count != 0 { 0 } else { g_prod }
+        if even && k2 == mid {
+            sum_sigma = sum_sigma + sigma_val
+        } else {
+            sum_sigma = sum_sigma + 2 * sigma_val
+        }
+        if sum_sigma >= ((1 as i64) << 62) {
+            sum_sigma = sum_sigma % MOD
+        }
+        k2 = k2 + 1
+    }
+    sum_sigma = sum_sigma % MOD
+    let sum_binom: i64 = (modpow(2, N) - 2 + MOD) % MOD
+    let ans: i64 = (sum_sigma - sum_binom + MOD) % MOD
+
+    free(max_exp)
+    free(offset)
+    free(inv_terms)
+    free(vals)
+    free(exp_arr)
+    free(p_pow_arr)
+    free(inv_num)
+    free(g_spf)
+    free(g_prime_idx)
+    free(g_primes)
+    return ans
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe445_answer())
+    printf("%lld\n", solve(10000000))
     return 0
 }

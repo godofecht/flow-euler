@@ -1,14 +1,325 @@
 # Project Euler 972
 # Rational triangles on the unit sphere.
-#
-# The heavy lifting (lattice construction and triple counting) lives in the
-# native C companion; Flow just shells out to it and prints the answer.
+# Ported from native C to pure Flow.
+
+import euler.nt { gcd }
 
 extern {
-    function p972_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function realloc(p: ptr<void>, n: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+function gcd64(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = if a0 < 0 { -a0 } else { a0 }
+    let mut b: i64 = if b0 < 0 { -b0 } else { b0 }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function lcm64(a: i64, b: i64) -> i64 {
+    return a / gcd64(a, b) * b
+}
+
+# Global state
+let mut g_scale: i64 = 0
+let mut g_coords: ptr<i64> = null
+let mut g_ncoords: i32 = 0
+let mut g_px: ptr<i64> = null
+let mut g_py: ptr<i64> = null
+let mut g_pz: ptr<i64> = null
+let mut g_npoints: i32 = 0
+
+# Heapsort for i64 array
+function sift_down_i64(arr: ptr<i64>, start: i64, end: i64) -> void {
+    let mut root: i64 = start
+    while 2 * root + 1 <= end {
+        let mut child: i64 = 2 * root + 1
+        if child + 1 <= end && arr[child] < arr[child + 1] {
+            child = child + 1
+        }
+        if arr[root] < arr[child] {
+            let tmp: i64 = arr[root]
+            arr[root] = arr[child]
+            arr[child] = tmp
+            root = child
+        } else {
+            break
+        }
+    }
+}
+
+function heapsort_i64(arr: ptr<i64>, n: i64) -> void {
+    if n <= 1 { return }
+    let mut start: i64 = n / 2 - 1
+    while start >= 0 {
+        sift_down_i64(arr, start, n - 1)
+        start = start - 1
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let tmp: i64 = arr[0]
+        arr[0] = arr[end]
+        arr[end] = tmp
+        end = end - 1
+        sift_down_i64(arr, 0, end)
+    }
+}
+
+# Heapsort for key pairs (a, b) lexicographic
+function sift_down_keys(ka: ptr<i64>, kb: ptr<i64>, start: i64, end: i64) -> void {
+    let mut root: i64 = start
+    while 2 * root + 1 <= end {
+        let mut child: i64 = 2 * root + 1
+        if child + 1 <= end {
+            let ca: i64 = ka[child]
+            let cb: i64 = kb[child]
+            let cca: i64 = ka[child + 1]
+            let ccb: i64 = kb[child + 1]
+            if ca < cca || (ca == cca && cb < ccb) {
+                child = child + 1
+            }
+        }
+        let ra: i64 = ka[root]
+        let rb: i64 = kb[root]
+        let ca2: i64 = ka[child]
+        let cb2: i64 = kb[child]
+        if ra < ca2 || (ra == ca2 && rb < cb2) {
+            let tmpa: i64 = ka[root]
+            let tmpb: i64 = kb[root]
+            ka[root] = ka[child]
+            kb[root] = kb[child]
+            ka[child] = tmpa
+            kb[child] = tmpb
+            root = child
+        } else {
+            break
+        }
+    }
+}
+
+function heapsort_keys(ka: ptr<i64>, kb: ptr<i64>, n: i64) -> void {
+    if n <= 1 { return }
+    let mut start: i64 = n / 2 - 1
+    while start >= 0 {
+        sift_down_keys(ka, kb, start, n - 1)
+        start = start - 1
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let tmpa: i64 = ka[0]
+        let tmpb: i64 = kb[0]
+        ka[0] = ka[end]
+        kb[0] = kb[end]
+        ka[end] = tmpa
+        kb[end] = tmpb
+        end = end - 1
+        sift_down_keys(ka, kb, 0, end)
+    }
+}
+
+function coordinate_values(n: i32) -> void {
+    g_scale = 1
+    let mut d: i32 = 1
+    while d <= n {
+        g_scale = lcm64(g_scale, d as i64)
+        d = d + 1
+    }
+
+    let mut cap: i32 = 256
+    g_coords = malloc((cap as i64) * 8) as ptr<i64>
+    g_ncoords = 0
+    g_coords[0] = 0
+    g_ncoords = 1
+
+    let mut d2: i32 = 2
+    while d2 <= n {
+        let step: i64 = g_scale / (d2 as i64)
+        let mut a: i32 = 1
+        while a < d2 {
+            if gcd64(a as i64, d2 as i64) == 1 {
+                let v: i64 = (a as i64) * step
+                if g_ncoords + 2 > cap {
+                    cap = cap * 2
+                    g_coords = realloc(g_coords as ptr<void>, (cap as i64) * 8) as ptr<i64>
+                }
+                g_coords[g_ncoords] = v
+                g_ncoords = g_ncoords + 1
+                g_coords[g_ncoords] = -v
+                g_ncoords = g_ncoords + 1
+            }
+            a = a + 1
+        }
+        d2 = d2 + 1
+    }
+
+    heapsort_i64(g_coords, g_ncoords as i64)
+
+    let mut w: i32 = 0
+    let mut i: i32 = 0
+    while i < g_ncoords {
+        if i == 0 || g_coords[i] != g_coords[i - 1] {
+            g_coords[w] = g_coords[i]
+            w = w + 1
+        }
+        i = i + 1
+    }
+    g_ncoords = w
+}
+
+function build_lifted_points(n: i32) -> void {
+    coordinate_values(n)
+    let scale2: i64 = g_scale * g_scale
+
+    let sq: ptr<i64> = malloc((g_ncoords as i64) * 8) as ptr<i64>
+    let mut i: i32 = 0
+    while i < g_ncoords {
+        sq[i] = g_coords[i] * g_coords[i]
+        i = i + 1
+    }
+
+    let mut cap: i32 = 1 << 16
+    g_px = malloc((cap as i64) * 8) as ptr<i64>
+    g_py = malloc((cap as i64) * 8) as ptr<i64>
+    g_pz = malloc((cap as i64) * 8) as ptr<i64>
+    g_npoints = 0
+
+    let mut xi: i32 = 0
+    while xi < g_ncoords {
+        let x: i64 = g_coords[xi]
+        let x2: i64 = sq[xi]
+        let mut yi: i32 = 0
+        while yi < g_ncoords {
+            let z0: i64 = x2 + sq[yi]
+            if z0 < scale2 {
+                if g_npoints >= cap {
+                    cap = cap * 2
+                    g_px = realloc(g_px as ptr<void>, (cap as i64) * 8) as ptr<i64>
+                    g_py = realloc(g_py as ptr<void>, (cap as i64) * 8) as ptr<i64>
+                    g_pz = realloc(g_pz as ptr<void>, (cap as i64) * 8) as ptr<i64>
+                }
+                g_px[g_npoints] = x
+                g_py[g_npoints] = g_coords[yi]
+                g_pz[g_npoints] = z0 + scale2
+                g_npoints = g_npoints + 1
+            }
+            yi = yi + 1
+        }
+        xi = xi + 1
+    }
+
+    free(sq as ptr<void>)
+}
+
+function count_unordered_triples() -> i64 {
+    let mut total: i64 = 0
+    let m: i32 = g_npoints
+
+    let ka: ptr<i64> = malloc((m as i64) * 8) as ptr<i64>
+    let kb: ptr<i64> = malloc((m as i64) * 8) as ptr<i64>
+
+    let mut i: i32 = 0
+    while i < m - 2 {
+        let px: i64 = g_px[i]
+        let py: i64 = g_py[i]
+        let pz: i64 = g_pz[i]
+        let mut nk: i32 = 0
+
+        if px != 0 {
+            let mut j: i32 = i + 1
+            while j < m {
+                let qx: i64 = g_px[j]
+                let qy: i64 = g_py[j]
+                let qz: i64 = g_pz[j]
+                let mut a: i64 = py * qx - px * qy
+                let mut b: i64 = pz * qx - px * qz
+                let g: i64 = gcd64(a, b)
+                if g != 0 {
+                    a = a / g
+                    b = b / g
+                }
+                if a < 0 || (a == 0 && b < 0) {
+                    a = -a
+                    b = -b
+                }
+                ka[nk] = a
+                kb[nk] = b
+                nk = nk + 1
+                j = j + 1
+            }
+        } else {
+            let mut j: i32 = i + 1
+            while j < m {
+                let qx: i64 = g_px[j]
+                let qy: i64 = g_py[j]
+                let qz: i64 = g_pz[j]
+                let mut a: i64 = qx
+                let mut b: i64 = pz * qy - py * qz
+                let g: i64 = gcd64(a, b)
+                if g != 0 {
+                    a = a / g
+                    b = b / g
+                }
+                if a < 0 || (a == 0 && b < 0) {
+                    a = -a
+                    b = -b
+                }
+                ka[nk] = a
+                kb[nk] = b
+                nk = nk + 1
+                j = j + 1
+            }
+        }
+
+        heapsort_keys(ka, kb, nk as i64)
+
+        let mut run_len: i64 = 1
+        let mut prev_a: i64 = ka[0]
+        let mut prev_b: i64 = kb[0]
+        let mut k: i32 = 1
+        while k < nk {
+            if ka[k] == prev_a && kb[k] == prev_b {
+                run_len = run_len + 1
+            } else {
+                if run_len >= 2 {
+                    total = total + run_len * (run_len - 1) / 2
+                }
+                prev_a = ka[k]
+                prev_b = kb[k]
+                run_len = 1
+            }
+            k = k + 1
+        }
+        if run_len >= 2 {
+            total = total + run_len * (run_len - 1) / 2
+        }
+
+        i = i + 1
+    }
+
+    free(ka as ptr<void>)
+    free(kb as ptr<void>)
+    return total
+}
+
+function compute_T(n: i32) -> i64 {
+    build_lifted_points(n)
+    let c: i64 = count_unordered_triples()
+    let result: i64 = 6 * c
+    free(g_coords as ptr<void>)
+    free(g_px as ptr<void>)
+    free(g_py as ptr<void>)
+    free(g_pz as ptr<void>)
+    return result
 }
 
 function main() -> i32 {
-    printf("%lld\n", p972_native())
+    printf("%lld\n", compute_T(12))
     return 0
 }

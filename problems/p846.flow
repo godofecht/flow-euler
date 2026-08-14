@@ -1,11 +1,337 @@
 # Project Euler 846
-# Magic Bracelets - F(10^6).
+# Magic Bracelets - F(10^6) using Gaussian integer vectors and path merging.
+
+import euler.nt { gcd }
 
 extern {
-    function p846_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
+}
+
+const LIMIT: i64 = 1000000
+const EDGE_HT_SIZE: i64 = 2097152
+const EDGE_HT_MASK: i64 = 2097151
+
+# Extended GCD for modular inverse (recursive)
+function ext_gcd(a: i64, b: i64, x: ptr<i64>, y: ptr<i64>) -> i64 {
+    if b == 0 {
+        x[0] = 1
+        y[0] = 0
+        return a
+    }
+    let x1: i64 = 0
+    let y1: i64 = 0
+    # Use stack-allocated temps via pointers
+    let g: i64 = ext_gcd(b, a % b, &x1, &y1)
+    x[0] = y1
+    y[0] = x1 - (a / b) * y1
+    return g
+}
+
+function mod_inverse(a0: i64, m: i64) -> i64 {
+    let a: i64 = ((a0 % m) + m) % m
+    let x: i64 = 0
+    let y: i64 = 0
+    let g: i64 = ext_gcd(a, m, &x, &y)
+    if g != 1 { return -1 }
+    return ((x % m) + m) % m
+}
+
+# canonical: make (x,y) into (|x|,|y|) with |x| >= |y|
+function canonical(x: ptr<i64>, y: ptr<i64>) -> void {
+    let mut a: i64 = x[0]
+    let mut b: i64 = y[0]
+    if a < 0 { a = -a }
+    if b < 0 { b = -b }
+    if b > a {
+        let t: i64 = a
+        a = b
+        b = t
+    }
+    x[0] = a
+    y[0] = b
+}
+
+function encode_edge(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < b {
+        let t: i64 = a
+        a = b
+        b = t
+    }
+    return a * (LIMIT + 1) + b
+}
+
+function hash_key(key: i64) -> i64 {
+    let mut h: i64 = (key * 11400714819323198485) as i64
+    if h < 0 { h = -h }
+    return h & EDGE_HT_MASK
+}
+
+struct EdgeEntry {
+    key: i64,
+    count: i64,
+    sum: i64,
+    used: i8
+}
+
+function edge_find(edge_ht: ptr<EdgeEntry>, key: i64) -> i64 {
+    let mut h: i64 = hash_key(key)
+    while edge_ht[h].used != 0 {
+        if edge_ht[h].key == key { return h }
+        h = (h + 1) & EDGE_HT_MASK
+    }
+    return h
+}
+
+function edge_lookup(edge_ht: ptr<EdgeEntry>, key: i64) -> i64 {
+    let mut h: i64 = hash_key(key)
+    while edge_ht[h].used != 0 {
+        if edge_ht[h].key == key { return h }
+        h = (h + 1) & EDGE_HT_MASK
+    }
+    return -1
+}
+
+# parent_labels: find parent labels for a Gaussian integer vector
+function parent_labels(label: i64, x: i64, y: i64,
+                       vec_x: ptr<i64>, vec_y: ptr<i64>, vec_valid: ptr<i8>,
+                       parents: ptr<i64>, np: ptr<i32>) -> void {
+    np[0] = 0
+    if label == 2 {
+        parents[0] = 1
+        np[0] = 1
+        return
+    }
+    if y == 0 { return }
+
+    let beta: i64 = mod_inverse(y, x)
+    if beta < 0 { return }
+    let alpha: i64 = (1 - beta * y) / x
+
+    let q1x: i64 = if beta < 0 { -beta } else { beta }
+    let q1y: i64 = if alpha < 0 { -alpha } else { alpha }
+    let q2x: i64 = x - q1x
+    let q2y: i64 = y - q1y
+
+    let n1: i64 = q1x * q1x + q1y * q1y
+    let n2: i64 = q2x * q2x + q2y * q2y
+
+    if n1 <= LIMIT && vec_valid[n1] != 0 {
+        parents[np[0]] = n1
+        np[0] = np[0] + 1
+    }
+    if n2 <= LIMIT && vec_valid[n2] != 0 && n2 != n1 {
+        parents[np[0]] = n2
+        np[0] = np[0] + 1
+    }
+    # Sort descending
+    if np[0] == 2 && parents[0] < parents[1] {
+        let t: i64 = parents[0]
+        parents[0] = parents[1]
+        parents[1] = t
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p846_native())
+    # Vector storage as parallel arrays
+    let vec_x: ptr<i64> = calloc(LIMIT + 1, 8) as ptr<i64>
+    let vec_y: ptr<i64> = calloc(LIMIT + 1, 8) as ptr<i64>
+    let vec_valid: ptr<i8> = calloc(LIMIT + 1, 1) as ptr<i8>
+
+    # Square root lookup
+    let sq_root: ptr<i32> = calloc(LIMIT + 1, 4) as ptr<i32>
+
+    # Sieve
+    let is_prime: ptr<i8> = calloc(LIMIT + 1, 1) as ptr<i8>
+    memset(is_prime as ptr<void>, 1, LIMIT + 1)
+    is_prime[0] = 0
+    is_prime[1] = 0
+
+    vec_x[1] = 1; vec_y[1] = 0; vec_valid[1] = 1
+    vec_x[2] = 1; vec_y[2] = 1; vec_valid[2] = 1
+
+    # Build square root lookup
+    let mut i: i64 = 0
+    while i * i <= LIMIT {
+        sq_root[i * i] = i as i32
+        i = i + 1
+    }
+
+    # Sieve
+    let mut p: i64 = 2
+    while p * p <= LIMIT {
+        if is_prime[p] != 0 {
+            let mut m: i64 = p * p
+            while m <= LIMIT {
+                is_prime[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+
+    # For each prime p = 1 (mod 4), find base representation
+    p = 5
+    while p <= LIMIT {
+        if is_prime[p] == 0 || p % 4 != 1 {
+            p = p + 1
+            continue
+        }
+
+        let mut bx: i64 = 0
+        let mut by: i64 = 0
+        let mut x: i64 = 1
+        while x * x <= p {
+            let rem: i32 = (p - x * x) as i32
+            if rem >= 0 && (rem as i64) <= LIMIT && sq_root[rem as i64] != 0 {
+                bx = x
+                by = sq_root[rem as i64] as i64
+                canonical(&bx, &by)
+                break
+            }
+            x = x + 1
+        }
+        if bx == 0 {
+            p = p + 1
+            continue
+        }
+
+        let mut value: i64 = p
+        let mut cx: i64 = bx
+        let mut cy: i64 = by
+        while value <= LIMIT {
+            let ccx: i64 = cx
+            let ccy: i64 = cy
+            canonical(&ccx, &ccy)
+            vec_x[value] = ccx
+            vec_y[value] = ccy
+            vec_valid[value] = 1
+
+            let doubled: i64 = 2 * value
+            if doubled <= LIMIT {
+                let mut dx: i64 = ccx - ccy
+                let mut dy: i64 = ccx + ccy
+                canonical(&dx, &dy)
+                vec_x[doubled] = dx
+                vec_y[doubled] = dy
+                vec_valid[doubled] = 1
+            }
+
+            let nx: i64 = cx * bx - cy * by
+            let ny: i64 = cx * by + cy * bx
+            cx = nx
+            cy = ny
+            value = value * p
+        }
+        p = p + 1
+    }
+
+    # Edge hash map (EdgeEntry = 32 bytes with padding)
+    let edge_ht: ptr<EdgeEntry> = calloc(EDGE_HT_SIZE, 32) as ptr<EdgeEntry>
+
+    let mut total: i64 = 0
+
+    # Process labels in decreasing order
+    let mut label: i64 = LIMIT
+    while label >= 2 {
+        if vec_valid[label] == 0 {
+            label = label - 1
+            continue
+        }
+
+        let x: i64 = vec_x[label]
+        let y: i64 = vec_y[label]
+        let parents: ptr<i64> = calloc(2, 8) as ptr<i64>
+        let np_ptr: ptr<i32> = calloc(1, 4) as ptr<i32>
+
+        parent_labels(label, x, y, vec_x, vec_y, vec_valid, parents, np_ptr)
+        let np: i32 = np_ptr[0]
+
+        if np == 0 {
+            free(parents as ptr<void>)
+            free(np_ptr as ptr<void>)
+            label = label - 1
+            continue
+        }
+
+        let mut pi: i32 = 0
+        while pi < np {
+            let parent: i64 = parents[pi]
+            let key: i64 = encode_edge(label, parent)
+            let ei: i64 = edge_find(edge_ht, key)
+            let mut count: i64 = 0
+            let mut isum: i64 = 0
+            if edge_ht[ei].used != 0 {
+                count = edge_ht[ei].count
+                isum = edge_ht[ei].sum
+            }
+
+            total = total + count * (label + parent) + isum
+
+            if edge_ht[ei].used == 0 {
+                edge_ht[ei].used = 1
+                edge_ht[ei].key = key
+            }
+            edge_ht[ei].count = count + 1
+            edge_ht[ei].sum = isum
+            pi = pi + 1
+        }
+
+        if np == 2 {
+            let a: i64 = parents[0]
+            let b: i64 = parents[1]
+            let key_a: i64 = encode_edge(label, a)
+            let key_b: i64 = encode_edge(label, b)
+            let ea_i: i64 = edge_lookup(edge_ht, key_a)
+            let eb_i: i64 = edge_lookup(edge_ht, key_b)
+
+            if ea_i < 0 || eb_i < 0 {
+                free(parents as ptr<void>)
+                free(np_ptr as ptr<void>)
+                label = label - 1
+                continue
+            }
+
+            let count_a: i64 = edge_ht[ea_i].count
+            let sum_a: i64 = edge_ht[ea_i].sum
+            let count_b: i64 = edge_ht[eb_i].count
+            let sum_b: i64 = edge_ht[eb_i].sum
+
+            let merged_count: i64 = count_a * count_b
+            let merged_sum: i64 = merged_count * label + count_a * sum_b + count_b * sum_a
+
+            let lower_key: i64 = encode_edge(a, b)
+            let le_i: i64 = edge_find(edge_ht, lower_key)
+            let mut old_count: i64 = 0
+            let mut old_sum: i64 = 0
+            if edge_ht[le_i].used != 0 {
+                old_count = edge_ht[le_i].count
+                old_sum = edge_ht[le_i].sum
+            }
+            if edge_ht[le_i].used == 0 {
+                edge_ht[le_i].used = 1
+                edge_ht[le_i].key = lower_key
+            }
+            edge_ht[le_i].count = old_count + merged_count
+            edge_ht[le_i].sum = old_sum + merged_sum
+        }
+
+        free(parents as ptr<void>)
+        free(np_ptr as ptr<void>)
+        label = label - 1
+    }
+
+    printf("%lld\n", total)
+
+    free(vec_x as ptr<void>)
+    free(vec_y as ptr<void>)
+    free(vec_valid as ptr<void>)
+    free(sq_root as ptr<void>)
+    free(is_prime as ptr<void>)
+    free(edge_ht as ptr<void>)
     return 0
 }

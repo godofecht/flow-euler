@@ -1,11 +1,421 @@
 # Project Euler 851
 # SOP and POS - R_6(10000!) mod 1e9+7.
+# Ported from native C to pure Flow.
+
+import euler.nt { mod_pow }
 
 extern {
-    function p851_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const LIMIT: i64 = 10000
+
+# Sieve state
+let mut g_is_prime: ptr<i8> = null
+let mut g_primes: ptr<i32> = null
+let mut g_num_primes: i32 = 0
+
+# Prime exponents for factorial
+let mut g_prime_exps_p: ptr<i32> = null
+let mut g_prime_exps_e: ptr<i32> = null
+let mut g_num_exps: i32 = 0
+
+# Modular inverses
+let mut g_inv_table: ptr<i64> = null
+
+# sigma1 and tau arrays
+let mut g_sigma1: ptr<i64> = null
+let mut g_tau_arr: ptr<i64> = null
+
+# Eisenstein coefficients indexed by k=2,4,6,8,10,12
+let mut g_E_coeff: ptr<i64> = null
+
+# sigma values indexed by s=1,3,5,7,9,11
+let mut g_sig: ptr<i64> = null
+
+# Inverse constants
+let mut g_inv2: i64 = 0
+let mut g_inv5: i64 = 0
+let mut g_inv7: i64 = 0
+let mut g_inv24185: i64 = 0
+
+function mm(a: i64, b: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (MOD as i128)) as i64
+}
+
+function sieve() -> void {
+    g_is_prime = calloc(LIMIT + 1, 1)
+    let mut i: i32 = 0
+    while i <= LIMIT {
+        g_is_prime[i] = 1
+        i = i + 1
+    }
+    g_is_prime[0] = 0
+    g_is_prime[1] = 0
+    let mut p: i32 = 2
+    while p * p <= LIMIT {
+        if g_is_prime[p] != 0 {
+            let mut m: i32 = p * p
+            while m <= LIMIT {
+                g_is_prime[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    g_primes = calloc(2000, 4)
+    g_num_primes = 0
+    i = 2
+    while i <= LIMIT {
+        if g_is_prime[i] != 0 {
+            g_primes[g_num_primes] = i
+            g_num_primes = g_num_primes + 1
+        }
+        i = i + 1
+    }
+}
+
+function factorial_prime_exponents(n: i32) -> void {
+    g_num_exps = 0
+    let mut pi: i32 = 0
+    while pi < g_num_primes {
+        let p: i32 = g_primes[pi]
+        if p > n { break }
+        let e: i32 = 0
+        let mut t: i32 = n
+        while t > 0 {
+            t = t / p
+            e = e + t
+        }
+        if e != 0 {
+            g_prime_exps_p[g_num_exps] = p
+            g_prime_exps_e[g_num_exps] = e
+            g_num_exps = g_num_exps + 1
+        }
+        pi = pi + 1
+    }
+}
+
+function compute_inv_table(n: i32, mod: i64) -> void {
+    g_inv_table[1] = 1
+    let mut i: i32 = 2
+    while i <= n {
+        g_inv_table[i] = (mod - (mod / (i as i64)) * g_inv_table[mod % (i as i64)] % mod) % mod
+        i = i + 1
+    }
+}
+
+function sigma_power_from_exps(s: i64, mod: i64) -> i64 {
+    let mut res: i64 = 1
+    let mut i: i32 = 0
+    while i < g_num_exps {
+        let p: i32 = g_prime_exps_p[i]
+        let e: i32 = g_prime_exps_e[i]
+        let ps: i64 = mod_pow(p as i64, s, mod)
+        let term: i64 = 0
+        if ps == 1 {
+            term = ((e + 1) as i64) % mod
+        } else {
+            let num: i64 = (mod_pow(ps, (e + 1) as i64, mod) - 1 + mod) % mod
+            let den_inv: i64 = mod_pow((ps - 1 + mod) % mod, mod - 2, mod)
+            term = mm(num, den_inv)
+        }
+        res = mm(res, term)
+        i = i + 1
+    }
+    return res
+}
+
+function n_mod_from_exps(mod: i64) -> i64 {
+    let mut res: i64 = 1
+    let mut i: i32 = 0
+    while i < g_num_exps {
+        res = mm(res, mod_pow(g_prime_exps_p[i] as i64, g_prime_exps_e[i] as i64, mod))
+        i = i + 1
+    }
+    return res
+}
+
+function precompute_sigma1(n: i32) -> void {
+    let mut i: i32 = 0
+    while i <= n {
+        g_sigma1[i] = 0
+        i = i + 1
+    }
+    let mut d: i32 = 1
+    while d <= n {
+        let mut m: i32 = d
+        while m <= n {
+            g_sigma1[m] = g_sigma1[m] + (d as i64)
+            m = m + d
+        }
+        d = d + 1
+    }
+    i = 0
+    while i <= n {
+        g_sigma1[i] = g_sigma1[i] % MOD
+        i = i + 1
+    }
+}
+
+function precompute_tau(n: i32, mod: i64) -> void {
+    precompute_sigma1(n)
+    compute_inv_table(n, mod)
+
+    let mut i: i32 = 0
+    while i <= n {
+        g_tau_arr[i] = 0
+        i = i + 1
+    }
+    g_tau_arr[1] = 1
+
+    let mut k: i32 = 2
+    while k <= n {
+        let mut total: i64 = 0
+        let mut m: i32 = 1
+        while m < k {
+            total = (total + mm(g_sigma1[m], g_tau_arr[k - m])) % mod
+            m = m + 1
+        }
+        let val0: i64 = mm((MOD - 24) % mod, total)
+        g_tau_arr[k] = mm(val0, g_inv_table[k - 1])
+        k = k + 1
+    }
+}
+
+# 2x2 matrix multiply mod
+function mat_mul(a0: i64, a1: i64, a2: i64, a3: i64, b0: i64, b1: i64, b2: i64, b3: i64, mod: i64) -> i64 {
+    # We return R[0] only; caller needs R[1] too. Use globals.
+    let r0: i64 = (mm(a0, b0) + mm(a1, b2)) % mod
+    let r1: i64 = (mm(a0, b1) + mm(a1, b3)) % mod
+    let r2: i64 = (mm(a2, b0) + mm(a3, b2)) % mod
+    let r3: i64 = (mm(a2, b1) + mm(a3, b3)) % mod
+    g_mat_r0 = r0
+    g_mat_r1 = r1
+    g_mat_r2 = r2
+    g_mat_r3 = r3
+    return 0
+}
+
+let mut g_mat_r0: i64 = 0
+let mut g_mat_r1: i64 = 0
+let mut g_mat_r2: i64 = 0
+let mut g_mat_r3: i64 = 0
+
+# tau(p^e) mod mod using matrix power
+function tau_prime_power(p: i32, e: i32, tau_p: i64, mod: i64) -> i64 {
+    if e == 0 { return 1 }
+    if e == 1 { return tau_p % mod }
+
+    let p11: i64 = mod_pow(p as i64, 11, mod)
+    # M = {tau_p % mod, (mod - p11) % mod, 1, 0}
+    let mut m0: i64 = tau_p % mod
+    let mut m1: i64 = (mod - p11) % mod
+    let mut m2: i64 = 1
+    let mut m3: i64 = 0
+    # R = identity
+    let mut r0: i64 = 1
+    let mut r1: i64 = 0
+    let mut r2: i64 = 0
+    let mut r3: i64 = 1
+    let mut exp: i32 = e - 1
+    while exp > 0 {
+        if (exp & 1) == 1 {
+            mat_mul(r0, r1, r2, r3, m0, m1, m2, m3, mod)
+            r0 = g_mat_r0
+            r1 = g_mat_r1
+            r2 = g_mat_r2
+            r3 = g_mat_r3
+        }
+        mat_mul(m0, m1, m2, m3, m0, m1, m2, m3, mod)
+        m0 = g_mat_r0
+        m1 = g_mat_r1
+        m2 = g_mat_r2
+        m3 = g_mat_r3
+        exp = exp >> 1
+    }
+    return (mm(r0, tau_p % mod) + r1) % mod
+}
+
+function tau_from_exps(mod: i64) -> i64 {
+    let mut res: i64 = 1
+    let mut i: i32 = 0
+    while i < g_num_exps {
+        let p: i32 = g_prime_exps_p[i]
+        let e: i32 = g_prime_exps_e[i]
+        res = mm(res, tau_prime_power(p, e, g_tau_arr[p], mod))
+        i = i + 1
+    }
+    return res
+}
+
+function init_e_coeff(mod: i64) -> void {
+    let inv_691: i64 = mod_pow(691, mod - 2, mod)
+    g_E_coeff[2] = (mod - 24) % mod
+    g_E_coeff[4] = 240 % mod
+    g_E_coeff[6] = (mod - 504) % mod
+    g_E_coeff[8] = 480 % mod
+    g_E_coeff[10] = (mod - 264) % mod
+    g_E_coeff[12] = mm(65520 % mod, inv_691)
+}
+
+function build_sigma_data(mod: i64) -> void {
+    let mut s: i32 = 1
+    while s <= 11 {
+        g_sig[s] = sigma_power_from_exps(s as i64, mod)
+        s = s + 2
+    }
+}
+
+function coeff_Ek(k: i32, mod: i64) -> i64 {
+    if k == 2 { return mm(g_E_coeff[2], g_sig[1]) }
+    return mm(g_E_coeff[k], g_sig[k - 1])
+}
+
+# n_pows is ptr<i64> with indices 0..5
+function coeff_D_Ek(k: i32, r: i32, n_pows: ptr<i64>, mod: i64) -> i64 {
+    return mm(n_pows[r], coeff_Ek(k, mod))
+}
+
+function coeff_E2_pow(k: i32, n_pows: ptr<i64>, tau_n: i64, mod: i64) -> i64 {
+    if k == 1 { return coeff_Ek(2, mod) }
+
+    if k == 2 {
+        let t1: i64 = coeff_Ek(4, mod)
+        let t2: i64 = mm(12, coeff_D_Ek(2, 1, n_pows, mod))
+        return (t1 + t2) % mod
+    }
+
+    if k == 3 {
+        let t1: i64 = coeff_Ek(6, mod)
+        let t2: i64 = mm(9, coeff_D_Ek(4, 1, n_pows, mod))
+        let t3: i64 = mm(72, coeff_D_Ek(2, 2, n_pows, mod))
+        return (t1 + t2 + t3) % mod
+    }
+
+    if k == 4 {
+        let c216_5: i64 = mm(216, g_inv5)
+        let t1: i64 = coeff_Ek(8, mod)
+        let t2: i64 = mm(8, coeff_D_Ek(6, 1, n_pows, mod))
+        let t3: i64 = mm(c216_5, coeff_D_Ek(4, 2, n_pows, mod))
+        let t4: i64 = mm(288, coeff_D_Ek(2, 3, n_pows, mod))
+        return (t1 + t2 + t3 + t4) % mod
+    }
+
+    if k == 5 {
+        let c15_2: i64 = mm(15, g_inv2)
+        let c240_7: i64 = mm(240, g_inv7)
+        let t1: i64 = coeff_Ek(10, mod)
+        let t2: i64 = mm(c15_2, coeff_D_Ek(8, 1, n_pows, mod))
+        let t3: i64 = mm(c240_7, coeff_D_Ek(6, 2, n_pows, mod))
+        let t4: i64 = mm(144, coeff_D_Ek(4, 3, n_pows, mod))
+        let t5: i64 = mm(864, coeff_D_Ek(2, 4, n_pows, mod))
+        return (t1 + t2 + t3 + t4 + t5) % mod
+    }
+
+    # k == 6
+    let c36_5: i64 = mm(36, g_inv5)
+    let c720_7: i64 = mm(720, g_inv7)
+    let c2592_7: i64 = mm(2592, g_inv7)
+    let c10368_5: i64 = mm(10368, g_inv5)
+    let cDelta: i64 = mm((mod - 4608) % mod, g_inv24185)
+    let t1: i64 = coeff_Ek(12, mod)
+    let t2: i64 = mm(cDelta, tau_n % mod)
+    let t3: i64 = mm(c36_5, coeff_D_Ek(10, 1, n_pows, mod))
+    let t4: i64 = mm(30, coeff_D_Ek(8, 2, n_pows, mod))
+    let t5: i64 = mm(c720_7, coeff_D_Ek(6, 3, n_pows, mod))
+    let t6: i64 = mm(c2592_7, coeff_D_Ek(4, 4, n_pows, mod))
+    let t7: i64 = mm(c10368_5, coeff_D_Ek(2, 5, n_pows, mod))
+    return (t1 + t2 + t3 + t4 + t5 + t6 + t7) % mod
+}
+
+function comb_small(n: i32, k: i32) -> i64 {
+    if k < 0 || k > n { return 0 }
+    let kk: i32 = k
+    if k > n - k { return comb_small(n, n - k) }
+    let mut num: i64 = 1
+    let mut den: i64 = 1
+    let mut i: i32 = 1
+    while i <= kk {
+        num = num * ((n - (kk - i)) as i64)
+        den = den * (i as i64)
+        i = i + 1
+    }
+    return num / den
+}
+
+function R_dim_at_n(dim: i32, n_pows: ptr<i64>, tau_n: i64, mod: i64) -> i64 {
+    let inv12: i64 = mod_pow(12, mod - 2, mod)
+    let scale: i64 = mod_pow(inv12, dim as i64, mod)
+
+    let mut s: i64 = 0
+    let mut k: i32 = 1
+    while k <= dim {
+        let ck: i64 = comb_small(dim, k)
+        let term: i64 = mm(ck, coeff_E2_pow(k, n_pows, tau_n, mod))
+        if k % 2 == 1 {
+            s = (s - term % mod + mod) % mod
+        } else {
+            s = (s + term) % mod
+        }
+        k = k + 1
+    }
+    return mm(s, scale)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p851_native())
+    let mod: i64 = MOD
+
+    # Allocate global arrays
+    g_prime_exps_p = calloc(2000, 4)
+    g_prime_exps_e = calloc(2000, 4)
+    g_inv_table = calloc(LIMIT + 1, 8)
+    g_sigma1 = calloc(LIMIT + 1, 8)
+    g_tau_arr = calloc(LIMIT + 1, 8)
+    g_E_coeff = calloc(13, 8)
+    g_sig = calloc(13, 8)
+
+    sieve()
+
+    # Initialize constants
+    g_inv2 = (mod + 1) / 2
+    g_inv5 = mod_pow(5, mod - 2, mod)
+    g_inv7 = mod_pow(7, mod - 2, mod)
+    g_inv24185 = mod_pow(24185, mod - 2, mod)
+    init_e_coeff(mod)
+
+    # Precompute tau(p) for primes p <= 10000
+    precompute_tau(LIMIT as i32, mod)
+
+    # Main computation: R_6(10000!) mod MOD
+    factorial_prime_exponents(LIMIT as i32)
+    build_sigma_data(mod)
+
+    let nmod: i64 = n_mod_from_exps(mod)
+    let n_pows: ptr<i64> = calloc(6, 8)
+    n_pows[0] = 1
+    let mut i: i32 = 1
+    while i <= 5 {
+        n_pows[i] = mm(n_pows[i - 1], nmod)
+        i = i + 1
+    }
+
+    let tau_fact: i64 = tau_from_exps(mod)
+
+    let result: i64 = R_dim_at_n(6, n_pows, tau_fact, mod)
+    printf("%lld\n", result)
+
+    free(n_pows)
+    free(g_is_prime)
+    free(g_primes)
+    free(g_prime_exps_p)
+    free(g_prime_exps_e)
+    free(g_inv_table)
+    free(g_sigma1)
+    free(g_tau_arr)
+    free(g_E_coeff)
+    free(g_sig)
     return 0
 }

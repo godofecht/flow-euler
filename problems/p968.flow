@@ -1,11 +1,506 @@
 # Project Euler 968
 # Counting via determinants and modular arithmetic.
+# Ported from native C to pure Flow.
+
+import euler.nt { mod_pow }
 
 extern {
-    function p968_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+const MOD: i64 = 1000000007
+
+# h[15][5] table, flat
+let mut h_data: array<i64, 75> = [
+    1, 1, 0, 0, 0,
+    1, 0, 1, 0, 0,
+    1, 0, 0, 1, 0,
+    1, 0, 0, 0, 1,
+    0, 1, 1, 0, 0,
+    0, 1, 0, 1, 0,
+    0, 1, 0, 0, 1,
+    0, 0, 1, 1, 0,
+    0, 0, 1, 0, 1,
+    0, 0, 0, 1, 1,
+    -1, 0, 0, 0, 0,
+    0, -1, 0, 0, 0,
+    0, 0, -1, 0, 0,
+    0, 0, 0, -1, 0,
+    0, 0, 0, 0, -1
+]
+
+function h_get(i: i64, j: i64) -> i64 {
+    return h_data[i * 5 + j]
+}
+
+function modinv(x: i64) -> i64 {
+    return mod_pow(x % MOD, MOD - 2, MOD)
+}
+
+# Determinant of n x n matrix (n <= 5), integer arithmetic
+# M is flat array M[i*5+j]
+function det_matrix(n: i64, M: ptr<i64>) -> i64 {
+    if n == 1 { return M[0] }
+    if n == 2 { return M[0] * M[6] - M[1] * M[5] }
+    let mut s: i64 = 0
+    let sub: ptr<i64> = calloc(25, 8) as ptr<i64>
+    let mut j: i64 = 0
+    while j < n {
+        if M[j] == 0 {
+            j = j + 1
+            continue
+        }
+        let mut i: i64 = 1
+        while i < n {
+            let mut col: i64 = 0
+            let mut k: i64 = 0
+            while k < n {
+                if k == j {
+                    k = k + 1
+                    continue
+                }
+                sub[(i - 1) * 5 + col] = M[i * 5 + k]
+                col = col + 1
+                k = k + 1
+            }
+            i = i + 1
+        }
+        let cof: i64 = det_matrix(n - 1, sub)
+        if (j & 1) != 0 {
+            s = s - M[j] * cof
+        } else {
+            s = s + M[j] * cof
+        }
+        j = j + 1
+    }
+    free(sub as ptr<void>)
+    return s
+}
+
+# Adjugate of n x n matrix
+function adj_matrix(n: i64, M: ptr<i64>, adj: ptr<i64>) -> void {
+    let sub: ptr<i64> = calloc(25, 8) as ptr<i64>
+    let mut i: i64 = 0
+    while i < n {
+        let mut j: i64 = 0
+        while j < n {
+            let mut row: i64 = 0
+            let mut k: i64 = 0
+            while k < n {
+                if k == j {
+                    k = k + 1
+                    continue
+                }
+                let mut col: i64 = 0
+                let mut l: i64 = 0
+                while l < n {
+                    if l == i {
+                        l = l + 1
+                        continue
+                    }
+                    sub[row * 5 + col] = M[k * 5 + l]
+                    col = col + 1
+                    l = l + 1
+                }
+                row = row + 1
+                k = k + 1
+            }
+            let cof: i64 = det_matrix(n - 1, sub)
+            if ((i + j) & 1) != 0 {
+                adj[i * 5 + j] = -cof
+            } else {
+                adj[i * 5 + j] = cof
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    free(sub as ptr<void>)
+}
+
+# w(v): product of primes^v[j] mod m, handling negative exponents
+function w_func(v: ptr<i64>) -> i64 {
+    let primes: array<i64, 5> = [2, 3, 5, 7, 11]
+    let mut z: i64 = 1
+    let mut j: i64 = 0
+    while j < 5 {
+        let e: i64 = v[j]
+        if e >= 0 {
+            z = z * mod_pow(primes[j], e, MOD) % MOD
+        } else {
+            let inv_base: i64 = modinv(mod_pow(primes[j], -e, MOD))
+            z = z * inv_base % MOD
+        }
+        j = j + 1
+    }
+    return z
+}
+
+# f(v): product of primes^v[j] mod m, return 0 if any exponent < 0
+function f_func(v: ptr<i64>) -> i64 {
+    let primes: array<i64, 5> = [2, 3, 5, 7, 11]
+    let mut j: i64 = 0
+    while j < 5 {
+        if v[j] < 0 { return 0 }
+        j = j + 1
+    }
+    let mut z: i64 = 1
+    j = 0
+    while j < 5 {
+        z = z * mod_pow(primes[j], v[j], MOD) % MOD
+        j = j + 1
+    }
+    return z
+}
+
+# Combo storage: flat arrays
+# I[combo*5 + i], det_val[combo], adj[combo*25 + i*5+j], r[combo*25 + i*5+j], den[combo]
+let mut combo_I: ptr<i32> = null
+let mut combo_det: ptr<i64> = null
+let mut combo_adj: ptr<i64> = null
+let mut combo_r: ptr<i64> = null
+let mut combo_den: ptr<i64> = null
+let mut num_combos: i64 = 0
+
+function precompute_combos() -> void {
+    combo_I = calloc(3003 * 5, 4) as ptr<i32>
+    combo_det = calloc(3003, 8) as ptr<i64>
+    combo_adj = calloc(3003 * 25, 8) as ptr<i64>
+    combo_r = calloc(3003 * 25, 8) as ptr<i64>
+    combo_den = calloc(3003, 8) as ptr<i64>
+    num_combos = 0
+
+    let M: ptr<i64> = calloc(25, 8) as ptr<i64>
+    let adj: ptr<i64> = calloc(25, 8) as ptr<i64>
+    let r: ptr<i64> = calloc(25, 8) as ptr<i64>
+    let v: ptr<i64> = calloc(5, 8) as ptr<i64>
+
+    let mut a: i64 = 0
+    while a < 15 {
+        let mut b: i64 = a + 1
+        while b < 15 {
+            let mut c: i64 = b + 1
+            while c < 15 {
+                let mut d: i64 = c + 1
+                while d < 15 {
+                    let mut e: i64 = d + 1
+                    while e < 15 {
+                        let idx: array<i64, 5> = [a, b, c, d, e]
+                        let mut i: i64 = 0
+                        while i < 5 {
+                            let mut j: i64 = 0
+                            while j < 5 {
+                                M[i * 5 + j] = h_get(idx[i], j)
+                                j = j + 1
+                            }
+                            i = i + 1
+                        }
+
+                        let det: i64 = det_matrix(5, M)
+                        if det != 1 && det != -1 && det != 2 && det != -2 {
+                            e = e + 1
+                            continue
+                        }
+
+                        adj_matrix(5, M, adj)
+
+                        # Build r: columns of adj, possibly negated
+                        let mut i2: i64 = 0
+                        while i2 < 5 {
+                            let mut j2: i64 = 0
+                            while j2 < 5 {
+                                v[j2] = adj[j2 * 5 + i2]
+                                j2 = j2 + 1
+                            }
+                            let mut dot: i64 = 0
+                            let mut k: i64 = 0
+                            while k < 5 {
+                                dot = dot + M[i2 * 5 + k] * v[k]
+                                k = k + 1
+                            }
+                            if dot > 0 {
+                                let mut j3: i64 = 0
+                                while j3 < 5 {
+                                    r[i2 * 5 + j3] = -v[j3]
+                                    j3 = j3 + 1
+                                }
+                            } else {
+                                let mut j3: i64 = 0
+                                while j3 < 5 {
+                                    r[i2 * 5 + j3] = v[j3]
+                                    j3 = j3 + 1
+                                }
+                            }
+                            i2 = i2 + 1
+                        }
+
+                        # den = product of (1 - w(r[i]))^(-1) mod m
+                        let mut den: i64 = 1
+                        let mut i3: i64 = 0
+                        while i3 < 5 {
+                            let mut j4: i64 = 0
+                            while j4 < 5 {
+                                v[j4] = r[i3 * 5 + j4]
+                                j4 = j4 + 1
+                            }
+                            let wi: i64 = w_func(v)
+                            let term: i64 = (1 - wi) % MOD
+                            let term2: i64 = if term < 0 { term + MOD } else { term }
+                            den = den * modinv(term2) % MOD
+                            i3 = i3 + 1
+                        }
+
+                        let ci: i64 = num_combos
+                        let mut i4: i64 = 0
+                        while i4 < 5 {
+                            combo_I[ci * 5 + i4] = idx[i4] as i32
+                            i4 = i4 + 1
+                        }
+                        combo_det[ci] = det
+                        let mut i5: i64 = 0
+                        while i5 < 25 {
+                            combo_adj[ci * 25 + i5] = adj[i5]
+                            combo_r[ci * 25 + i5] = r[i5]
+                            i5 = i5 + 1
+                        }
+                        combo_den[ci] = den
+                        num_combos = num_combos + 1
+
+                        e = e + 1
+                    }
+                    d = d + 1
+                }
+                c = c + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    free(M as ptr<void>)
+    free(adj as ptr<void>)
+    free(r as ptr<void>)
+    free(v as ptr<void>)
+}
+
+# P function: compute P(L) where L has 10 values
+function P_func(L: ptr<i64>, s_flag: i64) -> i64 {
+    let b: ptr<i64> = calloc(15, 8) as ptr<i64>
+    let mut i: i64 = 0
+    while i < 10 {
+        b[i] = L[i]
+        i = i + 1
+    }
+    while i < 15 {
+        b[i] = 0
+        i = i + 1
+    }
+
+    let bn: ptr<i64> = calloc(5, 8) as ptr<i64>
+    let xn: ptr<i64> = calloc(5, 8) as ptr<i64>
+    let exp: ptr<i64> = calloc(5, 8) as ptr<i64>
+    let T: ptr<i64> = calloc(5, 8) as ptr<i64>
+    let dr: ptr<i64> = calloc(25, 8) as ptr<i64>
+
+    let mut t: i64 = 0
+    let mut ci: i64 = 0
+    while ci < num_combos {
+        let det: i64 = combo_det[ci]
+
+        let mut i2: i64 = 0
+        while i2 < 5 {
+            bn[i2] = b[combo_I[ci * 5 + i2] as i64]
+            i2 = i2 + 1
+        }
+
+        let mut i3: i64 = 0
+        while i3 < 5 {
+            let mut sum: i64 = 0
+            let mut j: i64 = 0
+            while j < 5 {
+                sum = sum + combo_adj[ci * 25 + i3 * 5 + j] * bn[j]
+                j = j + 1
+            }
+            xn[i3] = sum
+            i3 = i3 + 1
+        }
+
+        let mut ok: i64 = 1
+        let mut eq: i64 = 0
+        if det > 0 {
+            let mut idx: i64 = 0
+            while idx < 15 && ok != 0 {
+                let mut v: i64 = 0
+                let mut j: i64 = 0
+                while j < 5 {
+                    v = v + h_get(idx, j) * xn[j]
+                    j = j + 1
+                }
+                let u: i64 = b[idx] * det
+                if v > u {
+                    ok = 0
+                } else {
+                    if v == u { eq = eq + 1 }
+                }
+                idx = idx + 1
+            }
+        } else {
+            let mut idx: i64 = 0
+            while idx < 15 && ok != 0 {
+                let mut v: i64 = 0
+                let mut j: i64 = 0
+                while j < 5 {
+                    v = v + h_get(idx, j) * xn[j]
+                    j = j + 1
+                }
+                let u: i64 = b[idx] * det
+                if v < u {
+                    ok = 0
+                } else {
+                    if v == u { eq = eq + 1 }
+                }
+                idx = idx + 1
+            }
+        }
+
+        if ok == 0 {
+            ci = ci + 1
+            continue
+        }
+        if s_flag != 0 && eq != 5 {
+            ci = ci + 1
+            continue
+        }
+
+        let da: i64 = if det < 0 { -det } else { det }
+        if da == 1 {
+            let mut i4: i64 = 0
+            while i4 < 5 {
+                exp[i4] = xn[i4] / det
+                i4 = i4 + 1
+            }
+            t = (t + f_func(exp) * combo_den[ci]) % MOD
+        } else {
+            # da == 2
+            let mut i5: i64 = 0
+            while i5 < 5 {
+                let mut j2: i64 = 0
+                while j2 < 5 {
+                    dr[i5 * 5 + j2] = det * combo_r[ci * 25 + i5 * 5 + j2]
+                    j2 = j2 + 1
+                }
+                i5 = i5 + 1
+            }
+
+            let tw: i64 = da * 2
+            let mut num: i64 = 0
+            let mut mask: i64 = 0
+            while mask < 32 {
+                let mut j3: i64 = 0
+                while j3 < 5 {
+                    T[j3] = 2 * xn[j3]
+                    j3 = j3 + 1
+                }
+                let mut i6: i64 = 0
+                while i6 < 5 {
+                    if (mask & (1 << i6)) != 0 {
+                        let mut j4: i64 = 0
+                        while j4 < 5 {
+                            T[j4] = T[j4] + dr[i6 * 5 + j4]
+                            j4 = j4 + 1
+                        }
+                    }
+                    i6 = i6 + 1
+                }
+                let mut valid: i64 = 1
+                let mut j5: i64 = 0
+                while j5 < 5 {
+                    if T[j5] % tw != 0 {
+                        valid = 0
+                        break
+                    }
+                    j5 = j5 + 1
+                }
+                if valid != 0 {
+                    let mut j6: i64 = 0
+                    while j6 < 5 {
+                        exp[j6] = T[j6] / (2 * det)
+                        j6 = j6 + 1
+                    }
+                    let mut all_ok: i64 = 1
+                    let mut row: i64 = 0
+                    while row < 15 && all_ok != 0 {
+                        let mut v2: i64 = 0
+                        let mut k: i64 = 0
+                        while k < 5 {
+                            v2 = v2 + h_get(row, k) * exp[k]
+                            k = k + 1
+                        }
+                        if v2 > b[row] {
+                            all_ok = 0
+                        }
+                        row = row + 1
+                    }
+                    if all_ok != 0 {
+                        num = (num + f_func(exp)) % MOD
+                    }
+                }
+                mask = mask + 1
+            }
+            t = (t + num * combo_den[ci]) % MOD
+        }
+        ci = ci + 1
+    }
+
+    free(b as ptr<void>)
+    free(bn as ptr<void>)
+    free(xn as ptr<void>)
+    free(exp as ptr<void>)
+    free(T as ptr<void>)
+    free(dr as ptr<void>)
+    return t
+}
+
+function B_sequence(n: i64, a: ptr<i64>) -> void {
+    a[0] = 1
+    a[1] = 7
+    let mut i: i64 = 2
+    while i < n {
+        a[i] = (7 * a[i - 1] + a[i - 2] * a[i - 2]) % MOD
+        i = i + 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p968_native())
+    precompute_combos()
+
+    let n: i64 = 100
+    let A: ptr<i64> = calloc(1005, 8) as ptr<i64>
+    B_sequence(10 * n + 5, A)
+
+    let group: ptr<i64> = calloc(10, 8) as ptr<i64>
+    let mut total: i64 = 0
+    let mut i: i64 = 0
+    while i < n {
+        let mut j: i64 = 0
+        while j < 10 {
+            group[j] = A[10 * i + j]
+            j = j + 1
+        }
+        total = (total + P_func(group, 1)) % MOD
+        i = i + 1
+    }
+
+    printf("%lld\n", total)
+
+    free(A as ptr<void>)
+    free(group as ptr<void>)
+    free(combo_I as ptr<void>)
+    free(combo_det as ptr<void>)
+    free(combo_adj as ptr<void>)
+    free(combo_r as ptr<void>)
+    free(combo_den as ptr<void>)
     return 0
 }

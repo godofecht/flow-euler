@@ -2,10 +2,11 @@
 # Square + 1 = Squarefree: count squarefree x^2+1 for 1<=x<=n.
 # Ported from native C to pure Flow.
 
+import euler.nt { isqrt }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-    function sqrt(x: f64) -> f64
 }
 
 const N_VAL: i64 = 123567101113
@@ -47,6 +48,24 @@ function mod_pow_u32(a0: i32, e0: i64, p: i32) -> i32 {
     return r as i32
 }
 
+# Modular inverse of m mod p2 using extended GCD with i128
+function mod_inv_i128(m: i64, p2: i64) -> i64 {
+    let mut old_r: i128 = (m as i128) % (p2 as i128)
+    let mut r: i128 = p2 as i128
+    let mut old_s: i128 = 1
+    let mut s: i128 = 0
+    while r != 0 {
+        let q: i128 = old_r / r
+        let tmp: i128 = old_r - q * r
+        old_r = r
+        r = tmp
+        let tmp2: i128 = old_s - q * s
+        old_s = s
+        s = tmp2
+    }
+    return ((old_s % (p2 as i128) + (p2 as i128)) % (p2 as i128)) as i64
+}
+
 function primes_1mod4_upto(limit: i64) -> ptr<i32> {
     if limit < 5 { return null }
     let size: i32 = (limit / 2 + 1) as i32
@@ -57,7 +76,7 @@ function primes_1mod4_upto(limit: i64) -> ptr<i32> {
         i = i + 1
     }
     sieve[0] = 0
-    let r: i32 = sqrt(limit as f64) as i32
+    let r: i32 = isqrt(limit) as i32
     let mut p: i32 = 3
     while p <= r {
         if sieve[p / 2] != 0 {
@@ -110,33 +129,11 @@ function roots_minus_one_mod_p2(p: i32) -> void {
 }
 
 function crt_combine(out: ptr<i64>, residues: ptr<i64>, len: i32, m: i64, a1: i64, a2: i64, p2: i64) -> void {
-    # Extended GCD for inverse of m mod p2
-    let mut inv: i64 = 0
-    {
-        let mut aw: i128 = (m as i128) % (p2 as i128)
-        let mut bw: i128 = p2 as i128
-        let mut old_r: i128 = aw
-        let mut r: i128 = bw
-        let mut old_s: i128 = 1
-        let mut s: i128 = 0
-        while r != 0 {
-            let q: i128 = old_r / r
-            let tmp: i128 = old_r - q * r
-            old_r = r
-            r = tmp
-            let tmp2: i128 = old_s - q * s
-            old_s = s
-            s = tmp2
-        }
-        inv = ((old_s % (p2 as i128) + (p2 as i128)) % (p2 as i128)) as i64
-    }
+    let inv: i64 = mod_inv_i128(m, p2)
     let mut i: i32 = 0
     while i < len {
         let r: i64 = residues[i]
         let r_mod: i64 = r % p2
-        if r_mod < 0 {
-            # r could be negative? No, residues are non-negative
-        }
         let diff1: i64 = (a1 + p2 - r_mod) % p2
         let t1: i64 = ((diff1 as i128) * (inv as i128) % (p2 as i128)) as i64
         out[2 * i] = (r + m * t1) as i64
@@ -229,7 +226,7 @@ function direct_mobius_sum(n: i64, D: i64) -> i64 {
 }
 
 function negative_pell_fundamental(D: i64, x_limit: i64) -> i32 {
-    let a0: i64 = sqrt(D as f64) as i64
+    let a0: i64 = isqrt(D)
     if a0 * a0 == D { return 0 }
 
     let mut m: i64 = 0
@@ -310,7 +307,7 @@ function build_primes_for_factoring(limit: i64) -> void {
         i = i + 1
     }
     sieve[0] = 0
-    let r: i32 = sqrt(limit as f64) as i32
+    let r: i32 = isqrt(limit) as i32
     let mut p: i32 = 3
     while p <= r {
         if sieve[p / 2] != 0 {
@@ -399,7 +396,7 @@ function correction_via_pell(n: i64, D: i64) -> i64 {
 
     linear_sieve_kmax(Kmax)
 
-    let isqrt_n: i64 = sqrt(n as f64) as i64
+    let isqrt_n: i64 = isqrt(n)
     build_primes_for_factoring(isqrt_n + 1)
 
     let mut corr: i64 = 0

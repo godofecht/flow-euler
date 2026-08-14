@@ -1,12 +1,470 @@
 # Project Euler 621
 # Sum of three triangular numbers: G(17526 * 10^9).
-# Native C helper for class number computation.
+# G(n) = r_3(8n+3) / 8
+# Uses class number formula: G(n) = 3 * h(D) * S / w_div2
+# where D = -n0, N = n0 * f^2, S = sum_{d|f} mu(d)*(D/d)*sigma(f/d)
+
+import euler.nt { gcd, isqrt, mod_pow, is_prime }
 
 extern {
-    function p621_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+}
+
+function mul_mod_ll(a: i64, b: i64, m: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (m as i128)) as i64
+}
+
+function pow_mod_ll(a0: i64, e0: i64, m: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = a0 % m
+    let mut e: i64 = e0
+    while e > 0 {
+        if e % 2 == 1 { r = mul_mod_ll(r, b, m) }
+        b = mul_mod_ll(b, b, m)
+        e = e / 2
+    }
+    return r
+}
+
+# Miller-Rabin (deterministic for 64-bit)
+function is_prime_ll(n: i64) -> bool {
+    if n < 2 { return false }
+    let small: array<i64, 11> = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 37]
+    for i in 0..11 {
+        if n == small[i] { return true }
+        if n % small[i] == 0 { return false }
+    }
+    let mut d: i64 = n - 1
+    let mut s: i32 = 0
+    while d % 2 == 0 { d = d / 2; s = s + 1 }
+    let bases: array<i64, 7> = [2, 3, 5, 7, 11, 13, 17]
+    for i in 0..7 {
+        let a: i64 = bases[i]
+        if a % n == 0 { continue }
+        let mut x: i64 = pow_mod_ll(a, d, n)
+        if x == 1 || x == n - 1 { continue }
+        let mut found: bool = false
+        for j in 0..(s - 1) {
+            x = mul_mod_ll(x, x, n)
+            if x == n - 1 { found = true; break }
+        }
+        if !found { return false }
+    }
+    return true
+}
+
+# Pollard's rho
+function pollard_rho(n: i64) -> i64 {
+    if n % 2 == 0 { return 2 }
+    if n % 3 == 0 { return 3 }
+    if is_prime_ll(n) { return n }
+    let mut c: i64 = 1
+    let mut x: i64 = 2
+    let mut y: i64 = 2
+    let mut d: i64 = 1
+    while d == 1 {
+        x = (mul_mod_ll(x, x, n) + c) % n
+        y = (mul_mod_ll(y, y, n) + c) % n
+        y = (mul_mod_ll(y, y, n) + c) % n
+        let diff: i64 = if x > y { x - y } else { y - x }
+        d = gcd(diff, n)
+    }
+    if d == n {
+        c = 2
+        while c < 100 {
+            x = 2; y = 2; d = 1
+            while d == 1 {
+                x = (mul_mod_ll(x, x, n) + c) % n
+                y = (mul_mod_ll(y, y, n) + c) % n
+                y = (mul_mod_ll(y, y, n) + c) % n
+                let diff: i64 = if x > y { x - y } else { y - x }
+                d = gcd(diff, n)
+            }
+            if d != n { return d }
+            c = c + 1
+        }
+    }
+    return d
+}
+
+# Factorize n into primes[] and exps[]
+function factorize_ll(n0: i64, primes: ptr<i64>, exps: ptr<i32>) -> i32 {
+    let mut n: i64 = n0
+    let mut cnt: i32 = 0
+    while n > 1 {
+        if is_prime_ll(n) {
+            let mut found: bool = false
+            for i in 0..cnt {
+                if primes[i] == n { exps[i] = exps[i] + 1; found = true; break }
+            }
+            if !found {
+                primes[cnt] = n
+                exps[cnt] = 1
+                cnt = cnt + 1
+            }
+            break
+        }
+        let mut d: i64 = pollard_rho(n)
+        while !is_prime_ll(d) { d = pollard_rho(d) }
+        let mut found: bool = false
+        for i in 0..cnt {
+            if primes[i] == d { exps[i] = exps[i] + 1; found = true; break }
+        }
+        if !found {
+            primes[cnt] = d
+            exps[cnt] = 1
+            cnt = cnt + 1
+        }
+        n = n / d
+    }
+    return cnt
+}
+
+# Legendre symbol (a/p) for odd prime p
+function legendre(a0: i64, p: i64) -> i32 {
+    let a: i64 = a0 % p
+    let a2: i64 = if a < 0 { a + p } else { a }
+    if a2 == 0 { return 0 }
+    let t: i64 = pow_mod_ll(a2, (p - 1) / 2, p)
+    if t == p - 1 { return -1 }
+    return 1
+}
+
+# Tonelli-Shanks: sqrt of n mod p (odd prime)
+function tonelli_shanks2(n0: i64, p: i64) -> i64 {
+    let n: i64 = n0 % p
+    let n2: i64 = if n < 0 { n + p } else { n }
+    if n2 == 0 { return 0 }
+    if legendre(n2, p) != 1 { return -1 }
+    if p % 4 == 3 { return pow_mod_ll(n2, (p + 1) / 4, p) }
+
+    let mut q: i64 = p - 1
+    let mut s: i32 = 0
+    while q % 2 == 0 { q = q / 2; s = s + 1 }
+
+    let mut z: i64 = 2
+    while legendre(z, p) != -1 { z = z + 1 }
+
+    let mut c: i64 = pow_mod_ll(z, q, p)
+    let mut r: i64 = pow_mod_ll(n2, (q + 1) / 2, p)
+    let mut t: i64 = pow_mod_ll(n2, q, p)
+    let mut m: i32 = s
+
+    while t != 1 {
+        let mut i: i32 = 1
+        let mut t2: i64 = mul_mod_ll(t, t, p)
+        while i < m && t2 != 1 {
+            t2 = mul_mod_ll(t2, t2, p)
+            i = i + 1
+        }
+        let b: i64 = pow_mod_ll(c, (1 as i64) << (m - i - 1), p)
+        r = mul_mod_ll(r, b, p)
+        t = mul_mod_ll(mul_mod_ll(t, b, p), b, p)
+        c = mul_mod_ll(b, b, p)
+        m = i
+    }
+    return r
+}
+
+# Hensel lift: lift root r mod p to root mod p^e
+function hensel_lift(n0: i64, p: i64, e: i32, r0: i64) -> i64 {
+    let mut pe: i64 = p
+    let mut r_mod: i64 = r0 % p
+    let mut pe_final: i64 = 1
+    for i in 0..e { pe_final = pe_final * p }
+    let mut n: i64 = n0 % pe_final
+    if n < 0 { n = n + pe_final }
+    let mut k: i32 = 1
+    while k < e {
+        let diff: i64 = r_mod * r_mod - n
+        let mut q: i64 = diff / pe
+        if diff % pe != 0 && ((diff < 0) != (pe < 0)) { q = q - 1 }
+        let mut rhs: i64 = q % p
+        if rhs < 0 { rhs = rhs + p }
+        let inv: i64 = pow_mod_ll((2 * r_mod) % p, p - 2, p)
+        let t: i64 = (p - rhs) * inv % p
+        r_mod = r_mod + t * pe
+        pe = pe * p
+        r_mod = r_mod % pe
+        k = k + 1
+    }
+    return r_mod
+}
+
+# Roots of x^2 = n (mod p^e) for odd prime p
+# Returns number of roots, fills roots[]
+function roots_mod_pe(n0: i64, p: i64, e: i32, roots: ptr<i64>) -> i32 {
+    let mut pe: i64 = 1
+    for i in 0..e { pe = pe * p }
+    let mut n: i64 = n0 % pe
+    if n < 0 { n = n + pe }
+
+    if n % p == 0 {
+        if n == 0 {
+            let mut step: i64 = 1
+            for i in 0..((e + 1) / 2) { step = step * p }
+            let mut cnt: i32 = 0
+            let mut x: i64 = 0
+            while x < pe {
+                roots[cnt] = x
+                cnt = cnt + 1
+                x = x + step
+            }
+            return cnt
+        }
+        if e == 1 { roots[0] = 0; return 1 }
+        return 0
+    }
+
+    let r: i64 = tonelli_shanks2(n, p)
+    if r == -1 { return 0 }
+    let mut r2: i64 = r
+    if e > 1 {
+        r2 = hensel_lift(n, p, e, r)
+    }
+    let r2b: i64 = pe - r2
+    if r2b == r2 { roots[0] = r2; return 1 }
+    roots[0] = r2
+    roots[1] = r2b
+    return 2
+}
+
+# Extended Euclidean algorithm
+function ext_gcd(a0: i64, b0: i64, x: ptr<i64>, y: ptr<i64>) -> i64 {
+    if b0 == 0 { x[0] = 1; y[0] = 0; return a0 }
+    let x1: ptr<i64> = calloc(1, 8) as ptr<i64>
+    let y1: ptr<i64> = calloc(1, 8) as ptr<i64>
+    let g: i64 = ext_gcd(b0, a0 % b0, x1, y1)
+    x[0] = y1[0]
+    y[0] = x1[0] - (a0 / b0) * y1[0]
+    free(x1 as ptr<void>)
+    free(y1 as ptr<void>)
+    return g
+}
+
+# Modular inverse of a mod m
+function mod_inv_general(a0: i64, m: i64) -> i64 {
+    let x: ptr<i64> = calloc(1, 8) as ptr<i64>
+    let y: ptr<i64> = calloc(1, 8) as ptr<i64>
+    let mut a: i64 = a0 % m
+    if a < 0 { a = a + m }
+    ext_gcd(a, m, x, y)
+    let mut r: i64 = x[0] % m
+    if r < 0 { r = r + m }
+    free(x as ptr<void>)
+    free(y as ptr<void>)
+    return r
+}
+
+# CRT: combine x=a1 (mod m1), x=a2 (mod m2)
+function crt(a1: i64, m1: i64, a2: i64, m2: i64, out_x: ptr<i64>, out_m: ptr<i64>) -> void {
+    if m1 == 1 { out_x[0] = a2; out_m[0] = m2; return }
+    if m2 == 1 { out_x[0] = a1; out_m[0] = m1; return }
+    let inv: i64 = mod_inv_general(m1 % m2, m2)
+    let t: i64 = (((a2 - a1) % m2 + m2) % m2) * inv % m2
+    out_x[0] = a1 + m1 * t
+    out_m[0] = m1 * m2
+}
+
+# Sieve smallest prime factor
+function sieve_spf(n: i32, spf: ptr<i32>) -> void {
+    for i in 0..(n + 1) { spf[i] = i }
+    let mut i: i32 = 2
+    while i * i <= n {
+        if spf[i] == i {
+            let mut j: i32 = i * i
+            while j <= n {
+                if spf[j] == j { spf[j] = i }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+}
+
+# Factorize small number using spf
+function factorize_small(x0: i32, spf: ptr<i32>, primes: ptr<i32>, exps: ptr<i32>) -> i32 {
+    let mut x: i32 = x0
+    let mut cnt: i32 = 0
+    while x > 1 {
+        let p: i32 = spf[x]
+        let mut e: i32 = 0
+        while x % p == 0 { x = x / p; e = e + 1 }
+        primes[cnt] = p
+        exps[cnt] = e
+        cnt = cnt + 1
+    }
+    return cnt
+}
+
+# Class number h(D) for D < 0, D = 5 mod 8
+function class_number(D: i64) -> i64 {
+    let absD: i64 = -D
+    let amax: i64 = isqrt(absD / 3)
+
+    let spf: ptr<i32> = calloc((amax + 1) as i64, 4) as ptr<i32>
+    sieve_spf(amax as i32, spf)
+
+    let mut h: i64 = 0
+
+    # For D = 5 mod 8, only odd a values
+    let mut a: i64 = 1
+    while a <= amax {
+        let fac_p: ptr<i32> = calloc(20, 4) as ptr<i32>
+        let fac_e: ptr<i32> = calloc(20, 4) as ptr<i32>
+        let nfac: i32 = factorize_small(a as i32, spf, fac_p, fac_e)
+
+        # Check: if p|D and p^2|a, skip
+        let mut bad: bool = false
+        for i in 0..nfac {
+            if fac_e[i] >= 2 && D % (fac_p[i] as i64) == 0 { bad = true; break }
+        }
+        if !bad {
+            # Build roots mod a via CRT
+            let roots: ptr<i64> = calloc(1024, 8) as ptr<i64>
+            let mut n_roots: i32 = 1
+            roots[0] = 0
+            let mut mod: i64 = 1
+            let mut ok: bool = true
+
+            for i in 0..nfac {
+                let p: i64 = fac_p[i] as i64
+                let e: i32 = fac_e[i]
+                let mut pe: i64 = 1
+                for j in 0..e { pe = pe * p }
+
+                let rset: ptr<i64> = calloc(8, 8) as ptr<i64>
+                let nr: i32 = roots_mod_pe(D, p, e, rset)
+                if nr == 0 { ok = false; free(rset as ptr<void>); break }
+
+                let new_roots: ptr<i64> = calloc(1024, 8) as ptr<i64>
+                let mut new_nr: i32 = 0
+                for j in 0..n_roots {
+                    for k in 0..nr {
+                        let x: ptr<i64> = calloc(1, 8) as ptr<i64>
+                        let m: ptr<i64> = calloc(1, 8) as ptr<i64>
+                        crt(roots[j], mod, rset[k], pe, x, m)
+                        new_roots[new_nr] = x[0]
+                        new_nr = new_nr + 1
+                        free(x as ptr<void>)
+                        free(m as ptr<void>)
+                    }
+                }
+                memcpy(roots as ptr<void>, new_roots as ptr<void>, (new_nr as i64) * 8)
+                n_roots = new_nr
+                mod = mod * pe
+                free(new_roots as ptr<void>)
+                free(rset as ptr<void>)
+            }
+
+            if ok {
+                for ri in 0..n_roots {
+                    let r: i64 = roots[ri]
+                    let b_signed: i64
+                    if r == 0 {
+                        b_signed = a
+                    } else {
+                        if r % 2 == 1 {
+                            b_signed = r
+                        } else {
+                            b_signed = r - a
+                        }
+                    }
+
+                    let b: i64 = if b_signed < 0 { -b_signed } else { b_signed }
+                    if b > a { continue }
+
+                    let num: i64 = b * b - D
+                    let den: i64 = 4 * a
+                    if num % den != 0 { continue }
+                    let c: i64 = num / den
+                    if a > c { continue }
+
+                    let abs_b: i64 = if b_signed < 0 { -b_signed } else { b_signed }
+                    if (abs_b == a || a == c) && b_signed < 0 { continue }
+
+                    h = h + 1
+                }
+            }
+            free(roots as ptr<void>)
+        }
+
+        free(fac_p as ptr<void>)
+        free(fac_e as ptr<void>)
+        a = a + 2
+    }
+
+    free(spf as ptr<void>)
+    return h
 }
 
 function main() -> i32 {
-    printf("%lld\n", p621_native())
+    let n: i64 = (17526 as i64) * 1000000000
+    let N: i64 = 8 * n + 3
+
+    # Factor N
+    let primes: ptr<i64> = calloc(20, 8) as ptr<i64>
+    let exps: ptr<i32> = calloc(20, 4) as ptr<i32>
+    let nfac: i32 = factorize_ll(N, primes, exps)
+
+    # N = n0 * f^2, n0 squarefree
+    let mut n0: i64 = 1
+    let mut f: i64 = 1
+    for i in 0..nfac {
+        if exps[i] % 2 == 1 { n0 = n0 * primes[i] }
+        for j in 0..(exps[i] / 2) { f = f * primes[i] }
+    }
+
+    let D: i64 = -n0
+    let h: i64 = class_number(D)
+
+    # w_div2
+    let mut w_div2: i64 = 1
+    if D == -3 { w_div2 = 3 }
+    else {
+        if D == -4 { w_div2 = 2 }
+    }
+
+    # S = sum_{d|f} mu(d) * (D/d) * sigma(f/d)
+    let f_primes: ptr<i64> = calloc(20, 8) as ptr<i64>
+    let f_exps: ptr<i32> = calloc(20, 4) as ptr<i32>
+    let nffac: i32 = factorize_ll(f, f_primes, f_exps)
+
+    let mut S: i64 = 0
+    let nprimes: i32 = nffac
+    for mask in 0..(1 << nprimes) {
+        let mut bits: i32 = 0
+        let mut jac: i64 = 1
+        let mut sig: i64 = 1
+        let mut valid: bool = true
+        for i in 0..nprimes {
+            let p: i64 = f_primes[i]
+            let mut e: i32 = f_exps[i]
+            if ((mask >> i) & 1) == 1 {
+                bits = bits + 1
+                jac = jac * (legendre(D, p) as i64)
+                e = e - 1
+            }
+            if e < 0 { sig = 0; valid = false; break }
+            # sigma(p^e) = (p^(e+1)-1)/(p-1)
+            let mut pe: i64 = 1
+            for j in 0..(e + 1) { pe = pe * p }
+            sig = sig * (pe - 1) / (p - 1)
+        }
+        if !valid || sig == 0 { continue }
+        let sign: i64 = if bits % 2 == 1 { -1 } else { 1 }
+        S = S + sign * jac * sig
+    }
+
+    # G(n) = 3 * h * S / w_div2
+    let result: i64 = 3 * h * S / w_div2
+    printf("%lld\n", result)
+
+    free(primes as ptr<void>)
+    free(exps as ptr<void>)
+    free(f_primes as ptr<void>)
+    free(f_exps as ptr<void>)
     return 0
 }

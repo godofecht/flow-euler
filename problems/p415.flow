@@ -1,11 +1,412 @@
 # Project Euler 415
 # Titanic sets on (N+1)^2 lattice, N=10^11, mod 10^8 via totient sums.
 
+import euler.nt { isqrt }
+
 extern {
-    function pe415_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 100000000
+const DEFAULT_N: i64 = 100000000000
+const PRECOMPUTE: i64 = 5000000
+
+# ---- TotientSums state ----
+let mut TS_limit: i64 = 0
+let mut TS_pref0: ptr<i64> = null
+let mut TS_pref1: ptr<i64> = null
+let mut TS_pref2: ptr<i64> = null
+
+# cache0 (phi_sum), cache1 (i_phi), cache2 (i2_phi)
+let mut c0k: ptr<i64> = null
+let mut c0v: ptr<i64> = null
+let mut c0u: ptr<i8> = null
+let mut c0cap: i64 = 0
+
+let mut c1k: ptr<i64> = null
+let mut c1v: ptr<i64> = null
+let mut c1u: ptr<i8> = null
+let mut c1cap: i64 = 0
+
+let mut c2k: ptr<i64> = null
+let mut c2v: ptr<i64> = null
+let mut c2u: ptr<i8> = null
+let mut c2cap: i64 = 0
+
+# stats hash tables (keyed by m)
+let mut sk: ptr<i64> = null
+let mut s_count: ptr<i64> = null
+let mut s_xy: ptr<i64> = null
+let mut s_pr: ptr<i64> = null
+let mut su: ptr<i8> = null
+let mut scap: i64 = 0
+
+function norm(x: i64) -> i64 {
+    let mut v: i64 = x % MOD
+    if v < 0 { v = v + MOD }
+    return v
+}
+
+function mod_pow_128(a0: i64, e0: i128) -> i64 {
+    let mut r: i64 = 1 % MOD
+    let mut a: i64 = a0 % MOD
+    let mut e: i128 = e0
+    while e > 0 {
+        let eb: i128 = e & (1 as i128)
+        if eb != (0 as i128) {
+            r = ((r as i128) * (a as i128) % (MOD as i128)) as i64
+        }
+        a = ((a as i128) * (a as i128) % (MOD as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function mod_pow_64(a0: i64, e0: i64) -> i64 {
+    let mut r: i64 = 1 % MOD
+    let mut a: i64 = a0 % MOD
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 {
+            r = ((r as i128) * (a as i128) % (MOD as i128)) as i64
+        }
+        a = ((a as i128) * (a as i128) % (MOD as i128)) as i64
+        e = e / 2
+    }
+    return r
+}
+
+function s1(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut a: i64 = n
+    let mut b: i64 = n + 1
+    if a % 2 == 0 { a = a / 2 } else { b = b / 2 }
+    return (a % MOD) * (b % MOD) % MOD
+}
+
+function s2(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let mut a: i64 = n
+    let mut b: i64 = n + 1
+    let mut c: i64 = 2 * n + 1
+    if a % 2 == 0 { a = a / 2 } else { b = b / 2 }
+    if a % 3 == 0 { a = a / 3 }
+    else {
+        if b % 3 == 0 { b = b / 3 }
+        else { c = c / 3 }
+    }
+    return (a % MOD) * (b % MOD) % MOD * (c % MOD) % MOD
+}
+
+function s3(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let t: i64 = s1(n)
+    return t * t % MOD
+}
+
+function range_s1(lo: i64, hi: i64) -> i64 {
+    return norm(s1(hi) - s1(lo - 1))
+}
+
+function range_s2(lo: i64, hi: i64) -> i64 {
+    return norm(s2(hi) - s2(lo - 1))
+}
+
+function range_s3(lo: i64, hi: i64) -> i64 {
+    return norm(s3(hi) - s3(lo - 1))
+}
+
+function pref_k_pow2(n: i64, pow2_next: i64) -> i64 {
+    if n < 0 { return 0 }
+    return norm(((n - 1) % MOD) * pow2_next + 2)
+}
+
+function pref_k2_pow2(n: i64, pow2_next: i64) -> i64 {
+    if n < 0 { return 0 }
+    let k: i64 = n % MOD
+    let inner: i64 = (k * k % MOD - 2 * k % MOD + 3) % MOD
+    return norm(inner * pow2_next - 6)
+}
+
+# ---- hash table helpers ----
+
+function ht_get(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64) -> i64 {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 {
+        if keys[slot] == key { return vals[slot] }
+        slot = (slot + 1) & (cap - 1)
+    }
+    return 0 - 1
+}
+
+function ht_put(keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>, cap: i64, key: i64, val: i64) -> void {
+    let mut slot: i64 = key
+    if slot < 0 { slot = 0 - slot }
+    slot = slot & (cap - 1)
+    while used[slot] != 0 && keys[slot] != key {
+        slot = (slot + 1) & (cap - 1)
+    }
+    used[slot] = 1
+    keys[slot] = key
+    vals[slot] = val
+}
+
+# ---- TotientSums ----
+
+function build_totient_sums(max_n: i64) -> void {
+    let mut limit: i64 = max_n
+    if limit > PRECOMPUTE { limit = PRECOMPUTE }
+    if limit < 1 { limit = 1 }
+    TS_limit = limit
+
+    let phi: ptr<i64> = calloc(limit + 1, 8)
+    let composite: ptr<i8> = calloc(limit + 1, 1)
+    let primes: ptr<i32> = calloc(limit + 1, 4)
+    let mut pcount: i64 = 0
+
+    phi[1] = 1
+    let mut x: i64 = 2
+    while x <= limit {
+        if composite[x] == 0 {
+            primes[pcount] = x as i32
+            pcount = pcount + 1
+            phi[x] = x - 1
+        }
+        let phix: i64 = phi[x]
+        let mut pi: i64 = 0
+        while pi < pcount {
+            let p: i64 = primes[pi] as i64
+            let y: i64 = x * p
+            if y > limit { break }
+            composite[y] = 1
+            if x % p == 0 {
+                phi[y] = phix * p
+                break
+            }
+            phi[y] = phix * (p - 1)
+            pi = pi + 1
+        }
+        x = x + 1
+    }
+
+    TS_pref0 = calloc(limit + 1, 8)
+    TS_pref1 = calloc(limit + 1, 8)
+    TS_pref2 = calloc(limit + 1, 8)
+    let mut i: i64 = 1
+    while i <= limit {
+        let ph: i64 = phi[i] % MOD
+        let xm: i64 = i % MOD
+        TS_pref0[i] = (TS_pref0[i - 1] + ph) % MOD
+        TS_pref1[i] = (TS_pref1[i - 1] + xm * ph) % MOD
+        TS_pref2[i] = (TS_pref2[i - 1] + xm * xm % MOD * ph) % MOD
+        i = i + 1
+    }
+
+    # init caches
+    c0cap = 1 << 21
+    c0k = calloc(c0cap, 8)
+    c0v = calloc(c0cap, 8)
+    c0u = calloc(c0cap, 1)
+
+    c1cap = 1 << 21
+    c1k = calloc(c1cap, 8)
+    c1v = calloc(c1cap, 8)
+    c1u = calloc(c1cap, 1)
+
+    c2cap = 1 << 21
+    c2k = calloc(c2cap, 8)
+    c2v = calloc(c2cap, 8)
+    c2u = calloc(c2cap, 1)
+
+    # init stats hash table
+    scap = 1 << 21
+    sk = calloc(scap, 8)
+    s_count = calloc(scap, 8)
+    s_xy = calloc(scap, 8)
+    s_pr = calloc(scap, 8)
+    su = calloc(scap, 1)
+
+    free(phi as ptr<void>)
+    free(composite as ptr<void>)
+    free(primes as ptr<void>)
+}
+
+function ts_phi_sum(n: i64) -> i64 {
+    if n <= TS_limit { return TS_pref0[n] }
+    let hit: i64 = ht_get(c0k, c0v, c0u, c0cap, n)
+    if hit >= 0 { return hit }
+    let mut total: i64 = s1(n)
+    let mut lo: i64 = 2
+    while lo <= n {
+        let q: i64 = n / lo
+        let hi: i64 = n / q
+        total = norm(total - ((hi - lo + 1) % MOD) * ts_phi_sum(q) % MOD)
+        lo = hi + 1
+    }
+    ht_put(c0k, c0v, c0u, c0cap, n, total)
+    return total
+}
+
+function ts_i_phi(n: i64) -> i64 {
+    if n <= TS_limit { return TS_pref1[n] }
+    let hit: i64 = ht_get(c1k, c1v, c1u, c1cap, n)
+    if hit >= 0 { return hit }
+    let mut total: i64 = s2(n)
+    let mut lo: i64 = 2
+    while lo <= n {
+        let q: i64 = n / lo
+        let hi: i64 = n / q
+        total = norm(total - range_s1(lo, hi) * ts_i_phi(q) % MOD)
+        lo = hi + 1
+    }
+    ht_put(c1k, c1v, c1u, c1cap, n, total)
+    return total
+}
+
+function ts_i2_phi(n: i64) -> i64 {
+    if n <= TS_limit { return TS_pref2[n] }
+    let hit: i64 = ht_get(c2k, c2v, c2u, c2cap, n)
+    if hit >= 0 { return hit }
+    let mut total: i64 = s3(n)
+    let mut lo: i64 = 2
+    while lo <= n {
+        let q: i64 = n / lo
+        let hi: i64 = n / q
+        total = norm(total - range_s2(lo, hi) * ts_i2_phi(q) % MOD)
+        lo = hi + 1
+    }
+    ht_put(c2k, c2v, c2u, c2cap, n, total)
+    return total
+}
+
+function ensure_stats(m: i64) -> void {
+    let hit: i64 = ht_get(sk, s_count, su, scap, m)
+    if hit >= 0 { return }
+    let count: i64 = 0
+    let coord_sum: i64 = 0
+    let product_sum: i64 = 0
+    if m > 0 {
+        let c: i64 = norm(2 * ts_phi_sum(m) - 1)
+        let xy: i64 = norm(3 * ts_i_phi(m) - 1)
+        let pr: i64 = ts_i2_phi(m)
+        ht_put(sk, s_count, su, scap, m, c)
+        ht_put(sk, s_xy, su, scap, m, xy)
+        ht_put(sk, s_pr, su, scap, m, pr)
+    } else {
+        ht_put(sk, s_count, su, scap, m, 0)
+        ht_put(sk, s_xy, su, scap, m, 0)
+        ht_put(sk, s_pr, su, scap, m, 0)
+    }
+}
+
+function get_stat_count(m: i64) -> i64 {
+    return ht_get(sk, s_count, su, scap, m)
+}
+
+function get_stat_xy(m: i64) -> i64 {
+    return ht_get(sk, s_xy, su, scap, m)
+}
+
+function get_stat_pr(m: i64) -> i64 {
+    return ht_get(sk, s_pr, su, scap, m)
+}
+
+function min64(a: i64, b: i64) -> i64 {
+    if a < b { return a }
+    return b
+}
+
+function titanic_sets(n: i64) -> i64 {
+    let side: i64 = n + 1
+    let point_count: i128 = (side as i128) * (side as i128)
+    let all_subsets: i64 = mod_pow_128(2, point_count)
+    let singleton_part: i64 = norm(1 + ((point_count % (MOD as i128)) as i64))
+    if n < 2 { return norm(all_subsets - singleton_part) }
+
+    # Block decomposition
+    let max_blocks: i64 = 2000000
+    let bl_lo: ptr<i64> = calloc(max_blocks, 8)
+    let bl_hi: ptr<i64> = calloc(max_blocks, 8)
+    let bl_a: ptr<i64> = calloc(max_blocks, 8)
+    let bl_b: ptr<i64> = calloc(max_blocks, 8)
+    let mut nblocks: i64 = 0
+
+    let mut lo: i64 = 2
+    while lo <= n {
+        let a: i64 = n / lo
+        let b: i64 = 0
+        if lo < n { b = n / (lo + 1) }
+        let hi_a: i64 = n / a
+        let hi_b: i64 = 0
+        if b != 0 { hi_b = n / b - 1 } else { hi_b = n }
+        let hi: i64 = min64(hi_a, hi_b)
+        bl_lo[nblocks] = lo
+        bl_hi[nblocks] = hi
+        bl_a[nblocks] = a
+        bl_b[nblocks] = b
+        nblocks = nblocks + 1
+        ensure_stats(a)
+        if b != 0 { ensure_stats(b) }
+        lo = hi + 1
+    }
+
+    let side_mod: i64 = side % MOD
+    let side2_mod: i64 = side_mod * side_mod % MOD
+    let mut collinear: i64 = 0
+
+    let mut bi: i64 = 0
+    while bi < nblocks {
+        let a: i64 = bl_a[bi]
+        let b: i64 = bl_b[bi]
+        let c1: i64 = get_stat_count(a)
+        let xy1: i64 = get_stat_xy(a)
+        let pr1: i64 = get_stat_pr(a)
+        let c2: i64 = 0
+        let xy2: i64 = 0
+        let pr2: i64 = 0
+        if b != 0 {
+            c2 = get_stat_count(b)
+            xy2 = get_stat_xy(b)
+            pr2 = get_stat_pr(b)
+        }
+        let q2: i64 = norm(pr1 - pr2)
+        let q1: i64 = norm(side_mod * norm(xy2 - xy1) % MOD - 2 * pr2 % MOD)
+        let q0: i64 = norm(side2_mod * norm(c1 - c2) % MOD + side_mod * xy2 % MOD - pr2)
+        let p2: i64 = 2 * q2 % MOD
+        let p1: i64 = 2 * q1 % MOD
+        let p0: i64 = (2 * q0 + 2 * side_mod) % MOD
+        let blo: i64 = bl_lo[bi]
+        let bhi: i64 = bl_hi[bi]
+        let pow_lo: i64 = mod_pow_64(2, blo)
+        let pow_after_hi: i64 = mod_pow_64(2, bhi + 1)
+        let e0: i64 = norm(pow_after_hi - pow_lo)
+        let e1: i64 = norm(pref_k_pow2(bhi, pow_after_hi) - pref_k_pow2(blo - 1, pow_lo))
+        let e2: i64 = norm(pref_k2_pow2(bhi, pow_after_hi) - pref_k2_pow2(blo - 1, pow_lo))
+        let poly_exp: i64 = (p2 * e2 + p1 * e1 + p0 * e0) % MOD
+        let r1: i64 = range_s1(blo, bhi)
+        let r2: i64 = range_s2(blo, bhi)
+        let r3: i64 = range_s3(blo, bhi)
+        let length: i64 = (bhi - blo + 1) % MOD
+        let poly_plain: i64 = (p2 * ((r3 + r2) % MOD) + p1 * ((r2 + r1) % MOD) + p0 * ((r1 + length) % MOD)) % MOD
+        collinear = norm(collinear + poly_exp - poly_plain)
+        bi = bi + 1
+    }
+
+    free(bl_lo as ptr<void>)
+    free(bl_hi as ptr<void>)
+    free(bl_a as ptr<void>)
+    free(bl_b as ptr<void>)
+
+    return norm(all_subsets - singleton_part - collinear)
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe415_answer())
+    let mut max_n: i64 = DEFAULT_N
+    if max_n < 100000 { max_n = 100000 }
+    build_totient_sums(max_n)
+    printf("%lld\n", titanic_sets(DEFAULT_N))
     return 0
 }

@@ -1,12 +1,230 @@
 # Project Euler 971
-# Sum of C_p = 1 + n*t over primes p <= 10^8 with p % 5 == 1,
-# where n=(p-1)/5 and t counts elements of mu5 on a cycle of phi(s)=s*(1+s)^n mod p.
+# Sum of C_p = 1 + n*t over primes p <= 10^8 with p % 5 == 1.
+# Ported from native C to pure Flow.
+
+import euler.nt { isqrt }
 
 extern {
-    function p971_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+# mulmod for u64 values where a, b < m <= 10^8: a*b fits in i64
+function mulmod971(a0: i64, b0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    let mut b: i64 = b0 % m
+    let mut result: i64 = 0
+    while b > 0 {
+        if (b & 1) != 0 {
+            result = (result + a) % m
+        }
+        a = (a * 2) % m
+        b = b >> 1
+    }
+    return result
+}
+
+function powmod(a0: i64, e: i64, m: i64) -> i64 {
+    let mut r: i64 = 1 % m
+    let mut a: i64 = a0 % m
+    let mut ee: i64 = e
+    while ee > 0 {
+        if (ee & 1) != 0 {
+            r = mulmod971(r, a, m)
+        }
+        a = mulmod971(a, a, m)
+        ee = ee >> 1
+    }
+    return r
+}
+
+# Odd-only sieve up to n. Returns array of primes and count.
+let mut g_primes: ptr<i64> = null
+
+function sieve_primes(n: i64) -> i64 {
+    if n < 2 { return 0 }
+    let half: i64 = n / 2 + 1
+    let sv: ptr<i8> = calloc(half, 1) as ptr<i8>
+    let limit: i64 = isqrt(n)
+    let mut i: i64 = 1
+    while i <= limit / 2 {
+        if sv[i] == 0 {
+            let p: i64 = 2 * i + 1
+            let start: i64 = (p * p - 1) / 2
+            let mut j: i64 = start
+            while j < half {
+                sv[j] = 1
+                j = j + p
+            }
+        }
+        i = i + 1
+    }
+    # count
+    let mut cnt: i64 = 1
+    i = 1
+    while i < half {
+        let v: i64 = 2 * i + 1
+        if v <= n && sv[i] == 0 {
+            cnt = cnt + 1
+        }
+        i = i + 1
+    }
+    g_primes = calloc(cnt, 8) as ptr<i64>
+    let mut k: i64 = 0
+    g_primes[k] = 2
+    k = k + 1
+    i = 1
+    while i < half {
+        let v: i64 = 2 * i + 1
+        if v <= n && sv[i] == 0 {
+            g_primes[k] = v
+            k = k + 1
+        }
+        i = i + 1
+    }
+    free(sv as ptr<void>)
+    return k
+}
+
+# For prime p with p % 5 == 1, count elements of mu5 on a cycle of phi.
+function count_periodic_in_mu5(p: i64) -> i64 {
+    let n: i64 = (p - 1) / 5
+    # find a generator of mu5: a with a^n != 1 mod p
+    let mut a: i64 = 2
+    let mut zeta: i64 = powmod(a, n, p)
+    while zeta == 1 {
+        a = a + 1
+        zeta = powmod(a, n, p)
+    }
+    # build mu5: {1, zeta, zeta^2, zeta^3, zeta^4}
+    let mu5: array<i64, 5> = [0, 0, 0, 0, 0]
+    mu5[0] = 1 % p
+    let mut cur: i64 = 1
+    let mut i: i64 = 1
+    while i < 5 {
+        cur = mulmod971(cur, zeta, p)
+        mu5[i] = cur
+        i = i + 1
+    }
+    # phi(s) = s * (1+s)^n mod p
+    let phi: array<i64, 5> = [0, 0, 0, 0, 0]
+    i = 0
+    while i < 5 {
+        let s: i64 = mu5[i]
+        let one_plus: i64 = (1 + s) % p
+        let pv: i64 = powmod(one_plus, n, p)
+        phi[i] = mulmod971(s, pv, p)
+        i = i + 1
+    }
+    # functional graph traversal on the 5 nodes
+    let visited: array<i64, 5> = [0, 0, 0, 0, 0]
+    let in_cycle: array<i64, 5> = [0, 0, 0, 0, 0]
+    let path: array<i64, 8> = [0, 0, 0, 0, 0, 0, 0, 0]
+
+    let mut start: i64 = 0
+    while start < 5 {
+        if visited[start] != 0 {
+            start = start + 1
+            continue
+        }
+        let mut pathlen: i64 = 0
+        let mut ci: i64 = start
+        while true {
+            if visited[ci] == 0 {
+                visited[ci] = 1
+                path[pathlen] = ci
+                pathlen = pathlen + 1
+                # compute next: phi[ci]; find its index
+                let v: i64 = phi[ci]
+                let mut next: i64 = -1
+                let mut j: i64 = 0
+                while j < 5 {
+                    if mu5[j] == v {
+                        next = j
+                        break
+                    }
+                    j = j + 1
+                }
+                if next < 0 {
+                    # maps outside mu5: no cycle on this path
+                    let mut x: i64 = 0
+                    while x < pathlen {
+                        visited[path[x]] = 2
+                        x = x + 1
+                    }
+                    break
+                }
+                ci = next
+            } else {
+                if visited[ci] == 1 {
+                    # found a cycle: from first occurrence of ci in path
+                    let mut idx: i64 = 0
+                    let mut x: i64 = 0
+                    while x < pathlen {
+                        if path[x] == ci {
+                            idx = x
+                            break
+                        }
+                        x = x + 1
+                    }
+                    x = idx
+                    while x < pathlen {
+                        in_cycle[path[x]] = 1
+                        x = x + 1
+                    }
+                    x = 0
+                    while x < pathlen {
+                        visited[path[x]] = 2
+                        x = x + 1
+                    }
+                    break
+                } else {
+                    # visited == 2: leads to processed region
+                    let mut x: i64 = 0
+                    while x < pathlen {
+                        visited[path[x]] = 2
+                        x = x + 1
+                    }
+                    break
+                }
+            }
+        }
+        start = start + 1
+    }
+    let mut t: i64 = 0
+    let mut i2: i64 = 0
+    while i2 < 5 {
+        t = t + in_cycle[i2]
+        i2 = i2 + 1
+    }
+    return t
 }
 
 function main() -> i32 {
-    printf("%lld\n", p971_native())
+    let limit: i64 = 100000000
+    let np: i64 = sieve_primes(limit)
+    let mut total: i128 = 0
+    let mut i: i64 = 0
+    while i < np {
+        let p: i64 = g_primes[i]
+        if p < 5 {
+            if p == 2 || p == 3 {
+                i = i + 1
+                continue
+            }
+        }
+        if p % 5 != 1 {
+            i = i + 1
+            continue
+        }
+        let n: i64 = (p - 1) / 5
+        let t: i64 = count_periodic_in_mu5(p)
+        let C_p: i64 = 1 + n * t
+        total = total + (C_p as i128)
+        i = i + 1
+    }
+    free(g_primes as ptr<void>)
+    printf("%lld\n", total as i64)
     return 0
 }

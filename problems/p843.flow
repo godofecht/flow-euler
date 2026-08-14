@@ -1,11 +1,881 @@
 # Project Euler 843
-# Periodic Circles - S(100).
+# Periodic Circles - S(100) = sum of all possible eventual periods for ring sizes 3..100.
+# Uses 256-bit GF(2) polynomial arithmetic, Berlekamp factorization, and order computations.
+
+import euler.nt { gcd }
 
 extern {
-    function p843_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(s: ptr<void>, c: i64, n: i64) -> ptr<void>
 }
 
+# ==================== Poly struct (256-bit GF(2)) ====================
+
+struct Poly {
+    w0: u64,
+    w1: u64,
+    w2: u64,
+    w3: u64
+}
+
+function poly_get_w(p: ptr<Poly>, i: i32) -> u64 {
+    if i == 0 { return p[0].w0 }
+    if i == 1 { return p[0].w1 }
+    if i == 2 { return p[0].w2 }
+    return p[0].w3
+}
+
+function poly_set_w(p: ptr<Poly>, i: i32, v: u64) -> void {
+    if i == 0 { p[0].w0 = v; return }
+    if i == 1 { p[0].w1 = v; return }
+    if i == 2 { p[0].w2 = v; return }
+    p[0].w3 = v
+}
+
+function poly_deg(p: ptr<Poly>) -> i32 {
+    let mut i: i32 = 3
+    while i >= 0 {
+        let w: u64 = poly_get_w(p, i)
+        if w != 0 {
+            let mut v: u64 = w
+            let mut bit: i32 = 0
+            while v > 1 {
+                v = v >> 1
+                bit = bit + 1
+            }
+            return bit + 64 * i
+        }
+        i = i - 1
+    }
+    return -1
+}
+
+function poly_is_zero(p: ptr<Poly>) -> bool {
+    return p[0].w0 == 0 && p[0].w1 == 0 && p[0].w2 == 0 && p[0].w3 == 0
+}
+
+function poly_is_one(p: ptr<Poly>) -> bool {
+    return p[0].w0 == 1 && p[0].w1 == 0 && p[0].w2 == 0 && p[0].w3 == 0
+}
+
+function poly_zero(p: ptr<Poly>) -> void {
+    p[0].w0 = 0; p[0].w1 = 0; p[0].w2 = 0; p[0].w3 = 0
+}
+
+function poly_one(p: ptr<Poly>) -> void {
+    p[0].w0 = 1; p[0].w1 = 0; p[0].w2 = 0; p[0].w3 = 0
+}
+
+function poly_copy(dst: ptr<Poly>, src: ptr<Poly>) -> void {
+    dst[0].w0 = src[0].w0; dst[0].w1 = src[0].w1
+    dst[0].w2 = src[0].w2; dst[0].w3 = src[0].w3
+}
+
+function poly_equal(a: ptr<Poly>, b: ptr<Poly>) -> bool {
+    return a[0].w0 == b[0].w0 && a[0].w1 == b[0].w1 &&
+           a[0].w2 == b[0].w2 && a[0].w3 == b[0].w3
+}
+
+function poly_get_bit(p: ptr<Poly>, i: i32) -> i32 {
+    let w: u64 = poly_get_w(p, i >> 6)
+    return ((w >> (i & 63)) & 1) as i32
+}
+
+function poly_set_bit(p: ptr<Poly>, i: i32) -> void {
+    let idx: i32 = i >> 6
+    let one: u64 = 1
+    let cur: u64 = poly_get_w(p, idx)
+    poly_set_w(p, idx, cur | (one << ((i & 63) as u64)))
+}
+
+function poly_xor(dst: ptr<Poly>, src: ptr<Poly>) -> void {
+    dst[0].w0 = dst[0].w0 ^ src[0].w0
+    dst[0].w1 = dst[0].w1 ^ src[0].w1
+    dst[0].w2 = dst[0].w2 ^ src[0].w2
+    dst[0].w3 = dst[0].w3 ^ src[0].w3
+}
+
+function poly_shl(dst: ptr<Poly>, src: ptr<Poly>, shift: i32) -> void {
+    let ws: i32 = shift >> 6
+    let bs: i32 = shift & 63
+    poly_zero(dst)
+    let one: u64 = 1
+    if bs == 0 {
+        let mut i: i32 = 3
+        while i >= 0 {
+            let di: i32 = i + ws
+            if di >= 0 && di < 4 {
+                poly_set_w(dst, di, poly_get_w(src, i))
+            }
+            i = i - 1
+        }
+    } else {
+        let mut i: i32 = 3
+        while i >= 0 {
+            let di: i32 = i + ws
+            let sv: u64 = poly_get_w(src, i)
+            if di >= 0 && di < 4 {
+                let cur: u64 = poly_get_w(dst, di)
+                poly_set_w(dst, di, cur | (sv << (bs as u64)))
+            }
+            if di + 1 >= 0 && di + 1 < 4 {
+                let cur2: u64 = poly_get_w(dst, di + 1)
+                poly_set_w(dst, di + 1, cur2 | (sv >> ((64 - bs) as u64)))
+            }
+            i = i - 1
+        }
+    }
+}
+
+function poly_mul(dst: ptr<Poly>, a: ptr<Poly>, b: ptr<Poly>) -> void {
+    poly_zero(dst)
+    let temp: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let db: i32 = poly_deg(b)
+    let mut i: i32 = 0
+    while i <= db {
+        if poly_get_bit(b, i) != 0 {
+            poly_shl(temp, a, i)
+            poly_xor(dst, temp)
+        }
+        i = i + 1
+    }
+    free(temp as ptr<void>)
+}
+
+function poly_mod(dst: ptr<Poly>, a: ptr<Poly>, modv: ptr<Poly>) -> void {
+    let r: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_copy(r, a)
+    let shifted: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let md: i32 = poly_deg(modv)
+    while !poly_is_zero(r) && poly_deg(r) >= md {
+        let shift: i32 = poly_deg(r) - md
+        poly_shl(shifted, modv, shift)
+        poly_xor(r, shifted)
+    }
+    poly_copy(dst, r)
+    free(r as ptr<void>)
+    free(shifted as ptr<void>)
+}
+
+function poly_mul_mod(dst: ptr<Poly>, a: ptr<Poly>, b: ptr<Poly>, modv: ptr<Poly>) -> void {
+    let prod: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_mul(prod, a, b)
+    poly_mod(dst, prod, modv)
+    free(prod as ptr<void>)
+}
+
+function poly_square(dst: ptr<Poly>, a: ptr<Poly>) -> void {
+    poly_zero(dst)
+    let da: i32 = poly_deg(a)
+    let mut i: i32 = 0
+    while i <= da {
+        if poly_get_bit(a, i) != 0 {
+            poly_set_bit(dst, 2 * i)
+        }
+        i = i + 1
+    }
+}
+
+function poly_square_mod(dst: ptr<Poly>, a: ptr<Poly>, modv: ptr<Poly>) -> void {
+    let sq: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_square(sq, a)
+    poly_mod(dst, sq, modv)
+    free(sq as ptr<void>)
+}
+
+function poly_pow_mod(dst: ptr<Poly>, a: ptr<Poly>, exp0: i64, modv: ptr<Poly>) -> void {
+    let res: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let base: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let tmp: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_one(res)
+    poly_mod(base, a, modv)
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if exp % 2 == 1 {
+            poly_mul_mod(tmp, res, base, modv)
+            poly_copy(res, tmp)
+        }
+        exp = exp >> 1
+        if exp != 0 {
+            poly_square_mod(tmp, base, modv)
+            poly_copy(base, tmp)
+        }
+    }
+    poly_copy(dst, res)
+    free(res as ptr<void>)
+    free(base as ptr<void>)
+    free(tmp as ptr<void>)
+}
+
+function poly_gcd(dst: ptr<Poly>, a: ptr<Poly>, b: ptr<Poly>) -> void {
+    let x: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let y: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let r: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_copy(x, a)
+    poly_copy(y, b)
+    while !poly_is_zero(y) {
+        poly_mod(r, x, y)
+        poly_copy(x, y)
+        poly_copy(y, r)
+    }
+    poly_copy(dst, x)
+    free(x as ptr<void>)
+    free(y as ptr<void>)
+    free(r as ptr<void>)
+}
+
+function poly_div_exact(dst: ptr<Poly>, a: ptr<Poly>, b: ptr<Poly>) -> void {
+    let r: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let q: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let shifted: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_copy(r, a)
+    poly_zero(q)
+    let db: i32 = poly_deg(b)
+    while !poly_is_zero(r) && poly_deg(r) >= db {
+        let shift: i32 = poly_deg(r) - db
+        poly_set_bit(q, shift)
+        poly_shl(shifted, b, shift)
+        poly_xor(r, shifted)
+    }
+    poly_copy(dst, q)
+    free(r as ptr<void>)
+    free(q as ptr<void>)
+    free(shifted as ptr<void>)
+}
+
+# ==================== Small integer factoring ====================
+
+let mut sieve_arr: ptr<i8> = null
+let mut small_primes: ptr<i32> = null
+let mut num_small_primes: i32 = 0
+
+function init_sieve() -> void {
+    let limit: i64 = 2000000
+    sieve_arr = calloc(limit + 1, 1) as ptr<i8>
+    memset(sieve_arr as ptr<void>, 1, limit + 1)
+    sieve_arr[0] = 0
+    sieve_arr[1] = 0
+    let mut p: i64 = 2
+    while p * p <= limit {
+        if sieve_arr[p] != 0 {
+            let mut m: i64 = p * p
+            while m <= limit {
+                sieve_arr[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    small_primes = calloc(200000, 4) as ptr<i32>
+    num_small_primes = 0
+    let mut i: i64 = 2
+    while i <= limit {
+        if sieve_arr[i] != 0 {
+            small_primes[num_small_primes] = i as i32
+            num_small_primes = num_small_primes + 1
+        }
+        i = i + 1
+    }
+}
+
+function factor_small(n0: i64, factors: ptr<i64>) -> i32 {
+    let mut n: i64 = n0
+    let mut cnt: i32 = 0
+    let mut i: i32 = 0
+    while i < num_small_primes {
+        let p: i32 = small_primes[i]
+        if (p as i64) * (p as i64) > n { break }
+        while n % (p as i64) == 0 {
+            factors[cnt] = p as i64
+            cnt = cnt + 1
+            n = n / (p as i64)
+        }
+        i = i + 1
+    }
+    if n > 1 {
+        factors[cnt] = n
+        cnt = cnt + 1
+    }
+    return cnt
+}
+
+# ==================== Berlekamp factorization ====================
+
+function berlekamp_nullspace(f: ptr<Poly>, basis: ptr<Poly>) -> i32 {
+    let n: i32 = poly_deg(f)
+    if n <= 0 { return 0 }
+
+    let rows: ptr<i128> = calloc(128, 16) as ptr<i128>
+    let one128: i128 = 1
+
+    let mut j: i32 = 0
+    while j < n {
+        let xpow: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+        poly_zero(xpow)
+        poly_set_bit(xpow, 2 * j)
+        let col: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+        poly_mod(col, xpow, f)
+        let mut i: i32 = 0
+        while !poly_is_zero(col) {
+            if (col[0].w0 & 1) != 0 {
+                rows[i] = rows[i] | (one128 << (j as i128))
+            }
+            col[0].w0 = (col[0].w0 >> 1) | ((col[0].w1 & 1) << 63)
+            col[0].w1 = (col[0].w1 >> 1) | ((col[0].w2 & 1) << 63)
+            col[0].w2 = (col[0].w2 >> 1) | ((col[0].w3 & 1) << 63)
+            col[0].w3 = col[0].w3 >> 1
+            i = i + 1
+        }
+        free(xpow as ptr<void>)
+        free(col as ptr<void>)
+        j = j + 1
+    }
+
+    # Q - I
+    let mut i2: i32 = 0
+    while i2 < n {
+        rows[i2] = rows[i2] ^ (one128 << (i2 as i128))
+        i2 = i2 + 1
+    }
+
+    # Gauss-Jordan over GF(2)
+    let pivot_cols: ptr<i32> = calloc(128, 4) as ptr<i32>
+    let pivot_row_for_col: ptr<i32> = calloc(128, 4) as ptr<i32>
+    let mut num_pivots: i32 = 0
+    let mut r: i32 = 0
+    let mut c: i32 = 0
+    while c < n && r < n {
+        let mut pivot: i32 = -1
+        let mut i3: i32 = r
+        while i3 < n {
+            if ((rows[i3] >> (c as i128)) & 1) != 0 { pivot = i3; break }
+            i3 = i3 + 1
+        }
+        if pivot < 0 { c = c + 1; continue }
+        let tmp: i128 = rows[r]
+        rows[r] = rows[pivot]
+        rows[pivot] = tmp
+        let pv: i128 = rows[r]
+        let mut i4: i32 = 0
+        while i4 < n {
+            if i4 != r && ((rows[i4] >> (c as i128)) & 1) != 0 {
+                rows[i4] = rows[i4] ^ pv
+            }
+            i4 = i4 + 1
+        }
+        pivot_cols[num_pivots] = c
+        pivot_row_for_col[c] = r
+        num_pivots = num_pivots + 1
+        r = r + 1
+        c = c + 1
+    }
+
+    # Free columns = non-pivot columns
+    let free_cols: ptr<i32> = calloc(128, 4) as ptr<i32>
+    let mut num_free: i32 = 0
+    let mut c2: i32 = 0
+    while c2 < n {
+        let mut is_pivot: bool = false
+        let mut j2: i32 = 0
+        while j2 < num_pivots {
+            if pivot_cols[j2] == c2 { is_pivot = true; break }
+            j2 = j2 + 1
+        }
+        if !is_pivot {
+            free_cols[num_free] = c2
+            num_free = num_free + 1
+        }
+        c2 = c2 + 1
+    }
+
+    let mut fi: i32 = 0
+    while fi < num_free {
+        let fc: i32 = free_cols[fi]
+        let v: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+        poly_zero(v)
+        poly_set_bit(v, fc)
+        let mut j3: i32 = 0
+        while j3 < num_pivots {
+            let pc: i32 = pivot_cols[j3]
+            let row: i128 = rows[pivot_row_for_col[pc]]
+            if ((row >> (fc as i128)) & 1) != 0 {
+                poly_set_bit(v, pc)
+            }
+            j3 = j3 + 1
+        }
+        poly_copy(&basis[fi], v)
+        free(v as ptr<void>)
+        fi = fi + 1
+    }
+
+    free(rows as ptr<void>)
+    free(pivot_cols as ptr<void>)
+    free(pivot_row_for_col as ptr<void>)
+    free(free_cols as ptr<void>)
+    return num_free
+}
+
+# Factor a square-free monic polynomial into irreducibles (recursive)
+function factor_squarefree(f: ptr<Poly>, out: ptr<Poly>) -> i32 {
+    let n: i32 = poly_deg(f)
+    if n <= 0 { return 0 }
+    if n == 1 { poly_copy(&out[0], f); return 1 }
+
+    let basis: ptr<Poly> = calloc(128, 32) as ptr<Poly>
+    let nbasis: i32 = berlekamp_nullspace(f, basis)
+    if nbasis <= 1 {
+        poly_copy(&out[0], f)
+        free(basis as ptr<void>)
+        return 1
+    }
+
+    let total_subsets: i32 = 1 << (nbasis - 1)
+    let comb: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let g: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let h: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let out2: ptr<Poly> = calloc(128, 32) as ptr<Poly>
+
+    let mut mask: i32 = 1
+    while mask < total_subsets {
+        poly_zero(comb)
+        let mut j: i32 = 0
+        while j < nbasis - 1 {
+            if (mask & (1 << j)) != 0 {
+                poly_xor(comb, &basis[j + 1])
+            }
+            j = j + 1
+        }
+        if poly_is_zero(comb) || poly_is_one(comb) {
+            mask = mask + 1
+            continue
+        }
+
+        poly_gcd(g, f, comb)
+        let dg: i32 = poly_deg(g)
+        if dg > 0 && dg < n {
+            poly_div_exact(h, f, g)
+            let ng: i32 = factor_squarefree(g, out)
+            let nh: i32 = factor_squarefree(h, out2)
+            let mut i: i32 = 0
+            while i < nh {
+                poly_copy(&out[ng + i], &out2[i])
+                i = i + 1
+            }
+            free(basis as ptr<void>)
+            free(comb as ptr<void>)
+            free(g as ptr<void>)
+            free(h as ptr<void>)
+            free(out2 as ptr<void>)
+            return ng + nh
+        }
+
+        # Try comb ^ 1
+        comb[0].w0 = comb[0].w0 ^ 1
+        poly_gcd(g, f, comb)
+        let dg2: i32 = poly_deg(g)
+        if dg2 > 0 && dg2 < n {
+            poly_div_exact(h, f, g)
+            let ng: i32 = factor_squarefree(g, out)
+            let nh: i32 = factor_squarefree(h, out2)
+            let mut i: i32 = 0
+            while i < nh {
+                poly_copy(&out[ng + i], &out2[i])
+                i = i + 1
+            }
+            free(basis as ptr<void>)
+            free(comb as ptr<void>)
+            free(g as ptr<void>)
+            free(h as ptr<void>)
+            free(out2 as ptr<void>)
+            return ng + nh
+        }
+        mask = mask + 1
+    }
+
+    poly_copy(&out[0], f)
+    free(basis as ptr<void>)
+    free(comb as ptr<void>)
+    free(g as ptr<void>)
+    free(h as ptr<void>)
+    free(out2 as ptr<void>)
+    return 1
+}
+
+# ==================== Factor cache for x^m + 1 ====================
+
+let mut factor_cache: ptr<ptr<Poly> > = null
+let mut factor_cache_count: ptr<i32> = null
+let mut factor_cache_done: ptr<i8> = null
+
+function init_factor_cache() -> void {
+    factor_cache = calloc(101, 8) as ptr<ptr<Poly> >
+    factor_cache_count = calloc(101, 4) as ptr<i32>
+    factor_cache_done = calloc(101, 1) as ptr<i8>
+    let mut m: i32 = 0
+    while m <= 100 {
+        factor_cache[m] = calloc(128, 32) as ptr<Poly>
+        m = m + 1
+    }
+}
+
+function irreducible_factors_xm_plus_1(m: i32, out: ptr<Poly>) -> i32 {
+    if factor_cache_done[m] != 0 {
+        let mut i: i32 = 0
+        while i < factor_cache_count[m] {
+            poly_copy(&out[i], &factor_cache[m][i])
+            i = i + 1
+        }
+        return factor_cache_count[m]
+    }
+    let f: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_zero(f)
+    poly_set_bit(f, m)
+    poly_set_bit(f, 0)
+    let cnt: i32 = factor_squarefree(f, out)
+    let mut i: i32 = 0
+    while i < cnt {
+        poly_copy(&factor_cache[m][i], &out[i])
+        i = i + 1
+    }
+    factor_cache_count[m] = cnt
+    factor_cache_done[m] = 1
+    free(f as ptr<void>)
+    return cnt
+}
+
+# ==================== Order computations ====================
+
+function frobenius_orbit_degree(a: ptr<Poly>, mod_irred: ptr<Poly>) -> i32 {
+    let t: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let sq: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_copy(t, a)
+    let d: i32 = poly_deg(mod_irred)
+    let mut k: i32 = 1
+    while k <= d {
+        poly_square_mod(sq, t, mod_irred)
+        poly_copy(t, sq)
+        if poly_equal(t, a) {
+            free(t as ptr<void>)
+            free(sq as ptr<void>)
+            return k
+        }
+        k = k + 1
+    }
+    free(t as ptr<void>)
+    free(sq as ptr<void>)
+    return d
+}
+
+# Mersenne factors cache
+let mut mersenne_cache: ptr<ptr<i64> > = null
+let mut mersenne_cache_count: ptr<i32> = null
+let mut mersenne_cache_done: ptr<i8> = null
+
+function init_mersenne_cache() -> void {
+    mersenne_cache = calloc(42, 8) as ptr<ptr<i64> >
+    mersenne_cache_count = calloc(42, 4) as ptr<i32>
+    mersenne_cache_done = calloc(42, 1) as ptr<i8>
+    let mut k: i32 = 0
+    while k < 42 {
+        mersenne_cache[k] = calloc(64, 8) as ptr<i64>
+        k = k + 1
+    }
+}
+
+function mersenne_factors(k: i32, out: ptr<i64>) -> i32 {
+    if mersenne_cache_done[k] != 0 {
+        let mut i: i32 = 0
+        while i < mersenne_cache_count[k] {
+            out[i] = mersenne_cache[k][i]
+            i = i + 1
+        }
+        return mersenne_cache_count[k]
+    }
+    let m: i64 = ((1 as i64) << k) - 1
+    let cnt: i32 = factor_small(m, out)
+    # Sort (bubble sort)
+    let mut i: i32 = 0
+    while i < cnt - 1 {
+        let mut j: i32 = i + 1
+        while j < cnt {
+            if out[j] < out[i] {
+                let tmp: i64 = out[i]
+                out[i] = out[j]
+                out[j] = tmp
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    i = 0
+    while i < cnt {
+        mersenne_cache[k][i] = out[i]
+        i = i + 1
+    }
+    mersenne_cache_count[k] = cnt
+    mersenne_cache_done[k] = 1
+    return cnt
+}
+
+function multiplicative_order(a: ptr<Poly>, mod_irred: ptr<Poly>) -> i64 {
+    if poly_is_zero(a) { return 0 }
+
+    let k: i32 = frobenius_orbit_degree(a, mod_irred)
+    let group_order: i64 = ((1 as i64) << k) - 1
+    if group_order == 1 { return 1 }
+
+    let mut order: i64 = group_order
+    let facs: ptr<i64> = calloc(64, 8) as ptr<i64>
+    let nfac: i32 = mersenne_factors(k, facs)
+    let unique_primes: ptr<i64> = calloc(64, 8) as ptr<i64>
+    let mut nunique: i32 = 0
+    let mut i: i32 = 0
+    while i < nfac {
+        if i == 0 || facs[i] != facs[i - 1] {
+            unique_primes[nunique] = facs[i]
+            nunique = nunique + 1
+        }
+        i = i + 1
+    }
+    let result: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    i = 0
+    while i < nunique {
+        let p: i64 = unique_primes[i]
+        while order % p == 0 {
+            let cand: i64 = order / p
+            poly_pow_mod(result, a, cand, mod_irred)
+            if poly_is_one(result) {
+                order = cand
+            } else {
+                break
+            }
+        }
+        i = i + 1
+    }
+    free(facs as ptr<void>)
+    free(unique_primes as ptr<void>)
+    free(result as ptr<void>)
+    return order
+}
+
+function max_two_lift_exponent(base_poly: ptr<Poly>, base_odd_order: i64,
+                               p: ptr<Poly>, max_exp: i32) -> i32 {
+    if max_exp <= 1 { return 0 }
+
+    let mut order: i64 = base_odd_order
+    let modv: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let tmp: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let result: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_copy(modv, p)
+    let mut t: i32 = 2
+    while t <= max_exp {
+        poly_mul(tmp, modv, p)
+        poly_copy(modv, tmp)
+        poly_pow_mod(result, base_poly, order, modv)
+        while !poly_is_one(result) {
+            order = order * 2
+            poly_pow_mod(result, base_poly, order, modv)
+        }
+        t = t + 1
+    }
+
+    let ratio: i64 = order / base_odd_order
+    let mut exp: i32 = 0
+    while ratio > 1 {
+        ratio = ratio >> 1
+        exp = exp + 1
+    }
+    free(modv as ptr<void>)
+    free(tmp as ptr<void>)
+    free(result as ptr<void>)
+    return exp
+}
+
+# ==================== Integer GCD/LCM ====================
+
+function igcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function ilcm(a: i64, b: i64) -> i64 {
+    if a == 0 || b == 0 { return 0 }
+    let r: i128 = (a / igcd(a, b)) as i128 * (b as i128)
+    return r as i64
+}
+
+# ==================== Period enumeration ====================
+
+struct DPEntry {
+    odd_lcm: i64,
+    smax: i32
+}
+
+let mut periods_set: ptr<i64> = null
+let mut periods_set_count: i32 = 0
+
+function periods_insert(val: i64) -> void {
+    let mut i: i32 = 0
+    while i < periods_set_count {
+        if periods_set[i] == val { return }
+        i = i + 1
+    }
+    periods_set[periods_set_count] = val
+    periods_set_count = periods_set_count + 1
+}
+
+function periods_for_n(n: i32, out_periods: ptr<i64>, out_count: ptr<i32>) -> void {
+    # n = 2^a * m with m odd
+    let mut m: i32 = n
+    let mut a: i32 = 0
+    while m % 2 == 0 {
+        m = m / 2
+        a = a + 1
+    }
+    let max_exp: i32 = 1 << a
+
+    # g(x) = x + x^(n-1)
+    let g_poly: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    poly_zero(g_poly)
+    poly_set_bit(g_poly, 1)
+    poly_set_bit(g_poly, n - 1)
+
+    # Factor x^m + 1
+    let factors: ptr<Poly> = calloc(128, 32) as ptr<Poly>
+    let nfactors: i32 = irreducible_factors_xm_plus_1(m, factors)
+
+    # DP over odd parts
+    let dp: ptr<DPEntry> = calloc(8192, 16) as ptr<DPEntry>
+    let mut dp_count: i32 = 1
+    dp[0].odd_lcm = 1
+    dp[0].smax = 0
+
+    let g_mod_p: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+    let g_gcd: ptr<Poly> = calloc(1, 32) as ptr<Poly>
+
+    let mut fi: i32 = 0
+    while fi < nfactors {
+        let p: ptr<Poly> = &factors[fi]
+
+        poly_mod(g_mod_p, g_poly, p)
+        poly_gcd(g_gcd, g_mod_p, p)
+        if poly_deg(g_gcd) > 0 {
+            fi = fi + 1
+            continue
+        }
+
+        let odd_order: i64 = multiplicative_order(g_mod_p, p)
+        let smax: i32 = max_two_lift_exponent(g_poly, odd_order, p, max_exp)
+
+        # Update DP
+        let new_dp: ptr<DPEntry> = calloc(8192, 16) as ptr<DPEntry>
+        let mut new_dp_count: i32 = 0
+
+        let mut i: i32 = 0
+        while i < dp_count {
+            new_dp[new_dp_count] = dp[i]
+            new_dp_count = new_dp_count + 1
+            i = i + 1
+        }
+
+        i = 0
+        while i < dp_count {
+            let nl: i64 = ilcm(dp[i].odd_lcm, odd_order)
+            let mut ns: i32 = dp[i].smax
+            if smax > ns { ns = smax }
+
+            let mut found: bool = false
+            let mut j: i32 = 0
+            while j < new_dp_count {
+                if new_dp[j].odd_lcm == nl {
+                    if ns > new_dp[j].smax { new_dp[j].smax = ns }
+                    found = true
+                    break
+                }
+                j = j + 1
+            }
+            if !found {
+                new_dp[new_dp_count].odd_lcm = nl
+                new_dp[new_dp_count].smax = ns
+                new_dp_count = new_dp_count + 1
+            }
+            i = i + 1
+        }
+
+        let mut k: i32 = 0
+        while k < new_dp_count {
+            dp[k] = new_dp[k]
+            k = k + 1
+        }
+        dp_count = new_dp_count
+        free(new_dp as ptr<void>)
+        fi = fi + 1
+    }
+
+    # Generate periods
+    out_count[0] = 0
+    let mut i: i32 = 0
+    while i < dp_count {
+        let mut e: i32 = 0
+        while e <= dp[i].smax {
+            out_periods[out_count[0]] = dp[i].odd_lcm << e
+            out_count[0] = out_count[0] + 1
+            e = e + 1
+        }
+        i = i + 1
+    }
+
+    free(g_poly as ptr<void>)
+    free(factors as ptr<void>)
+    free(dp as ptr<void>)
+    free(g_mod_p as ptr<void>)
+    free(g_gcd as ptr<void>)
+}
+
+# ==================== Main ====================
+
 function main() -> i32 {
-    printf("%lld\n", p843_native())
+    init_sieve()
+    init_factor_cache()
+    init_mersenne_cache()
+
+    periods_set = calloc(100000, 8) as ptr<i64>
+    periods_set_count = 0
+
+    let periods: ptr<i64> = calloc(10000, 8) as ptr<i64>
+    let np_ptr: ptr<i32> = calloc(1, 4) as ptr<i32>
+
+    let mut n: i32 = 3
+    while n <= 100 {
+        periods_for_n(n, periods, np_ptr)
+        let np: i32 = np_ptr[0]
+        let mut i: i32 = 0
+        while i < np {
+            periods_insert(periods[i])
+            i = i + 1
+        }
+        n = n + 1
+    }
+
+    let mut total: i64 = 0
+    let mut i: i32 = 0
+    while i < periods_set_count {
+        total = total + periods_set[i]
+        i = i + 1
+    }
+
+    printf("%lld\n", total)
+
+    free(periods as ptr<void>)
+    free(np_ptr as ptr<void>)
+    free(periods_set as ptr<void>)
     return 0
 }

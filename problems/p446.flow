@@ -1,11 +1,255 @@
 # Project Euler 446
-# Retractions B: F(10^7)=sum R(n^4+4) mod 10^9+7 via k^2+1 factorization.
+# Retractions B, F(10^7) mod 10^9+7.
+# Ported from native C++ to pure Flow.
+
+import euler.nt { isqrt }
 
 extern {
-    function pe446_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+
+function modpow(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut a: i64 = a0 % mod
+    let mut e: i64 = e0
+    while e > 0 {
+        if e % 2 == 1 { r = r * a % mod }
+        a = a * a % mod
+        e = e / 2
+    }
+    return r
+}
+
+function modinv(a: i64, mod: i64) -> i64 {
+    return modpow(a, mod - 2, mod)
+}
+
+function primes_upto(limit: i64) -> ptr<i32> {
+    let sieve: ptr<i8> = calloc(limit / 2 + 2, 1) as ptr<i8>
+    let mut i: i64 = 0
+    while i < limit / 2 + 2 {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    let r: i64 = isqrt(limit)
+    let mut x: i64 = 3
+    while x <= r {
+        if sieve[x / 2] == 1 {
+            let start: i64 = x * x / 2
+            let mut j: i64 = start
+            while j < limit / 2 + 2 {
+                sieve[j] = 0
+                j = j + x
+            }
+        }
+        x = x + 2
+    }
+    # count primes
+    let mut count: i64 = 1
+    let mut ii: i64 = 1
+    while ii < limit / 2 + 2 {
+        if sieve[ii] == 1 { count = count + 1 }
+        ii = ii + 1
+    }
+    let primes: ptr<i32> = calloc(count, 4) as ptr<i32>
+    primes[0] = 2
+    let mut idx: i64 = 1
+    ii = 1
+    while ii < limit / 2 + 2 {
+        if sieve[ii] == 1 {
+            primes[idx] = (2 * ii + 1) as i32
+            idx = idx + 1
+        }
+        ii = ii + 1
+    }
+    free(sieve)
+    return primes
+}
+
+# Returns number of primes stored in the returned array (via out param)
+let mut g_p_list: ptr<i32> = null
+let mut g_r_list: ptr<i32> = null
+let mut g_pcount: i64 = 0
+
+function sqrt_minus_one(p: i64) -> i64 {
+    let leg: i64 = (p - 1) / 2
+    let quarter: i64 = (p - 1) / 4
+    # Try small non-residues first
+    let mut g: i64 = 2
+    while g <= 113 {
+        if g >= p { break }
+        if modpow(g, leg, p) == p - 1 {
+            return modpow(g, quarter, p)
+        }
+        g = g + 1
+    }
+    g = 115
+    while true {
+        if modpow(g, leg, p) == p - 1 {
+            return modpow(g, quarter, p)
+        }
+        g = g + 2
+    }
+    return 0
+}
+
+function build_primes_with_sqrtm1(k_max: i64) -> void {
+    let all_primes: ptr<i32> = primes_upto(k_max)
+    # count primes
+    let mut total: i64 = 0
+    let mut i: i64 = 0
+    while i < k_max + 1 {
+        if all_primes[i] == 0 { break }
+        total = total + 1
+        i = i + 1
+    }
+    # p=2 is first, then primes p=1 mod 4
+    g_p_list = calloc(total, 4) as ptr<i32>
+    g_r_list = calloc(total, 4) as ptr<i32>
+    g_p_list[0] = 2
+    g_r_list[0] = 1
+    g_pcount = 1
+    i = 1
+    while i < total {
+        let p: i64 = all_primes[i] as i64
+        if p % 4 == 1 {
+            g_p_list[g_pcount] = p as i32
+            g_r_list[g_pcount] = sqrt_minus_one(p) as i32
+            g_pcount = g_pcount + 1
+        }
+        i = i + 1
+    }
+    free(all_primes)
+}
+
+function solve(N: i64) -> i64 {
+    if N < 1 { return 0 }
+    let k_max: i64 = N + 1
+    build_primes_with_sqrtm1(k_max)
+    let correction_even: i64 = 5 * modpow(9, MOD - 2, MOD) % MOD
+    let block_size: i64 = 1000000
+    let mut total: i64 = 0
+    let mut prev2_P: i64 = -1
+    let mut prev1_P: i64 = -1
+    let mut prev2_C: i64 = -1
+    let mut prev1_C: i64 = -1
+
+    let mut L: i64 = 0
+    while L <= k_max {
+        let R: i64 = if L + block_size < k_max + 1 { L + block_size } else { k_max + 1 }
+        let size: i64 = R - L
+        let rem: ptr<i64> = calloc(size, 8) as ptr<i64>
+        let prod: ptr<i64> = calloc(size, 8) as ptr<i64>
+        let cmod: ptr<i64> = calloc(size, 8) as ptr<i64>
+
+        let mut k: i64 = L
+        let mut v: i64 = k * k + 1
+        let mut i: i64 = 0
+        while i < size {
+            rem[i] = v
+            cmod[i] = v % MOD
+            prod[i] = 1
+            v = v + 2 * k + 1
+            k = k + 1
+            i = i + 1
+        }
+
+        let mut j: i64 = 0
+        while j < g_pcount {
+            let p: i64 = g_p_list[j] as i64
+            let r: i64 = g_r_list[j] as i64
+            if p == 2 {
+                let start: i64 = (1 - L) & 1
+                let mut idx: i64 = start
+                while idx < size {
+                    rem[idx] = rem[idx] / 2
+                    prod[idx] = prod[idx] * 3 % MOD
+                    idx = idx + 2
+                }
+            } else {
+                # process root r
+                let mut start: i64 = ((r - L) % p + p) % p
+                let mut idx: i64 = start
+                while idx < size {
+                    let mut x: i64 = rem[idx] / p
+                    let mut pe: i64 = p
+                    while x % p == 0 {
+                        x = x / p
+                        pe = pe * p
+                    }
+                    rem[idx] = x
+                    let mut t: i64 = pe + 1
+                    if t >= MOD { t = t % MOD }
+                    prod[idx] = prod[idx] * t % MOD
+                    idx = idx + p
+                }
+                # process root p - r
+                start = ((p - r - L) % p + p) % p
+                idx = start
+                while idx < size {
+                    let mut x: i64 = rem[idx] / p
+                    let mut pe: i64 = p
+                    while x % p == 0 {
+                        x = x / p
+                        pe = pe * p
+                    }
+                    rem[idx] = x
+                    let mut t: i64 = pe + 1
+                    if t >= MOD { t = t % MOD }
+                    prod[idx] = prod[idx] * t % MOD
+                    idx = idx + p
+                }
+            }
+            j = j + 1
+        }
+
+        i = 0
+        while i < size {
+            if rem[i] > 1 {
+                let mut t: i64 = rem[i] + 1
+                if t >= MOD { t = t % MOD }
+                prod[i] = prod[i] * t % MOD
+            }
+            i = i + 1
+        }
+
+        i = 0
+        while i < size {
+            let kk: i64 = L + i
+            let Pk: i64 = prod[i]
+            let Ck: i64 = cmod[i]
+            if prev2_P >= 0 {
+                let n: i64 = kk - 1
+                if n <= N {
+                    let mut pm: i64 = prev2_P * Pk % MOD
+                    if n % 2 == 0 { pm = pm * correction_even % MOD }
+                    let mm: i64 = prev2_C * Ck % MOD
+                    total = (total + pm - mm) % MOD
+                    if total < 0 { total = total + MOD }
+                }
+            }
+            prev2_P = prev1_P
+            prev1_P = Pk
+            prev2_C = prev1_C
+            prev1_C = Ck
+            i = i + 1
+        }
+
+        free(rem)
+        free(prod)
+        free(cmod)
+        L = L + block_size
+    }
+    free(g_p_list)
+    free(g_r_list)
+    return total % MOD
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe446_answer())
+    printf("%lld\n", solve(10000000))
     return 0
 }

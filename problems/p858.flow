@@ -1,11 +1,380 @@
 # Project Euler 858
 # LCM - G(800) mod 1e9+7.
+# G(N) = sum over all subsets S of {1..N} of lcm(S).
+# Ported from native C to pure Flow.
+
+import euler.nt { mod_pow }
 
 extern {
-    function p858_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1000000007
+const N: i64 = 800
+const SQRT_N: i64 = 28
+const N_WORDS: i64 = 13
+const KMAX: i64 = 27
+const LP_CAP: i64 = 65536
+
+function mm(a: i64, b: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (MOD as i128)) as i64
+}
+
+# Manual popcount for u64
+function popcount_u64(x: u64) -> i32 {
+    let mut v: u64 = x
+    v = v - ((v >> 1) & 0x5555555555555555)
+    v = (v & 0x3333333333333333) + ((v >> 2) & 0x3333333333333333)
+    v = (v + (v >> 4)) & 0x0F0F0F0F0F0F0F0F
+    return ((v * 0x0101010101010101) >> 56) as i32
+}
+
+# Sieve state
+let mut g_is_prime: ptr<i8> = null
+let mut g_primes: ptr<i32> = null
+let mut g_num_primes: i32 = 0
+
+function sieve() -> void {
+    g_is_prime = calloc(N + 1, 1)
+    let mut i: i32 = 0
+    while i <= N {
+        g_is_prime[i] = 1
+        i = i + 1
+    }
+    g_is_prime[0] = 0
+    g_is_prime[1] = 0
+    let mut p: i32 = 2
+    while p * p <= N {
+        if g_is_prime[p] != 0 {
+            let mut m: i32 = p * p
+            while m <= N {
+                g_is_prime[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    g_primes = calloc(N + 1, 4)
+    g_num_primes = 0
+    i = 2
+    while i <= N {
+        if g_is_prime[i] != 0 {
+            g_primes[g_num_primes] = i
+            g_num_primes = g_num_primes + 1
+        }
+        i = i + 1
+    }
+}
+
+# Global arrays
+let mut g_e_val: ptr<i64> = null
+let mut g_p_pow_e_mod: ptr<i64> = null
+let mut g_inv_p_pow_e: ptr<i64> = null
+let mut g_pow2: ptr<i64> = null
+let mut g_inv2pow: ptr<i64> = null
+let mut g_prefix_masks: ptr<u32> = null
+
+let mut g_small_primes: ptr<i32> = null
+let mut g_num_small_primes: i32 = 0
+let mut g_large_primes: ptr<i32> = null
+let mut g_num_large_primes: i32 = 0
+let mut g_w_large: ptr<i64> = null
+
+# Options: stored as flat arrays
+# opt_maskN[si * 16 * 13 + j * 13 + w] for small prime si, option j, word w
+let mut g_opt_maskN: ptr<u64> = null
+let mut g_opt_maskK: ptr<u32> = null
+let mut g_opt_weight: ptr<i64> = null
+let mut g_opt_count: ptr<i32> = null
+
+# Hash map for large_product memoization
+let mut g_lp_key: ptr<u32> = null
+let mut g_lp_val: ptr<i64> = null
+let mut g_lp_used: ptr<i8> = null
+
+function lp_clear() -> void {
+    let mut i: i64 = 0
+    while i < LP_CAP {
+        g_lp_used[i] = 0
+        i = i + 1
+    }
+}
+
+function lp_lookup(key: u32) -> i64 {
+    let mut h: i64 = ((key as i64) * 2654435761) % LP_CAP
+    while g_lp_used[h] != 0 {
+        if g_lp_key[h] == key { return g_lp_val[h] }
+        h = (h + 1) % LP_CAP
+    }
+    return -1
+}
+
+function lp_insert(key: u32, val: i64) -> void {
+    let mut h: i64 = ((key as i64) * 2654435761) % LP_CAP
+    while g_lp_used[h] != 0 {
+        if g_lp_key[h] == key {
+            g_lp_val[h] = val
+            return
+        }
+        h = (h + 1) % LP_CAP
+    }
+    g_lp_used[h] = 1
+    g_lp_key[h] = key
+    g_lp_val[h] = val
+}
+
+function large_product(maskK: u32) -> i64 {
+    let cached: i64 = lp_lookup(maskK)
+    if cached >= 0 { return cached }
+
+    let mut prod: i64 = 1
+    let mut i: i32 = 0
+    while i < g_num_large_primes {
+        let p: i32 = g_large_primes[i]
+        let t: i32 = (N / (p as i64)) as i32
+        let mut covered: i32 = 0
+        if t > 0 {
+            let pmask: u32 = g_prefix_masks[t]
+            let masked: u32 = maskK & pmask
+            covered = popcount_u64(masked as u64)
+        }
+        let new_val: i32 = t - covered
+        let factor: i64 = (1 - mm(g_w_large[p], g_inv2pow[new_val])) % MOD
+        factor = (factor % MOD + MOD) % MOD
+        prod = mm(prod, factor)
+        i = i + 1
+    }
+    lp_insert(maskK, prod)
+    return prod
+}
+
+# DFS state: maskN (ptr<u64> of N_WORDS), maskK (u32), coeff (i64)
+let mut g_dfs_total: i64 = 0
+
+function bitset_popcount(bs: ptr<u64>) -> i32 {
+    let mut cnt: i32 = 0
+    let mut i: i64 = 0
+    while i < N_WORDS {
+        cnt = cnt + popcount_u64(bs[i])
+        i = i + 1
+    }
+    return cnt
+}
+
+function dfs(i: i32, maskN: ptr<u64>, maskK: u32, coeff: i64) -> void {
+    if i == g_num_small_primes {
+        let covered_count: i32 = bitset_popcount(maskN)
+        let base: i64 = g_pow2[N - (covered_count as i64)]
+        let lp: i64 = large_product(maskK)
+        g_dfs_total = (g_dfs_total + mm(mm(coeff, base), lp)) % MOD
+        return
+    }
+    let mut j: i32 = 0
+    while j < g_opt_count[i] {
+        # Copy maskN
+        let new_maskN: ptr<u64> = calloc(N_WORDS, 8)
+        let mut w: i64 = 0
+        while w < N_WORDS {
+            new_maskN[w] = maskN[w]
+            w = w + 1
+        }
+        # OR in option's maskN
+        let base_idx: i64 = (i as i64) * 16 * N_WORDS + (j as i64) * N_WORDS
+        w = 0
+        while w < N_WORDS {
+            new_maskN[w] = new_maskN[w] | g_opt_maskN[base_idx + w]
+            w = w + 1
+        }
+        let new_maskK: u32 = maskK | g_opt_maskK[(i as i64) * 16 + (j as i64)]
+        let new_coeff: i64 = mm(coeff, g_opt_weight[(i as i64) * 16 + (j as i64)])
+        dfs(i + 1, new_maskN, new_maskK, new_coeff)
+        free(new_maskN)
+        j = j + 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p858_native())
+    sieve()
+
+    # Allocate global arrays
+    g_e_val = calloc(N + 1, 8)
+    g_p_pow_e_mod = calloc(N + 1, 8)
+    g_inv_p_pow_e = calloc(N + 1, 8)
+    g_pow2 = calloc(N + 1, 8)
+    g_inv2pow = calloc(KMAX + 1, 8)
+    g_prefix_masks = calloc(KMAX + 1, 4)
+    g_small_primes = calloc(32, 4)
+    g_large_primes = calloc(200, 4)
+    g_w_large = calloc(N + 1, 8)
+    g_opt_maskN = calloc(32 * 16 * N_WORDS, 8)
+    g_opt_maskK = calloc(32 * 16, 4)
+    g_opt_weight = calloc(32 * 16, 8)
+    g_opt_count = calloc(32, 4)
+    g_lp_key = calloc(LP_CAP, 4)
+    g_lp_val = calloc(LP_CAP, 8)
+    g_lp_used = calloc(LP_CAP, 1)
+
+    # Compute e[p], p^e mod MOD, inv_p^e
+    let mut L_mod: i64 = 1
+    let mut pi: i32 = 0
+    while pi < g_num_primes {
+        let p: i32 = g_primes[pi]
+        let mut ep: i32 = 0
+        let mut t: i64 = p as i64
+        while t <= N {
+            ep = ep + 1
+            t = t * (p as i64)
+        }
+        g_e_val[p] = ep as i64
+        let pe_mod: i64 = mod_pow(p as i64, ep as i64, MOD)
+        g_p_pow_e_mod[p] = pe_mod
+        g_inv_p_pow_e[p] = mod_pow(pe_mod, MOD - 2, MOD)
+        L_mod = mm(L_mod, pe_mod)
+        pi = pi + 1
+    }
+
+    # Split primes
+    g_num_small_primes = 0
+    g_num_large_primes = 0
+    pi = 0
+    while pi < g_num_primes {
+        let p: i32 = g_primes[pi]
+        if p <= SQRT_N {
+            g_small_primes[g_num_small_primes] = p
+            g_num_small_primes = g_num_small_primes + 1
+        } else {
+            g_large_primes[g_num_large_primes] = p
+            g_num_large_primes = g_num_large_primes + 1
+        }
+        pi = pi + 1
+    }
+
+    # Precompute pow2 and inv2pow
+    g_pow2[0] = 1
+    let mut i: i64 = 1
+    while i <= N {
+        g_pow2[i] = mm(g_pow2[i - 1], 2)
+        i = i + 1
+    }
+    let inv2: i64 = (MOD + 1) / 2
+    g_inv2pow[0] = 1
+    i = 1
+    while i <= KMAX {
+        g_inv2pow[i] = mm(g_inv2pow[i - 1], inv2)
+        i = i + 1
+    }
+
+    # prefix_masks
+    g_prefix_masks[0] = 0
+    let mut t: i64 = 1
+    while t <= KMAX {
+        g_prefix_masks[t] = ((1 as i64) << t) - 1
+        t = t + 1
+    }
+
+    # Build options for each small prime
+    let mut si: i32 = 0
+    while si < g_num_small_primes {
+        let p: i32 = g_small_primes[si]
+        let ep: i64 = g_e_val[p]
+        let mut nopt: i32 = 0
+
+        # r=0: not selected
+        let base0: i64 = (si as i64) * 16 * N_WORDS + (nopt as i64) * N_WORDS
+        let mut w: i64 = 0
+        while w < N_WORDS {
+            g_opt_maskN[base0 + w] = 0
+            w = w + 1
+        }
+        g_opt_maskK[(si as i64) * 16 + nopt] = 0
+        g_opt_weight[(si as i64) * 16 + nopt] = 1
+        nopt = nopt + 1
+
+        # r=1..ep
+        let mut r: i64 = 1
+        while r <= ep {
+            let mut q: i64 = 1
+            let mut j: i64 = 0
+            while j < r {
+                q = q * (p as i64)
+                j = j + 1
+            }
+
+            let base_idx: i64 = (si as i64) * 16 * N_WORDS + (nopt as i64) * N_WORDS
+            w = 0
+            while w < N_WORDS {
+                g_opt_maskN[base_idx + w] = 0
+                w = w + 1
+            }
+            let mut m: i64 = q
+            while m <= N {
+                let pos: i64 = m - 1
+                g_opt_maskN[base_idx + pos / 64] = g_opt_maskN[base_idx + pos / 64] | ((1 as u64) << (pos % 64))
+                m = m + q
+            }
+
+            let mut maskK: u32 = 0
+            if q <= KMAX {
+                let mut m2: i64 = q
+                while m2 <= KMAX {
+                    maskK = maskK | ((1 as u32) << ((m2 - 1) as i32))
+                    m2 = m2 + q
+                }
+            }
+            g_opt_maskK[(si as i64) * 16 + nopt] = maskK
+
+            # phi(p^r) = p^(r-1) * (p-1)
+            let phi: i64 = mm(mod_pow(p as i64, r - 1, MOD), (p - 1) as i64)
+            let w_val: i64 = mm(phi, g_inv_p_pow_e[p])
+            g_opt_weight[(si as i64) * 16 + nopt] = (MOD - w_val) % MOD
+            nopt = nopt + 1
+            r = r + 1
+        }
+        g_opt_count[si] = nopt
+        si = si + 1
+    }
+
+    # Compute w_large for large primes
+    let mut i2: i32 = 0
+    while i2 < g_num_large_primes {
+        let p: i32 = g_large_primes[i2]
+        let invp: i64 = mod_pow(p as i64, MOD - 2, MOD)
+        g_w_large[p] = mm((p - 1) as i64, invp)
+        i2 = i2 + 1
+    }
+
+    # Run DFS
+    lp_clear()
+    g_dfs_total = 0
+    let empty_mask: ptr<u64> = calloc(N_WORDS, 8)
+    let mut w: i64 = 0
+    while w < N_WORDS {
+        empty_mask[w] = 0
+        w = w + 1
+    }
+    dfs(0, empty_mask, 0, 1)
+    free(empty_mask)
+
+    printf("%lld\n", mm(L_mod, g_dfs_total))
+
+    free(g_is_prime)
+    free(g_primes)
+    free(g_e_val)
+    free(g_p_pow_e_mod)
+    free(g_inv_p_pow_e)
+    free(g_pow2)
+    free(g_inv2pow)
+    free(g_prefix_masks)
+    free(g_small_primes)
+    free(g_large_primes)
+    free(g_w_large)
+    free(g_opt_maskN)
+    free(g_opt_maskK)
+    free(g_opt_weight)
+    free(g_opt_count)
+    free(g_lp_key)
+    free(g_lp_val)
+    free(g_lp_used)
     return 0
 }
