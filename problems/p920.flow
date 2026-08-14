@@ -1,11 +1,590 @@
-# Project Euler 920
-# Tau Numbers.
+# Project Euler 920: Tau Numbers
+# m(k) = smallest tau number x with tau(x)=k
+# M(n) = sum of all m(k) whose values do not exceed 10^n
+# Compute M(16).
 
 extern {
-    function p920_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+}
+
+const LIMIT: i64 = 10000000000000000
+const MAX_VECS: i32 = 300000
+const MAX_EXP_LEN: i32 = 20
+const MAX_REQ: i32 = 12
+
+let mut g_inf: i128 = 0
+
+# Primes
+let mut g_primes: ptr<i32> = null
+let mut g_num_primes: i32 = 0
+
+# Exponent vectors
+let mut g_vec_len: ptr<i32> = null
+let mut g_vec_data: ptr<i32> = null
+let mut g_num_vecs: i32 = 0
+let mut g_lb_primes: ptr<i32> = null
+let mut g_num_lb_primes: i32 = 0
+let mut g_dfs_exps: ptr<i32> = null
+
+# Factorize small
+let mut g_fac_primes: ptr<i32> = null
+let mut g_fac_exps: ptr<i32> = null
+let mut g_fac_count: i32 = 0
+
+# min_tau_number globals
+let mut g_g_exps: ptr<i32> = null
+let mut g_g_r: i32 = 0
+let mut g_g_req_primes: ptr<i64> = null
+let mut g_g_req_exps: ptr<i32> = null
+let mut g_g_s: i32 = 0
+let mut g_g_fillers: ptr<i64> = null
+let mut g_g_num_fillers: i32 = 0
+let mut g_g_best: i128 = 0
+let mut g_g_limit: i128 = 0
+
+function sieve() -> void {
+    let isp: ptr<i8> = calloc(201, 1)
+    memset(isp as ptr<void>, 1, 201)
+    isp[0] = 0
+    isp[1] = 0
+    let mut p: i32 = 2
+    while p * p <= 200 {
+        if isp[p] != 0 {
+            let mut m: i32 = p * p
+            while m <= 200 {
+                isp[m] = 0
+                m = m + p
+            }
+        }
+        p = p + 1
+    }
+    g_num_primes = 0
+    let mut i: i32 = 2
+    while i <= 200 {
+        if isp[i] != 0 {
+            g_primes[g_num_primes] = i
+            g_num_primes = g_num_primes + 1
+        }
+        i = i + 1
+    }
+    free(isp)
+}
+
+function ipow128(base0: i64, exp0: i32) -> i128 {
+    let mut result: i128 = 1
+    let mut b: i128 = base0 as i128
+    let cap: i128 = (1000000000000000000 as i128) * (100 as i128)
+    let mut e: i32 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            result = result * b
+            if result > cap { return cap }
+        }
+        e = e >> 1
+        if e > 0 {
+            b = b * b
+            if b > cap { b = cap }
+        }
+    }
+    return result
+}
+
+function safe_mul(a: i128, b: i128) -> i128 {
+    if a == 0 || b == 0 { return 0 }
+    let r: i128 = a * b
+    if r / a != b { return g_inf }
+    return r
+}
+
+function dfs_gen(idx: i32, max_e: i32, current: i128) -> void {
+    if idx >= g_num_lb_primes { return }
+    let p: i32 = g_lb_primes[idx]
+    let mut p_pow: i128 = 1
+    let mut e: i32 = 1
+    while e <= max_e {
+        p_pow = p_pow * (p as i128)
+        let nxt: i128 = current * p_pow
+        if nxt > (LIMIT as i128) { break }
+        g_dfs_exps[idx] = e
+        let len: i32 = idx + 1
+        g_vec_len[g_num_vecs] = len
+        memcpy(g_vec_data + g_num_vecs * MAX_EXP_LEN, g_dfs_exps as ptr<void>, (len as i64) * 4)
+        g_num_vecs = g_num_vecs + 1
+        dfs_gen(idx + 1, e, nxt)
+        e = e + 1
+    }
+}
+
+function factorize_small(n0: i32) -> void {
+    g_fac_count = 0
+    let mut n: i32 = n0
+    let mut i: i32 = 0
+    while i < g_num_primes && g_primes[i] * g_primes[i] <= n {
+        if (n % g_primes[i]) == 0 {
+            let mut e: i32 = 0
+            while (n % g_primes[i]) == 0 {
+                n = n / g_primes[i]
+                e = e + 1
+            }
+            g_fac_primes[g_fac_count] = g_primes[i]
+            g_fac_exps[g_fac_count] = e
+            g_fac_count = g_fac_count + 1
+        }
+        i = i + 1
+    }
+    if n > 1 {
+        g_fac_primes[g_fac_count] = n
+        g_fac_exps[g_fac_count] = 1
+        g_fac_count = g_fac_count + 1
+    }
+}
+
+function lower_bound(mask: i32, current_prod: i128, next_req_idx: i32) -> i128 {
+    # Collect remaining exponents (not in mask), sort descending
+    let rem_exps: array<i32, 20> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let mut rem_count: i32 = 0
+    let mut i: i32 = 0
+    while i < g_g_r {
+        if ((mask >> i) & 1) == 0 {
+            rem_exps[rem_count] = g_g_exps[i]
+            rem_count = rem_count + 1
+        }
+        i = i + 1
+    }
+    # Sort descending (bubble sort, small array)
+    let mut i2: i32 = 0
+    while i2 < rem_count {
+        let mut j: i32 = i2 + 1
+        while j < rem_count {
+            if rem_exps[j] > rem_exps[i2] {
+                let t: i32 = rem_exps[i2]
+                rem_exps[i2] = rem_exps[j]
+                rem_exps[j] = t
+            }
+            j = j + 1
+        }
+        i2 = i2 + 1
+    }
+
+    # Collect remaining primes (fillers + remaining required), sort ascending
+    let rem_primes: array<i64, 40> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let mut rp_count: i32 = 0
+    let mut i3: i32 = 0
+    while i3 < g_g_num_fillers {
+        rem_primes[rp_count] = g_g_fillers[i3]
+        rp_count = rp_count + 1
+        i3 = i3 + 1
+    }
+    let mut i4: i32 = next_req_idx
+    while i4 < g_g_s {
+        rem_primes[rp_count] = g_g_req_primes[i4]
+        rp_count = rp_count + 1
+        i4 = i4 + 1
+    }
+    # Sort ascending (bubble sort)
+    let mut i5: i32 = 0
+    while i5 < rp_count {
+        let mut j2: i32 = i5 + 1
+        while j2 < rp_count {
+            if rem_primes[j2] < rem_primes[i5] {
+                let t2: i64 = rem_primes[i5]
+                rem_primes[i5] = rem_primes[j2]
+                rem_primes[j2] = t2
+            }
+            j2 = j2 + 1
+        }
+        i5 = i5 + 1
+    }
+
+    let mut lb: i128 = current_prod
+    let n: i32 = if rem_count < rp_count { rem_count } else { rp_count }
+    let mut i6: i32 = 0
+    while i6 < n {
+        let pp: i128 = ipow128(rem_primes[i6], rem_exps[i6])
+        lb = safe_mul(lb, pp)
+        if lb >= g_g_best || lb >= g_inf { break }
+        i6 = i6 + 1
+    }
+    return lb
+}
+
+function dfs_assign(req_idx: i32, mask: i32, current_prod: i128) -> void {
+    if current_prod >= g_g_best { return }
+    if req_idx == g_g_s {
+        # Collect remaining exponents, sort descending
+        let rem_exps: array<i32, 20> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let mut rem_count: i32 = 0
+        let mut i: i32 = 0
+        while i < g_g_r {
+            if ((mask >> i) & 1) == 0 {
+                rem_exps[rem_count] = g_g_exps[i]
+                rem_count = rem_count + 1
+            }
+            i = i + 1
+        }
+        # Sort descending
+        let mut i2: i32 = 0
+        while i2 < rem_count {
+            let mut j: i32 = i2 + 1
+            while j < rem_count {
+                if rem_exps[j] > rem_exps[i2] {
+                    let t: i32 = rem_exps[i2]
+                    rem_exps[i2] = rem_exps[j]
+                    rem_exps[j] = t
+                }
+                j = j + 1
+            }
+            i2 = i2 + 1
+        }
+        let mut total: i128 = current_prod
+        let mut i3: i32 = 0
+        while i3 < g_g_num_fillers && i3 < rem_count {
+            total = safe_mul(total, ipow128(g_g_fillers[i3], rem_exps[i3]))
+            if total >= g_g_best { return }
+            i3 = i3 + 1
+        }
+        if total <= g_g_limit && total < g_g_best { g_g_best = total }
+        return
+    }
+    if lower_bound(mask, current_prod, req_idx) >= g_g_best { return }
+    let p: i64 = g_g_req_primes[req_idx]
+    let need: i32 = g_g_req_exps[req_idx]
+    let mut prev_e: i32 = -1
+    let mut i4: i32 = 0
+    while i4 < g_g_r {
+        if ((mask >> i4) & 1) != 0 {
+            i4 = i4 + 1
+            continue
+        }
+        let e: i32 = g_g_exps[i4]
+        if e < need {
+            i4 = i4 + 1
+            continue
+        }
+        if e == prev_e {
+            i4 = i4 + 1
+            continue
+        }
+        prev_e = e
+        let nxt: i128 = safe_mul(current_prod, ipow128(p, e))
+        if nxt >= g_g_best || nxt > g_g_limit {
+            i4 = i4 + 1
+            continue
+        }
+        dfs_assign(req_idx + 1, mask | (1 << i4), nxt)
+        i4 = i4 + 1
+    }
+}
+
+function min_tau_number(exps: ptr<i32>, r: i32, req_pr: ptr<i64>, req_ex: ptr<i32>, s: i32) -> i64 {
+    if r == 0 { return 1 }
+    if s > r { return -1 }
+    let mut max_exp: i32 = exps[0]
+    let mut i: i32 = 0
+    while i < s {
+        if req_ex[i] > max_exp { return -1 }
+        i = i + 1
+    }
+
+    # Required set marking
+    let req_mark: ptr<i32> = calloc(200, 4)
+    let mut i2: i32 = 0
+    while i2 < s {
+        let mut j: i32 = 0
+        while j < g_num_primes {
+            if (g_primes[j] as i64) == req_pr[i2] {
+                req_mark[j] = 1
+                break
+            }
+            j = j + 1
+        }
+        i2 = i2 + 1
+    }
+
+    let fillers_needed: i32 = r - s
+    g_g_num_fillers = 0
+    let mut j2: i32 = 0
+    while j2 < g_num_primes && g_g_num_fillers < fillers_needed {
+        if req_mark[j2] == 0 {
+            g_g_fillers[g_g_num_fillers] = g_primes[j2] as i64
+            g_g_num_fillers = g_g_num_fillers + 1
+        }
+        j2 = j2 + 1
+    }
+
+    g_g_r = r
+    memcpy(g_g_exps as ptr<void>, exps as ptr<void>, (r as i64) * 4)
+    g_g_s = s
+    let mut i3: i32 = 0
+    while i3 < s {
+        g_g_req_primes[i3] = req_pr[i3]
+        g_g_req_exps[i3] = req_ex[i3]
+        i3 = i3 + 1
+    }
+    # Sort required primes descending (bubble sort)
+    let mut i4: i32 = 0
+    while i4 < s {
+        let mut j3: i32 = i4 + 1
+        while j3 < s {
+            if g_g_req_primes[j3] > g_g_req_primes[i4] {
+                let tp: i64 = g_g_req_primes[i4]
+                g_g_req_primes[i4] = g_g_req_primes[j3]
+                g_g_req_primes[j3] = tp
+                let te: i32 = g_g_req_exps[i4]
+                g_g_req_exps[i4] = g_g_req_exps[j3]
+                g_g_req_exps[j3] = te
+            }
+            j3 = j3 + 1
+        }
+        i4 = i4 + 1
+    }
+    g_g_limit = LIMIT as i128
+
+    # Greedy upper bound
+    let avail: ptr<i32> = calloc(MAX_EXP_LEN as i64, 4)
+    memcpy(avail as ptr<void>, exps as ptr<void>, (r as i64) * 4)
+    # Sort ascending
+    let mut i5: i32 = 0
+    while i5 < r {
+        let mut j4: i32 = i5 + 1
+        while j4 < r {
+            if avail[j4] < avail[i5] {
+                let t: i32 = avail[i5]
+                avail[i5] = avail[j4]
+                avail[j4] = t
+            }
+            j4 = j4 + 1
+        }
+        i5 = i5 + 1
+    }
+
+    let mut gp: i128 = 1
+    let mut gok: i32 = 1
+    let au: ptr<i32> = calloc(MAX_EXP_LEN as i64, 4)
+    let mut i6: i32 = 0
+    while i6 < s && gok != 0 {
+        let p: i64 = g_g_req_primes[i6]
+        let need: i32 = g_g_req_exps[i6]
+        let mut found: i32 = -1
+        let mut j5: i32 = 0
+        while j5 < r {
+            if au[j5] == 0 && avail[j5] >= need {
+                found = j5
+                break
+            }
+            j5 = j5 + 1
+        }
+        if found < 0 {
+            gok = 0
+        } else {
+            au[found] = 1
+            gp = safe_mul(gp, ipow128(p, avail[found]))
+            if gp > g_g_limit { gok = 0 }
+        }
+        i6 = i6 + 1
+    }
+    if gok != 0 {
+        # Remaining exponents sorted descending
+        let rem: ptr<i32> = calloc(MAX_EXP_LEN as i64, 4)
+        let mut rc: i32 = 0
+        let mut j6: i32 = 0
+        while j6 < r {
+            if au[j6] == 0 {
+                rem[rc] = avail[j6]
+                rc = rc + 1
+            }
+            j6 = j6 + 1
+        }
+        # Sort descending
+        let mut i7: i32 = 0
+        while i7 < rc {
+            let mut j7: i32 = i7 + 1
+            while j7 < rc {
+                if rem[j7] > rem[i7] {
+                    let t: i32 = rem[i7]
+                    rem[i7] = rem[j7]
+                    rem[j7] = t
+                }
+                j7 = j7 + 1
+            }
+            i7 = i7 + 1
+        }
+        let mut i8v: i32 = 0
+        while i8v < g_g_num_fillers && i8v < rc {
+            gp = safe_mul(gp, ipow128(g_g_fillers[i8v], rem[i8v]))
+            if gp > g_g_limit { gok = 0; break }
+            i8v = i8v + 1
+        }
+        free(rem)
+    }
+    g_g_best = if gok != 0 { gp } else { g_inf }
+
+    dfs_assign(0, 0, 1)
+
+    free(req_mark)
+    free(avail)
+    free(au)
+
+    if g_g_best <= g_g_limit && g_g_best < g_inf { return g_g_best as i64 }
+    return -1
+}
+
+# Heapsort for kn_pairs: sort by (k ascending, n ascending)
+function kn_sift_down(pk: ptr<i64>, pn: ptr<i64>, n: i32, i: i32) -> void {
+    let mut root: i32 = i
+    while true {
+        let left: i32 = 2 * root + 1
+        let right: i32 = 2 * root + 2
+        let mut largest: i32 = root
+        if left < n {
+            if pk[left] > pk[largest] { largest = left }
+            if pk[left] == pk[largest] && pn[left] > pn[largest] { largest = left }
+        }
+        if right < n {
+            if pk[right] > pk[largest] { largest = right }
+            if pk[right] == pk[largest] && pn[right] > pn[largest] { largest = right }
+        }
+        if largest == root { return }
+        let tk: i64 = pk[root]
+        pk[root] = pk[largest]
+        pk[largest] = tk
+        let tn: i64 = pn[root]
+        pn[root] = pn[largest]
+        pn[largest] = tn
+        root = largest
+    }
+}
+
+function kn_heapsort(pk: ptr<i64>, pn: ptr<i64>, n: i32) -> void {
+    let mut i: i32 = n / 2 - 1
+    while i >= 0 {
+        kn_sift_down(pk, pn, n, i)
+        i = i - 1
+    }
+    let mut j: i32 = n - 1
+    while j > 0 {
+        let tk: i64 = pk[0]
+        pk[0] = pk[j]
+        pk[j] = tk
+        let tn: i64 = pn[0]
+        pn[0] = pn[j]
+        pn[j] = tn
+        kn_sift_down(pk, pn, j, 0)
+        j = j - 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p920_native())
+    g_inf = (1 as i128) << 120
+
+    # Allocate arrays
+    g_primes = calloc(200, 4)
+    g_vec_len = calloc(MAX_VECS as i64, 4)
+    g_vec_data = calloc((MAX_VECS as i64) * (MAX_EXP_LEN as i64), 4)
+    g_lb_primes = calloc(20, 4)
+    g_dfs_exps = calloc(MAX_EXP_LEN as i64, 4)
+    g_fac_primes = calloc(10, 4)
+    g_fac_exps = calloc(10, 4)
+    g_g_exps = calloc(MAX_EXP_LEN as i64, 4)
+    g_g_req_primes = calloc(MAX_REQ as i64, 8)
+    g_g_req_exps = calloc(MAX_REQ as i64, 4)
+    g_g_fillers = calloc(MAX_EXP_LEN as i64, 8)
+
+    sieve()
+
+    # Generate exponent vectors
+    g_num_vecs = 0
+    let mut prod: i128 = 1
+    g_num_lb_primes = 0
+    let mut i: i32 = 0
+    while i < g_num_primes {
+        if prod * (g_primes[i] as i128) > (LIMIT as i128) { break }
+        prod = prod * (g_primes[i] as i128)
+        g_lb_primes[g_num_lb_primes] = g_primes[i]
+        g_num_lb_primes = g_num_lb_primes + 1
+        i = i + 1
+    }
+    dfs_gen(0, 60, 1)
+
+    # Collect (k, n) pairs
+    let pair_k: ptr<i64> = calloc((g_num_vecs + 1) as i64, 8)
+    let pair_n: ptr<i64> = calloc((g_num_vecs + 1) as i64, 8)
+    let mut np: i32 = 0
+
+    # k=1, n=1
+    pair_k[np] = 1
+    pair_n[np] = 1
+    np = np + 1
+
+    let req_pr: ptr<i64> = calloc(MAX_REQ as i64, 8)
+    let req_ex: ptr<i32> = calloc(MAX_REQ as i64, 4)
+
+    let mut v: i32 = 0
+    while v < g_num_vecs {
+        let exps: ptr<i32> = g_vec_data + v * MAX_EXP_LEN
+        let r: i32 = g_vec_len[v]
+
+        let mut k: i64 = 1
+        let mut s: i32 = 0
+
+        let mut i2: i32 = 0
+        while i2 < r {
+            let ai1: i32 = exps[i2] + 1
+            k = k * (ai1 as i64)
+            factorize_small(ai1)
+            let mut j: i32 = 0
+            while j < g_fac_count {
+                let fp: i32 = g_fac_primes[j]
+                let fe: i32 = g_fac_exps[j]
+                let mut found: i32 = -1
+                let mut t: i32 = 0
+                while t < s {
+                    if req_pr[t] == (fp as i64) {
+                        found = t
+                        break
+                    }
+                    t = t + 1
+                }
+                if found >= 0 {
+                    req_ex[found] = req_ex[found] + fe
+                } else {
+                    req_pr[s] = fp as i64
+                    req_ex[s] = fe
+                    s = s + 1
+                }
+                j = j + 1
+            }
+            i2 = i2 + 1
+        }
+
+        let n_val: i64 = min_tau_number(exps, r, req_pr, req_ex, s)
+        if n_val > 0 && n_val <= LIMIT {
+            pair_k[np] = k
+            pair_n[np] = n_val
+            np = np + 1
+        }
+        v = v + 1
+    }
+
+    # Sort pairs by (k ascending, n ascending)
+    kn_heapsort(pair_k, pair_n, np)
+
+    # Sum unique k values
+    let mut sum: i128 = 0
+    let mut prev_k: i64 = -1
+    let mut i3: i32 = 0
+    while i3 < np {
+        if pair_k[i3] != prev_k {
+            sum = sum + (pair_n[i3] as i128)
+            prev_k = pair_k[i3]
+        }
+        i3 = i3 + 1
+    }
+
+    printf("%lld\n", sum as i64)
     return 0
 }

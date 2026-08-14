@@ -1,12 +1,541 @@
 # Project Euler 1001
 # Connections I: connectivity number of a chord diagram, mod 1003443221.
-# Native C helper for leftist heap + DSU + Fenwick/interval DP.
+# Leftist heap + DSU + Fenwick/interval DP.
 
 extern {
-    function p1001_native() -> i64
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fclose(f: ptr<void>) -> i32
+    function fseek(f: ptr<void>, off: i64, whence: i32) -> i32
+    function ftell(f: ptr<void>) -> i64
+    function fread(buf: ptr<void>, size: i64, nmemb: i64, f: ptr<void>) -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1003443221
+
+struct Cand {
+    right: i32,
+    node: i32,
+    root: i32
+}
+
+# ---- DSU with path compression ----
+
+function find(parent: ptr<i32>, x0: i32) -> i32 {
+    let mut root: i32 = x0
+    while parent[root] != root {
+        root = parent[root]
+    }
+    let mut x: i32 = x0
+    while parent[x] != root {
+        let nxt: i32 = parent[x]
+        parent[x] = root
+        x = nxt
+    }
+    return root
+}
+
+# ---- leftist heap meld (recursive) ----
+
+function meld(right_end: ptr<i32>, hl: ptr<i32>, hr: ptr<i32>, hrank: ptr<i32>,
+              a0: i32, b0: i32) -> i32 {
+    let a: i32 = a0
+    let b: i32 = b0
+    if a < 0 { return b }
+    if b < 0 { return a }
+    let mut aa: i32 = a
+    let mut bb: i32 = b
+    if right_end[aa] > right_end[bb] {
+        let t: i32 = aa
+        aa = bb
+        bb = t
+    }
+    hr[aa] = meld(right_end, hl, hr, hrank, hr[aa], bb)
+    let lc: i32 = hl[aa]
+    let rc: i32 = hr[aa]
+    let lr: i32 = if lc < 0 { 0 } else { hrank[lc] }
+    let rr: i32 = if rc < 0 { 0 } else { hrank[rc] }
+    if lr < rr {
+        hl[aa] = rc
+        hr[aa] = lc
+    }
+    hrank[aa] = (if lr < rr { lr } else { rr }) + 1
+    return aa
+}
+
+function pop_heap(right_end: ptr<i32>, hl: ptr<i32>, hr: ptr<i32>, hrank: ptr<i32>,
+                  node: i32) -> i32 {
+    return meld(right_end, hl, hr, hrank, hl[node], hr[node])
+}
+
+function union_dsu(parent: ptr<i32>, sz: ptr<i32>, comp_heap: ptr<i32>,
+                   hl: ptr<i32>, hr: ptr<i32>, hrank: ptr<i32>, right_end: ptr<i32>,
+                   a0: i32, b0: i32) -> i32 {
+    let mut a: i32 = find(parent, a0)
+    let mut b: i32 = find(parent, b0)
+    if a == b { return a }
+    if sz[a] < sz[b] {
+        let t: i32 = a
+        a = b
+        b = t
+    }
+    parent[b] = a
+    sz[a] = sz[a] + sz[b]
+    comp_heap[a] = meld(right_end, hl, hr, hrank, comp_heap[a], comp_heap[b])
+    comp_heap[b] = -1
+    return a
+}
+
+# ---- candidate min-heap (ordered by right) ----
+
+function cand_push(h: ptr<Cand>, pn: ptr<i32>, c: Cand) -> void {
+    let n: i32 = pn[0]
+    let i: i32 = n
+    h[i] = c
+    pn[0] = n + 1
+    let mut ii: i32 = i
+    while ii > 0 {
+        let p: i32 = (ii - 1) / 2
+        if h[ii].right < h[p].right {
+            let t: Cand = h[ii]
+            h[ii] = h[p]
+            h[p] = t
+            ii = p
+        } else {
+            ii = 0
+        }
+    }
+}
+
+function cand_pop(h: ptr<Cand>, pn: ptr<i32>) -> void {
+    let n: i32 = pn[0] - 1
+    pn[0] = n
+    h[0] = h[n]
+    let mut i: i32 = 0
+    let mut cont: bool = true
+    while cont {
+        let l: i32 = 2 * i + 1
+        let r: i32 = 2 * i + 2
+        let sm: i32 = i
+        if l < n && h[l].right < h[sm].right { sm = l }
+        if r < n && h[r].right < h[sm].right { sm = r }
+        if sm == i {
+            cont = false
+        } else {
+            let t: Cand = h[i]
+            h[i] = h[sm]
+            h[sm] = t
+            i = sm
+        }
+    }
+}
+
+# ---- find crossing components (sweep) ----
+
+function find_components(left_end: ptr<i32>, right_end: ptr<i32>,
+                         parent: ptr<i32>, sz: ptr<i32>,
+                         hl: ptr<i32>, hr: ptr<i32>, hrank: ptr<i32>, comp_heap: ptr<i32>,
+                         chord_count: i32) -> void {
+    let cand: ptr<Cand> = calloc((chord_count + 1) as i64, 12) as ptr<Cand>
+    let cn: ptr<i32> = calloc(1, 4) as ptr<i32>
+    cn[0] = 0
+
+    let mut chord: i32 = 0
+    while chord < chord_count {
+        let le: i32 = left_end[chord]
+        let re: i32 = right_end[chord]
+        let mut current: i32 = chord
+
+        let mut inner: bool = true
+        while inner {
+            if cn[0] == 0 {
+                inner = false
+            } else {
+                let top: Cand = cand[0]
+                let rt: i32 = find(parent, top.root)
+
+                if rt != top.root {
+                    cand_pop(cand, cn)
+                } else {
+                    let chr: i32 = comp_heap[rt]
+                    if chr != top.node || right_end[top.node] != top.right {
+                        cand_pop(cand, cn)
+                    } else {
+                        if rt == find(parent, current) {
+                            cand_pop(cand, cn)
+                        } else {
+                            if top.right <= le {
+                                cand_pop(cand, cn)
+                                while comp_heap[rt] >= 0 && right_end[comp_heap[rt]] <= le {
+                                    comp_heap[rt] = pop_heap(right_end, hl, hr, hrank, comp_heap[rt])
+                                }
+                                let nhr: i32 = comp_heap[rt]
+                                if nhr >= 0 {
+                                    cand_push(cand, cn, Cand {
+                                        right: right_end[nhr],
+                                        node: nhr,
+                                        root: rt
+                                    })
+                                }
+                            } else {
+                                if top.right >= re {
+                                    inner = false
+                                } else {
+                                    cand_pop(cand, cn)
+                                    current = union_dsu(parent, sz, comp_heap, hl, hr, hrank, right_end, current, rt)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        current = find(parent, current)
+        let hr2: i32 = comp_heap[current]
+        if hr2 >= 0 {
+            cand_push(cand, cn, Cand {
+                right: right_end[hr2],
+                node: hr2,
+                root: current
+            })
+        }
+        chord = chord + 1
+    }
+
+    # Path compress all.
+    let mut i: i32 = 0
+    while i < chord_count {
+        find(parent, i)
+        i = i + 1
+    }
+
+    free(cand as ptr<void>)
+    free(cn as ptr<void>)
+}
+
+# ---- permutation cut ----
+
+function permutation_cut(word: ptr<i32>, wc_len: i32) -> i32 {
+    let chord_count: i32 = wc_len / 2
+    let freq: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    let mut repeated: i32 = 0
+
+    let mut i: i32 = 0
+    while i < chord_count {
+        let c: i32 = word[i]
+        if freq[c] == 1 { repeated = repeated + 1 }
+        freq[c] = freq[c] + 1
+        i = i + 1
+    }
+
+    let mut start: i32 = 0
+    while start < chord_count {
+        if repeated == 0 {
+            free(freq as ptr<void>)
+            return start
+        }
+        let outgoing: i32 = word[start]
+        if freq[outgoing] == 2 { repeated = repeated - 1 }
+        freq[outgoing] = freq[outgoing] - 1
+        let incoming: i32 = word[start + chord_count]
+        if freq[incoming] == 1 { repeated = repeated + 1 }
+        freq[incoming] = freq[incoming] + 1
+        start = start + 1
+    }
+
+    free(freq as ptr<void>)
+    return -1
+}
+
+# ---- count via Fenwick tree for permutation diagrams ----
+
+function count_perm_diagram(word: ptr<i32>, wc_len: i32, start: i32) -> i64 {
+    let cc: i32 = wc_len / 2
+    let fenwick: ptr<i64> = calloc((cc + 1) as i64, 8) as ptr<i64>
+    let mut sub_count: i64 = 0
+
+    let second_pos: ptr<i32> = calloc(cc as i64, 4) as ptr<i32>
+    let mut i: i32 = 0
+    while i < cc {
+        let chord: i32 = word[start + cc + i]
+        second_pos[chord] = i
+        i = i + 1
+    }
+
+    i = 0
+    while i < cc {
+        let chord: i32 = word[start + i]
+        let pos: i32 = second_pos[chord]
+
+        let mut prefix: i64 = 0
+        let mut idx: i32 = pos + 1
+        while idx > 0 {
+            prefix = (prefix + fenwick[idx]) % MOD
+            idx = idx - (idx & (0 - idx))
+        }
+
+        let mut ending: i64 = (1 + sub_count - prefix) % MOD
+        if ending < 0 { ending = ending + MOD }
+        sub_count = (sub_count + ending) % MOD
+
+        idx = pos + 1
+        while idx <= cc {
+            fenwick[idx] = (fenwick[idx] + ending) % MOD
+            idx = idx + (idx & (0 - idx))
+        }
+        i = i + 1
+    }
+
+    free(fenwick as ptr<void>)
+    free(second_pos as ptr<void>)
+    return (sub_count + 1) % MOD
+}
+
+# ---- count via interval DP ----
+
+function count_interval_dp(word: ptr<i32>, wc_len: i32) -> i64 {
+    let n: i32 = wc_len
+    let mate: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+    let mut i: i32 = 0
+    while i < n {
+        mate[i] = -1
+        i = i + 1
+    }
+
+    let cc: i32 = n / 2
+    let first_pos: ptr<i32> = calloc(cc as i64, 4) as ptr<i32>
+    i = 0
+    while i < cc {
+        first_pos[i] = -1
+        i = i + 1
+    }
+
+    let mut pos: i32 = 0
+    while pos < n {
+        let c: i32 = word[pos]
+        if first_pos[c] < 0 {
+            first_pos[c] = pos
+        } else {
+            mate[first_pos[c]] = pos
+            mate[pos] = first_pos[c]
+        }
+        pos = pos + 1
+    }
+
+    let inside: ptr<i64> = calloc(n as i64, 8) as ptr<i64>
+    let current: ptr<i64> = calloc((n + 1) as i64, 8) as ptr<i64>
+    i = 0
+    while i < n {
+        inside[i] = 1
+        i = i + 1
+    }
+
+    let mut boundary: i32 = 0
+    while boundary < n {
+        current[boundary + 1] = 1
+        let mut pos2: i32 = boundary
+        while pos2 >= 0 {
+            let other: i32 = mate[pos2]
+            let mut val: i64 = current[pos2 + 1]
+            if pos2 < other && other <= boundary {
+                val = (val + inside[pos2] * current[other + 1]) % MOD
+            }
+            current[pos2] = val
+            pos2 = pos2 - 1
+        }
+        let next_pos: i32 = boundary + 1
+        if next_pos < n && mate[next_pos] < next_pos {
+            let le: i32 = mate[next_pos]
+            inside[le] = current[le + 1]
+        }
+        boundary = boundary + 1
+    }
+
+    let result: i64 = current[0]
+    free(mate as ptr<void>)
+    free(first_pos as ptr<void>)
+    free(inside as ptr<void>)
+    free(current as ptr<void>)
+    return result
+}
+
+function count_component(word: ptr<i32>, wc_len: i32) -> i64 {
+    let start: i32 = permutation_cut(word, wc_len)
+    if start >= 0 {
+        return count_perm_diagram(word, wc_len, start)
+    }
+    return count_interval_dp(word, wc_len)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p1001_native())
+    let f: ptr<void> = fopen("data/p1001_input.txt", "r")
+    if f == null {
+        printf("failed to open data/p1001_input.txt\n")
+        return 1
+    }
+    fseek(f, 0, 2)
+    let fsz: i64 = ftell(f)
+    fseek(f, 0, 0)
+    let buf: ptr<i8> = calloc(fsz + 1, 1) as ptr<i8>
+    fread(buf as ptr<void>, 1, fsz, f)
+    buf[fsz] = 0
+    fclose(f)
+
+    # Parse comma-separated integers.
+    let cap: i32 = 40001
+    let values: ptr<i32> = calloc(cap as i64, 4) as ptr<i32>
+    let mut n: i32 = 0
+    let mut p: i64 = 0
+    let mut ch: i8 = buf[p]
+    while ch != 0 {
+        # skip whitespace
+        while ch != 0 {
+            if ch != 32 && ch != 10 && ch != 13 && ch != 9 { break }
+            p = p + 1
+            ch = buf[p]
+        }
+        if ch == 0 { break }
+        let mut val: i32 = 0
+        while ch >= 48 && ch <= 57 {
+            val = val * 10 + (ch - 48) as i32
+            p = p + 1
+            ch = buf[p]
+        }
+        values[n] = val
+        n = n + 1
+        # skip to next comma
+        while ch != 0 && ch != 44 {
+            p = p + 1
+            ch = buf[p]
+        }
+        if ch == 44 {
+            p = p + 1
+            ch = buf[p]
+        }
+    }
+    free(buf as ptr<void>)
+
+    let chord_count: i32 = n / 2
+
+    # Parse chords.
+    let left_end: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    let right_end: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    let chord_at: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+
+    let mut max_val: i32 = 0
+    let mut i: i32 = 0
+    while i < n {
+        if values[i] > max_val { max_val = values[i] }
+        i = i + 1
+    }
+    let open_chord: ptr<i32> = calloc((max_val + 1) as i64, 4) as ptr<i32>
+    let mut j: i32 = 0
+    while j <= max_val {
+        open_chord[j] = -1
+        j = j + 1
+    }
+
+    let mut nc: i32 = 0
+    let mut pos: i32 = 0
+    while pos < n {
+        let v: i32 = values[pos]
+        let c: i32 = open_chord[v]
+        if c < 0 {
+            let cn: i32 = nc
+            nc = nc + 1
+            open_chord[v] = cn
+            left_end[cn] = pos
+            right_end[cn] = -1
+            chord_at[pos] = cn
+        } else {
+            right_end[c] = pos
+            open_chord[v] = -1
+            chord_at[pos] = c
+        }
+        pos = pos + 1
+    }
+    free(open_chord as ptr<void>)
+
+    # DSU + leftist heap arrays.
+    let parent: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    let sz: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    let hl: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    let hr: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    let hrank: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    let comp_heap: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+
+    let mut k: i32 = 0
+    while k < chord_count {
+        parent[k] = k
+        sz[k] = 1
+        hl[k] = -1
+        hr[k] = -1
+        hrank[k] = 1
+        comp_heap[k] = k
+        k = k + 1
+    }
+
+    find_components(left_end, right_end, parent, sz, hl, hr, hrank, comp_heap, chord_count)
+
+    # Group chords by root.
+    let comp_word_count: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    i = 0
+    while i < n {
+        let r: i32 = find(parent, chord_at[i])
+        comp_word_count[r] = comp_word_count[r] + 1
+        i = i + 1
+    }
+
+    let comp_words: ptr<ptr<i32> > = calloc(chord_count as i64, 8) as ptr<ptr<i32> >
+    i = 0
+    while i < chord_count {
+        if comp_word_count[i] > 0 {
+            comp_words[i] = calloc(comp_word_count[i] as i64, 4) as ptr<i32>
+        }
+        i = i + 1
+    }
+    let comp_idx: ptr<i32> = calloc(chord_count as i64, 4) as ptr<i32>
+    i = 0
+    while i < n {
+        let r: i32 = find(parent, chord_at[i])
+        comp_words[r][comp_idx[r]] = chord_at[i]
+        comp_idx[r] = comp_idx[r] + 1
+        i = i + 1
+    }
+
+    # Multiply component counts.
+    let mut answer: i64 = 1
+    i = 0
+    while i < chord_count {
+        if comp_word_count[i] > 0 {
+            let c: i64 = count_component(comp_words[i], comp_word_count[i])
+            answer = answer * c % MOD
+        }
+        i = i + 1
+    }
+
+    printf("%lld\n", answer)
+
+    # Cleanup.
+    i = 0
+    while i < chord_count {
+        if comp_words[i] != null { free(comp_words[i] as ptr<void>) }
+        i = i + 1
+    }
+    free(comp_words as ptr<void>)
+    free(comp_idx as ptr<void>)
+    free(comp_word_count as ptr<void>)
+    free(left_end as ptr<void>)
+    free(right_end as ptr<void>)
+    free(chord_at as ptr<void>)
+    free(parent as ptr<void>)
+    free(sz as ptr<void>)
+    free(hl as ptr<void>)
+    free(hr as ptr<void>)
+    free(hrank as ptr<void>)
+    free(comp_heap as ptr<void>)
+    free(values as ptr<void>)
     return 0
 }

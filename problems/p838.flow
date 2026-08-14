@@ -1,9 +1,379 @@
-# Wrapper for native C solver.
+# Project Euler 838: Not Coprime.
+# f(N) = smallest positive integer not coprime to any n<=N whose LSD is 3.
+# Prints ln(f(10^6)) rounded to 6 digits.
+# Ported from native C to pure Flow.
+
 extern {
-    function p838_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function log(x: f64) -> f64
+}
+
+const N: i64 = 1000000
+const SCALE: i64 = 1000000000000
+
+# ---- Dinic max-flow globals (linked-list adjacency) ----
+let mut g_head: ptr<i64> = null
+let mut e_to: ptr<i64> = null
+let mut e_cap: ptr<i64> = null
+let mut e_rev: ptr<i64> = null
+let mut e_next: ptr<i64> = null
+let mut g_level: ptr<i64> = null
+let mut g_it: ptr<i64> = null
+let mut g_q: ptr<i64> = null
+let mut g_n: i64 = 0
+let mut g_edge_cnt: i64 = 0
+
+function add_edge(u: i64, v: i64, cap: i64) -> void {
+    let e1: i64 = g_edge_cnt
+    g_edge_cnt = g_edge_cnt + 1
+    let e2: i64 = g_edge_cnt
+    g_edge_cnt = g_edge_cnt + 1
+    e_to[e1] = v
+    e_cap[e1] = cap
+    e_rev[e1] = e2
+    e_next[e1] = g_head[u]
+    g_head[u] = e1
+    e_to[e2] = u
+    e_cap[e2] = 0
+    e_rev[e2] = e1
+    e_next[e2] = g_head[v]
+    g_head[v] = e2
+}
+
+function bfs(s: i64, t: i64) -> bool {
+    let mut i: i64 = 0
+    while i < g_n {
+        g_level[i] = -1
+        i = i + 1
+    }
+    let mut qh: i64 = 0
+    let mut qt: i64 = 0
+    g_level[s] = 0
+    g_q[qt] = s
+    qt = qt + 1
+    while qh < qt {
+        let u: i64 = g_q[qh]
+        qh = qh + 1
+        let mut e: i64 = g_head[u]
+        while e != -1 {
+            let v: i64 = e_to[e]
+            if e_cap[e] > 0 && g_level[v] < 0 {
+                g_level[v] = g_level[u] + 1
+                g_q[qt] = v
+                qt = qt + 1
+            }
+            e = e_next[e]
+        }
+    }
+    return g_level[t] >= 0
+}
+
+function dfs(u: i64, t: i64, f: i64) -> i64 {
+    if u == t { return f }
+    let mut e: i64 = g_it[u]
+    while e != -1 {
+        let v: i64 = e_to[e]
+        if e_cap[e] > 0 && g_level[v] == g_level[u] + 1 {
+            let mut push: i64 = f
+            if e_cap[e] < push { push = e_cap[e] }
+            let pushed: i64 = dfs(v, t, push)
+            if pushed > 0 {
+                e_cap[e] = e_cap[e] - pushed
+                e_cap[e_rev[e]] = e_cap[e_rev[e]] + pushed
+                g_it[u] = e
+                return pushed
+            }
+        }
+        e = e_next[e]
+        g_it[u] = e
+    }
+    return 0
+}
+
+function max_flow(s: i64, t: i64) -> i64 {
+    let mut flow: i64 = 0
+    let INF: i64 = 1000000000000000000
+    while bfs(s, t) {
+        let mut i: i64 = 0
+        while i < g_n {
+            g_it[i] = g_head[i]
+            i = i + 1
+        }
+        let mut pushed: i64 = dfs(s, t, INF)
+        while pushed > 0 {
+            flow = flow + pushed
+            pushed = dfs(s, t, INF)
+        }
+    }
+    return flow
+}
+
+function reachable(s: i64, vis: ptr<i8>) -> void {
+    let mut i: i64 = 0
+    while i < g_n {
+        vis[i] = 0
+        i = i + 1
+    }
+    let mut qh: i64 = 0
+    let mut qt: i64 = 0
+    vis[s] = 1
+    g_q[qt] = s
+    qt = qt + 1
+    while qh < qt {
+        let u: i64 = g_q[qh]
+        qh = qh + 1
+        let mut e: i64 = g_head[u]
+        while e != -1 {
+            let v: i64 = e_to[e]
+            if e_cap[e] > 0 && vis[v] == 0 {
+                vis[v] = 1
+                g_q[qt] = v
+                qt = qt + 1
+            }
+            e = e_next[e]
+        }
+    }
+}
+
+function iroot3(n: i64) -> i64 {
+    let mut r: i64 = 0
+    let mut cont: bool = true
+    while cont {
+        let nr: i64 = r + 1
+        let c: i128 = (nr as i128) * (nr as i128) * (nr as i128)
+        if c <= (n as i128) {
+            r = nr
+        } else {
+            cont = false
+        }
+    }
+    return r
 }
 
 function main() -> i32 {
-    printf("%.6f\n", p838_native())
+    # Sieve primes up to N
+    let is_prime: ptr<i8> = calloc(N + 1, 1) as ptr<i8>
+    memset(is_prime, 1, N + 1)
+    is_prime[0] = 0
+    is_prime[1] = 0
+    let mut p: i64 = 2
+    while p * p <= N {
+        if is_prime[p] != 0 {
+            let mut j: i64 = p * p
+            while j <= N {
+                is_prime[j] = 0
+                j = j + p
+            }
+        }
+        p = p + 1
+    }
+
+    # Count and collect primes
+    let mut pc: i64 = 0
+    let mut i: i64 = 2
+    while i <= N {
+        if is_prime[i] != 0 { pc = pc + 1 }
+        i = i + 1
+    }
+    let primes: ptr<i64> = calloc(pc, 8) as ptr<i64>
+    pc = 0
+    i = 2
+    while i <= N {
+        if is_prime[i] != 0 {
+            primes[pc] = i
+            pc = pc + 1
+        }
+        i = i + 1
+    }
+
+    let cbrt: i64 = iroot3(N)
+
+    # Build left list: p%10==7, p*19<=N, p>cbrt (not forced)
+    let left: ptr<i64> = calloc(pc, 8) as ptr<i64>
+    let mut nL: i64 = 0
+    i = 0
+    while i < pc {
+        let pp: i64 = primes[i]
+        if pp % 10 == 7 && pp * 19 <= N && pp > cbrt {
+            left[nL] = pp
+            nL = nL + 1
+        }
+        i = i + 1
+    }
+
+    let mut ln_total: f64 = 0.0
+
+    # Add forced primes' log contributions
+    i = 0
+    while i < pc {
+        let pp: i64 = primes[i]
+        if pp % 10 == 3 {
+            ln_total = ln_total + log(pp as f64)
+        } else {
+            if pp % 10 == 7 && pp <= cbrt {
+                ln_total = ln_total + log(pp as f64)
+            }
+        }
+        i = i + 1
+    }
+
+    if nL == 0 {
+        printf("%.6f\n", ln_total)
+        free(is_prime)
+        free(primes)
+        free(left)
+        return 0
+    }
+
+    let pmin: i64 = left[0]
+    # Build right list: q%10==9, q <= N/pmin
+    let right: ptr<i64> = calloc(pc, 8) as ptr<i64>
+    let mut nR: i64 = 0
+    let rlim: i64 = N / pmin
+    i = 0
+    while i < pc {
+        let qq: i64 = primes[i]
+        if qq % 10 == 9 && qq <= rlim {
+            right[nR] = qq
+            nR = nR + 1
+        }
+        i = i + 1
+    }
+
+    if nR == 0 {
+        printf("%.6f\n", ln_total)
+        free(is_prime)
+        free(primes)
+        free(left)
+        free(right)
+        return 0
+    }
+
+    # prefix lengths: for each left[i], count right[j] <= N/left[i]
+    let pref_len: ptr<i64> = calloc(nL, 8) as ptr<i64>
+    let mut total_pref: i64 = 0
+    i = 0
+    while i < nL {
+        let lim: i64 = N / left[i]
+        let mut lo: i64 = 0
+        let mut hi: i64 = nR
+        while lo < hi {
+            let mid: i64 = (lo + hi) / 2
+            if right[mid] <= lim {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        pref_len[i] = lo
+        total_pref = total_pref + lo
+        i = i + 1
+    }
+
+    # Weights scaled by 1e12
+    let wL: ptr<i64> = calloc(nL, 8) as ptr<i64>
+    let wR: ptr<i64> = calloc(nR, 8) as ptr<i64>
+    let mut total_w: i64 = 0
+    i = 0
+    while i < nL {
+        wL[i] = (log(left[i] as f64) * (SCALE as f64) + 0.5) as i64
+        total_w = total_w + wL[i]
+        i = i + 1
+    }
+    i = 0
+    while i < nR {
+        wR[i] = (log(right[i] as f64) * (SCALE as f64) + 0.5) as i64
+        total_w = total_w + wR[i]
+        i = i + 1
+    }
+    let INF: i64 = total_w + 1
+
+    # Build flow network: S=0, offL=1, offR=1+nL, T=1+nL+nR
+    let nNodes: i64 = 2 + nL + nR
+    let S: i64 = 0
+    let offL: i64 = 1
+    let offR: i64 = 1 + nL
+    let T: i64 = 1 + nL + nR
+
+    let total_edges: i64 = 2 * (nL + nR + total_pref)
+    g_n = nNodes
+    g_edge_cnt = 0
+    g_head = calloc(nNodes, 8) as ptr<i64>
+    i = 0
+    while i < nNodes {
+        g_head[i] = -1
+        i = i + 1
+    }
+    e_to = calloc(total_edges, 8) as ptr<i64>
+    e_cap = calloc(total_edges, 8) as ptr<i64>
+    e_rev = calloc(total_edges, 8) as ptr<i64>
+    e_next = calloc(total_edges, 8) as ptr<i64>
+    g_level = calloc(nNodes, 8) as ptr<i64>
+    g_it = calloc(nNodes, 8) as ptr<i64>
+    g_q = calloc(nNodes, 8) as ptr<i64>
+
+    i = 0
+    while i < nL {
+        add_edge(S, offL + i, wL[i])
+        i = i + 1
+    }
+    i = 0
+    while i < nR {
+        add_edge(offR + i, T, wR[i])
+        i = i + 1
+    }
+    i = 0
+    while i < nL {
+        let u: i64 = offL + i
+        let k: i64 = pref_len[i]
+        let mut j: i64 = 0
+        while j < k {
+            add_edge(u, offR + j, INF)
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    max_flow(S, T)
+
+    let vis: ptr<i8> = calloc(nNodes, 1) as ptr<i8>
+    reachable(S, vis)
+
+    # min vertex cover = (Left not reachable) U (Right reachable)
+    i = 0
+    while i < nL {
+        if vis[offL + i] == 0 {
+            ln_total = ln_total + log(left[i] as f64)
+        }
+        i = i + 1
+    }
+    i = 0
+    while i < nR {
+        if vis[offR + i] != 0 {
+            ln_total = ln_total + log(right[i] as f64)
+        }
+        i = i + 1
+    }
+
+    printf("%.6f\n", ln_total)
+
+    free(vis)
+    free(g_head)
+    free(e_to)
+    free(e_cap)
+    free(e_rev)
+    free(e_next)
+    free(g_level)
+    free(g_it)
+    free(g_q)
+    free(wL)
+    free(wR)
+    free(pref_len)
+    free(left)
+    free(right)
+    free(primes)
+    free(is_prime)
     return 0
 }

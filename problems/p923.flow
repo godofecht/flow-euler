@@ -1,8 +1,524 @@
+# Project Euler 923
+# DP with hot types and int types, modular arithmetic.
+
 extern {
-    function p923_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
 }
 
+const MOD: i64 = 1000000007
+const M: i32 = 8
+const W: i32 = 64
+const SUM_OFF: i32 = 2000
+const SUM_RNG: i32 = 4001
+
+# powmod
+function powmod(a0: i64, b0: i64, m: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut a: i64 = a0 % m
+    if a < 0 { a = a + m }
+    let mut b: i64 = b0
+    while b > 0 {
+        if (b & 1) == 1 {
+            let aw: i128 = r as i128
+            let bw: i128 = a as i128
+            let mw: i128 = m as i128
+            r = ((aw * bw) % mw) as i64
+        }
+        let aw2: i128 = a as i128
+        let bw2: i128 = a as i128
+        let mw2: i128 = m as i128
+        a = ((aw2 * bw2) % mw2) as i64
+        b = b >> 1
+    }
+    return r
+}
+
+# reduced_hook: compute Mv and Nv
+# Returns Mv via g_mv_out, Nv via g_nv_out
+let mut g_mv_out: i64 = 0
+let mut g_nv_out: i64 = 0
+
+function reduced_hook(a: i64, b: i64, k: i64) -> void {
+    let mut d: i64 = 0
+    let mut j: i64 = 0
+    while j < k {
+        let row_len: i64 = (k - j) * b
+        let start: i64 = j * a + 1
+        if row_len >= start {
+            let endv: i64 = (j + 1) * a
+            let cand: i64 = endv
+            if row_len < endv { cand = row_len }
+            if cand > d { d = cand }
+        }
+        j = j + 1
+    }
+    let block_of_row_d: i64 = (d - 1) / a
+    let lambda_d: i64 = (k - block_of_row_d) * b
+    let mv: i64 = lambda_d - d + 1
+    let need_blocks: i64 = (d + b - 1) / b
+    let last_block: i64 = k - need_blocks
+    let col_height: i64 = (last_block + 1) * a
+    let nv: i64 = col_height - d + 1
+    g_mv_out = mv
+    g_nv_out = nv
+}
+
+# collect_counts globals
+let mut g_int_counts: ptr<i64> = null  # [2001]
+let mut g_int_vals: ptr<i64> = null    # [2001]
+let mut g_num_int_vals: i32 = 0
+
+# hot types (after dedup)
+let mut g_hot_t: ptr<i64> = null     # [2000]
+let mut g_hot_r: ptr<i64> = null     # [2000]
+let mut g_hot_count: ptr<i64> = null # [2000]
+let mut g_num_hot_types: i32 = 0
+
+# temp hot (before dedup)
+let mut g_temp_t: ptr<i64> = null     # [50000]
+let mut g_temp_r: ptr<i64> = null     # [50000]
+let mut g_temp_count: ptr<i64> = null # [50000]
+let mut g_temp_n: i32 = 0
+
+# heapsort for temp_hot: sort by t descending, then R ascending
+function sift_down(n: i32, i: i32) -> void {
+    let mut root: i32 = i
+    while true {
+        let left: i32 = 2 * root + 1
+        let right: i32 = 2 * root + 2
+        let mut largest: i32 = root
+        if left < n {
+            # compare: want "largest" = one that should come first in sort order
+            # sort order: t descending, R ascending
+            # "largest" in heap = "should come last" = smallest t, or same t and largest R
+            let tl: i64 = g_temp_t[left]
+            let tr: i64 = g_temp_t[largest]
+            if tl < tr {
+                largest = left
+            } else {
+                if tl == tr {
+                    if g_temp_r[left] > g_temp_r[largest] {
+                        largest = left
+                    }
+                }
+            }
+        }
+        if right < n {
+            let tr2: i64 = g_temp_t[right]
+            let tl2: i64 = g_temp_t[largest]
+            if tr2 < tl2 {
+                largest = right
+            } else {
+                if tr2 == tl2 {
+                    if g_temp_r[right] > g_temp_r[largest] {
+                        largest = right
+                    }
+                }
+            }
+        }
+        if largest == root { return }
+        # swap
+        let tt: i64 = g_temp_t[root]
+        g_temp_t[root] = g_temp_t[largest]
+        g_temp_t[largest] = tt
+        let tr3: i64 = g_temp_r[root]
+        g_temp_r[root] = g_temp_r[largest]
+        g_temp_r[largest] = tr3
+        let tc: i64 = g_temp_count[root]
+        g_temp_count[root] = g_temp_count[largest]
+        g_temp_count[largest] = tc
+        root = largest
+    }
+}
+
+function heapsort_temp(n: i32) -> void {
+    # Build heap
+    let mut i: i32 = n / 2 - 1
+    while i >= 0 {
+        sift_down(n, i)
+        i = i - 1
+    }
+    # Extract
+    let mut j: i32 = n - 1
+    while j > 0 {
+        # swap root and j
+        let tt: i64 = g_temp_t[0]
+        g_temp_t[0] = g_temp_t[j]
+        g_temp_t[j] = tt
+        let tr: i64 = g_temp_r[0]
+        g_temp_r[0] = g_temp_r[j]
+        g_temp_r[j] = tr
+        let tc: i64 = g_temp_count[0]
+        g_temp_count[0] = g_temp_count[j]
+        g_temp_count[j] = tc
+        sift_down(j, 0)
+        j = j - 1
+    }
+}
+
+function collect_counts() -> void {
+    memset(g_int_counts as ptr<void>, 0, 2001 * 8)
+    g_temp_n = 0
+
+    let mut a: i64 = 1
+    while a < W as i64 - 1 {
+        let mut b: i64 = 1
+        while b < W as i64 - a {
+            let max_k: i64 = W as i64 - a - b
+            if max_k >= 1 {
+                let mut k: i64 = 1
+                while k <= max_k {
+                    reduced_hook(a, b, k)
+                    let mv: i64 = g_mv_out
+                    let nv: i64 = g_nv_out
+                    if nv == 1 {
+                        let v: i64 = mv - 1
+                        g_int_counts[v + 1000] = g_int_counts[v + 1000] + 1
+                    } else {
+                        if mv == 1 {
+                            let v2: i64 = -(nv - 1)
+                            g_int_counts[v2 + 1000] = g_int_counts[v2 + 1000] + 1
+                        } else {
+                            let t: i64 = mv + nv - 4
+                            let r: i64 = -(nv - 2)
+                            g_temp_t[g_temp_n] = t
+                            g_temp_r[g_temp_n] = r
+                            g_temp_count[g_temp_n] = 1
+                            g_temp_n = g_temp_n + 1
+                        }
+                    }
+                    k = k + 1
+                }
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    # Sort temp_hot by (t descending, R ascending)
+    heapsort_temp(g_temp_n)
+
+    # Dedup
+    g_num_hot_types = 0
+    let mut i: i32 = 0
+    while i < g_temp_n {
+        if g_num_hot_types > 0 {
+            if g_hot_t[g_num_hot_types - 1] == g_temp_t[i] && g_hot_r[g_num_hot_types - 1] == g_temp_r[i] {
+                g_hot_count[g_num_hot_types - 1] = g_hot_count[g_num_hot_types - 1] + 1
+            } else {
+                g_hot_t[g_num_hot_types] = g_temp_t[i]
+                g_hot_r[g_num_hot_types] = g_temp_r[i]
+                g_hot_count[g_num_hot_types] = g_temp_count[i]
+                g_num_hot_types = g_num_hot_types + 1
+            }
+        } else {
+            g_hot_t[g_num_hot_types] = g_temp_t[i]
+            g_hot_r[g_num_hot_types] = g_temp_r[i]
+            g_hot_count[g_num_hot_types] = g_temp_count[i]
+            g_num_hot_types = g_num_hot_types + 1
+        }
+        i = i + 1
+    }
+
+    # Collect int vals
+    g_num_int_vals = 0
+    let mut v: i32 = -1000
+    while v <= 1000 {
+        if g_int_counts[v + 1000] > 0 {
+            g_int_vals[g_num_int_vals] = v as i64
+            g_num_int_vals = g_num_int_vals + 1
+        }
+        v = v + 1
+    }
+}
+
+# DP arrays
+# hot_a[9][2][SUM_RNG], hot_b[9][2][SUM_RNG] -> flat: 9*2*4001
+# int_a[9][SUM_RNG], int_b[9][SUM_RNG] -> flat: 9*4001
+let mut g_hot_a: ptr<i64> = null
+let mut g_hot_b: ptr<i64> = null
+let mut g_int_a: ptr<i64> = null
+let mut g_int_b: ptr<i64> = null
+
+# min/max tracking
+let mut g_hot_min_a: ptr<i64> = null  # [9][2]
+let mut g_hot_max_a: ptr<i64> = null
+let mut g_hot_min_b: ptr<i64> = null
+let mut g_hot_max_b: ptr<i64> = null
+let mut g_int_min_a: ptr<i64> = null  # [9]
+let mut g_int_max_a: ptr<i64> = null
+let mut g_int_min_b: ptr<i64> = null
+let mut g_int_max_b: ptr<i64> = null
+
 function main() -> i32 {
-    printf("%lld\n", p923_native())
+    # Allocate arrays
+    g_int_counts = calloc(2001, 8)
+    g_int_vals = calloc(2001, 8)
+    g_hot_t = calloc(2000, 8)
+    g_hot_r = calloc(2000, 8)
+    g_hot_count = calloc(2000, 8)
+    g_temp_t = calloc(50000, 8)
+    g_temp_r = calloc(50000, 8)
+    g_temp_count = calloc(50000, 8)
+
+    let hot_sz: i64 = 9 * 2 * SUM_RNG as i64
+    g_hot_a = calloc(hot_sz, 8)
+    g_hot_b = calloc(hot_sz, 8)
+    let int_sz: i64 = 9 * SUM_RNG as i64
+    g_int_a = calloc(int_sz, 8)
+    g_int_b = calloc(int_sz, 8)
+
+    g_hot_min_a = calloc(18, 8)
+    g_hot_max_a = calloc(18, 8)
+    g_hot_min_b = calloc(18, 8)
+    g_hot_max_b = calloc(18, 8)
+    g_int_min_a = calloc(9, 8)
+    g_int_max_a = calloc(9, 8)
+    g_int_min_b = calloc(9, 8)
+    g_int_max_b = calloc(9, 8)
+
+    # Factorials and inverse factorials
+    let fact: ptr<i64> = calloc(10, 8)
+    let invfact: ptr<i64> = calloc(10, 8)
+    fact[0] = 1
+    let mut i: i32 = 1
+    while i <= M {
+        fact[i] = fact[i - 1] * (i as i64) % MOD
+        i = i + 1
+    }
+    invfact[M] = powmod(fact[M], MOD - 2, MOD)
+    let mut j: i32 = M
+    while j >= 1 {
+        invfact[j - 1] = invfact[j] * (j as i64) % MOD
+        j = j - 1
+    }
+
+    collect_counts()
+
+    # Hot DP
+    memset(g_hot_a as ptr<void>, 0, hot_sz * 8)
+    let mut u: i32 = 0
+    while u <= M {
+        let mut p: i32 = 0
+        while p < 2 {
+            g_hot_min_a[u * 2 + p] = SUM_RNG as i64
+            g_hot_max_a[u * 2 + p] = -1
+            p = p + 1
+        }
+        u = u + 1
+    }
+    g_hot_a[0 * 2 * SUM_RNG + 0 * SUM_RNG + SUM_OFF] = 1
+    g_hot_min_a[0 * 2 + 0] = SUM_OFF as i64
+    g_hot_max_a[0 * 2 + 0] = SUM_OFF as i64
+
+    let mut ht: i32 = 0
+    while ht < g_num_hot_types {
+        let t: i64 = g_hot_t[ht]
+        let r: i64 = g_hot_r[ht]
+        let c: i64 = g_hot_count[ht]
+
+        # poly[0..M]
+        let poly: ptr<i64> = calloc(10, 8)
+        poly[0] = 1
+        let mut p: i64 = 1
+        let mut kk: i32 = 1
+        while kk <= M {
+            p = p * c % MOD
+            poly[kk] = p * invfact[kk] % MOD
+            kk = kk + 1
+        }
+
+        memset(g_hot_b as ptr<void>, 0, hot_sz * 8)
+        let mut u2: i32 = 0
+        while u2 <= M {
+            let mut p2: i32 = 0
+            while p2 < 2 {
+                g_hot_min_b[u2 * 2 + p2] = SUM_RNG as i64
+                g_hot_max_b[u2 * 2 + p2] = -1
+                p2 = p2 + 1
+            }
+            u2 = u2 + 1
+        }
+
+        let mut used: i32 = 0
+        while used <= M {
+            let mut parity: i32 = 0
+            while parity < 2 {
+                if g_hot_max_a[used * 2 + parity] >= 0 {
+                    let mn: i64 = g_hot_min_a[used * 2 + parity]
+                    let mx: i64 = g_hot_max_a[used * 2 + parity]
+                    let mut idx: i64 = mn
+                    while idx <= mx {
+                        let coeff: i64 = g_hot_a[used * 2 * SUM_RNG + parity * SUM_RNG + idx]
+                        if coeff != 0 {
+                            let mut k: i32 = 0
+                            while k <= M - used {
+                                let mult: i64 = poly[k]
+                                if mult != 0 {
+                                    let right_turns: i64 = ((k as i64) + 1 - parity as i64) / 2
+                                    let delta: i64 = (k as i64) * r + right_turns * t
+                                    let nu: i32 = used + k
+                                    let np: i32 = parity ^ (k & 1)
+                                    let nidx: i64 = idx + delta
+                                    if nidx >= 0 && nidx < SUM_RNG as i64 {
+                                        let aw: i128 = g_hot_b[nu * 2 * SUM_RNG + np * SUM_RNG + nidx] as i128
+                                        let bw: i128 = coeff as i128
+                                        let cw: i128 = mult as i128
+                                        let mw: i128 = MOD as i128
+                                        g_hot_b[nu * 2 * SUM_RNG + np * SUM_RNG + nidx] = ((aw + bw * cw) % mw) as i64
+                                        if nidx < g_hot_min_b[nu * 2 + np] { g_hot_min_b[nu * 2 + np] = nidx }
+                                        if nidx > g_hot_max_b[nu * 2 + np] { g_hot_max_b[nu * 2 + np] = nidx }
+                                    }
+                                }
+                                k = k + 1
+                            }
+                        }
+                        idx = idx + 1
+                    }
+                }
+                parity = parity + 1
+            }
+            used = used + 1
+        }
+
+        memcpy(g_hot_a as ptr<void>, g_hot_b as ptr<void>, hot_sz * 8)
+        memcpy(g_hot_min_a as ptr<void>, g_hot_min_b as ptr<void>, 18 * 8)
+        memcpy(g_hot_max_a as ptr<void>, g_hot_max_b as ptr<void>, 18 * 8)
+        free(poly)
+        ht = ht + 1
+    }
+
+    # Int DP
+    memset(g_int_a as ptr<void>, 0, int_sz * 8)
+    let mut u3: i32 = 0
+    while u3 <= M {
+        g_int_min_a[u3] = SUM_RNG as i64
+        g_int_max_a[u3] = -1
+        u3 = u3 + 1
+    }
+    g_int_a[0 * SUM_RNG + SUM_OFF] = 1
+    g_int_min_a[0] = SUM_OFF as i64
+    g_int_max_a[0] = SUM_OFF as i64
+
+    let mut iv: i32 = 0
+    while iv < g_num_int_vals {
+        let v: i64 = g_int_vals[iv]
+        let c: i64 = g_int_counts[v + 1000]
+
+        let poly2: ptr<i64> = calloc(10, 8)
+        poly2[0] = 1
+        let mut p2: i64 = 1
+        let mut kk2: i32 = 1
+        while kk2 <= M {
+            p2 = p2 * c % MOD
+            poly2[kk2] = p2 * invfact[kk2] % MOD
+            kk2 = kk2 + 1
+        }
+
+        memset(g_int_b as ptr<void>, 0, int_sz * 8)
+        let mut u4: i32 = 0
+        while u4 <= M {
+            g_int_min_b[u4] = SUM_RNG as i64
+            g_int_max_b[u4] = -1
+            u4 = u4 + 1
+        }
+
+        let mut used2: i32 = 0
+        while used2 <= M {
+            if g_int_max_a[used2] >= 0 {
+                let mn2: i64 = g_int_min_a[used2]
+                let mx2: i64 = g_int_max_a[used2]
+                let mut idx2: i64 = mn2
+                while idx2 <= mx2 {
+                    let coeff2: i64 = g_int_a[used2 * SUM_RNG + idx2]
+                    if coeff2 != 0 {
+                        let mut k2: i32 = 0
+                        while k2 <= M - used2 {
+                            let mult2: i64 = poly2[k2]
+                            if mult2 != 0 {
+                                let nu2: i32 = used2 + k2
+                                let nidx2: i64 = idx2 + (k2 as i64) * v
+                                if nidx2 >= 0 && nidx2 < SUM_RNG as i64 {
+                                    let aw2: i128 = g_int_b[nu2 * SUM_RNG + nidx2] as i128
+                                    let bw2: i128 = coeff2 as i128
+                                    let cw2: i128 = mult2 as i128
+                                    let mw2: i128 = MOD as i128
+                                    g_int_b[nu2 * SUM_RNG + nidx2] = ((aw2 + bw2 * cw2) % mw2) as i64
+                                    if nidx2 < g_int_min_b[nu2] { g_int_min_b[nu2] = nidx2 }
+                                    if nidx2 > g_int_max_b[nu2] { g_int_max_b[nu2] = nidx2 }
+                                }
+                            }
+                            k2 = k2 + 1
+                        }
+                    }
+                    idx2 = idx2 + 1
+                }
+            }
+            used2 = used2 + 1
+        }
+
+        memcpy(g_int_a as ptr<void>, g_int_b as ptr<void>, int_sz * 8)
+        memcpy(g_int_min_a as ptr<void>, g_int_min_b as ptr<void>, 9 * 8)
+        memcpy(g_int_max_a as ptr<void>, g_int_max_b as ptr<void>, 9 * 8)
+        free(poly2)
+        iv = iv + 1
+    }
+
+    # Combine
+    let mut multiset_count: i64 = 0
+    let mut j2: i32 = 0
+    while j2 <= M {
+        let mut parity2: i32 = 0
+        while parity2 < 2 {
+            if g_hot_max_a[j2 * 2 + parity2] >= 0 {
+                if g_int_max_a[M - j2] >= 0 {
+                    let hmn: i64 = g_hot_min_a[j2 * 2 + parity2]
+                    let hmx: i64 = g_hot_max_a[j2 * 2 + parity2]
+                    let mut hidx: i64 = hmn
+                    while hidx <= hmx {
+                        let ch: i64 = g_hot_a[j2 * 2 * SUM_RNG + parity2 * SUM_RNG + hidx]
+                        if ch != 0 {
+                            let imn: i64 = g_int_min_a[M - j2]
+                            let imx: i64 = g_int_max_a[M - j2]
+                            let mut iidx: i64 = imn
+                            while iidx <= imx {
+                                let ci: i64 = g_int_a[(M - j2) * SUM_RNG + iidx]
+                                if ci != 0 {
+                                    let total: i64 = (hidx - SUM_OFF as i64) + (iidx - SUM_OFF as i64)
+                                    if total > 0 {
+                                        let aw3: i128 = multiset_count as i128
+                                        let bw3: i128 = ch as i128
+                                        let cw3: i128 = ci as i128
+                                        let mw3: i128 = MOD as i128
+                                        multiset_count = ((aw3 + bw3 * cw3) % mw3) as i64
+                                    } else {
+                                        if total == 0 {
+                                            if parity2 == 1 {
+                                                let aw4: i128 = multiset_count as i128
+                                                let bw4: i128 = ch as i128
+                                                let cw4: i128 = ci as i128
+                                                let mw4: i128 = MOD as i128
+                                                multiset_count = ((aw4 + bw4 * cw4) % mw4) as i64
+                                            }
+                                        }
+                                    }
+                                }
+                                iidx = iidx + 1
+                            }
+                        }
+                        hidx = hidx + 1
+                    }
+                }
+            }
+            parity2 = parity2 + 1
+        }
+        j2 = j2 + 1
+    }
+
+    let result: i64 = multiset_count * fact[M] % MOD
+    printf("%lld\n", result)
     return 0
 }

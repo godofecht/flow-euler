@@ -1,12 +1,193 @@
 # Project Euler 835
 # Supernatural Triangles - S(10^(10^10)) mod 1234567891.
-# Real solver in native/p835.c.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p835_native() -> i64
+    function sqrt(x: f64) -> f64
+    function log(x: f64) -> f64
+    function floor(x: f64) -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MOD: i64 = 1234567891
+
+function mmul(a: i64, b: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (MOD as i128)) as i64
+}
+
+function mpow(base: i64, exp: i64) -> i64 {
+    let mut result: i64 = 1 % MOD
+    let mut b: i64 = base % MOD
+    if b < 0 { b = b + MOD }
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { result = mmul(result, b) }
+        b = mmul(b, b)
+        e = e / 2
+    }
+    return result
+}
+
+function egcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0 % MOD
+    if a < 0 { a = a + MOD }
+    let mut b: i64 = MOD
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = b
+        b = a % b
+        a = t
+        let t2: i64 = x1
+        x1 = x0 - q * x1
+        x0 = t2
+    }
+    return ((x0 % MOD) + MOD) % MOD
+}
+
+function modinv(a: i64) -> i64 {
+    return egcd(a, MOD)
+}
+
+# ---- Family B ----
+function sum_family_B(E: i64) -> i64 {
+    let M: i64 = E / 2
+    let n: i64 = (5 * mpow(10, M - 1)) % MOD
+    let n2: i64 = mmul(n, n)
+    let n3: i64 = mmul(n2, n)
+    let INV3: i64 = modinv(3)
+
+    let sum_t_all: i64 = n2
+    let sum_t2_all: i64 = mmul((4 * n3 % MOD - n % MOD + MOD) % MOD, INV3)
+    return (sum_t_all + sum_t2_all - 2 + MOD) % MOD
+}
+
+# ---- Family A: matrix exponentiation ----
+function mat_mul(A: ptr<i64>, B: ptr<i64>, C: ptr<i64>) -> void {
+    let tmp: ptr<i64> = calloc(9, 8)
+    let mut i: i32 = 0
+    while i < 3 {
+        let mut j: i32 = 0
+        while j < 3 {
+            let mut s: i128 = 0
+            let mut k: i32 = 0
+            while k < 3 {
+                s = s + (A[i * 3 + k] as i128) * (B[k * 3 + j] as i128)
+                k = k + 1
+            }
+            tmp[i * 3 + j] = (s % (MOD as i128)) as i64
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let mut i2: i32 = 0
+    while i2 < 9 {
+        C[i2] = tmp[i2]
+        i2 = i2 + 1
+    }
+    free(tmp)
+}
+
+function mat_pow(M: ptr<i64>, exp: i64, R: ptr<i64>) -> void {
+    let result: ptr<i64> = calloc(9, 8)
+    result[0] = 1; result[1] = 0; result[2] = 0
+    result[3] = 0; result[4] = 1; result[5] = 0
+    result[6] = 0; result[7] = 0; result[8] = 1
+    let base: ptr<i64> = calloc(9, 8)
+    let mut i: i32 = 0
+    while i < 9 {
+        base[i] = M[i]
+        i = i + 1
+    }
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { mat_mul(result, base, result) }
+        mat_mul(base, base, base)
+        e = e / 2
+    }
+    let mut i2: i32 = 0
+    while i2 < 9 {
+        R[i2] = result[i2]
+        i2 = i2 + 1
+    }
+    free(result)
+    free(base)
+}
+
+function pell_max_index(E: i64) -> i64 {
+    let alpha: f64 = 3.0 + 2.0 * sqrt(2.0)
+    let A_coeff: f64 = (4.0 + 3.0 * sqrt(2.0)) / 4.0
+    let log10_alpha: f64 = log(alpha) / log(10.0)
+    let log10_A: f64 = log(A_coeff) / log(10.0)
+
+    let x: f64 = ((E as f64) - log10_A) / log10_alpha
+    let mut n: i64 = x as i64
+
+    # Adjust for floating point rounding
+    while n > 0 {
+        if (log10_A + (n as f64) * log10_alpha) >= (E as f64) {
+            n = n - 1
+        } else {
+            break
+        }
+    }
+    while (log10_A + ((n + 1) as f64) * log10_alpha) < (E as f64) {
+        n = n + 1
+    }
+    if n < 1 { return 0 }
+    return n
+}
+
+function sum_family_A(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    if n == 1 { return 12 % MOD }
+
+    # State: [P_k, P_{k-1}, S_k]^T
+    # P_{k+1} = 6*P_k - P_{k-1}
+    # S_{k+1} = S_k + P_{k+1}
+    let mat: ptr<i64> = calloc(9, 8)
+    mat[0] = 6; mat[1] = MOD - 1; mat[2] = 0
+    mat[3] = 1; mat[4] = 0; mat[5] = 0
+    mat[6] = 6; mat[7] = MOD - 1; mat[8] = 1
+
+    let P: ptr<i64> = calloc(9, 8)
+    mat_pow(mat, n - 1, P)
+
+    # v1 = [12, 2, 12]^T (k=1)
+    let v: ptr<i64> = calloc(3, 8)
+    v[0] = 12; v[1] = 2; v[2] = 12
+
+    let result: ptr<i64> = calloc(3, 8)
+    let mut i: i32 = 0
+    while i < 3 {
+        let mut s: i128 = 0
+        let mut j: i32 = 0
+        while j < 3 {
+            s = s + (P[i * 3 + j] as i128) * (v[j] as i128)
+            j = j + 1
+        }
+        result[i] = (s % (MOD as i128)) as i64
+        i = i + 1
+    }
+
+    let ans: i64 = result[2] % MOD
+    free(mat)
+    free(P)
+    free(v)
+    free(result)
+    return ans
 }
 
 function main() -> i32 {
-    printf("%lld\n", p835_native())
+    let E: i64 = 10000000000
+
+    let sumB: i64 = sum_family_B(E)
+    let nA: i64 = pell_max_index(E)
+    let sumA: i64 = sum_family_A(nA)
+
+    let ans: i64 = (sumA + sumB - 12 + MOD) % MOD
+    printf("%lld\n", ans)
     return 0
 }

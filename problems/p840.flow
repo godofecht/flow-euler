@@ -1,11 +1,377 @@
-# Project Euler 840
-# Sum of Products — CDQ + NTT convolution in C.
+# Project Euler 840 - Sum of Products.
+# Computes S(5*10^4) mod 999676999 using CDQ divide-and-conquer with NTT.
+# Ported from native C to pure Flow.
 
 extern {
-    function p840_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 999676999
+const N: i64 = 50000
+const THRESH: i64 = 256
+
+const P1: i64 = 998244353
+const P2: i64 = 1004535809
+const P3: i64 = 469762049
+
+let mut inv_p1_p2: i64 = 0
+let mut inv_p12_p3: i64 = 0
+let mut p1_mod: i64 = 0
+let mut p12_mod: i64 = 0
+
+let mut g_b: ptr<i64> = null
+let mut g_a: ptr<i64> = null
+let mut g_f: ptr<i64> = null
+let mut g_inv: ptr<i64> = null
+let mut g_n: i64 = 0
+let mut g_size: i64 = 0
+
+# NTT cache: up to 20 entries
+let mut cache_L: ptr<i64> = null
+let mut cache_fb0: ptr<i64> = null
+let mut cache_fb1: ptr<i64> = null
+let mut cache_fb2: ptr<i64> = null
+let mut cache_count: i64 = 0
+
+function mod_pow(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut a: i64 = a0 % mod
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = (((r as i128) * (a as i128)) % (mod as i128)) as i64
+        }
+        a = (((a as i128) * (a as i128)) % (mod as i128)) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function mod_inv(a: i64, mod: i64) -> i64 {
+    return mod_pow(a, mod - 2, mod)
+}
+
+function ntt(a: ptr<i64>, n: i64, invert: bool, mod: i64, root: i64) -> void {
+    let mut j: i64 = 0
+    let mut i: i64 = 1
+    while i < n {
+        let mut bit: i64 = n >> 1
+        while (j & bit) != 0 {
+            j = j ^ bit
+            bit = bit >> 1
+        }
+        j = j ^ bit
+        if i < j {
+            let t: i64 = a[i]
+            a[i] = a[j]
+            a[j] = t
+        }
+        i = i + 1
+    }
+    let mut len: i64 = 2
+    while len <= n {
+        let mut wlen: i64 = mod_pow(root, (mod - 1) / len, mod)
+        if invert { wlen = mod_inv(wlen, mod) }
+        let mut i2: i64 = 0
+        while i2 < n {
+            let mut w: i64 = 1
+            let mut jj: i64 = 0
+            while jj < len / 2 {
+                let u: i64 = a[i2 + jj]
+                let v: i64 = (((a[i2 + jj + len / 2] as i128) * (w as i128)) % (mod as i128)) as i64
+                let mut x: i64 = u + v
+                if x >= mod { x = x - mod }
+                let mut y: i64 = u - v
+                if y < 0 { y = y + mod }
+                a[i2 + jj] = x
+                a[i2 + jj + len / 2] = y
+                w = (((w as i128) * (wlen as i128)) % (mod as i128)) as i64
+                jj = jj + 1
+            }
+            i2 = i2 + len
+        }
+        len = len << 1
+    }
+    if invert {
+        let ninv: i64 = mod_inv(n, mod)
+        let mut i3: i64 = 0
+        while i3 < n {
+            a[i3] = (((a[i3] as i128) * (ninv as i128)) % (mod as i128)) as i64
+            i3 = i3 + 1
+        }
+    }
+}
+
+function crt_init() -> void {
+    inv_p1_p2 = mod_inv(P1 % P2, P2)
+    let p12: i128 = (P1 as i128) * (P2 as i128)
+    inv_p12_p3 = mod_inv((p12 % P3) as i64, P3)
+    p1_mod = P1 % MOD
+    p12_mod = (p12 % MOD) as i64
+}
+
+function crt3(a1: i64, a2: i64, a3: i64) -> i64 {
+    let mut t1: i64 = (a2 - a1) % P2
+    if t1 < 0 { t1 = t1 + P2 }
+    t1 = (((t1 as i128) * (inv_p1_p2 as i128)) % (P2 as i128)) as i64
+    let x12_p3: i64 = ((((a1 as i128) + (P1 as i128) * (t1 as i128)) % (P3 as i128))) as i64
+    let mut t2: i64 = (a3 - x12_p3) % P3
+    if t2 < 0 { t2 = t2 + P3 }
+    t2 = (((t2 as i128) * (inv_p12_p3 as i128)) % (P3 as i128)) as i64
+    let r: i128 = ((a1 % MOD) as i128) + (p1_mod as i128) * ((t1 % MOD) as i128) + (p12_mod as i128) * ((t2 % MOD) as i128)
+    return (r % (MOD as i128)) as i64
+}
+
+function get_ntt_cache_idx(L: i64) -> i64 {
+    let mut i: i64 = 0
+    while i < cache_count {
+        if cache_L[i] == L { return i }
+        i = i + 1
+    }
+    let idx: i64 = cache_count
+    cache_count = cache_count + 1
+    cache_L[idx] = L
+    let nfft: i64 = 2 * L
+    let primes: array<i64, 3> = [P1, P2, P3]
+    let base: i64 = idx * nfft
+    let pi: i64 = 0
+    while pi < 3 {
+        let p: i64 = primes[pi]
+        let fb: ptr<i64> = null
+        if pi == 0 { fb = cache_fb0 }
+        if pi == 1 { fb = cache_fb1 }
+        if pi == 2 { fb = cache_fb2 }
+        let mut i2: i64 = 0
+        while i2 < nfft {
+            fb[base + i2] = 0
+            i2 = i2 + 1
+        }
+        let mut i3: i64 = 0
+        while i3 < L {
+            fb[base + i3] = g_b[i3] % p
+            i3 = i3 + 1
+        }
+        ntt(fb + base, nfft, false, p, 3)
+        pi = pi + 1
+    }
+    return idx
+}
+
+function convolve_first_L(a_seg: ptr<i64>, half: i64, L: i64, out: ptr<i64>) -> void {
+    let nfft: i64 = 2 * L
+    let primes: array<i64, 3> = [P1, P2, P3]
+    let idx: i64 = get_ntt_cache_idx(L)
+    let base: i64 = idx * nfft
+
+    let fa: ptr<i64> = calloc(nfft, 8) as ptr<i64>
+    let res0: ptr<i64> = calloc(L, 8) as ptr<i64>
+    let res1: ptr<i64> = calloc(L, 8) as ptr<i64>
+    let res2: ptr<i64> = calloc(L, 8) as ptr<i64>
+
+    let pi: i64 = 0
+    while pi < 3 {
+        let p: i64 = primes[pi]
+        let fb: ptr<i64> = null
+        if pi == 0 { fb = cache_fb0 }
+        if pi == 1 { fb = cache_fb1 }
+        if pi == 2 { fb = cache_fb2 }
+        let mut i2: i64 = 0
+        while i2 < nfft {
+            fa[i2] = 0
+            i2 = i2 + 1
+        }
+        let mut i3: i64 = 0
+        while i3 < half {
+            fa[i3] = a_seg[i3] % p
+            i3 = i3 + 1
+        }
+        ntt(fa, nfft, false, p, 3)
+        let mut i4: i64 = 0
+        while i4 < nfft {
+            fa[i4] = (((fa[i4] as i128) * (fb[base + i4] as i128)) % (p as i128)) as i64
+            i4 = i4 + 1
+        }
+        ntt(fa, nfft, true, p, 3)
+        let mut i5: i64 = 0
+        while i5 < L {
+            if pi == 0 { res0[i5] = fa[i5] }
+            if pi == 1 { res1[i5] = fa[i5] }
+            if pi == 2 { res2[i5] = fa[i5] }
+            i5 = i5 + 1
+        }
+        pi = pi + 1
+    }
+
+    let mut i6: i64 = 0
+    while i6 < L {
+        out[i6] = crt3(res0[i6], res1[i6], res2[i6])
+        i6 = i6 + 1
+    }
+
+    free(fa)
+    free(res0)
+    free(res1)
+    free(res2)
+}
+
+function next_pow2(x: i64) -> i64 {
+    let mut p: i64 = 1
+    while p < x {
+        p = p << 1
+    }
+    return p
+}
+
+function solve_block(l: i64, r: i64) -> void {
+    let rr: i64 = r
+    if rr > g_n { rr = g_n }
+    let mut i: i64 = l
+    while i <= rr {
+        let ai: i64 = 0
+        if i == 0 {
+            ai = 1
+        } else {
+            ai = (((g_f[i] as i128) * (g_inv[i] as i128)) % (MOD as i128)) as i64
+        }
+        g_a[i] = ai
+        let max_k: i64 = rr - i
+        if max_k <= 0 || ai == 0 {
+            i = i + 1
+        } else {
+            let mut k: i64 = 1
+            while k <= max_k {
+                g_f[i + k] = (g_f[i + k] + (((ai as i128) * (g_b[k] as i128)) % (MOD as i128)) as i64) % MOD
+                k = k + 1
+            }
+            i = i + 1
+        }
+    }
+}
+
+function cdq(l: i64, L: i64) -> void {
+    if l > g_n { return }
+    let r: i64 = l + L - 1
+    if L <= THRESH {
+        solve_block(l, r)
+        return
+    }
+    let half: i64 = L >> 1
+    let mid: i64 = l + half - 1
+
+    cdq(l, half)
+
+    if mid < g_n {
+        let conv: ptr<i64> = calloc(L, 8) as ptr<i64>
+        convolve_first_L(g_a + l, half, L, conv)
+        let rr: i64 = r
+        if rr > g_n { rr = g_n }
+        let mut t: i64 = mid + 1
+        while t <= rr {
+            g_f[t] = (g_f[t] + conv[t - l]) % MOD
+            t = t + 1
+        }
+        free(conv)
+    }
+
+    cdq(mid + 1, half)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p840_native())
+    crt_init()
+    g_n = N
+    g_size = next_pow2(N + 1)
+
+    # SPF and arithmetic derivative D
+    let spf: ptr<i32> = calloc(N + 1, 4) as ptr<i32>
+    let mut i: i64 = 0
+    while i <= N {
+        spf[i] = i as i32
+        i = i + 1
+    }
+    spf[0] = 0
+    spf[1] = 1
+    let mut i2: i64 = 2
+    while i2 * i2 <= N {
+        if spf[i2] == (i2 as i32) {
+            let mut j: i64 = i2 * i2
+            while j <= N {
+                if spf[j] == (j as i32) { spf[j] = i2 as i32 }
+                j = j + i2
+            }
+        }
+        i2 = i2 + 1
+    }
+
+    let D: ptr<i64> = calloc(N + 1, 8) as ptr<i64>
+    let mut n: i64 = 2
+    while n <= N {
+        let p: i64 = spf[n] as i64
+        let m: i64 = n / p
+        D[n] = m + p * D[m]
+        n = n + 1
+    }
+    D[1] = 1
+
+    # Build b[k] = sum_{m|k} m * D(m)^{k/m} mod MOD
+    g_b = calloc(g_size, 8) as ptr<i64>
+    let mut m: i64 = 1
+    while m <= N {
+        let wm: i64 = D[m] % MOD
+        let mm: i64 = m % MOD
+        let mut pwr: i64 = wm
+        let mut j: i64 = m
+        while j <= N {
+            g_b[j] = (g_b[j] + (((mm as i128) * (pwr as i128)) % (MOD as i128)) as i64) % MOD
+            pwr = (((pwr as i128) * (wm as i128)) % (MOD as i128)) as i64
+            j = j + m
+        }
+        m = m + 1
+    }
+
+    # Modular inverses
+    g_inv = calloc(N + 1, 8) as ptr<i64>
+    g_inv[1] = 1
+    let mut i3: i64 = 2
+    while i3 <= N {
+        g_inv[i3] = (MOD - (MOD / i3) * g_inv[MOD % i3] % MOD) % MOD
+        i3 = i3 + 1
+    }
+
+    # CDQ
+    g_a = calloc(g_size, 8) as ptr<i64>
+    g_f = calloc(g_size, 8) as ptr<i64>
+
+    # NTT cache
+    cache_L = calloc(20, 8) as ptr<i64>
+    let max_nfft: i64 = 2 * g_size
+    cache_fb0 = calloc(20 * max_nfft, 8) as ptr<i64>
+    cache_fb1 = calloc(20 * max_nfft, 8) as ptr<i64>
+    cache_fb2 = calloc(20 * max_nfft, 8) as ptr<i64>
+    cache_count = 0
+
+    cdq(0, g_size)
+
+    # Answer = sum(G[1..N]) mod MOD
+    let mut ans: i64 = 0
+    let mut k: i64 = 1
+    while k <= N {
+        ans = (ans + g_a[k]) % MOD
+        k = k + 1
+    }
+
+    printf("%lld\n", ans)
+
+    free(spf)
+    free(D)
+    free(g_b)
+    free(g_inv)
+    free(g_a)
+    free(g_f)
+    free(cache_L)
+    free(cache_fb0)
+    free(cache_fb1)
+    free(cache_fb2)
     return 0
 }

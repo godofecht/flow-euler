@@ -1,12 +1,411 @@
-# Project Euler 924
-# Larger Digit Permutation II — native C solver.
-# Companion: problems/native/p924.c
+# Project Euler 924: Larger Digit Permutation II
+# B(n) = smallest number larger than n formed by rearranging digits of n, or 0.
+# a_0 = 0, a_n = a_{n-1}^2 + 2. U(N) = sum_{n=1..N} B(a_n).
+# Answer: U(10^16) mod 1_000_000_007.
 
 extern {
-    function p924_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+const HT_SIZE: i64 = 131072
+const HT_MASK: i64 = 131071
+const HASH_C: i64 = 2654435761
+
+# Hash table
+let mut ht_key: ptr<i64> = null
+let mut ht_val: ptr<i64> = null
+
+function ht_init() -> void {
+    memset(ht_key as ptr<void>, 0, HT_SIZE * 8)
+    memset(ht_val as ptr<void>, 0, HT_SIZE * 8)
+}
+
+function ht_put(key: i64, val: i64) -> void {
+    let mut h: i64 = (key * HASH_C) & HT_MASK
+    if h < 0 { h = -h }
+    let mut i: i64 = 0
+    while i < HT_SIZE {
+        let idx: i64 = (h + i) & HT_MASK
+        if ht_val[idx] == 0 {
+            ht_key[idx] = key
+            ht_val[idx] = val
+            return
+        }
+        i = i + 1
+    }
+}
+
+# Returns index if found, -1 if not found
+function ht_get(key: i64) -> i64 {
+    let mut h: i64 = (key * HASH_C) & HT_MASK
+    if h < 0 { h = -h }
+    let mut i: i64 = 0
+    while i < HT_SIZE {
+        let idx: i64 = (h + i) & HT_MASK
+        if ht_key[idx] == key && ht_val[idx] != 0 {
+            return ht_val[idx]
+        }
+        if ht_val[idx] == 0 && ht_key[idx] == 0 {
+            return -1
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+# next_perm_inplace on ptr<i8> digit array
+# Returns 1 if next perm exists, 0 otherwise
+function next_perm_inplace(digs: ptr<i8>, len: i32) -> i32 {
+    let mut i: i32 = len - 2
+    while i >= 0 && digs[i] >= digs[i + 1] {
+        i = i - 1
+    }
+    if i < 0 { return 0 }
+    let mut j: i32 = len - 1
+    while digs[j] <= digs[i] {
+        j = j - 1
+    }
+    let tmp: i8 = digs[i]
+    digs[i] = digs[j]
+    digs[j] = tmp
+    let mut l: i32 = i + 1
+    let mut r: i32 = len - 1
+    while l < r {
+        let tmp2: i8 = digs[l]
+        digs[l] = digs[r]
+        digs[r] = tmp2
+        l = l + 1
+        r = r - 1
+    }
+    return 1
+}
+
+function B_small(n: i64) -> i64 {
+    let digs: ptr<i8> = calloc(20, 1)
+    let mut len: i32 = 0
+    let mut t: i64 = n
+    if t == 0 {
+        digs[0] = 0
+        len = 1
+    } else {
+        while t > 0 {
+            digs[len] = (t % 10) as i8
+            len = len + 1
+            t = t / 10
+        }
+        # reverse
+        let mut i: i32 = 0
+        while i < len / 2 {
+            let tmp: i8 = digs[i]
+            digs[i] = digs[len - 1 - i]
+            digs[len - 1 - i] = tmp
+            i = i + 1
+        }
+    }
+    let ok: i32 = next_perm_inplace(digs, len)
+    if ok == 0 {
+        free(digs)
+        return 0
+    }
+    let mut y: i64 = 0
+    let mut i2: i32 = 0
+    while i2 < len {
+        y = y * 10 + (digs[i2] as i64)
+        i2 = i2 + 1
+    }
+    free(digs)
+    return y
+}
+
+# next_perm_fixed: fixed-width next permutation (leading zeros allowed)
+# Returns next perm value, or -1 if no next permutation
+function next_perm_fixed(x: i64, k: i32, buf: ptr<i8>) -> i64 {
+    let mut t: i64 = x
+    let mut i: i32 = k - 1
+    while i >= 0 {
+        buf[i] = (t % 10) as i8
+        t = t / 10
+        i = i - 1
+    }
+    # Find pivot
+    let mut ii: i32 = k - 2
+    while ii >= 0 && buf[ii] >= buf[ii + 1] {
+        ii = ii - 1
+    }
+    if ii < 0 { return -1 }
+    let mut j: i32 = k - 1
+    while buf[j] <= buf[ii] {
+        j = j - 1
+    }
+    let tmp: i8 = buf[ii]
+    buf[ii] = buf[j]
+    buf[j] = tmp
+    let mut l: i32 = ii + 1
+    let mut r: i32 = k - 1
+    while l < r {
+        let tmp2: i8 = buf[l]
+        buf[l] = buf[r]
+        buf[r] = tmp2
+        l = l + 1
+        r = r - 1
+    }
+    let mut y: i64 = 0
+    let mut d: i32 = 0
+    while d < k {
+        y = y * 10 + (buf[d] as i64)
+        d = d + 1
+    }
+    return y
+}
+
+# sum_a_mod: cycle detection for a_n mod MOD
+function sum_a_mod(N: i64) -> i64 {
+    let states: ptr<i64> = calloc(200000, 8)
+    let pref: ptr<i64> = calloc(200000, 8)
+
+    ht_init()
+    states[0] = 0
+    ht_put(0, 0)
+    let mut n_states: i32 = 1
+
+    let mut x: i64 = 0
+    let mut mu: i64 = 0
+    let mut lam: i64 = 0
+
+    while true {
+        let nxt: i64 = (x * x + 2) % MOD
+        let idx: i64 = n_states as i64
+
+        let mut found: i64 = -1
+        if nxt == 0 {
+            found = 0
+        } else {
+            found = ht_get(nxt)
+        }
+
+        if found >= 0 {
+            mu = found
+            lam = idx - found
+            break
+        }
+        ht_put(nxt, idx)
+        states[n_states] = nxt
+        n_states = n_states + 1
+        x = nxt
+    }
+
+    # Build prefix sums
+    pref[0] = 0
+    let mut i: i32 = 1
+    while i < n_states {
+        pref[i] = (pref[i - 1] + states[i]) % MOD
+        i = i + 1
+    }
+
+    if N < n_states as i64 {
+        let result: i64 = pref[N as i32]
+        free(states)
+        free(pref)
+        return result
+    }
+
+    let base_before: i64 = if mu > 0 { pref[(mu - 1) as i32] } else { 0 }
+    let mut cycle_sum: i64 = (pref[(mu + lam - 1) as i32] - base_before) % MOD
+    if cycle_sum < 0 { cycle_sum = cycle_sum + MOD }
+
+    let cycle_terms: i64 = N - mu + 1
+    let full: i64 = cycle_terms / lam
+    let rem: i64 = cycle_terms % lam
+
+    let mut total: i64 = (base_before + (full % MOD) * cycle_sum) % MOD
+    if rem != 0 {
+        let mut extra: i64 = (pref[(mu + rem - 1) as i32] - base_before) % MOD
+        if extra < 0 { extra = extra + MOD }
+        total = (total + extra) % MOD
+    }
+
+    free(states)
+    free(pref)
+    return total
+}
+
+# delta_small: n=1..5
+function delta_small(N: i64) -> i64 {
+    let mut a: i64 = 0
+    let mut s: i64 = 0
+    let limit: i32 = if N < 5 { N as i32 } else { 5 }
+    let mut n: i32 = 1
+    while n <= limit {
+        a = a * a + 2
+        let b: i64 = B_small(a)
+        let mut d: i64 = (b - a) % MOD
+        if d < 0 { d = d + MOD }
+        s = (s + d) % MOD
+        n = n + 1
+    }
+    return s
+}
+
+# delta10_and_bad outputs
+let mut g_d10_total: i64 = 0
+let mut g_d10_first_bad_n: i64 = -1
+let mut g_d10_step: i64 = 0
+
+function delta10_and_bad(N: i64) -> void {
+    g_d10_total = 0
+    g_d10_first_bad_n = -1
+    g_d10_step = 0
+
+    if N <= 5 { return }
+
+    let k: i32 = 10
+    let mut m: i128 = 1
+    let mut i: i32 = 0
+    while i < k {
+        m = m * 10
+        i = i + 1
+    }
+    let mut step: i64 = 8
+    let mut i2: i32 = 0
+    while i2 < k - 2 {
+        step = step * 5
+        i2 = i2 + 1
+    }
+    g_d10_step = step
+
+    # Compute a_6 mod 10^10
+    let mut x: i128 = 0
+    let mut i3: i32 = 0
+    while i3 < 6 {
+        x = (x * x + 2) % m
+        i3 = i3 + 1
+    }
+    let start: i128 = x
+
+    let total_terms: i64 = N - 5
+    let q: i64 = total_terms / step
+    let r: i64 = total_terms % step
+
+    let buf: ptr<i8> = calloc(16, 1)
+    let mut cycle_sum: i64 = 0
+    let mut rem_sum: i64 = 0
+    let mut bad_step: i64 = -1
+
+    let mut ii: i64 = 1
+    while ii <= step {
+        let y: i64 = next_perm_fixed(x as i64, k, buf)
+        if y < 0 {
+            bad_step = ii
+        } else {
+            let d: i64 = y - (x as i64)
+            cycle_sum = (cycle_sum + d) % MOD
+            if cycle_sum < 0 { cycle_sum = cycle_sum + MOD }
+            if ii <= r {
+                rem_sum = (rem_sum + d) % MOD
+                if rem_sum < 0 { rem_sum = rem_sum + MOD }
+            }
+        }
+        x = (x * x + 2) % m
+        ii = ii + 1
+    }
+
+    free(buf)
+
+    g_d10_first_bad_n = bad_step + 5
+    g_d10_total = ((q % MOD) * cycle_sum % MOD + rem_sum) % MOD
+    if g_d10_total < 0 { g_d10_total = g_d10_total + MOD }
+}
+
+# delta_bad_11
+function delta_bad_11(N: i64, first_bad_n: i64, step: i64) -> i64 {
+    if first_bad_n < 0 || N < first_bad_n { return 0 }
+
+    let mut m11: i128 = 1
+    let mut i: i32 = 0
+    while i < 11 {
+        m11 = m11 * 10
+        i = i + 1
+    }
+
+    # targets[0..4] = first_bad_n + t*step for t=0..4
+    let targets: ptr<i64> = calloc(5, 8)
+    let mut t: i32 = 0
+    while t < 5 {
+        targets[t] = first_bad_n + (t as i64) * step
+        t = t + 1
+    }
+    let max_n: i64 = targets[4]
+
+    # Simulate a_n mod 10^11 up to max_n
+    let mut x: i128 = 0
+    let vals: ptr<i64> = calloc(5, 8)
+    let mut idx: i32 = 0
+    let mut n: i64 = 1
+    while n <= max_n {
+        x = (x * x + 2) % m11
+        if n == targets[idx] {
+            vals[idx] = x as i64
+            idx = idx + 1
+            if idx == 5 { break }
+        }
+        n = n + 1
+    }
+
+    let buf: ptr<i8> = calloc(16, 1)
+    let deltas: ptr<i64> = calloc(5, 8)
+    let mut i2: i32 = 0
+    while i2 < 5 {
+        let y: i64 = next_perm_fixed(vals[i2], 11, buf)
+        # y should never be -1 for 11-digit
+        let mut d: i64 = (y - vals[i2]) % MOD
+        if d < 0 { d = d + MOD }
+        deltas[i2] = d
+        i2 = i2 + 1
+    }
+
+    # Count bad indices <= N
+    let T: i64 = 1 + (N - first_bad_n) / step
+    let base: i64 = T / 5
+    let rem: i64 = T % 5
+
+    let mut total: i64 = 0
+    let mut i3: i32 = 0
+    while i3 < 5 {
+        let c: i64 = base + (if i3 < rem as i32 { 1 } else { 0 })
+        total = (total + (c % MOD) * deltas[i3]) % MOD
+        i3 = i3 + 1
+    }
+
+    free(targets)
+    free(vals)
+    free(buf)
+    free(deltas)
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p924_native())
+    ht_key = calloc(HT_SIZE, 8)
+    ht_val = calloc(HT_SIZE, 8)
+
+    let mut N: i64 = 1
+    let mut i: i32 = 0
+    while i < 16 {
+        N = N * 10
+        i = i + 1
+    }
+
+    let s_a: i64 = sum_a_mod(N)
+    let d_small: i64 = delta_small(N)
+
+    delta10_and_bad(N)
+    let d_bad: i64 = delta_bad_11(N, g_d10_first_bad_n, g_d10_step)
+
+    let mut result: i64 = (s_a + d_small + g_d10_total + d_bad) % MOD
+    if result < 0 { result = result + MOD }
+
+    printf("%lld\n", result)
     return 0
 }

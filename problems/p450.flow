@@ -1,11 +1,364 @@
 # Project Euler 450
-# Hypocycloid lattice points T(10^6): Möbius axis sums + Gaussian powers.
+# Hypocycloid lattice points T(10^6): Mobius axis sums + Gaussian powers.
 
 extern {
-    function pe450_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+    function pow(base: f64, exp: f64) -> f64
+}
+
+const N: i64 = 1000000
+
+let mut g_mu: ptr<i32> = null
+let mut g_pref_mui: ptr<i64> = null
+let mut g_pref_mui_odd: ptr<i64> = null
+let mut g_f_cache: ptr<i64> = null
+let mut g_f_computed: ptr<i8> = null
+
+let mut g_triple_a: ptr<i64> = null
+let mut g_triple_b: ptr<i64> = null
+let mut g_triple_c: ptr<i64> = null
+let mut g_triple_count: i64 = 0
+
+function igcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = 0 - a }
+    if b < 0 { b = 0 - b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function llabs(x: i64) -> i64 {
+    if x < 0 { return 0 - x }
+    return x
+}
+
+function ipow(b0: i64, e0: i32) -> i64 {
+    let mut r: i64 = 1
+    let mut b: i64 = b0
+    let mut e: i32 = e0
+    while e > 0 {
+        if (e & 1) == 1 { r = r * b }
+        b = b * b
+        e = e >> 1
+    }
+    return r
+}
+
+function mobius_sieve(n: i64) -> void {
+    g_mu = calloc(n + 1, 4) as ptr<i32>
+    let comp: ptr<i8> = calloc(n + 1, 1) as ptr<i8>
+    let primes: ptr<i32> = calloc(n + 1, 4) as ptr<i32>
+    let mut prime_count: i64 = 0
+    g_mu[1] = 1
+    let mut i: i64 = 2
+    while i <= n {
+        if comp[i] == 0 {
+            primes[prime_count] = i as i32
+            prime_count = prime_count + 1
+            g_mu[i] = -1
+        }
+        let mut pi: i64 = 0
+        while pi < prime_count {
+            let p: i64 = primes[pi] as i64
+            let ip: i64 = i * p
+            if ip > n { break }
+            comp[ip] = 1
+            if i % p == 0 {
+                g_mu[ip] = 0
+                break
+            }
+            g_mu[ip] = 0 - g_mu[i]
+            pi = pi + 1
+        }
+        i = i + 1
+    }
+    free(comp)
+    free(primes)
+}
+
+function build_prefix(n: i64) -> void {
+    g_pref_mui = calloc(n + 1, 8) as ptr<i64>
+    g_pref_mui_odd = calloc(n + 1, 8) as ptr<i64>
+    let mut s1: i64 = 0
+    let mut so1: i64 = 0
+    let mut i: i64 = 1
+    while i <= n {
+        s1 = s1 + (g_mu[i] as i64) * i
+        if (i & 1) == 1 { so1 = so1 + (g_mu[i] as i64) * i }
+        g_pref_mui[i] = s1
+        g_pref_mui_odd[i] = so1
+        i = i + 1
+    }
+}
+
+function G0(n: i64) -> i64 {
+    if n <= 2 { return 0 }
+    let m: i64 = (n - 1) / 2
+    return m * (n - m - 1)
+}
+
+function GA(n: i64) -> i64 {
+    return (n + 1) * G0(n) / 2
+}
+
+function GB(n: i64) -> i64 {
+    if n <= 2 { return 0 }
+    let m: i64 = (n - 1) / 2
+    let term: i64 = m * (m + 1)
+    return term * (3 * n - 4 * m - 2) / 6
+}
+
+function HB(n: i64) -> i64 {
+    let M: i64 = (n - 2) / 2
+    if M <= 0 { return 0 }
+    let m0: i64 = (M - 1) / 2
+    if m0 < 0 { return 0 }
+    let s_y: i64 = m0 * (m0 + 1) / 2
+    let s_y2: i64 = m0 * (m0 + 1) * (2 * m0 + 1) / 6
+    return M * (m0 + 1) * (m0 + 1) - 4 * s_y2 - 2 * s_y
+}
+
+function KB(n: i64) -> i64 {
+    let mut res: i64 = 0
+    let M1: i64 = (n - 2) / 4
+    if M1 > 0 {
+        let m1: i64 = (M1 - 1) / 2
+        if m1 >= 0 {
+            let s_y: i64 = m1 * (m1 + 1) / 2
+            let s_y2: i64 = m1 * (m1 + 1) * (2 * m1 + 1) / 6
+            let sum_4y1: i64 = (m1 + 1) * (2 * m1 + 1)
+            res = res + M1 * sum_4y1 - 8 * s_y2 - 2 * s_y
+        }
+    }
+    let M3: i64 = (n - 6) / 4
+    if M3 > 0 {
+        let m3: i64 = (M3 - 1) / 2
+        if m3 >= 0 {
+            let s_y: i64 = m3 * (m3 + 1) / 2
+            let s_y2: i64 = m3 * (m3 + 1) * (2 * m3 + 1) / 6
+            let sum_4y3: i64 = (m3 + 1) * (2 * m3 + 3)
+            res = res + M3 * sum_4y3 - 8 * s_y2 - 6 * s_y
+        }
+    }
+    return res
+}
+
+function mobius_sum_weighted(m: i64, pref: ptr<i64>, base_type: i32) -> i64 {
+    let mut res: i64 = 0
+    let mut l: i64 = 1
+    while l <= m {
+        let q: i64 = m / l
+        let r: i64 = m / q
+        let mut bv: i64 = 0
+        if base_type == 0 { bv = GA(q) }
+        else { if base_type == 1 { bv = GB(q) }
+        else { if base_type == 2 { bv = HB(q) }
+        else { bv = KB(q) } } }
+        res = res + (pref[r] - pref[l - 1]) * bv
+        l = r + 1
+    }
+    return res
+}
+
+function f_cached(m: i64) -> i64 {
+    if g_f_computed[m] != 0 { return g_f_cache[m] }
+    let SA: i64 = mobius_sum_weighted(m, g_pref_mui, 0)
+    let SB: i64 = mobius_sum_weighted(m, g_pref_mui, 1)
+    let P2: i64 = mobius_sum_weighted(m, g_pref_mui_odd, 2)
+    let P4: i64 = mobius_sum_weighted(m, g_pref_mui_odd, 3)
+    let val: i64 = 4 * SA + 2 * SB + 2 * P2 - 4 * P4
+    g_f_cache[m] = val
+    g_f_computed[m] = 1
+    return val
+}
+
+function axis_total(n: i64) -> i64 {
+    let mut tot: i64 = 0
+    let mut l: i64 = 1
+    while l <= n {
+        let q: i64 = n / l
+        let r: i64 = n / q
+        let sum_d: i64 = (l + r) * (r - l + 1) / 2
+        tot = tot + sum_d * f_cached(q)
+        l = r + 1
+    }
+    return tot
+}
+
+function primitive_triples(cmax: i64) -> void {
+    g_triple_a = malloc(50000 * 8) as ptr<i64>
+    g_triple_b = malloc(50000 * 8) as ptr<i64>
+    g_triple_c = malloc(50000 * 8) as ptr<i64>
+    g_triple_count = 0
+    let m_limit: i64 = (sqrt((cmax * 2) as f64) as i64) + 3
+    let mut m: i64 = 2
+    while m <= m_limit {
+        let mm: i64 = m * m
+        let mut nn: i64 = 1
+        while nn < m {
+            if ((m - nn) & 1) != 0 {
+                if igcd(m, nn) == 1 {
+                    let c: i64 = mm + nn * nn
+                    if c > cmax { break }
+                    g_triple_a[g_triple_count] = mm - nn * nn
+                    g_triple_b[g_triple_count] = 2 * m * nn
+                    g_triple_c[g_triple_count] = c
+                    g_triple_count = g_triple_count + 1
+                }
+            }
+            nn = nn + 1
+        }
+        m = m + 1
+    }
+}
+
+function gauss_pow(re0: i64, im0: i64, exp0: i32, out: ptr<i64>) -> void {
+    out[0] = 1
+    out[1] = 0
+    let mut br: i64 = re0
+    let mut bi: i64 = im0
+    let mut e: i32 = exp0
+    while e > 0 {
+        if (e & 1) == 1 {
+            let nr: i64 = out[0] * br - out[1] * bi
+            let ni: i64 = out[0] * bi + out[1] * br
+            out[0] = nr
+            out[1] = ni
+        }
+        let nbr: i64 = br * br - bi * bi
+        let nbi: i64 = br * bi + bi * br
+        br = nbr
+        bi = nbi
+        e = e >> 1
+    }
+}
+
+function non_axis_total(n: i64) -> i64 {
+    let mut total: i64 = 0
+    let mut maxA: i32 = 1
+    while ipow(3, maxA + 1) <= n { maxA = maxA + 1 }
+
+    let Ap: i32 = 2
+    while Ap <= maxA {
+        let mut cmax: i64 = (pow((n as f64), 1.0 / (Ap as f64)) as i64) + 2
+        while ipow(cmax, Ap) > n { cmax = cmax - 1 }
+        primitive_triples(cmax)
+
+        let Bp: i32 = 1
+        while Bp < Ap {
+            if igcd((Ap as i64), (Bp as i64)) == 1 {
+                let mut ti: i64 = 0
+                while ti < g_triple_count {
+                    let ta: i64 = g_triple_a[ti]
+                    let tb: i64 = g_triple_b[ti]
+                    let tc: i64 = g_triple_c[ti]
+                    let den: i64 = ipow(tc, Ap)
+                    if den * (Ap as i64 + Bp as i64) > n { ti = ti + 1; continue }
+
+                    # variants: up to 16 pairs (u, v)
+                    let variants: array<i64, 32> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                    let mut nv: i32 = 0
+                    # pairs[0] = (a, b), pairs[1] = (b, a)
+                    let pairs: array<i64, 4> = [ta, tb, tb, ta]
+                    let mut pi: i32 = 0
+                    while pi < 2 {
+                        let pa: i64 = pairs[pi * 2]
+                        let pb: i64 = pairs[pi * 2 + 1]
+                        let mut sui: i32 = 0
+                        while sui < 2 {
+                            let su: i64 = if sui == 0 { 1 } else { -1 }
+                            let mut svi: i32 = 0
+                            while svi < 2 {
+                                let sv: i64 = if svi == 0 { 1 } else { -1 }
+                                let u: i64 = su * pa
+                                let v: i64 = sv * pb
+                                # Check for duplicate
+                                let mut dup: i32 = 0
+                                let mut k: i32 = 0
+                                while k < nv {
+                                    if variants[k * 2] == u && variants[k * 2 + 1] == v {
+                                        dup = 1
+                                        break
+                                    }
+                                    k = k + 1
+                                }
+                                if dup == 0 {
+                                    variants[nv * 2] = u
+                                    variants[nv * 2 + 1] = v
+                                    nv = nv + 1
+                                }
+                                svi = svi + 1
+                            }
+                            sui = sui + 1
+                        }
+                        pi = pi + 1
+                    }
+
+                    let mut vi: i32 = 0
+                    while vi < nv {
+                        let re_val: i64 = variants[vi * 2]
+                        let im_val: i64 = variants[vi * 2 + 1]
+                        let uA_out: array<i64, 2> = [0, 0]
+                        let uB_out: array<i64, 2> = [0, 0]
+                        gauss_pow(re_val, im_val, Ap, uA_out as ptr<i64>)
+                        gauss_pow(re_val, im_val, Bp, uB_out as ptr<i64>)
+                        let uA: i64 = uA_out[0]
+                        let vA: i64 = uA_out[1]
+                        let uB: i64 = uB_out[0]
+                        let vB: i64 = uB_out[1]
+                        let scale: i64 = ipow(tc, Ap - Bp)
+                        let numX: i64 = (Ap as i64) * uB * scale + (Bp as i64) * uA
+                        let numY: i64 = (Ap as i64) * vB * scale - (Bp as i64) * vA
+                        let g: i64 = igcd(den, igcd(llabs(numX), llabs(numY)))
+                        let d0: i64 = den / g
+                        if d0 * (Ap as i64 + Bp as i64) > n { vi = vi + 1; continue }
+                        let x0: i64 = numX / g
+                        let y0: i64 = numY / g
+                        let kmax: i64 = n / (d0 * (Ap as i64 + Bp as i64))
+                        total = total + (llabs(x0) + llabs(y0)) * (kmax * (kmax + 1) / 2)
+                        vi = vi + 1
+                    }
+                    ti = ti + 1
+                }
+            }
+            Bp = Bp + 1
+        }
+
+        free(g_triple_a)
+        free(g_triple_b)
+        free(g_triple_c)
+        g_triple_a = null
+        g_triple_b = null
+        g_triple_c = null
+
+        Ap = Ap + 1
+    }
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe450_answer())
+    mobius_sieve(N)
+    build_prefix(N)
+    g_f_cache = calloc(N + 1, 8) as ptr<i64>
+    g_f_computed = calloc(N + 1, 1) as ptr<i8>
+
+    let axis: i64 = axis_total(N)
+    let non_axis: i64 = non_axis_total(N)
+    let ans: i64 = axis + non_axis
+    printf("%lld\n", ans)
+
+    free(g_mu)
+    free(g_pref_mui)
+    free(g_pref_mui_odd)
+    free(g_f_cache)
+    free(g_f_computed)
     return 0
 }

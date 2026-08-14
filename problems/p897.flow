@@ -1,8 +1,284 @@
+# Project Euler 897
+# Newton's method with tridiagonal solve for optimizing a piecewise function.
+
 extern {
-    function p897_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+    function fabs(x: f64) -> f64
+    function pow(base: f64, exp: f64) -> f64
+}
+
+const MAXN: i32 = 128
+
+# Global arrays for Newton solve
+let mut g_g: ptr<f64> = null
+let mut g_diag: ptr<f64> = null
+let mut g_lower: ptr<f64> = null
+let mut g_upper: ptr<f64> = null
+let mut g_rhs: ptr<f64> = null
+let mut g_delta: ptr<f64> = null
+let mut g_trial: ptr<f64> = null
+let mut g_terms: ptr<f64> = null
+
+# Tridiagonal temp arrays
+let mut g_c: ptr<f64> = null
+let mut g_d: ptr<f64> = null
+let mut g_b: ptr<f64> = null
+
+function tridiag_solve(lower: ptr<f64>, diag: ptr<f64>, upper: ptr<f64>, rhs: ptr<f64>, x: ptr<f64>, n: i32) -> void {
+    memcpy(g_c as ptr<void>, upper as ptr<void>, ((n - 1) as i64) * 8)
+    memcpy(g_d as ptr<void>, diag as ptr<void>, (n as i64) * 8)
+    memcpy(g_b as ptr<void>, rhs as ptr<void>, (n as i64) * 8)
+    let mut i: i32 = 0
+    while i < n - 1 {
+        let w: f64 = lower[i] / g_d[i]
+        g_d[i + 1] = g_d[i + 1] - w * g_c[i]
+        g_b[i + 1] = g_b[i + 1] - w * g_b[i]
+        i = i + 1
+    }
+    x[n - 1] = g_b[n - 1] / g_d[n - 1]
+    let mut i2: i32 = n - 2
+    while i2 >= 0 {
+        x[i2] = (g_b[i2] - g_c[i2] * x[i2 + 1]) / g_d[i2]
+        i2 = i2 - 1
+    }
+}
+
+function max_residual(xs: ptr<f64>, n: i32) -> f64 {
+    let mut mx: f64 = 0.0
+    let mut k: i32 = 1
+    while k < n - 1 {
+        let a: f64 = xs[k - 1]
+        let x: f64 = xs[k]
+        let b: f64 = xs[k + 1]
+        let a4: f64 = a * a * a * a
+        let b4: f64 = b * b * b * b
+        let x3: f64 = x * x * x
+        let g: f64 = a4 - b4 + 4.0 * x3 * (b - a)
+        let ag: f64 = fabs(g)
+        if ag > mx { mx = ag }
+        k = k + 1
+    }
+    return mx
+}
+
+function newton_solve(xs: ptr<f64>, n: i32) -> void {
+    let m: i32 = n - 2
+
+    let mut iter: i32 = 0
+    while iter < 200 {
+        memset(g_g as ptr<void>, 0, (m as i64) * 8)
+        memset(g_diag as ptr<void>, 0, (m as i64) * 8)
+        memset(g_lower as ptr<void>, 0, ((m - 1) as i64) * 8)
+        memset(g_upper as ptr<void>, 0, ((m - 1) as i64) * 8)
+
+        let mut k: i32 = 1
+        while k < n - 1 {
+            let a: f64 = xs[k - 1]
+            let x: f64 = xs[k]
+            let b: f64 = xs[k + 1]
+            let idx: i32 = k - 1
+            let a4: f64 = a * a * a * a
+            let b4: f64 = b * b * b * b
+            let x3: f64 = x * x * x
+            let x2: f64 = x * x
+            let a3: f64 = a * a * a
+            let b3: f64 = b * b * b
+
+            g_g[idx] = a4 - b4 + 4.0 * x3 * (b - a)
+            g_diag[idx] = 12.0 * x2 * (b - a)
+            if idx - 1 >= 0 {
+                g_lower[idx - 1] = 4.0 * a3 - 4.0 * x3
+            }
+            if idx + 1 < m {
+                g_upper[idx] = 4.0 * x3 - 4.0 * b3
+            }
+            k = k + 1
+        }
+
+        let mut maxg: f64 = 0.0
+        let mut i: i32 = 0
+        while i < m {
+            if fabs(g_g[i]) > maxg { maxg = fabs(g_g[i]) }
+            i = i + 1
+        }
+        if maxg < 1e-15 { break }
+
+        let mut i2: i32 = 0
+        while i2 < m {
+            g_rhs[i2] = -g_g[i2]
+            i2 = i2 + 1
+        }
+        tridiag_solve(g_lower, g_diag, g_upper, g_rhs, g_delta, m)
+
+        let mut alpha: f64 = 1.0
+        let mut found: i32 = 0
+        while alpha > 1e-14 {
+            memcpy(g_trial as ptr<void>, xs as ptr<void>, (n as i64) * 8)
+            let mut i3: i32 = 0
+            while i3 < m {
+                g_trial[i3 + 1] = xs[i3 + 1] + alpha * g_delta[i3]
+                i3 = i3 + 1
+            }
+
+            let mut ok: i32 = 1
+            let mut i4: i32 = 0
+            while i4 < n - 1 {
+                if !(g_trial[i4] < g_trial[i4 + 1]) {
+                    ok = 0
+                    break
+                }
+                i4 = i4 + 1
+            }
+            if ok != 0 {
+                if g_trial[1] > -1.0 && g_trial[1] < 1.0 && g_trial[n - 2] > -1.0 && g_trial[n - 2] < 1.0 {
+                    if max_residual(g_trial, n) < maxg {
+                        memcpy(xs as ptr<void>, g_trial as ptr<void>, (n as i64) * 8)
+                        found = 1
+                        break
+                    }
+                }
+            }
+            alpha = alpha * 0.5
+        }
+        if found == 0 {
+            let mut i5: i32 = 0
+            while i5 < m {
+                xs[i5 + 1] = xs[i5 + 1] + 1e-16 * g_delta[i5]
+                i5 = i5 + 1
+            }
+        }
+        iter = iter + 1
+    }
+}
+
+function kahan_sum(values: ptr<f64>, n: i32) -> f64 {
+    let mut s: f64 = 0.0
+    let mut c: f64 = 0.0
+    let mut i: i32 = 0
+    while i < n {
+        let y: f64 = values[i] - c
+        let t: f64 = s + y
+        c = (t - s) - y
+        s = t
+        i = i + 1
+    }
+    return s
+}
+
+# Heapsort for doubles (ascending)
+function dsort_sift_down(arr: ptr<f64>, n: i32, i: i32) -> void {
+    let mut root: i32 = i
+    while true {
+        let left: i32 = 2 * root + 1
+        let right: i32 = 2 * root + 2
+        let mut largest: i32 = root
+        if left < n {
+            if arr[left] > arr[largest] { largest = left }
+        }
+        if right < n {
+            if arr[right] > arr[largest] { largest = right }
+        }
+        if largest == root { return }
+        let tmp: f64 = arr[root]
+        arr[root] = arr[largest]
+        arr[largest] = tmp
+        root = largest
+    }
+}
+
+function dsort(arr: ptr<f64>, n: i32) -> void {
+    let mut i: i32 = n / 2 - 1
+    while i >= 0 {
+        dsort_sift_down(arr, n, i)
+        i = i - 1
+    }
+    let mut j: i32 = n - 1
+    while j > 0 {
+        let tmp: f64 = arr[0]
+        arr[0] = arr[j]
+        arr[j] = tmp
+        dsort_sift_down(arr, j, 0)
+        j = j - 1
+    }
+}
+
+function compute_area(xs: ptr<f64>, n: i32) -> f64 {
+    let mut i: i32 = 0
+    while i < n - 1 {
+        let a: f64 = xs[i]
+        let b: f64 = xs[i + 1]
+        let a4: f64 = a * a * a * a
+        let b4: f64 = b * b * b * b
+        g_terms[i] = (b - a) * (a4 + b4) * 0.5
+        i = i + 1
+    }
+    let bottom: f64 = kahan_sum(g_terms, n - 1)
+    return 2.0 - bottom
 }
 
 function main() -> i32 {
-    printf("%.9f\n", p897_native())
+    # Allocate global arrays
+    g_g = calloc(MAXN as i64, 8)
+    g_diag = calloc(MAXN as i64, 8)
+    g_lower = calloc(MAXN as i64, 8)
+    g_upper = calloc(MAXN as i64, 8)
+    g_rhs = calloc(MAXN as i64, 8)
+    g_delta = calloc(MAXN as i64, 8)
+    g_trial = calloc(MAXN as i64, 8)
+    g_terms = calloc(MAXN as i64, 8)
+    g_c = calloc(MAXN as i64, 8)
+    g_d = calloc(MAXN as i64, 8)
+    g_b = calloc(MAXN as i64, 8)
+
+    let n: i32 = 101
+    let m: i32 = (n - 1) / 2
+    let mut best_area: f64 = -1e18
+
+    let xs: ptr<f64> = calloc(MAXN as i64, 8)
+
+    let mut extra_left: i32 = 0
+    while extra_left <= 1 {
+        let mut left_internal: i32 = m
+        let mut right_internal: i32 = m - 1
+        if extra_left == 0 {
+            let tmp: i32 = left_internal
+            left_internal = right_internal
+            right_internal = tmp
+        }
+
+        let mut cnt: i32 = 0
+        xs[cnt] = -1.0
+        cnt = cnt + 1
+
+        let mut j: i32 = 1
+        while j <= left_internal {
+            let z: f64 = 1.0 - (j as f64) / ((left_internal + 1) as f64)
+            xs[cnt] = -pow(z, 3.0 / 5.0)
+            cnt = cnt + 1
+            j = j + 1
+        }
+        let mut j2: i32 = 1
+        while j2 <= right_internal {
+            let z2: f64 = (j2 as f64) / ((right_internal + 1) as f64)
+            xs[cnt] = pow(z2, 3.0 / 5.0)
+            cnt = cnt + 1
+            j2 = j2 + 1
+        }
+        xs[cnt] = 1.0
+        cnt = cnt + 1
+
+        dsort(xs, cnt)
+        newton_solve(xs, n)
+
+        let area: f64 = compute_area(xs, n)
+        if area > best_area { best_area = area }
+
+        extra_left = extra_left + 1
+    }
+
+    printf("%.9f\n", best_area)
     return 0
 }

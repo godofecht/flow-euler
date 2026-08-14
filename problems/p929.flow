@@ -1,12 +1,338 @@
-# Project Euler 929
-# Odd-Run Compositions — native C solver (FFT-based polynomial inversion).
-# Companion: problems/native/p929.c
+# Project Euler 929: Odd-Run Compositions
+# Compute F(10^5) mod 1111124111, where F(n) counts compositions of n
+# whose maximal runs of equal parts all have odd length.
+# Uses NTT (Number Theoretic Transform) with 3 primes and CRT
+# for exact polynomial multiplication, plus Newton iteration for
+# series inversion.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p929_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function realloc(p: ptr<void>, n: i64) -> ptr<void>
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+const MOD: i64 = 1111124111
+const N: i32 = 100000
+
+# NTT primes
+const NTT_P0: i64 = 998244353
+const NTT_P1: i64 = 1004535809
+const NTT_P2: i64 = 754974721
+const NTT_G0: i64 = 3
+const NTT_G1: i64 = 3
+const NTT_G2: i64 = 11
+
+# CRT precomputed coefficients
+let mut p1_mod_p2_inv: i64 = 0
+let mut p12_mod_p3_inv: i64 = 0
+let mut p1_mod_MOD: i64 = 0
+let mut p12_mod_MOD: i64 = 0
+
+# NTT bit-reversal
+let mut ntt_rev: ptr<i32> = null as ptr<i32>
+let mut ntt_rev_n: i32 = 0
+
+function mulmod(a: i64, b: i64, mod: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (mod as i128)) as i64
+}
+
+function powmod(a0: i64, e0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut a: i64 = a0 % mod
+    if a < 0 { a = a + mod }
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 { r = mulmod(r, a, mod) }
+        a = mulmod(a, a, mod)
+        e = e >> 1
+    }
+    return r
+}
+
+function modinv(a: i64, mod: i64) -> i64 {
+    return powmod(a, mod - 2, mod)
+}
+
+function ntt_bitrev(n: i32) -> void {
+    if ntt_rev_n != n {
+        ntt_rev = (realloc(ntt_rev as ptr<void>, (n as i64) * 4)) as ptr<i32>
+        ntt_rev_n = n
+    }
+    let mut logn: i32 = 0
+    let mut tmp: i32 = n
+    while tmp > 1 {
+        logn = logn + 1
+        tmp = tmp >> 1
+    }
+    ntt_rev[0] = 0
+    let mut i: i32 = 1
+    while i < n {
+        ntt_rev[i] = (ntt_rev[i >> 1] >> 1) | ((i & 1) << (logn - 1))
+        i = i + 1
+    }
+}
+
+function ntt(a: ptr<i64>, n: i32, invert: i32, mod: i64, gen: i64) -> void {
+    let mut i: i32 = 0
+    while i < n {
+        let j: i32 = ntt_rev[i]
+        if i < j {
+            let t: i64 = a[i]
+            a[i] = a[j]
+            a[j] = t
+        }
+        i = i + 1
+    }
+
+    let mut len: i32 = 2
+    while len <= n {
+        let half: i32 = len >> 1
+        let mut w: i64 = 0
+        if invert != 0 {
+            w = powmod(gen, (mod - 1) - (mod - 1) / (len as i64), mod)
+        } else {
+            w = powmod(gen, (mod - 1) / (len as i64), mod)
+        }
+        let mut ii: i32 = 0
+        while ii < n {
+            let mut wk: i64 = 1
+            let mut jj: i32 = 0
+            while jj < half {
+                let u: i64 = a[ii + jj]
+                let v: i64 = mulmod(a[ii + jj + half], wk, mod)
+                a[ii + jj] = (u + v) % mod
+                a[ii + jj + half] = ((u - v) % mod + mod) % mod
+                wk = mulmod(wk, w, mod)
+                jj = jj + 1
+            }
+            ii = ii + len
+        }
+        len = len << 1
+    }
+
+    if invert != 0 {
+        let inv_n: i64 = modinv((n as i64), mod)
+        let mut iii: i32 = 0
+        while iii < n {
+            a[iii] = mulmod(a[iii], inv_n, mod)
+            iii = iii + 1
+        }
+    }
+}
+
+# Convolution mod MOD using 3-prime NTT + CRT.
+# Returns result in a freshly allocated array of size `limit`.
+function conv_mod(a: ptr<i64>, na: i32, b: ptr<i64>, nb: i32, limit0: i32) -> ptr<i64> {
+    if na == 0 || nb == 0 { return null as ptr<i64> }
+
+    let full_len: i32 = na + nb - 1
+    let mut limit: i32 = limit0
+    if limit > full_len { limit = full_len }
+    if limit <= 0 { return null as ptr<i64> }
+
+    # Small case: naive
+    if (na as i64) * (nb as i64) <= 16384 {
+        let res: ptr<i64> = (calloc((limit as i64), 8)) as ptr<i64>
+        let mut i: i32 = 0
+        while i < na {
+            if a[i] == 0 {
+                i = i + 1
+                continue
+            }
+            let mut maxj: i32 = nb
+            if limit - i < maxj { maxj = limit - i }
+            let mut j: i32 = 0
+            while j < maxj {
+                res[i + j] = (res[i + j] + a[i] * b[j]) % MOD
+                if res[i + j] < 0 { res[i + j] = res[i + j] + MOD }
+                j = j + 1
+            }
+            i = i + 1
+        }
+        return res
+    }
+
+    let mut n_ntt: i32 = 1
+    while n_ntt < full_len {
+        n_ntt = n_ntt << 1
+    }
+    ntt_bitrev(n_ntt)
+
+    let res: ptr<i64> = (calloc((limit as i64), 8)) as ptr<i64>
+
+    # Compute NTT for each prime
+    let ntt_results: array<ptr<i64>, 3> = [null as ptr<i64>, null as ptr<i64>, null as ptr<i64>]
+    let ntt_primes: array<i64, 3> = [NTT_P0, NTT_P1, NTT_P2]
+    let ntt_gens: array<i64, 3> = [NTT_G0, NTT_G1, NTT_G2]
+
+    let mut pi: i32 = 0
+    while pi < 3 {
+        let mod: i64 = ntt_primes[pi]
+        let gen: i64 = ntt_gens[pi]
+
+        let fa: ptr<i64> = (calloc((n_ntt as i64), 8)) as ptr<i64>
+        let fb: ptr<i64> = (calloc((n_ntt as i64), 8)) as ptr<i64>
+
+        let mut i: i32 = 0
+        while i < na {
+            fa[i] = a[i] % mod
+            i = i + 1
+        }
+        i = 0
+        while i < nb {
+            fb[i] = b[i] % mod
+            i = i + 1
+        }
+
+        ntt(fa, n_ntt, 0, mod, gen)
+        ntt(fb, n_ntt, 0, mod, gen)
+
+        let mut ii: i32 = 0
+        while ii < n_ntt {
+            fa[ii] = mulmod(fa[ii], fb[ii], mod)
+            ii = ii + 1
+        }
+
+        ntt(fa, n_ntt, 1, mod, gen)
+        ntt_results[pi] = fa
+        free(fb as ptr<void>)
+        pi = pi + 1
+    }
+
+    # CRT via Garner's algorithm
+    let mut i: i32 = 0
+    while i < limit {
+        let a1: i64 = ntt_results[0][i]
+        let a2: i64 = ntt_results[1][i]
+        let a3: i64 = ntt_results[2][i]
+
+        # Step 2: x mod p1*p2
+        let mut t2: i64 = ((a2 - a1) % NTT_P1 + NTT_P1) % NTT_P1
+        t2 = mulmod(t2, p1_mod_p2_inv, NTT_P1)
+        let x12_mod: i64 = (a1 % MOD + mulmod(p1_mod_MOD, t2 % MOD, MOD)) % MOD
+
+        # Step 3: x mod p1*p2*p3
+        let mut x12_mod_p3: i64 = (a1 % NTT_P2 + mulmod(NTT_P0 % NTT_P2, t2, NTT_P2)) % NTT_P2
+        if x12_mod_p3 < 0 { x12_mod_p3 = x12_mod_p3 + NTT_P2 }
+        let mut t3: i64 = ((a3 - x12_mod_p3) % NTT_P2 + NTT_P2) % NTT_P2
+        t3 = mulmod(t3, p12_mod_p3_inv, NTT_P2)
+        res[i] = (x12_mod + mulmod(p12_mod_MOD, t3 % MOD, MOD)) % MOD
+        if res[i] < 0 { res[i] = res[i] + MOD }
+        i = i + 1
+    }
+
+    free(ntt_results[0] as ptr<void>)
+    free(ntt_results[1] as ptr<void>)
+    free(ntt_results[2] as ptr<void>)
+
+    return res
+}
+
+# Series inversion via Newton iteration.
+function series_inverse(f: ptr<i64>, n_terms: i32) -> ptr<i64> {
+    if n_terms <= 0 { return null as ptr<i64> }
+
+    let mut f0: i64 = f[0] % MOD
+    if f0 < 0 { f0 = f0 + MOD }
+
+    let g0: i64 = modinv(f0, MOD)
+    let g: ptr<i64> = (calloc((n_terms as i64), 8)) as ptr<i64>
+    g[0] = g0
+
+    let mut m: i32 = 1
+    while m < n_terms {
+        let mut m2: i32 = m * 2
+        if m2 > n_terms { m2 = n_terms }
+
+        let fg: ptr<i64> = conv_mod(f, m2, g, m, m2)
+
+        let mut i: i32 = 0
+        while i < m2 {
+            fg[i] = (-fg[i]) % MOD
+            if fg[i] < 0 { fg[i] = fg[i] + MOD }
+            i = i + 1
+        }
+        fg[0] = (fg[0] + 2) % MOD
+
+        let g_new: ptr<i64> = conv_mod(g, m, fg, m2, m2)
+
+        let mut ii: i32 = 0
+        while ii < m2 {
+            g[ii] = g_new[ii]
+            ii = ii + 1
+        }
+
+        free(fg as ptr<void>)
+        free(g_new as ptr<void>)
+        m = m2
+    }
+
+    return g
+}
+
+function init_crt() -> void {
+    p1_mod_p2_inv = modinv(NTT_P0 % NTT_P1, NTT_P1)
+    let p12_mod_p3: i64 = mulmod(NTT_P0 % NTT_P2, NTT_P1 % NTT_P2, NTT_P2)
+    p12_mod_p3_inv = modinv(p12_mod_p3, NTT_P2)
+    p1_mod_MOD = NTT_P0 % MOD
+    p12_mod_MOD = mulmod(NTT_P0 % MOD, NTT_P1 % MOD, MOD)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p929_native())
+    init_crt()
+
+    # Fibonacci numbers mod MOD
+    let fib: ptr<i64> = (calloc((N + 1) as i64, 8)) as ptr<i64>
+    fib[1] = 1
+    if N >= 2 { fib[2] = 1 }
+    let mut i: i32 = 3
+    while i <= N {
+        let mut x: i64 = fib[i - 1] + fib[i - 2]
+        if x >= MOD { x = x - MOD }
+        fib[i] = x
+        i = i + 1
+    }
+
+    # Sieve: s[n] = sum_{d|n} (-1)^(d-1) * Fib[d] mod MOD
+    let s: ptr<i64> = (calloc((N + 1) as i64, 8)) as ptr<i64>
+    let mut d: i32 = 1
+    while d <= N {
+        let mut val: i64 = fib[d]
+        if (d & 1) == 0 { val = MOD - val }
+        let mut k: i32 = d
+        while k <= N {
+            let mut x: i64 = s[k] + val
+            if x >= MOD { x = x - MOD }
+            s[k] = x
+            k = k + d
+        }
+        d = d + 1
+    }
+
+    # f(x) = 1 - S(x)
+    let f: ptr<i64> = (calloc((N + 1) as i64, 8)) as ptr<i64>
+    f[0] = 1
+    let mut ii: i32 = 1
+    while ii <= N {
+        f[ii] = (MOD - s[ii]) % MOD
+        if f[ii] < 0 { f[ii] = f[ii] + MOD }
+        ii = ii + 1
+    }
+
+    # t = 1 / f
+    let t: ptr<i64> = series_inverse(f, N + 1)
+
+    let mut result: i64 = t[N] % MOD
+    if result < 0 { result = result + MOD }
+
+    free(fib as ptr<void>)
+    free(s as ptr<void>)
+    free(f as ptr<void>)
+    free(t as ptr<void>)
+
+    printf("%lld\n", result)
     return 0
 }

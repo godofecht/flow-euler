@@ -1,6 +1,7 @@
-# Project Euler 928
-# Cribbage: count non-empty hands where hand_score == cribbage_score.
-# Meet-in-the-middle with heapsort and binary search.
+# Project Euler 928: Cribbage
+# Count non-empty hands (subsets of 52-card deck) where
+# hand_score == cribbage_score.
+# Meet-in-the-middle: left ranks 1..7, right ranks 8..13.
 # Pure Flow port of the native C solver.
 
 extern {
@@ -9,6 +10,7 @@ extern {
     function malloc(n: i64) -> ptr<void>
     function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
     function memset(dst: ptr<void>, val: i32, n: i64) -> void
+    function printf(fmt: ptr<i8>, ...) -> i32
 }
 
 struct LeftEntry {
@@ -53,7 +55,6 @@ struct RightSuperGroup {
 let mut COMB4: ptr<i32> = null as ptr<i32>
 let mut CHOOSE: ptr<i32> = null as ptr<i32>
 let mut g_nd: ptr<i64> = null as ptr<i64>
-let mut g_dp: ptr<i64> = null as ptr<i64>
 let mut left_entries: ptr<LeftEntry> = null as ptr<LeftEntry>
 let mut n_left: i32 = 0
 let mut right_entries: ptr<RightEntry> = null as ptr<RightEntry>
@@ -262,4 +263,368 @@ function heapsort_right(entries: ptr<RightEntry>, n: i32) -> void {
         sift_down_right(entries, 0, i)
         i = i - 1
     }
+}
+
+function enumerate_left() -> void {
+    let c1: i32 = 0
+    while c1 < 5 {
+        let c2: i32 = 0
+        while c2 < 5 {
+            let c3: i32 = 0
+            while c3 < 5 {
+                let c4: i32 = 0
+                while c4 < 5 {
+                    let c5: i32 = 0
+                    while c5 < 5 {
+                        let c6: i32 = 0
+                        while c6 < 5 {
+                            let c7: i32 = 0
+                            while c7 < 5 {
+                                let w: i64 = (COMB4[c1] as i64) * (COMB4[c2] as i64) * (COMB4[c3] as i64) * (COMB4[c4] as i64) * (COMB4[c5] as i64) * (COMB4[c6] as i64) * (COMB4[c7] as i64)
+                                if w == 0 {
+                                    c7 = c7 + 1
+                                    continue
+                                }
+
+                                let counts: array<i32, 7> = [c1, c2, c3, c4, c5, c6, c7]
+
+                                let hv: i32 = 1*c1 + 2*c2 + 3*c3 + 4*c4 + 5*c5 + 6*c6 + 7*c7
+                                let pairs: i32 = c1*(c1-1) + c2*(c2-1) + c3*(c3-1) + c4*(c4-1) + c5*(c5-1) + c6*(c6-1) + c7*(c7-1)
+
+                                let dp: array<i64, 16> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                                dp[0] = 1
+                                dp_update((dp as ptr<i64>), 1, c1)
+                                dp_update((dp as ptr<i64>), 2, c2)
+                                dp_update((dp as ptr<i64>), 3, c3)
+                                dp_update((dp as ptr<i64>), 4, c4)
+                                dp_update((dp as ptr<i64>), 5, c5)
+                                dp_update((dp as ptr<i64>), 6, c6)
+                                dp_update((dp as ptr<i64>), 7, c7)
+
+                                let L5: i32 = dp[5] as i32
+                                let L6: i32 = dp[6] as i32
+                                let L7: i32 = dp[7] as i32
+                                let L15: i32 = dp[15] as i32
+                                if L15 > 170 {
+                                    c7 = c7 + 1
+                                    continue
+                                }
+
+                                # run_internal: exclude trailing segment reaching rank 7
+                                let mut run_internal: i32 = 0
+                                let mut cur_len: i32 = 0
+                                let mut cur_prod: i32 = 1
+                                let mut ii: i32 = 0
+                                while ii < 7 {
+                                    if counts[ii] == 0 {
+                                        if cur_len >= 3 { run_internal = run_internal + cur_len * cur_prod }
+                                        cur_len = 0
+                                        cur_prod = 1
+                                    } else {
+                                        cur_len = cur_len + 1
+                                        cur_prod = cur_prod * counts[ii]
+                                    }
+                                    ii = ii + 1
+                                }
+                                let tail_len: i32 = cur_len
+                                let tail_prod: i32 = 1
+                                if cur_len > 0 { tail_prod = cur_prod }
+
+                                let A_L: i32 = hv - pairs - run_internal
+
+                                left_entries[n_left].L5 = L5
+                                left_entries[n_left].L6 = L6
+                                left_entries[n_left].L7 = L7
+                                left_entries[n_left].L15 = L15
+                                left_entries[n_left].tail_len = tail_len
+                                left_entries[n_left].tail_prod = tail_prod
+                                left_entries[n_left].A_L = A_L
+                                left_entries[n_left].weight = w
+                                n_left = n_left + 1
+
+                                c7 = c7 + 1
+                            }
+                            c6 = c6 + 1
+                        }
+                        c5 = c5 + 1
+                    }
+                    c4 = c4 + 1
+                }
+                c3 = c3 + 1
+            }
+            c2 = c2 + 1
+        }
+        c1 = c1 + 1
+    }
+}
+
+function enumerate_right() -> void {
+    let c8: i32 = 0
+    while c8 < 5 {
+        let c9: i32 = 0
+        while c9 < 5 {
+            let c10: i32 = 0
+            while c10 < 5 {
+                let c11: i32 = 0
+                while c11 < 5 {
+                    let c12: i32 = 0
+                    while c12 < 5 {
+                        let c13: i32 = 0
+                        while c13 < 5 {
+                            let w: i64 = (COMB4[c8] as i64) * (COMB4[c9] as i64) * (COMB4[c10] as i64) * (COMB4[c11] as i64) * (COMB4[c12] as i64) * (COMB4[c13] as i64)
+                            if w == 0 {
+                                c13 = c13 + 1
+                                continue
+                            }
+
+                            let n10: i32 = c10 + c11 + c12 + c13
+                            let hv: i32 = 8*c8 + 9*c9 + 10*n10
+                            let pairs: i32 = c8*(c8-1) + c9*(c9-1) + c10*(c10-1) + c11*(c11-1) + c12*(c12-1) + c13*(c13-1)
+
+                            let counts: array<i32, 6> = [c8, c9, c10, c11, c12, c13]
+
+                            # head segment starting at rank 8
+                            let mut head_len: i32 = 0
+                            let mut head_prod: i32 = 1
+                            let mut ii: i32 = 0
+                            while ii < 6 {
+                                if counts[ii] == 0 { break }
+                                head_len = head_len + 1
+                                head_prod = head_prod * counts[ii]
+                                ii = ii + 1
+                            }
+                            if head_len == 0 {
+                                head_len = 0
+                                head_prod = 1
+                            }
+
+                            # run_internal: all segments length>=3 EXCEPT the one starting at rank 8
+                            let mut run_internal: i32 = 0
+                            let mut cur_len: i32 = 0
+                            let mut cur_prod: i32 = 1
+                            let mut seg_start: i32 = -1
+                            ii = 0
+                            while ii < 6 {
+                                if counts[ii] == 0 {
+                                    if cur_len >= 3 && seg_start != 0 {
+                                        run_internal = run_internal + cur_len * cur_prod
+                                    }
+                                    cur_len = 0
+                                    cur_prod = 1
+                                    seg_start = -1
+                                } else {
+                                    if cur_len == 0 { seg_start = ii }
+                                    cur_len = cur_len + 1
+                                    cur_prod = cur_prod * counts[ii]
+                                }
+                                ii = ii + 1
+                            }
+                            if cur_len >= 3 && seg_start != 0 {
+                                run_internal = run_internal + cur_len * cur_prod
+                            }
+
+                            let A_R: i32 = hv - pairs - run_internal
+
+                            right_entries[n_right].c8 = c8
+                            right_entries[n_right].c9 = c9
+                            right_entries[n_right].n10 = n10
+                            right_entries[n_right].head_len = head_len
+                            right_entries[n_right].head_prod = head_prod
+                            right_entries[n_right].A_R = A_R
+                            right_entries[n_right].weight = w
+                            n_right = n_right + 1
+
+                            c13 = c13 + 1
+                        }
+                        c12 = c12 + 1
+                    }
+                    c11 = c11 + 1
+                }
+                c10 = c10 + 1
+            }
+            c9 = c9 + 1
+        }
+        c8 = c8 + 1
+    }
+}
+
+function binary_search_right(lo0: i32, hi0: i32, target_A_R: i32) -> i64 {
+    let mut lo: i32 = lo0
+    let mut hi: i32 = hi0
+    let orig_hi: i32 = hi0
+    while lo < hi {
+        let mid: i32 = lo + (hi - lo) / 2
+        if right_entries[mid].A_R < target_A_R {
+            lo = mid + 1
+        } else {
+            hi = mid
+        }
+    }
+    if lo < orig_hi && right_entries[lo].A_R == target_A_R {
+        return right_entries[lo].weight
+    }
+    return 0
+}
+
+function main() -> i32 {
+    COMB4 = (malloc(20)) as ptr<i32>
+    COMB4[0] = 1
+    COMB4[1] = 4
+    COMB4[2] = 6
+    COMB4[3] = 4
+    COMB4[4] = 1
+    CHOOSE = (calloc(25, 4)) as ptr<i32>
+    g_nd = (calloc(16, 8)) as ptr<i64>
+
+    init_choose()
+
+    left_entries = (calloc(78125, 40)) as ptr<LeftEntry>
+    n_left = 0
+    right_entries = (calloc(15625, 48)) as ptr<RightEntry>
+    n_right = 0
+
+    enumerate_left()
+    enumerate_right()
+
+    # Sort both arrays
+    heapsort_left(left_entries, n_left)
+    heapsort_right(right_entries, n_right)
+
+    # Merge left entries with same key and A_L
+    let left_group_start: ptr<i32> = (malloc(78125 * 4)) as ptr<i32>
+    let left_group_end: ptr<i32> = (malloc(78125 * 4)) as ptr<i32>
+    let mut n_left_groups: i32 = 0
+
+    let mut i: i32 = 0
+    while i < n_left {
+        let mut j: i32 = i
+        while j < n_left && cmp_left_at(left_entries, i, j) == 0 {
+            j = j + 1
+        }
+        # Merge weights for same (key, A_L)
+        let mut total_w: i64 = 0
+        let mut k: i32 = i
+        while k < j {
+            total_w = total_w + left_entries[k].weight
+            k = k + 1
+        }
+        left_entries[i].weight = total_w
+        left_group_start[n_left_groups] = i
+        left_group_end[n_left_groups] = j
+        n_left_groups = n_left_groups + 1
+        i = j
+    }
+
+    # Build right group index
+    let right_groups: ptr<RightGroup> = (calloc(15625, 28)) as ptr<RightGroup>
+    let mut n_right_groups: i32 = 0
+
+    i = 0
+    while i < n_right {
+        let mut j: i32 = i
+        while j < n_right &&
+              right_entries[j].c8 == right_entries[i].c8 &&
+              right_entries[j].c9 == right_entries[i].c9 &&
+              right_entries[j].n10 == right_entries[i].n10 &&
+              right_entries[j].head_len == right_entries[i].head_len &&
+              right_entries[j].head_prod == right_entries[i].head_prod {
+            j = j + 1
+        }
+        # Merge weights for same A_R within this group
+        let mut k2: i32 = i
+        while k2 < j {
+            let mut l: i32 = k2
+            while l < j && right_entries[l].A_R == right_entries[k2].A_R {
+                l = l + 1
+            }
+            let mut total_w2: i64 = 0
+            let mut m: i32 = k2
+            while m < l {
+                total_w2 = total_w2 + right_entries[m].weight
+                m = m + 1
+            }
+            right_entries[k2].weight = total_w2
+            k2 = l
+        }
+        right_groups[n_right_groups].c8 = right_entries[i].c8
+        right_groups[n_right_groups].c9 = right_entries[i].c9
+        right_groups[n_right_groups].n10 = right_entries[i].n10
+        right_groups[n_right_groups].head_len = right_entries[i].head_len
+        right_groups[n_right_groups].head_prod = right_entries[i].head_prod
+        right_groups[n_right_groups].start = i
+        right_groups[n_right_groups].end = j
+        n_right_groups = n_right_groups + 1
+        i = j
+    }
+
+    # Build right (c8, c9, n10) super-group index
+    let right_super: ptr<RightSuperGroup> = (calloc(500, 24)) as ptr<RightSuperGroup>
+    let mut n_right_super: i32 = 0
+
+    i = 0
+    while i < n_right_groups {
+        let mut j: i32 = i
+        while j < n_right_groups &&
+              right_groups[j].c8 == right_groups[i].c8 &&
+              right_groups[j].c9 == right_groups[i].c9 &&
+              right_groups[j].n10 == right_groups[i].n10 {
+            j = j + 1
+        }
+        right_super[n_right_super].c8 = right_groups[i].c8
+        right_super[n_right_super].c9 = right_groups[i].c9
+        right_super[n_right_super].n10 = right_groups[i].n10
+        right_super[n_right_super].start = i
+        right_super[n_right_super].end = j
+        n_right_super = n_right_super + 1
+        i = j
+    }
+
+    # Combination step
+    let mut total: i64 = 0
+
+    let mut lg: i32 = 0
+    while lg < n_left_groups {
+        let le: ptr<LeftEntry> = (left_entries + left_group_start[lg])
+        let L5: i32 = le.L5
+        let L6: i32 = le.L6
+        let L7: i32 = le.L7
+        let L15: i32 = le.L15
+        let tl: i32 = le.tail_len
+        let tp: i32 = le.tail_prod
+
+        let A_L: i32 = le.A_L
+        let wL: i64 = le.weight
+
+        let mut rs: i32 = 0
+        while rs < n_right_super {
+            let c8: i32 = right_super[rs].c8
+            let c9: i32 = right_super[rs].c9
+            let n10: i32 = right_super[rs].n10
+            let dp15: i32 = L15 + L7 * c8 + L6 * c9 + L5 * n10
+            if dp15 > 170 {
+                rs = rs + 1
+                continue
+            }
+            let base: i32 = 2 * dp15
+
+            let mut rg: i32 = right_super[rs].start
+            while rg < right_super[rs].end {
+                let hl: i32 = right_groups[rg].head_len
+                let hp: i32 = right_groups[rg].head_prod
+                let req: i32 = base + run_boundary(tl, tp, hl, hp)
+                let want: i32 = req - A_L
+                let wR: i64 = binary_search_right(right_groups[rg].start, right_groups[rg].end, want)
+                if wR != 0 { total = total + wL * wR }
+                rg = rg + 1
+            }
+            rs = rs + 1
+        }
+        lg = lg + 1
+    }
+
+    # Exclude empty hand
+    total = total - 1
+
+    printf("%lld\n", total)
+    return 0
 }

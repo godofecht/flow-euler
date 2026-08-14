@@ -1,12 +1,429 @@
-# Project Euler 933
-# Paper Cutting — Sprague-Grundy nimbers + quadruple counting (native).
-# Companion: problems/native/p933.c
+# Project Euler 933: Paper Cutting.
+# Two-player impartial game on integer rectangles. A move cuts one
+# rectangle once vertically and once horizontally into four smaller
+# rectangles (all sides positive integers). No move means lose.
+# Compute D(123, 1234567) via Sprague-Grundy nimbers and quadruple counting.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p933_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function realloc(p: ptr<void>, n: i64) -> ptr<void>
+    function memset(dst: ptr<void>, val: i32, n: i64) -> void
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+let mut B_arr: ptr<i32> = null as ptr<i32>
+let mut g_const_arr: ptr<i32> = null as ptr<i32>
+let mut const_arr: ptr<i32> = null as ptr<i32>
+let mut G_arr: ptr<ptr<i32> > = null as ptr<ptr<i32> >
+let mut visited: ptr<i32> = null as ptr<i32>
+let mut vis_size: i32 = 0
+let mut stamp: i32 = 0
+let mut prev_maxg: i32 = 0
+let mut current_w: i32 = 0
+let mut W_alloc: i32 = 0
+
+function grundy_init() -> void {
+    W_alloc = 4
+    B_arr = (calloc((W_alloc as i64), 4)) as ptr<i32>
+    g_const_arr = (calloc((W_alloc as i64), 4)) as ptr<i32>
+    const_arr = (calloc((W_alloc as i64), 4)) as ptr<i32>
+    G_arr = (calloc((W_alloc as i64), 8)) as ptr<ptr<i32> >
+    B_arr[1] = 1
+    g_const_arr[1] = 1
+    G_arr[1] = (calloc(2, 4)) as ptr<i32>
+    G_arr[1][0] = 0
+    G_arr[1][1] = 0
+    vis_size = 32768
+    visited = (calloc((vis_size as i64), 4)) as ptr<i32>
+    stamp = 1
+    prev_maxg = 1
+    current_w = 1
+}
+
+function ensure_size(n: i32) -> void {
+    if n < W_alloc { return }
+    let mut na: i32 = W_alloc
+    while na <= n {
+        na = na * 2
+    }
+    B_arr = (realloc(B_arr as ptr<void>, (na as i64) * 4)) as ptr<i32>
+    g_const_arr = (realloc(g_const_arr as ptr<void>, (na as i64) * 4)) as ptr<i32>
+    const_arr = (realloc(const_arr as ptr<void>, (na as i64) * 4)) as ptr<i32>
+    G_arr = (realloc(G_arr as ptr<void>, (na as i64) * 8)) as ptr<ptr<i32> >
+    memset((B_arr + W_alloc) as ptr<void>, 0, ((na - W_alloc) as i64) * 4)
+    memset((g_const_arr + W_alloc) as ptr<void>, 0, ((na - W_alloc) as i64) * 4)
+    memset((const_arr + W_alloc) as ptr<void>, 0, ((na - W_alloc) as i64) * 4)
+    memset((G_arr + W_alloc) as ptr<void>, 0, ((na - W_alloc) as i64) * 8)
+    W_alloc = na
+}
+
+function getG(wi0: i32, hi0: i32) -> i32 {
+    let mut wi: i32 = wi0
+    let mut hi: i32 = hi0
+    if wi > hi {
+        let t: i32 = wi
+        wi = hi
+        hi = t
+    }
+    if wi <= 1 { return 0 }
+    if hi <= B_arr[wi] { return G_arr[wi][hi] }
+    return const_arr[wi]
+}
+
+function mark_visited(v: i32) -> void {
+    if v < vis_size {
+        visited[v] = stamp
+    } else {
+        let mut ns: i32 = vis_size
+        while ns <= v {
+            ns = ns * 2
+        }
+        visited = (realloc(visited as ptr<void>, (ns as i64) * 4)) as ptr<i32>
+        memset((visited + vis_size) as ptr<void>, 0, ((ns - vis_size) as i64) * 4)
+        vis_size = ns
+        visited[v] = stamp
+    }
+}
+
+# Compute nimbers g_w[h] for h in [h_start..h_end].
+function compute_h_range(h_start: i32, h_end: i32, g_w: ptr<i32>,
+                         Vs: ptr<ptr<i32> >, t_as: ptr<i32>, half_w: i32) -> void {
+    let mut h: i32 = h_start
+    while h <= h_end {
+        stamp = stamp + 1
+        let half_h: i32 = h >> 1
+        let mut a_idx: i32 = 0
+        while a_idx < half_w {
+            let V: ptr<i32> = Vs[a_idx]
+            let ta: i32 = t_as[a_idx]
+            let mut maxb: i32 = 0
+            if half_h >= ta {
+                visited[0] = stamp
+                maxb = ta - 1
+                if maxb > half_h { maxb = half_h }
+            } else {
+                maxb = half_h
+            }
+            let mut b: i32 = 1
+            while b <= maxb {
+                let v: i32 = V[b] ^ V[h - b]
+                mark_visited(v)
+                b = b + 1
+            }
+            a_idx = a_idx + 1
+        }
+        let mut m: i32 = 0
+        while visited[m] == stamp {
+            m = m + 1
+        }
+        g_w[h] = m
+        h = h + 1
+    }
+}
+
+function compute_next() -> void {
+    let w: i32 = current_w + 1
+    ensure_size(w)
+
+    let mut limit: i32 = 0
+    if w > 2 * prev_maxg {
+        limit = w
+    } else {
+        limit = 2 * prev_maxg
+    }
+
+    let mut g_w: ptr<i32> = (calloc(((limit + 1) as i64), 4)) as ptr<i32>
+
+    # Fill h < w by symmetry
+    let mut upto: i32 = w
+    if upto > limit + 1 { upto = limit + 1 }
+    let mut h: i32 = 1
+    while h < upto {
+        g_w[h] = getG(h, w)
+        h = h + 1
+    }
+
+    let half_w: i32 = w >> 1
+
+    # Precompute V arrays and t_as for each vertical split
+    let Vs: ptr<ptr<i32> > = (malloc((half_w as i64) * 8)) as ptr<ptr<i32> >
+    let t_as: ptr<i32> = (malloc((half_w as i64) * 4)) as ptr<i32>
+    let mut a: i32 = 1
+    while a <= half_w {
+        let bw: i32 = w - a
+        let mut ta: i32 = g_const_arr[a]
+        if g_const_arr[bw] > ta { ta = g_const_arr[bw] }
+        t_as[a - 1] = ta
+        let V: ptr<i32> = (calloc(((limit + 1) as i64), 4)) as ptr<i32>
+        let mut b: i32 = 1
+        while b <= limit {
+            V[b] = getG(a, b) ^ getG(bw, b)
+            b = b + 1
+        }
+        Vs[a - 1] = V
+        a = a + 1
+    }
+
+    compute_h_range(w, limit, g_w, Vs, t_as, half_w)
+
+    # Track last change index
+    let mut last: i32 = 1
+    let mut hh: i32 = 2
+    while hh <= limit {
+        if g_w[hh] != g_w[hh - 1] { last = hh }
+        hh = hh + 1
+    }
+
+    # Extend until stability: constant on [last, 2*last] => constant forever
+    while true {
+        let need: i32 = 2 * last
+        if need <= limit {
+            let v0: i32 = g_w[last]
+            let mut ok: i32 = 1
+            let mut hhh: i32 = last + 1
+            while hhh <= need {
+                if g_w[hhh] != v0 {
+                    ok = 0
+                    break
+                }
+                hhh = hhh + 1
+            }
+            if ok != 0 { break }
+        }
+
+        let mut new_limit: i32 = limit * 2
+        if need > new_limit { new_limit = need }
+        if w > new_limit { new_limit = w }
+
+        g_w = (realloc(g_w as ptr<void>, ((new_limit + 1) as i64) * 4)) as ptr<i32>
+        memset((g_w + limit + 1) as ptr<void>, 0, ((new_limit - limit) as i64) * 4)
+
+        let mut a_idx2: i32 = 0
+        while a_idx2 < half_w {
+            Vs[a_idx2] = (realloc(Vs[a_idx2] as ptr<void>, ((new_limit + 1) as i64) * 4)) as ptr<i32>
+            let V: ptr<i32> = Vs[a_idx2]
+            let mut b2: i32 = limit + 1
+            while b2 <= new_limit {
+                V[b2] = getG(a_idx2 + 1, b2) ^ getG(w - a_idx2 - 1, b2)
+                b2 = b2 + 1
+            }
+            a_idx2 = a_idx2 + 1
+        }
+
+        compute_h_range(limit + 1, new_limit, g_w, Vs, t_as, half_w)
+        limit = new_limit
+
+        let mut h4: i32 = last + 1
+        while h4 <= limit {
+            if g_w[h4] != g_w[h4 - 1] { last = h4 }
+            h4 = h4 + 1
+        }
+    }
+
+    B_arr[w] = limit
+    g_const_arr[w] = last
+    const_arr[w] = g_w[last]
+    G_arr[w] = g_w
+    current_w = w
+    if last > prev_maxg { prev_maxg = last }
+
+    let mut a_idx3: i32 = 0
+    while a_idx3 < half_w {
+        free(Vs[a_idx3] as ptr<void>)
+        a_idx3 = a_idx3 + 1
+    }
+    free(Vs as ptr<void>)
+    free(t_as as ptr<void>)
+}
+
+function compute_upto(W: i32) -> void {
+    while current_w < W {
+        compute_next()
+    }
+}
+
+# Directly count winning moves for a single rectangle w x h.
+function count_winning_moves_C(w: i32, h: i32) -> i64 {
+    let mut cnt: i64 = 0
+    let mut x: i32 = 1
+    while x < w {
+        let mut y: i32 = 1
+        while y < h {
+            let v: i32 = getG(x, y) ^ getG(w - x, y) ^ getG(x, h - y) ^ getG(w - x, h - y)
+            if v == 0 { cnt = cnt + 1 }
+            y = y + 1
+        }
+        x = x + 1
+    }
+    return cnt
+}
+
+# Compute D(W,H) via quadruple counting over ordered splits.
+function compute_D(W: i32, H: i64) -> i64 {
+    let mut max_m: i32 = 0
+    let mut w: i32 = 1
+    while w <= W {
+        if g_const_arr[w] > max_m { max_m = g_const_arr[w] }
+        w = w + 1
+    }
+
+    let mut max_k: i32 = max_m
+    if ((H - 1) as i32) < max_k { max_k = (H - 1) as i32 }
+
+    # Precompute row[u][k] = G(u,k) for u=1..W, k=1..max_k
+    let row: ptr<ptr<i32> > = (malloc(((W + 1) as i64) * 8)) as ptr<ptr<i32> >
+    let mut u: i32 = 0
+    while u <= W {
+        row[u] = (calloc(((max_k + 1) as i64), 4)) as ptr<i32>
+        u = u + 1
+    }
+    u = 1
+    while u <= W {
+        let mut k: i32 = 1
+        while k <= max_k {
+            row[u][k] = getG(u, k)
+            k = k + 1
+        }
+        u = u + 1
+    }
+
+    # Stamp-based counting arrays for the fast branch
+    let mut cnts_sz: i32 = 65536
+    let mut cnts_stamp: ptr<i32> = (calloc((cnts_sz as i64), 4)) as ptr<i32>
+    let mut cnts_count: ptr<i32> = (calloc((cnts_sz as i64), 4)) as ptr<i32>
+    let mut cnts_list: ptr<i32> = (malloc((cnts_sz as i64) * 4)) as ptr<i32>
+    let mut cur_stamp: i32 = 0
+
+    let mut total: i64 = 0
+
+    let mut i: i32 = 1
+    while i < W {
+        let ri: ptr<i32> = row[i]
+        let mut j: i32 = 1
+        while j <= W - i {
+            let rj: ptr<i32> = row[j]
+            let mut m: i32 = g_const_arr[i]
+            if g_const_arr[j] > m { m = g_const_arr[j] }
+            let const_t: i32 = const_arr[i] ^ const_arr[j]
+
+            if H >= 2 * (m as i64) {
+                # Fast branch
+                let L: i32 = m - 1
+                let mut countA: i64 = 0
+                let mut countB: i64 = 0
+                let mut countC: i64 = 0
+                let mut count_eq: i64 = 0
+                let mut sum_k_eq: i64 = 0
+
+                if L > 0 {
+                    cur_stamp = cur_stamp + 1
+                    let mut nvisited: i32 = 0
+                    let mut k: i32 = 1
+                    while k <= L {
+                        let t: i32 = ri[k] ^ rj[k]
+                        if t >= cnts_sz {
+                            let mut ns: i32 = cnts_sz
+                            while ns <= t {
+                                ns = ns * 2
+                            }
+                            cnts_stamp = (realloc(cnts_stamp as ptr<void>, (ns as i64) * 4)) as ptr<i32>
+                            cnts_count = (realloc(cnts_count as ptr<void>, (ns as i64) * 4)) as ptr<i32>
+                            cnts_list = (realloc(cnts_list as ptr<void>, (ns as i64) * 4)) as ptr<i32>
+                            memset((cnts_stamp + cnts_sz) as ptr<void>, 0, ((ns - cnts_sz) as i64) * 4)
+                            cnts_sz = ns
+                        }
+                        if cnts_stamp[t] != cur_stamp {
+                            cnts_stamp[t] = cur_stamp
+                            cnts_count[t] = 1
+                            cnts_list[nvisited] = t
+                            nvisited = nvisited + 1
+                        } else {
+                            cnts_count[t] = cnts_count[t] + 1
+                        }
+                        if t == const_t {
+                            count_eq = count_eq + 1
+                            sum_k_eq = sum_k_eq + (k as i64)
+                        }
+                        k = k + 1
+                    }
+                    let mut idx: i32 = 0
+                    while idx < nvisited {
+                        let c: i64 = (cnts_count[cnts_list[idx]]) as i64
+                        countA = countA + c * c
+                        idx = idx + 1
+                    }
+                }
+
+                if count_eq != 0 {
+                    countB = 2 * (count_eq * (H - (m as i64) + 1) - sum_k_eq)
+                }
+
+                let S: i64 = H - 2 * (m as i64)
+                if S >= 0 {
+                    countC = (S + 1) * (S + 2) / 2
+                }
+
+                total = total + countA + countB + countC
+            } else {
+                # Generic smaller-H branch
+                let t_arr: ptr<i32> = (malloc((H as i64) * 4)) as ptr<i32>
+                let mut k: i32 = 1
+                while k < (H as i32) {
+                    if k <= max_k {
+                        t_arr[k] = ri[k] ^ rj[k]
+                    } else {
+                        t_arr[k] = const_t
+                    }
+                    k = k + 1
+                }
+                k = 1
+                while k < (H as i32) {
+                    let tk: i32 = t_arr[k]
+                    let mut l: i32 = 1
+                    while l <= (H as i32) - k {
+                        if tk == t_arr[l] { total = total + 1 }
+                        l = l + 1
+                    }
+                    k = k + 1
+                }
+                free(t_arr as ptr<void>)
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    u = 0
+    while u <= W {
+        free(row[u] as ptr<void>)
+        u = u + 1
+    }
+    free(row as ptr<void>)
+    free(cnts_stamp as ptr<void>)
+    free(cnts_count as ptr<void>)
+    free(cnts_list as ptr<void>)
+
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p933_native())
+    grundy_init()
+    compute_upto(123)
+
+    # Self-tests from the problem statement
+    if count_winning_moves_C(5, 3) != 4 {
+        printf("p933 self-test C(5,3) failed\n")
+        return -1
+    }
+    if compute_D(12, 123) != 327398 {
+        printf("p933 self-test D(12,123) failed\n")
+        return -1
+    }
+
+    let result: i64 = compute_D(123, 1234567)
+    printf("%lld\n", result)
     return 0
 }

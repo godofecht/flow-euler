@@ -1,8 +1,290 @@
+# Project Euler 904: Pythagorean Angle
+# F(N, L) = sum_{n=1..N} f(cuberoot(n), L)
+# N = 45000, L = 10^10
+
 extern {
-    function p904_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+    function fabs(x: f64) -> f64
+    function atan(x: f64) -> f64
+    function tan(x: f64) -> f64
+    function cbrt(x: f64) -> f64
+}
+
+const PI: f64 = 3.14159265358979323846
+const DEG2RAD: f64 = 0.01745329251994329576
+const T0_F: f64 = 0.41421356237309504880
+
+function g_of_t(t: f64) -> f64 {
+    let tt: f64 = t * t
+    let denom: f64 = 1.0 + tt
+    return 3.0 * t * (1.0 - tt) / (denom * denom)
+}
+
+function root_left(y: f64) -> f64 {
+    let mut lo: f64 = 0.0
+    let mut hi: f64 = T0_F
+    let mut i: i32 = 0
+    while i < 35 {
+        let mid: f64 = (lo + hi) * 0.5
+        if g_of_t(mid) < y { lo = mid } else { hi = mid }
+        i = i + 1
+    }
+    return (lo + hi) * 0.5
+}
+
+function root_right(y: f64) -> f64 {
+    let mut lo: f64 = T0_F
+    let mut hi: f64 = 1.0
+    let mut i: i32 = 0
+    while i < 35 {
+        let mid: f64 = (lo + hi) * 0.5
+        if g_of_t(mid) > y { lo = mid } else { hi = mid }
+        i = i + 1
+    }
+    return (lo + hi) * 0.5
+}
+
+# cf_candidates_circle: continued fraction candidates
+# Fills out_p[0..count-1] and out_q[0..count-1]
+# Returns count
+function cf_candidates_circle(x: f64, L: i64, out_p: ptr<i64>, out_q: ptr<i64>, max_out: i32) -> i32 {
+    let mut count: i32 = 0
+    let mut p0: i64 = 0
+    let mut q0: i64 = 1
+    let mut p1: i64 = 1
+    let mut q1: i64 = 0
+    let mut frac: f64 = x
+    let sqrtL: i64 = sqrt(L as f64) as i64 + 1
+
+    let mut iter: i32 = 0
+    while iter < 80 {
+        let a: i64 = frac as i64
+
+        # Check for potential overflow
+        if a > 2 * sqrtL || (p1 > 0 && a > sqrtL / p1 + 1) {
+            # Semiconvergent branch (overflow case)
+            let A: i64 = p1 * p1 + q1 * q1
+            let B: i64 = 2 * (p0 * p1 + q0 * q1)
+            let C: i64 = p0 * p0 + q0 * q0 - L
+
+            let mut kmax: i64 = 0
+            if A > 0 {
+                let disc: i128 = (B as i128) * (B as i128) - (4 as i128) * (A as i128) * (C as i128)
+                if disc > 0 {
+                    let mut s_val: i64 = sqrt(disc as f64) as i64
+                    while (s_val as i128) * (s_val as i128) > disc { s_val = s_val - 1 }
+                    while ((s_val + 1) as i128) * ((s_val + 1) as i128) <= disc { s_val = s_val + 1 }
+                    kmax = (-B + s_val) / (2 * A)
+                }
+            }
+            if kmax > a - 1 { kmax = a - 1 }
+            if kmax < 0 { kmax = 0 }
+
+            let mut lo: i64 = kmax - 3
+            if lo < 1 { lo = 1 }
+            let mut hi: i64 = kmax + 3
+            if hi > a - 1 { hi = a - 1 }
+            if hi < lo { hi = lo }
+
+            let mut k: i64 = lo
+            while k <= hi {
+                let ps: i64 = k * p1 + p0
+                let qs: i64 = k * q1 + q0
+                if ps > 0 && qs > 0 && (ps as i128) * (ps as i128) + (qs as i128) * (qs as i128) <= (L as i128) {
+                    if count < max_out {
+                        out_p[count] = ps
+                        out_q[count] = qs
+                        count = count + 1
+                    }
+                }
+                k = k + 1
+            }
+            break
+        }
+
+        let p2: i64 = a * p1 + p0
+        let q2: i64 = a * q1 + q0
+
+        if (p2 as i128) * (p2 as i128) + (q2 as i128) * (q2 as i128) > (L as i128) {
+            # Find largest k <= a-1 with (p0+k*p1)^2 + (q0+k*q1)^2 <= L
+            let A2: i64 = p1 * p1 + q1 * q1
+            let B2: i64 = 2 * (p0 * p1 + q0 * q1)
+            let C2: i64 = p0 * p0 + q0 * q0 - L
+
+            let mut kmax2: i64 = 0
+            if A2 > 0 {
+                let disc2: i128 = (B2 as i128) * (B2 as i128) - (4 as i128) * (A2 as i128) * (C2 as i128)
+                if disc2 > 0 {
+                    let mut s_val2: i64 = sqrt(disc2 as f64) as i64
+                    while (s_val2 as i128) * (s_val2 as i128) > disc2 { s_val2 = s_val2 - 1 }
+                    while ((s_val2 + 1) as i128) * ((s_val2 + 1) as i128) <= disc2 { s_val2 = s_val2 + 1 }
+                    kmax2 = (-B2 + s_val2) / (2 * A2)
+                }
+            }
+            if kmax2 > a - 1 { kmax2 = a - 1 }
+            if kmax2 < 0 { kmax2 = 0 }
+
+            let mut lo2: i64 = kmax2 - 3
+            if lo2 < 1 { lo2 = 1 }
+            let mut hi2: i64 = kmax2 + 3
+            if hi2 > a - 1 { hi2 = a - 1 }
+
+            let mut k2: i64 = lo2
+            while k2 <= hi2 {
+                let ps2: i64 = k2 * p1 + p0
+                let qs2: i64 = k2 * q1 + q0
+                if ps2 > 0 && qs2 > 0 && (ps2 as i128) * (ps2 as i128) + (qs2 as i128) * (qs2 as i128) <= (L as i128) {
+                    if count < max_out {
+                        out_p[count] = ps2
+                        out_q[count] = qs2
+                        count = count + 1
+                    }
+                }
+                k2 = k2 + 1
+            }
+            break
+        }
+
+        if p2 > 0 && q2 > 0 {
+            if count < max_out {
+                out_p[count] = p2
+                out_q[count] = q2
+                count = count + 1
+            }
+        }
+
+        if frac == (a as f64) { break }
+        frac = 1.0 / (frac - (a as f64))
+        p0 = p1
+        q0 = q1
+        p1 = p2
+        q1 = q2
+
+        iter = iter + 1
+    }
+
+    # Also include last convergent if admissible
+    if p1 > 0 && q1 > 0 && (p1 as i128) * (p1 as i128) + (q1 as i128) * (q1 as i128) <= (L as i128) {
+        let mut found: i32 = 0
+        let mut i: i32 = 0
+        while i < count {
+            if out_p[i] == p1 && out_q[i] == q1 {
+                found = 1
+                break
+            }
+            i = i + 1
+        }
+        if found == 0 && count < max_out {
+            out_p[count] = p1
+            out_q[count] = q1
+            count = count + 1
+        }
+    }
+
+    return count
+}
+
+# triangle_from_mn outputs
+let mut g_tri_a: i64 = 0
+let mut g_tri_b: i64 = 0
+let mut g_tri_c: i64 = 0
+
+function triangle_from_mn(m: i64, n: i64) -> void {
+    let aa: i64 = m * m - n * n
+    let bb: i64 = 2 * m * n
+    let cc: i64 = m * m + n * n
+    if ((m + n) % 2) == 0 {
+        g_tri_a = aa / 2
+        g_tri_b = bb / 2
+        g_tri_c = cc / 2
+    } else {
+        g_tri_a = aa
+        g_tri_b = bb
+        g_tri_c = cc
+    }
+}
+
+function tan_theta_from_legs(a: i64, b: i64) -> f64 {
+    let aa: f64 = (a as f64) * (a as f64)
+    let bb: f64 = (b as f64) * (b as f64)
+    return (3.0 * (a as f64) * (b as f64)) / (2.0 * (aa + bb))
+}
+
+function f_val(alpha_deg: f64, L: i64) -> i64 {
+    let alpha_rad: f64 = alpha_deg * DEG2RAD
+    let y: f64 = tan(alpha_rad)
+
+    let r1: f64 = root_left(y)
+    let r2: f64 = root_right(y)
+
+    let mut best_diff: f64 = 1e300
+    let mut best_area_key: f64 = -1.0
+    let mut best_perim: i64 = 0
+
+    let cands_p: ptr<i64> = calloc(200, 8)
+    let cands_q: ptr<i64> = calloc(200, 8)
+
+    let mut ri: i32 = 0
+    while ri < 2 {
+        let root: f64 = if ri == 0 { r1 } else { r2 }
+        let ncands: i32 = cf_candidates_circle(root, L, cands_p, cands_q, 200)
+        let mut ci: i32 = 0
+        while ci < ncands {
+            let n_val: i64 = cands_p[ci]
+            let m_val: i64 = cands_q[ci]
+            if n_val > 0 && n_val < m_val {
+                triangle_from_mn(m_val, n_val)
+                let a: i64 = g_tri_a
+                let b: i64 = g_tri_b
+                let c: i64 = g_tri_c
+                if a > 0 && b > 0 {
+                    if c <= L {
+                        let k: i64 = L / c
+                        if k > 0 {
+                            let theta: f64 = atan(tan_theta_from_legs(a, b))
+                            let diff: f64 = fabs(theta - alpha_rad)
+
+                            let area_key: f64 = (k as f64) * (k as f64) * (a as f64) * (b as f64)
+                            let perim: i64 = k * (a + b + c)
+
+                            if diff + 1e-16 < best_diff {
+                                best_diff = diff
+                                best_area_key = area_key
+                                best_perim = perim
+                            } else {
+                                if fabs(diff - best_diff) <= 1e-16 {
+                                    if area_key > best_area_key {
+                                        best_area_key = area_key
+                                        best_perim = perim
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            ci = ci + 1
+        }
+        ri = ri + 1
+    }
+
+    free(cands_p)
+    free(cands_q)
+    return best_perim
 }
 
 function main() -> i32 {
-    printf("%lld\n", p904_native())
+    let N: i64 = 45000
+    let L: i64 = 10000000000
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n <= N {
+        let alpha: f64 = cbrt(n as f64)
+        total = total + f_val(alpha, L)
+        n = n + 1
+    }
+    printf("%lld\n", total)
     return 0
 }

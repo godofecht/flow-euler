@@ -1,12 +1,502 @@
-# Project Euler 946
-# Continued Fraction Fraction — native C solver (FST + binary lifting).
-# Companion: problems/native/p946.c
+# Project Euler 946: Continued Fraction Fraction
+# Ported from native C to pure Flow.
+# Sum of first 10^8 CF coefficients of beta = (2*alpha+3)/(3*alpha+2).
+# Uses FST with binary lifting for fast processing of long runs of 1s.
 
 extern {
-    function p946_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+}
+
+const STATE_HT_SIZE: i64 = 4096
+const STATE_HT_MASK: i64 = 4095
+const MAX_POW: i64 = 25
+
+struct State {
+    A: i64,
+    B: i64,
+    C: i64,
+    D: i64
+}
+
+# State storage
+let mut st_A: ptr<i64> = null
+let mut st_B: ptr<i64> = null
+let mut st_C: ptr<i64> = null
+let mut st_D: ptr<i64> = null
+let mut st_ids: ptr<i32> = null
+let mut n_states: i64 = 0
+
+# Transition tables
+let mut next1_arr: ptr<i32> = null
+let mut next2_arr: ptr<i32> = null
+let mut cnt1_arr: ptr<i64> = null
+let mut sum1_arr: ptr<i64> = null
+let mut cnt2_arr: ptr<i64> = null
+let mut sum2_arr: ptr<i64> = null
+
+# Binary lifting tables (flat: MAX_POW * STATE_HT_SIZE)
+let mut pow_next_arr: ptr<i32> = null
+let mut pow_cnt_arr: ptr<i64> = null
+let mut pow_sum_arr: ptr<i64> = null
+
+# Output from step_transition
+let mut g_outs: ptr<i64> = null
+let mut g_n_outs: i64 = 0
+
+# Prime generator state
+let mut primes_arr: ptr<i64> = null
+let mut n_primes: i64 = 0
+let mut next_cand: i64 = 0
+
+# Alpha cursor state
+let mut alpha_stage: i64 = 0
+let mut alpha_ones_left: i64 = 0
+
+# Output from consume_ones_with_limit
+let mut g_new_state: i64 = 0
+let mut g_consumed: i64 = 0
+let mut g_emitted_c: i64 = 0
+let mut g_emitted_s: i64 = 0
+
+function floor_div(n0: i64, d0: i64) -> i64 {
+    let mut n: i64 = n0
+    let mut d: i64 = d0
+    if d < 0 {
+        n = 0 - n
+        d = 0 - d
+    }
+    if n >= 0 {
+        return n / d
+    }
+    return 0 - ((0 - n + d - 1) / d)
+}
+
+function normalize(s: State) -> State {
+    let mut r: State = s
+    if r.C < 0 && r.C + r.D < 0 {
+        r.A = 0 - r.A
+        r.B = 0 - r.B
+        r.C = 0 - r.C
+        r.D = 0 - r.D
+    }
+    return r
+}
+
+function step_transition(s0: State, inp: i64) -> State {
+    g_n_outs = 0
+    let mut s: State = normalize(s0)
+
+    # Consume input: multiply by [[inp, 1], [1, 0]]
+    let newA: i64 = s.A * inp + s.B
+    let newB: i64 = s.A
+    let newC: i64 = s.C * inp + s.D
+    let newD: i64 = s.C
+    s.A = newA
+    s.B = newB
+    s.C = newC
+    s.D = newD
+
+    while true {
+        s = normalize(s)
+        let denom_inf: i64 = s.C
+        let denom_1: i64 = s.C + s.D
+        if denom_inf != 0 && denom_1 != 0 {
+            let inf_pos: bool = denom_inf > 0
+            let one_pos: bool = denom_1 > 0
+            if inf_pos == one_pos {
+                let q_inf: i64 = floor_div(s.A, denom_inf)
+                let q_1: i64 = floor_div(s.A + s.B, denom_1)
+                if q_inf == q_1 {
+                    let q: i64 = q_inf
+                    g_outs[g_n_outs] = q
+                    g_n_outs = g_n_outs + 1
+                    # Extract: y' = 1/(y - q)
+                    let oA: i64 = s.C
+                    let oB: i64 = s.D
+                    let oC: i64 = s.A - q * s.C
+                    let oD: i64 = s.B - q * s.D
+                    s.A = oA
+                    s.B = oB
+                    s.C = oC
+                    s.D = oD
+                } else {
+                    break
+                }
+            } else {
+                break
+            }
+        } else {
+            break
+        }
+    }
+    return s
+}
+
+function state_hash(s: State) -> i64 {
+    let h: i64 = s.A * 31 + s.B * 37 + s.C * 41 + s.D * 43
+    return h & STATE_HT_MASK
+}
+
+function state_find(s: State) -> i64 {
+    let h: i64 = state_hash(s)
+    let mut i: i64 = 0
+    while i < STATE_HT_SIZE {
+        let idx: i64 = (h + i) & STATE_HT_MASK
+        if st_ids[idx] == -1 {
+            return -1
+        }
+        let sid: i64 = st_ids[idx] as i64
+        if st_A[sid] == s.A && st_B[sid] == s.B && st_C[sid] == s.C && st_D[sid] == s.D {
+            return sid
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+function state_insert(s: State) -> i64 {
+    let id: i64 = n_states
+    st_A[id] = s.A
+    st_B[id] = s.B
+    st_C[id] = s.C
+    st_D[id] = s.D
+    let h: i64 = state_hash(s)
+    let mut i: i64 = 0
+    while i < STATE_HT_SIZE {
+        let idx: i64 = (h + i) & STATE_HT_MASK
+        if st_ids[idx] == -1 {
+            st_ids[idx] = id as i32
+            n_states = n_states + 1
+            return id
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+function clzll(n: i64) -> i64 {
+    if n <= 0 {
+        return 64
+    }
+    let mut count: i64 = 0
+    let mut v: i64 = n
+    while v > 0 {
+        v = v >> 1
+        count = count + 1
+    }
+    return 64 - count
+}
+
+function isqrt_i64(n: i64) -> i64 {
+    if n < 2 {
+        return n
+    }
+    let mut r: i64 = (sqrt(n as f64)) as i64
+    while r > 0 && r * r > n {
+        r = r - 1
+    }
+    while (r + 1) * (r + 1) <= n {
+        r = r + 1
+    }
+    return r
+}
+
+function next_prime() -> i64 {
+    if n_primes == 0 {
+        primes_arr[0] = 2
+        n_primes = 1
+        next_cand = 3
+        return 2
+    }
+    let mut n: i64 = next_cand
+    while true {
+        let r: i64 = isqrt_i64(n)
+        let mut is_p: bool = true
+        let mut i: i64 = 0
+        while i < n_primes {
+            let p: i64 = primes_arr[i]
+            if p > r {
+                break
+            }
+            if n % p == 0 {
+                is_p = false
+                break
+            }
+            i = i + 1
+        }
+        if is_p {
+            primes_arr[n_primes] = n
+            n_primes = n_primes + 1
+            next_cand = n + 2
+            return n
+        }
+        n = n + 2
+    }
+    return 0
+}
+
+function alpha_init() -> void {
+    alpha_stage = 0
+    alpha_ones_left = 0
+}
+
+function alpha_next() -> i64 {
+    if alpha_stage == 0 {
+        alpha_stage = 1
+        alpha_ones_left = next_prime()
+        return 2
+    }
+    if alpha_stage == 1 {
+        alpha_ones_left = alpha_ones_left - 1
+        if alpha_ones_left == 0 {
+            alpha_stage = 2
+        }
+        return 1
+    }
+    # stage 2
+    alpha_stage = 1
+    alpha_ones_left = next_prime()
+    return 2
+}
+
+function alpha_can_skip_ones() -> bool {
+    return alpha_stage == 1 && alpha_ones_left > 0
+}
+
+function alpha_skip_ones(k: i64) -> void {
+    alpha_ones_left = alpha_ones_left - k
+    if alpha_ones_left == 0 {
+        alpha_stage = 2
+    }
+}
+
+function prepare_tables() -> void {
+    # Initialize hash table to -1
+    let mut i: i64 = 0
+    while i < STATE_HT_SIZE {
+        st_ids[i] = -1
+        i = i + 1
+    }
+    n_states = 0
+
+    let init_state: State = State { A: 2, B: 3, C: 3, D: 2 }
+    let init_id: i64 = state_insert(init_state)
+
+    # BFS to collect reachable states
+    let queue: ptr<i32> = malloc(STATE_HT_SIZE * 4) as ptr<i32>
+    let mut qhead: i64 = 0
+    let mut qtail: i64 = 0
+    queue[qtail] = init_id as i32
+    qtail = qtail + 1
+
+    while qhead < qtail {
+        let sid: i64 = queue[qhead] as i64
+        qhead = qhead + 1
+        let st: State = State { A: st_A[sid], B: st_B[sid], C: st_C[sid], D: st_D[sid] }
+        let mut inp: i64 = 1
+        while inp <= 2 {
+            let nst: State = step_transition(st, inp)
+            let nid: i64 = state_find(nst)
+            if nid == -1 {
+                let nid2: i64 = state_insert(nst)
+                queue[qtail] = nid2 as i32
+                qtail = qtail + 1
+            }
+            inp = inp + 1
+        }
+    }
+    free(queue as ptr<void>)
+
+    # Base transitions
+    let mut sid: i64 = 0
+    while sid < n_states {
+        let st: State = State { A: st_A[sid], B: st_B[sid], C: st_C[sid], D: st_D[sid] }
+
+        let nst1: State = step_transition(st, 1)
+        next1_arr[sid] = state_find(nst1) as i32
+        cnt1_arr[sid] = g_n_outs
+        let mut s1: i64 = 0
+        let mut j: i64 = 0
+        while j < g_n_outs {
+            s1 = s1 + g_outs[j]
+            j = j + 1
+        }
+        sum1_arr[sid] = s1
+
+        let nst2: State = step_transition(st, 2)
+        next2_arr[sid] = state_find(nst2) as i32
+        cnt2_arr[sid] = g_n_outs
+        let mut s2: i64 = 0
+        j = 0
+        while j < g_n_outs {
+            s2 = s2 + g_outs[j]
+            j = j + 1
+        }
+        sum2_arr[sid] = s2
+
+        sid = sid + 1
+    }
+
+    # Binary lifting for repeated 1s
+    sid = 0
+    while sid < n_states {
+        pow_next_arr[sid] = next1_arr[sid]
+        pow_cnt_arr[sid] = cnt1_arr[sid]
+        pow_sum_arr[sid] = sum1_arr[sid]
+        sid = sid + 1
+   
+    }
+    let mut k: i64 = 1
+    while k < MAX_POW {
+        sid = 0
+        while sid < n_states {
+            let mid: i64 = pow_next_arr[(k - 1) * STATE_HT_SIZE + sid] as i64
+            pow_next_arr[k * STATE_HT_SIZE + sid] = pow_next_arr[(k - 1) * STATE_HT_SIZE + mid]
+            pow_cnt_arr[k * STATE_HT_SIZE + sid] = pow_cnt_arr[(k - 1) * STATE_HT_SIZE + sid] + pow_cnt_arr[(k - 1) * STATE_HT_SIZE + mid]
+            pow_sum_arr[k * STATE_HT_SIZE + sid] = pow_sum_arr[(k - 1) * STATE_HT_SIZE + sid] + pow_sum_arr[(k - 1) * STATE_HT_SIZE + mid]
+            sid = sid + 1
+        }
+        k = k + 1
+    }
+}
+
+function consume_ones_with_limit(state_id: i64, max_ones: i64, out_limit: i64) -> void {
+    g_consumed = 0
+    g_emitted_c = 0
+    g_emitted_s = 0
+    g_new_state = state_id
+
+    if max_ones <= 0 || out_limit <= 0 {
+        return
+    }
+
+    let mut sid: i64 = state_id
+    let mut cons: i64 = 0
+    let mut ec: i64 = 0
+    let mut es: i64 = 0
+    let mut remaining: i64 = out_limit
+
+    let mut bit: i64 = 63 - clzll(max_ones)
+    while bit >= 0 {
+        let step: i64 = 1 << bit
+        if cons + step <= max_ones {
+            let c: i64 = pow_cnt_arr[bit * STATE_HT_SIZE + sid]
+            if c <= remaining {
+                remaining = remaining - c
+                cons = cons + step
+                ec = ec + c
+                es = es + pow_sum_arr[bit * STATE_HT_SIZE + sid]
+                sid = pow_next_arr[bit * STATE_HT_SIZE + sid] as i64
+            }
+        }
+        bit = bit - 1
+    }
+
+    g_new_state = sid
+    g_consumed = cons
+    g_emitted_c = ec
+    g_emitted_s = es
 }
 
 function main() -> i32 {
-    printf("%lld\n", p946_native())
+    # Allocate all arrays
+    st_A = malloc(STATE_HT_SIZE * 8) as ptr<i64>
+    st_B = malloc(STATE_HT_SIZE * 8) as ptr<i64>
+    st_C = malloc(STATE_HT_SIZE * 8) as ptr<i64>
+    st_D = malloc(STATE_HT_SIZE * 8) as ptr<i64>
+    st_ids = malloc(STATE_HT_SIZE * 4) as ptr<i32>
+    next1_arr = malloc(STATE_HT_SIZE * 4) as ptr<i32>
+    next2_arr = malloc(STATE_HT_SIZE * 4) as ptr<i32>
+    cnt1_arr = malloc(STATE_HT_SIZE * 8) as ptr<i64>
+    sum1_arr = malloc(STATE_HT_SIZE * 8) as ptr<i64>
+    cnt2_arr = malloc(STATE_HT_SIZE * 8) as ptr<i64>
+    sum2_arr = malloc(STATE_HT_SIZE * 8) as ptr<i64>
+    pow_next_arr = malloc(MAX_POW * STATE_HT_SIZE * 4) as ptr<i32>
+    pow_cnt_arr = malloc(MAX_POW * STATE_HT_SIZE * 8) as ptr<i64>
+    pow_sum_arr = malloc(MAX_POW * STATE_HT_SIZE * 8) as ptr<i64>
+    g_outs = malloc(16 * 8) as ptr<i64>
+    primes_arr = malloc(20000 * 8) as ptr<i64>
+
+    prepare_tables()
+
+    let n: i64 = 100000000
+
+    alpha_init()
+
+    let mut state_id: i64 = 0
+    let mut total_sum: i64 = 0
+    let mut total_cnt: i64 = 0
+    let cutoff: i64 = 2000
+    let mut safe_target: i64 = n - cutoff
+    if safe_target < 0 {
+        safe_target = 0
+    }
+
+    # Fast path: skip long runs of 1s
+    while total_cnt < safe_target {
+        if alpha_can_skip_ones() {
+            let remaining_allowed: i64 = safe_target - total_cnt
+            let max_ones: i64 = alpha_ones_left
+            consume_ones_with_limit(state_id, max_ones, remaining_allowed)
+            if g_consumed == 0 {
+                break
+            }
+            alpha_skip_ones(g_consumed)
+            total_cnt = total_cnt + g_emitted_c
+            total_sum = total_sum + g_emitted_s
+            state_id = g_new_state
+            if g_consumed < max_ones {
+                break
+            }
+        } else {
+            let c: i64 = cnt2_arr[state_id]
+            if total_cnt + c > safe_target {
+                break
+            }
+            total_sum = total_sum + sum2_arr[state_id]
+            total_cnt = total_cnt + c
+            state_id = next2_arr[state_id] as i64
+            alpha_next()
+        }
+    }
+
+    # Finish digit by digit
+    while total_cnt < n {
+        let a: i64 = alpha_next()
+        let st: State = State { A: st_A[state_id], B: st_B[state_id], C: st_C[state_id], D: st_D[state_id] }
+        let nst: State = step_transition(st, a)
+        state_id = state_find(nst)
+        let mut j: i64 = 0
+        while j < g_n_outs {
+            if total_cnt >= n {
+                break
+            }
+            total_sum = total_sum + g_outs[j]
+            total_cnt = total_cnt + 1
+            j = j + 1
+        }
+    }
+
+    printf("%lld\n", total_sum)
+
+    free(st_A as ptr<void>)
+    free(st_B as ptr<void>)
+    free(st_C as ptr<void>)
+    free(st_D as ptr<void>)
+    free(st_ids as ptr<void>)
+    free(next1_arr as ptr<void>)
+    free(next2_arr as ptr<void>)
+    free(cnt1_arr as ptr<void>)
+    free(sum1_arr as ptr<void>)
+    free(cnt2_arr as ptr<void>)
+    free(sum2_arr as ptr<void>)
+    free(pow_next_arr as ptr<void>)
+    free(pow_cnt_arr as ptr<void>)
+    free(pow_sum_arr as ptr<void>)
+    free(g_outs as ptr<void>)
+    free(primes_arr as ptr<void>)
     return 0
 }

@@ -1,12 +1,232 @@
 # Project Euler 830
 # Binomials and Powers - S(10^18) mod 83^3 * 89^3 * 97^3.
-# Real solver in native/p830.c.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p830_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+function mmul(a: i64, b: i64, mod: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (mod as i128)) as i64
+}
+
+function mpow(base: i64, exp: i64, mod: i64) -> i64 {
+    let mut result: i64 = 1 % mod
+    let mut b: i64 = base % mod
+    if b < 0 { b = b + mod }
+    let mut e: i64 = exp
+    while e > 0 {
+        if e % 2 == 1 { result = mmul(result, b, mod) }
+        b = mmul(b, b, mod)
+        e = e / 2
+    }
+    return result
+}
+
+function egcd(a0: i64, b0: i64, mod: i64) -> i64 {
+    let mut a: i64 = a0 % mod
+    if a < 0 { a = a + mod }
+    let mut b: i64 = mod
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    while b != 0 {
+        let q: i64 = a / b
+        let t: i64 = b
+        b = a % b
+        a = t
+        let t2: i64 = x1
+        x1 = x0 - q * x1
+        x0 = t2
+    }
+    return ((x0 % mod) + mod) % mod
+}
+
+function modinv(a: i64, mod: i64) -> i64 {
+    return egcd(a, mod, mod)
+}
+
+function v_p(x: i64, p: i32) -> i32 {
+    if x == 0 { return 100 }
+    let mut c: i32 = 0
+    let mut v: i64 = x
+    while v % (p as i64) == 0 {
+        v = v / (p as i64)
+        c = c + 1
+    }
+    return c
+}
+
+# Largest J such that v_p(n*(n-1)*...*(n-J+1)) < a
+function max_j(n: i64, p: i32, a: i32) -> i32 {
+    if n <= 0 { return 0 }
+    let mut vp: i32 = 0
+    let mut j: i32 = 0
+    while true {
+        if vp >= a { return j - 1 }
+        j = j + 1
+        if (j as i64) > n { return j - 1 }
+        vp = vp + v_p(n - (j as i64) + 1, p)
+    }
+    return 0
+}
+
+# Forward differences of powers: F[j] = Delta^j f(0) for f(i) = i^n, mod p^a
+function forward_diff(n: i64, J: i32, mod: i64, p: i32, F: ptr<i64>) -> void {
+    let arr: ptr<i64> = malloc(((J as i64) + 1) * 8)
+    arr[0] = 0
+    let mut i: i32 = 1
+    while i <= J {
+        if i % p == 0 {
+            arr[i] = 0
+        } else {
+            arr[i] = mpow(i as i64, n, mod)
+        }
+        i = i + 1
+    }
+    let mut j: i32 = 0
+    while j <= J {
+        F[j] = arr[0] % mod
+        let mut i2: i32 = 0
+        while i2 < J - j {
+            arr[i2] = (arr[i2 + 1] - arr[i2]) % mod
+            if arr[i2] < 0 { arr[i2] = arr[i2] + mod }
+            i2 = i2 + 1
+        }
+        j = j + 1
+    }
+    free(arr)
+}
+
+# C(n, 0..J) mod p^a using p-adic valuation tracking
+function binom_prefix(n: i64, J: i32, mod: i64, p: i32, a: i32, out: ptr<i64>) -> void {
+    out[0] = 1 % mod
+    let mut u_c: i64 = 1 % mod
+    let mut v_c: i32 = 0
+
+    let mut j: i32 = 1
+    while j <= J {
+        let term: i64 = n - (j as i64) + 1
+        let v_term: i32 = v_p(term, p)
+        let mut u_term: i64 = term
+        let mut k: i32 = 0
+        while k < v_term {
+            u_term = u_term / (p as i64)
+            k = k + 1
+        }
+        u_term = u_term % mod
+
+        let v_jd: i32 = v_p(j as i64, p)
+        let mut u_jd: i64 = j as i64
+        let mut k2: i32 = 0
+        while k2 < v_jd {
+            u_jd = u_jd / (p as i64)
+            k2 = k2 + 1
+        }
+        u_jd = u_jd % mod
+        let inv_ujd: i64 = modinv(u_jd, mod)
+
+        u_c = mmul(mmul(u_c, u_term, mod), inv_ujd, mod)
+        v_c = v_c + v_term - v_jd
+
+        if v_c >= a {
+            out[j] = 0
+        } else {
+            let mut pp: i64 = 1
+            let mut k3: i32 = 0
+            while k3 < v_c {
+                pp = pp * (p as i64)
+                k3 = k3 + 1
+            }
+            out[j] = mmul(pp % mod, u_c, mod)
+        }
+        j = j + 1
+    }
+}
+
+function solve_mod_prime_power(n: i64, p: i32, a: i32) -> i64 {
+    let mut mod: i64 = 1
+    let mut i: i32 = 0
+    while i < a {
+        mod = mod * (p as i64)
+        i = i + 1
+    }
+
+    if n == 0 { return 1 % mod }
+
+    let J: i32 = max_j(n, p, a)
+
+    let fact_stirling: ptr<i64> = malloc(((J as i64) + 1) * 8)
+    let choose: ptr<i64> = malloc(((J as i64) + 1) * 8)
+
+    forward_diff(n, J, mod, p, fact_stirling)
+    binom_prefix(n, J, mod, p, a, choose)
+
+    let pow2: i64 = mpow(2, n, mod)
+    let inv2: i64 = modinv(2, mod)
+
+    let mut res: i64 = 0
+    let mut cur_pow2: i64 = pow2
+    let mut j: i32 = 0
+    while j <= J {
+        let term: i64 = mmul(mmul(choose[j], fact_stirling[j], mod), cur_pow2, mod)
+        res = (res + term) % mod
+        cur_pow2 = mmul(cur_pow2, inv2, mod)
+        j = j + 1
+    }
+
+    free(fact_stirling)
+    free(choose)
+    return res
+}
+
+function crt(residues: ptr<i64>, moduli: ptr<i64>, count: i32) -> i64 {
+    let mut M: i64 = 1
+    let mut i: i32 = 0
+    while i < count {
+        M = M * moduli[i]
+        i = i + 1
+    }
+    let mut x: i128 = 0
+    let mut i2: i32 = 0
+    while i2 < count {
+        let Mi: i64 = M / moduli[i2]
+        let inv: i64 = modinv(Mi % moduli[i2], moduli[i2])
+        x = x + (residues[i2] as i128) * (Mi as i128) * (inv as i128)
+        i2 = i2 + 1
+    }
+    return (x % (M as i128)) as i64
 }
 
 function main() -> i32 {
-    printf("%lld\n", p830_native())
+    let primes: ptr<i32> = malloc(12)
+    primes[0] = 83; primes[1] = 89; primes[2] = 97
+    let power: i32 = 3
+    let mut n: i64 = 1
+    let mut i: i32 = 0
+    while i < 18 {
+        n = n * 10
+        i = i + 1
+    }
+
+    let mods: ptr<i64> = malloc(24)
+    let residues: ptr<i64> = malloc(24)
+    let mut i2: i32 = 0
+    while i2 < 3 {
+        mods[i2] = 1
+        let mut k: i32 = 0
+        while k < power {
+            mods[i2] = mods[i2] * (primes[i2] as i64)
+            k = k + 1
+        }
+        residues[i2] = solve_mod_prime_power(n, primes[i2], power)
+        i2 = i2 + 1
+    }
+
+    printf("%lld\n", crt(residues, mods, 3))
+    free(primes)
+    free(mods)
+    free(residues)
     return 0
 }

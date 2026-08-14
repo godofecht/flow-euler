@@ -1,11 +1,209 @@
 # Project Euler 925: Next permutation of squares
-# Sum of B(n^2) for n=1..10^16-1 mod 1e9+7 via digit-by-digit correction sum.
+# Sum of B(n^2) for n=1..10^16-1, mod 1e9+7.
+# B(n) = next lexicographic permutation of n's digits (0 if none).
+# Pure Flow port of the native C solver using i128.
 
 extern {
-    function p925_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+const MOD: i64 = 1000000007
+
+let mut g_pow10: ptr<i128> = null as ptr<i128>
+let mut g_pow10_mod: ptr<i64> = null as ptr<i64>
+let mut g_K: i32 = 0
+
+# Compute (next_permutation(n) - n) % MOD for n given as i128.
+function delta_mod_i128(n0: i128) -> i64 {
+    if n0 == 0 { return 0 }
+    let digits: array<i32, 40> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let mut len: i32 = 0
+    let mut tmp: i128 = n0
+    while tmp > 0 {
+        digits[len] = (tmp % 10) as i32
+        len = len + 1
+        tmp = tmp / 10
+    }
+    # Reverse to most-significant first
+    let mut i: i32 = 0
+    let mut j: i32 = len - 1
+    while i < j {
+        let t: i32 = digits[i]
+        digits[i] = digits[j]
+        digits[j] = t
+        i = i + 1
+        j = j - 1
+    }
+
+    # n mod MOD from digits
+    let mut n_mod: i64 = 0
+    let mut d: i32 = 0
+    while d < len {
+        n_mod = ((n_mod * 10) % MOD + (digits[d] as i64)) % MOD
+        d = d + 1
+    }
+
+    # Find largest i with digits[i] < digits[i+1]
+    let mut ii: i32 = len - 2
+    while ii >= 0 && digits[ii] >= digits[ii + 1] {
+        ii = ii - 1
+    }
+    if ii < 0 {
+        let r: i64 = (MOD - n_mod) % MOD
+        return r
+    }
+
+    # Find largest j > i with digits[j] > digits[i]
+    let mut jj: i32 = len - 1
+    while digits[jj] <= digits[ii] {
+        jj = jj - 1
+    }
+
+    # Swap
+    let t: i32 = digits[ii]
+    digits[ii] = digits[jj]
+    digits[jj] = t
+
+    # Reverse suffix starting at i+1
+    let mut lo: i32 = ii + 1
+    let mut hi: i32 = len - 1
+    while lo < hi {
+        let tt: i32 = digits[lo]
+        digits[lo] = digits[hi]
+        digits[hi] = tt
+        lo = lo + 1
+        hi = hi - 1
+    }
+
+    # next_permutation value mod MOD
+    let mut np_mod: i64 = 0
+    d = 0
+    while d < len {
+        np_mod = ((np_mod * 10) % MOD + (digits[d] as i64)) % MOD
+        d = d + 1
+    }
+
+    let dm: i64 = (np_mod - n_mod) % MOD
+    if dm < 0 { return dm + MOD }
+    return dm
+}
+
+function mod_pow(a0: i64, e0: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut a: i64 = a0 % MOD
+    if a < 0 { a = a + MOD }
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 {
+            r = ((r * a) % MOD) as i64
+        }
+        a = ((a * a) % MOD) as i64
+        e = e >> 1
+    }
+    return r
+}
+
+function square_sum_below_power10(k: i32) -> i64 {
+    let n: i64 = mod_pow(10, (k as i64))
+    let mut t1: i64 = (n - 1) % MOD
+    if t1 < 0 { t1 = t1 + MOD }
+    let mut t2: i64 = (2 * n - 1) % MOD
+    if t2 < 0 { t2 = t2 + MOD }
+    let inv6: i64 = mod_pow(6, MOD - 2)
+    let mut result: i64 = ((n * t1) % MOD) as i64
+    result = ((result * t2) % MOD) as i64
+    result = ((result * inv6) % MOD) as i64
+    return result
+}
+
+function recurse(suffix0: i64, width: i32, trailing_zeros: i32) -> i64 {
+    let k: i32 = g_K
+
+    if width + trailing_zeros >= k {
+        let val: i128 = (suffix0 as i128) * g_pow10[trailing_zeros]
+        let sq: i128 = val * val
+        return delta_mod_i128(sq)
+    }
+
+    let square_suffix: i64 = ((suffix0 as i128) * (suffix0 as i128) % g_pow10[width]) as i64
+    let left_digit: i64 = square_suffix / (g_pow10[width - 1] as i64)
+    let next_place: i128 = g_pow10[width]
+    let next_modulus: i128 = g_pow10[width + 1]
+    let free_digits: i32 = k - width - trailing_zeros - 1
+    let completion_count: i64 = g_pow10_mod[free_digits]
+
+    let mut total: i64 = 0
+
+    let mut digit: i32 = 0
+    while digit < 10 {
+        let next_suffix: i128 = (digit as i128) * next_place + (suffix0 as i128)
+        let next_sq: i128 = next_suffix * next_suffix
+        let new_digit: i64 = ((next_sq % next_modulus) / next_place) as i64
+
+        if new_digit >= left_digit {
+            total = (total + recurse((next_suffix as i64), width + 1, trailing_zeros)) % MOD
+        } else {
+            let next_sq_mod: i128 = next_sq % next_modulus
+            let visible: i128 = next_sq_mod * g_pow10[2 * trailing_zeros]
+            let representative: i128 = g_pow10[width + 1 + 2 * trailing_zeros] + visible
+            let representative_delta: i64 = delta_mod_i128(representative)
+
+            if next_sq < next_modulus {
+                total = (total + delta_mod_i128(visible)) % MOD
+                let mut term: i64 = (completion_count - 1) % MOD
+                if term < 0 { term = term + MOD }
+                term = ((term * representative_delta) % MOD) as i64
+                total = (total + term) % MOD
+            } else {
+                let term: i64 = ((completion_count * representative_delta) % MOD) as i64
+                total = (total + term) % MOD
+            }
+        }
+        digit = digit + 1
+    }
+    return total
+}
+
+function correction_sum(k: i32) -> i64 {
+    g_K = k
+
+    # Build pow10 array (exact, up to 2*k+2) using i128
+    g_pow10[0] = 1
+    let mut i: i32 = 1
+    while i <= 2 * k + 2 {
+        g_pow10[i] = g_pow10[i - 1] * 10
+        i = i + 1
+    }
+
+    # Build pow10_mod (up to k)
+    g_pow10_mod[0] = 1
+    i = 1
+    while i <= k {
+        g_pow10_mod[i] = (g_pow10_mod[i - 1] * 10) % MOD
+        i = i + 1
+    }
+
+    let mut total: i64 = 0
+    let mut trailing_zeros: i32 = 0
+    while trailing_zeros < k {
+        let mut last_digit: i32 = 1
+        while last_digit < 10 {
+            total = (total + recurse((last_digit as i64), 1, trailing_zeros)) % MOD
+            last_digit = last_digit + 1
+        }
+        trailing_zeros = trailing_zeros + 1
+    }
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p925_native())
+    g_pow10 = (malloc(40 * 16)) as ptr<i128>
+    g_pow10_mod = (malloc(20 * 8)) as ptr<i64>
+    let k: i32 = 16
+    let result: i64 = (square_sum_below_power10(k) + correction_sum(k)) % MOD
+    printf("%lld\n", result)
     return 0
 }

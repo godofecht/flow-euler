@@ -1,10 +1,501 @@
 # Project Euler 963: A Gated Town
+# Ported from native C to pure Flow.
+# F(N) for N = 10^5.
 
 extern {
-    function p963_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function log(x: f64) -> f64
+    function ceil(x: f64) -> f64
+}
+
+const N: i64 = 100000
+const LMAX: i64 = 24
+
+let mut B: ptr<f64> = null
+
+# Key fields as flat global arrays
+let mut key_len: ptr<i32> = null
+let mut key_L: ptr<i32> = null
+let mut key_parity: ptr<i32> = null
+let mut key_bval: ptr<f64> = null
+
+# Combo fields as flat global arrays
+let mut combo_len: ptr<i32> = null
+let mut combo_L: ptr<i32> = null
+let mut combo_parity: ptr<i32> = null
+let mut combo_bval: ptr<f64> = null
+let mut combo_count: ptr<i64> = null
+
+function build_B(m: i64) -> void {
+    B = calloc(m + 1, 8) as ptr<f64>
+    let mut i: i64 = 1
+    while i <= m {
+        let h: f64 = B[i >> 1]
+        if (i & 1) != 0 {
+            B[i] = h + 1.0
+        } else {
+            if h < 2.0 {
+                B[i] = h / 2.0
+            } else {
+                B[i] = h - 1.0
+            }
+        }
+        i = i + 1
+    }
+}
+
+# Compare two keys by index (using key_ arrays)
+function cmp_key_idx(a: i64, b: i64) -> i64 {
+    let la: i64 = key_len[a] as i64
+    let lb: i64 = key_len[b] as i64
+    if la != lb {
+        if la < lb { return -1 }
+        return 1
+    }
+    let mut i: i64 = 0
+    while i < la {
+        let va: i64 = key_L[a * LMAX + i] as i64
+        let vb: i64 = key_L[b * LMAX + i] as i64
+        if va != vb {
+            if va < vb { return -1 }
+            return 1
+        }
+        i = i + 1
+    }
+    let pa: i64 = key_parity[a] as i64
+    let pb: i64 = key_parity[b] as i64
+    if pa != pb {
+        if pa < pb { return -1 }
+        return 1
+    }
+    let ba: f64 = key_bval[a]
+    let bb: f64 = key_bval[b]
+    if ba < bb { return -1 }
+    if ba > bb { return 1 }
+    return 0
+}
+
+function keys_equal_idx(a: i64, b: i64) -> bool {
+    if key_len[a] != key_len[b] { return false }
+    let la: i64 = key_len[a] as i64
+    let mut i: i64 = 0
+    while i < la {
+        if key_L[a * LMAX + i] != key_L[b * LMAX + i] { return false }
+        i = i + 1
+    }
+    if key_parity[a] != key_parity[b] { return false }
+    return key_bval[a] == key_bval[b]
+}
+
+# Compare two combos by index
+function cmp_combo_idx(a: i64, b: i64) -> i64 {
+    let la: i64 = combo_len[a] as i64
+    let lb: i64 = combo_len[b] as i64
+    if la != lb {
+        if la < lb { return -1 }
+        return 1
+    }
+    let mut i: i64 = 0
+    while i < la {
+        let va: i64 = combo_L[a * LMAX + i] as i64
+        let vb: i64 = combo_L[b * LMAX + i] as i64
+        if va != vb {
+            if va < vb { return -1 }
+            return 1
+        }
+        i = i + 1
+    }
+    let pa: i64 = combo_parity[a] as i64
+    let pb: i64 = combo_parity[b] as i64
+    if pa != pb {
+        if pa < pb { return -1 }
+        return 1
+    }
+    let ba: f64 = combo_bval[a]
+    let bb: f64 = combo_bval[b]
+    if ba < bb { return -1 }
+    if ba > bb { return 1 }
+    return 0
+}
+
+function combos_equal_idx(a: i64, b: i64) -> bool {
+    if combo_len[a] != combo_len[b] { return false }
+    let la: i64 = combo_len[a] as i64
+    let mut i: i64 = 0
+    while i < la {
+        if combo_L[a * LMAX + i] != combo_L[b * LMAX + i] { return false }
+        i = i + 1
+    }
+    if combo_parity[a] != combo_parity[b] { return false }
+    return combo_bval[a] == combo_bval[b]
+}
+
+# Heapsort for keys (sorts index array)
+function key_sift_down(idx: ptr<i64>, start: i64, end: i64) -> void {
+    let mut root: i64 = start
+    while 2 * root + 1 <= end {
+        let mut child: i64 = 2 * root + 1
+        if child + 1 <= end && cmp_key_idx(idx[child], idx[child + 1]) < 0 {
+            child = child + 1
+        }
+        if cmp_key_idx(idx[root], idx[child]) < 0 {
+            let tmp: i64 = idx[root]
+            idx[root] = idx[child]
+            idx[child] = tmp
+            root = child
+        } else {
+            break
+        }
+    }
+}
+
+function key_heapsort_idx(idx: ptr<i64>, n: i64) -> void {
+    if n <= 1 { return }
+    let mut start: i64 = n / 2 - 1
+    while start >= 0 {
+        key_sift_down(idx, start, n - 1)
+        start = start - 1
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let tmp: i64 = idx[0]
+        idx[0] = idx[end]
+        idx[end] = tmp
+        end = end - 1
+        key_sift_down(idx, 0, end)
+    }
+}
+
+# Heapsort for combos (sorts index array)
+function combo_sift_down(idx: ptr<i64>, start: i64, end: i64) -> void {
+    let mut root: i64 = start
+    while 2 * root + 1 <= end {
+        let mut child: i64 = 2 * root + 1
+        if child + 1 <= end && cmp_combo_idx(idx[child], idx[child + 1]) < 0 {
+            child = child + 1
+        }
+        if cmp_combo_idx(idx[root], idx[child]) < 0 {
+            let tmp: i64 = idx[root]
+            idx[root] = idx[child]
+            idx[child] = tmp
+            root = child
+        } else {
+            break
+        }
+    }
+}
+
+function combo_heapsort_idx(idx: ptr<i64>, n: i64) -> void {
+    if n <= 1 { return }
+    let mut start: i64 = n / 2 - 1
+    while start >= 0 {
+        combo_sift_down(idx, start, n - 1)
+        start = start - 1
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let tmp: i64 = idx[0]
+        idx[0] = idx[end]
+        idx[end] = tmp
+        end = end - 1
+        combo_sift_down(idx, 0, end)
+    }
+}
+
+function compute_key(n: i64, kidx: i64) -> void {
+    let s: array<i8, 32> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let mut slen: i64 = 0
+    let mut x: i64 = n
+    while x > 0 {
+        s[slen] = ((x % 3) as i8) + 48
+        slen = slen + 1
+        x = x / 3
+    }
+    # reverse s
+    let mut i: i64 = 0
+    while i < slen / 2 {
+        let t: i8 = s[i]
+        s[i] = s[slen - 1 - i]
+        s[slen - 1 - i] = t
+        i = i + 1
+    }
+    if slen == 0 {
+        s[0] = 48
+        slen = 1
+    }
+
+    # Find l = last position before first '1' where digit < '1' (digit is '0')
+    let mut l: i64 = -1
+    let mut j: i64 = 0
+    while j < slen {
+        if s[j] == 49 { break }
+        if s[j] < 49 {
+            l = j
+        }
+        j = j + 1
+    }
+
+    # Build L_tuple
+    key_len[kidx] = 0
+    if l > -1 {
+        let mut k: i64 = 0
+        let mut j2: i64 = l - 1
+        while j2 >= 0 {
+            if s[j2] < 49 {
+                k = k + 1
+            } else {
+                key_L[kidx * LMAX + key_len[kidx] as i64] = k as i32
+                key_len[kidx] = key_len[kidx] + 1
+                k = 0
+            }
+            j2 = j2 - 1
+        }
+    }
+
+    # Count 2s for parity
+    let mut cnt2: i64 = 0
+    j = 0
+    while j < slen {
+        if s[j] == 50 {
+            cnt2 = cnt2 + 1
+        }
+        j = j + 1
+    }
+    key_parity[kidx] = (cnt2 & 1) as i32
+
+    # Build u (digits < '2') and compute bval
+    let mut ulen: i64 = 0
+    j = 0
+    while j < slen {
+        if s[j] < 50 {
+            ulen = ulen + 1
+        }
+        j = j + 1
+    }
+    if ulen == 0 {
+        key_bval[kidx] = 0.0
+    } else {
+        let mut val: i64 = 0
+        j = 0
+        while j < slen {
+            if s[j] < 50 {
+                val = val * 2 + (s[j] - 48) as i64
+            }
+            j = j + 1
+        }
+        key_bval[kidx] = B[val]
+    }
+    # Zero out remaining L entries
+    let mut li: i64 = key_len[kidx] as i64
+    while li < LMAX {
+        key_L[kidx * LMAX + li] = 0
+        li = li + 1
+    }
+}
+
+function combine_key(aidx: i64, bidx: i64, out_idx: i64) -> void {
+    let alen: i64 = key_len[aidx] as i64
+    let blen: i64 = key_len[bidx] as i64
+    let mut outlen: i64 = alen + blen
+    combo_len[out_idx] = outlen as i32
+
+    let mut idx: i64 = 0
+    let mut i: i64 = 0
+    while i < alen {
+        combo_L[out_idx * LMAX + idx] = key_L[aidx * LMAX + i]
+        idx = idx + 1
+        i = i + 1
+    }
+    i = 0
+    while i < blen {
+        combo_L[out_idx * LMAX + idx] = key_L[bidx * LMAX + i]
+        idx = idx + 1
+        i = i + 1
+    }
+    # Sort ascending (bubble sort, outlen is small)
+    let mut ii: i64 = 0
+    while ii < outlen {
+        let mut jj: i64 = ii + 1
+        while jj < outlen {
+            if combo_L[out_idx * LMAX + ii] > combo_L[out_idx * LMAX + jj] {
+                let t: i32 = combo_L[out_idx * LMAX + ii]
+                combo_L[out_idx * LMAX + ii] = combo_L[out_idx * LMAX + jj]
+                combo_L[out_idx * LMAX + jj] = t
+            }
+            jj = jj + 1
+        }
+        ii = ii + 1
+    }
+
+    combo_parity[out_idx] = key_parity[aidx] ^ key_parity[bidx]
+    combo_bval[out_idx] = key_bval[aidx] + key_bval[bidx]
+
+    # Zero out remaining L entries
+    let mut li: i64 = outlen
+    while li < LMAX {
+        combo_L[out_idx * LMAX + li] = 0
+        li = li + 1
+    }
 }
 
 function main() -> i32 {
-    printf("%lld\n", p963_native())
+    let mut m: i64 = 1 << (ceil(log(N as f64) / log(3.0)) as i64)
+    if m < 1 { m = 1 }
+    build_B(m)
+
+    # Allocate key arrays
+    key_len = malloc(N * 4) as ptr<i32>
+    key_L = malloc(N * LMAX * 4) as ptr<i32>
+    key_parity = malloc(N * 4) as ptr<i32>
+    key_bval = malloc(N * 8) as ptr<f64>
+
+    # Build all keys for n=1..N
+    let mut n: i64 = 1
+    while n <= N {
+        compute_key(n, n - 1)
+        n = n + 1
+    }
+
+    # Sort keys using index array
+    let key_idx: ptr<i64> = malloc(N * 8) as ptr<i64>
+    let mut i: i64 = 0
+    while i < N {
+        key_idx[i] = i
+        i = i + 1
+    }
+    key_heapsort_idx(key_idx, N)
+
+    # Extract unique keys and their counts
+    let unique_len: ptr<i32> = malloc(N * 4) as ptr<i32>
+    let unique_L: ptr<i32> = malloc(N * LMAX * 4) as ptr<i32>
+    let unique_parity: ptr<i32> = malloc(N * 4) as ptr<i32>
+    let unique_bval: ptr<f64> = malloc(N * 8) as ptr<f64>
+    let unique_counts: ptr<i64> = malloc(N * 8) as ptr<i64>
+    let mut nkeys: i64 = 0
+
+    # Copy key arrays to unique arrays for combine_key access
+    let mut i2: i64 = 0
+    while i2 < N {
+        unique_len[i2] = key_len[i2]
+        unique_parity[i2] = key_parity[i2]
+        unique_bval[i2] = key_bval[i2]
+        let mut j: i64 = 0
+        while j < LMAX {
+            unique_L[i2 * LMAX + j] = key_L[i2 * LMAX + j]
+            j = j + 1
+        }
+        i2 = i2 + 1
+    }
+
+    i = 0
+    while i < N {
+        let cur: i64 = key_idx[i]
+        let mut j: i64 = i + 1
+        while j < N && keys_equal_idx(key_idx[i], key_idx[j]) {
+            j = j + 1
+        }
+        # Store unique key (using original index, not sorted)
+        unique_len[nkeys] = key_len[cur]
+        unique_parity[nkeys] = key_parity[cur]
+        unique_bval[nkeys] = key_bval[cur]
+        let mut k: i64 = 0
+        while k < LMAX {
+            unique_L[nkeys * LMAX + k] = key_L[cur * LMAX + k]
+            k = k + 1
+        }
+        unique_counts[nkeys] = j - i
+        nkeys = nkeys + 1
+        i = j
+    }
+
+    free(key_idx as ptr<void>)
+
+    # Now use unique arrays as key arrays for combine_key
+    # Save original key arrays, point key_ to unique arrays
+    let orig_key_len: ptr<i32> = key_len
+    let orig_key_L: ptr<i32> = key_L
+    let orig_key_parity: ptr<i32> = key_parity
+    let orig_key_bval: ptr<f64> = key_bval
+    key_len = unique_len
+    key_L = unique_L
+    key_parity = unique_parity
+    key_bval = unique_bval
+
+    # Generate all combined keys
+    let total_combos: i64 = nkeys * nkeys
+    combo_len = malloc(total_combos * 4) as ptr<i32>
+    combo_L = malloc(total_combos * LMAX * 4) as ptr<i32>
+    combo_parity = malloc(total_combos * 4) as ptr<i32>
+    combo_bval = malloc(total_combos * 8) as ptr<f64>
+    combo_count = malloc(total_combos * 8) as ptr<i64>
+
+    let mut ci: i64 = 0
+    let mut ai: i64 = 0
+    while ai < nkeys {
+        let mut bi: i64 = 0
+        while bi < nkeys {
+            combine_key(ai, bi, ci)
+            let mut c: i64 = unique_counts[ai] * unique_counts[bi]
+            if ai == bi {
+                c = c + unique_counts[ai]
+            }
+            combo_count[ci] = c
+            ci = ci + 1
+            bi = bi + 1
+        }
+        ai = ai + 1
+    }
+
+    # Free original key arrays
+    free(orig_key_len as ptr<void>)
+    free(orig_key_L as ptr<void>)
+    free(orig_key_parity as ptr<void>)
+    free(orig_key_bval as ptr<void>)
+
+    # Sort combos using index array
+    let combo_idx: ptr<i64> = malloc(total_combos * 8) as ptr<i64>
+    let mut i3: i64 = 0
+    while i3 < total_combos {
+        combo_idx[i3] = i3
+        i3 = i3 + 1
+    }
+    combo_heapsort_idx(combo_idx, total_combos)
+
+    # Merge identical keys and sum counts
+    let mut ans: i128 = 0
+    let mut k: i64 = 0
+    while k < total_combos {
+        let mut j: i64 = k + 1
+        while j < total_combos && combos_equal_idx(combo_idx[k], combo_idx[j]) {
+            j = j + 1
+        }
+        let mut v: i128 = 0
+        let mut x: i64 = k
+        while x < j {
+            v = v + (combo_count[combo_idx[x]] as i128)
+            x = x + 1
+        }
+        ans = ans + v * v
+        k = j
+    }
+    ans = ans / 4
+
+    printf("%lld\n", ans as i64)
+
+    # Cleanup
+    free(key_len as ptr<void>)
+    free(key_L as ptr<void>)
+    free(key_parity as ptr<void>)
+    free(key_bval as ptr<void>)
+    free(unique_counts as ptr<void>)
+    free(combo_len as ptr<void>)
+    free(combo_L as ptr<void>)
+    free(combo_parity as ptr<void>)
+    free(combo_bval as ptr<void>)
+    free(combo_count as ptr<void>)
+    free(combo_idx as ptr<void>)
+    free(B as ptr<void>)
     return 0
 }

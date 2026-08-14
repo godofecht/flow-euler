@@ -1,12 +1,292 @@
-# Project Euler 967
-# B-trivisible: F(10^18, 120) via meet-in-the-middle.
-# Native C helper for the enumeration.
+# Project Euler 967: B-trivisible F(N, B) with N=10^18, B=120.
+# Meet-in-the-middle over the squarefree products of primes <= B (excluding 3).
+# For each squarefree d we track a sign t = (-1)^k and a mod-3 character vector
+# (s0, s1, s2). Combining left and right halves gives the contribution
+#   t_L * t_R * floor(N / (d_L * d_R)) * (s0_L*s0_R + s1_L*s2_R + s2_L*s1_R).
 
 extern {
-    function p967_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+struct Item {
+    prod: i64,
+    t: i64,
+    s0: i64,
+    s1: i64,
+    s2: i64
+}
+
+const N: i64 = 1000000000000000000
+
+function primes_upto(B: i32, out: ptr<i32>) -> i32 {
+    let sieve: ptr<i8> = calloc((B + 2) as i64, 1) as ptr<i8>
+    memset(sieve as ptr<void>, 1, ((B + 1) as i64))
+    sieve[0] = 0
+    sieve[1] = 0
+    let mut i: i32 = 2
+    while (i as i64) * (i as i64) <= (B as i64) {
+        if sieve[i] != 0 {
+            let mut j: i32 = i * i
+            while j <= B {
+                sieve[j] = 0
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+    let mut k: i32 = 0
+    let mut i2: i32 = 2
+    while i2 <= B {
+        if sieve[i2] != 0 && i2 != 3 {
+            out[k] = i2
+            k = k + 1
+        }
+        i2 = i2 + 1
+    }
+    free(sieve as ptr<void>)
+    return k
+}
+
+function extend_vec(cls: i32, s0: i64, s1: i64, s2: i64,
+                    ns0: ptr<i64>, ns1: ptr<i64>, ns2: ptr<i64>) -> void {
+    if cls == 1 {
+        ns0[0] = s0 - s2
+        ns1[0] = s1 - s0
+        ns2[0] = s2 - s1
+    } else {
+        ns0[0] = s0 - s1
+        ns1[0] = s1 - s2
+        ns2[0] = s2 - s0
+    }
+}
+
+# Enumerate squarefree products <= N from primes via iterative DFS.
+# Uses global arrays for output and stack.
+let mut g_out: ptr<Item> = null
+let mut g_out_n: i64 = 0
+let mut g_out_cap: i64 = 0
+
+let mut g_stk: ptr<i64> = null
+let mut g_stk_cap: i64 = 0
+
+function gen_half(primes: ptr<i32>, cnt: i32, lim: i64) -> i64 {
+    g_out_cap = 1048576
+    g_out = calloc(g_out_cap, 40) as ptr<Item>
+    let mut n: i64 = 0
+
+    g_stk_cap = 65536
+    g_stk = calloc(g_stk_cap * 6, 8) as ptr<i64>
+    let mut sp: i64 = 0
+
+    g_stk[sp * 6 + 0] = 0
+    g_stk[sp * 6 + 1] = 1
+    g_stk[sp * 6 + 2] = 1
+    g_stk[sp * 6 + 3] = 1
+    g_stk[sp * 6 + 4] = 0
+    g_stk[sp * 6 + 5] = 0
+    sp = sp + 1
+
+    while sp > 0 {
+        sp = sp - 1
+        let idx: i64 = g_stk[sp * 6 + 0]
+        let prod: i64 = g_stk[sp * 6 + 1]
+        let t: i64 = g_stk[sp * 6 + 2]
+        let s0: i64 = g_stk[sp * 6 + 3]
+        let s1: i64 = g_stk[sp * 6 + 4]
+        let s2: i64 = g_stk[sp * 6 + 5]
+
+        if n >= g_out_cap {
+            g_out_cap = g_out_cap * 2
+            let new_out: ptr<Item> = calloc(g_out_cap, 40) as ptr<Item>
+            let mut ci: i64 = 0
+            while ci < n {
+                new_out[ci] = g_out[ci]
+                ci = ci + 1
+            }
+            free(g_out as ptr<void>)
+            g_out = new_out
+        }
+        g_out[n] = Item { prod: prod, t: t, s0: s0, s1: s1, s2: s2 }
+        n = n + 1
+
+        let mut j: i32 = idx as i32
+        while j < cnt {
+            let p: i32 = primes[j]
+            if prod > lim / (p as i64) { break }
+            let np: i64 = prod * (p as i64)
+            let nsbuf: array<i64, 3> = [0, 0, 0]
+            extend_vec(p % 3, s0, s1, s2, &nsbuf[0], &nsbuf[1], &nsbuf[2])
+            if sp + 1 > g_stk_cap {
+                g_stk_cap = g_stk_cap * 2
+                let new_stk: ptr<i64> = calloc(g_stk_cap * 6, 8) as ptr<i64>
+                let mut ci2: i64 = 0
+                while ci2 < sp * 6 {
+                    new_stk[ci2] = g_stk[ci2]
+                    ci2 = ci2 + 1
+                }
+                free(g_stk as ptr<void>)
+                g_stk = new_stk
+            }
+            g_stk[sp * 6 + 0] = (j + 1) as i64
+            g_stk[sp * 6 + 1] = np
+            g_stk[sp * 6 + 2] = 0 - t
+            g_stk[sp * 6 + 3] = nsbuf[0]
+            g_stk[sp * 6 + 4] = nsbuf[1]
+            g_stk[sp * 6 + 5] = nsbuf[2]
+            sp = sp + 1
+            j = j + 1
+        }
+    }
+    free(g_stk as ptr<void>)
+    g_out_n = n
+    return n
+}
+
+# heapsort Item by prod
+function item_less(a: Item, b: Item) -> bool {
+    return a.prod < b.prod
+}
+
+function item_sift_down(arr: ptr<Item>, start: i64, endd: i64) -> void {
+    let mut root: i64 = start
+    let mut cont: bool = true
+    while cont {
+        let mut child: i64 = 2 * root + 1
+        if child > endd {
+            cont = false
+        } else {
+            if child + 1 <= endd && item_less(arr[child], arr[child + 1]) {
+                child = child + 1
+            }
+            if item_less(arr[root], arr[child]) {
+                let t: Item = arr[root]
+                arr[root] = arr[child]
+                arr[child] = t
+                root = child
+            } else {
+                cont = false
+            }
+        }
+    }
+}
+
+function heapsort_items(arr: ptr<Item>, n: i64) -> void {
+    if n <= 1 { return }
+    let mut start: i64 = n / 2 - 1
+    while start >= 0 {
+        item_sift_down(arr, start, n - 1)
+        start = start - 1
+    }
+    let mut endd: i64 = n - 1
+    while endd > 0 {
+        let t: Item = arr[0]
+        arr[0] = arr[endd]
+        arr[endd] = t
+        endd = endd - 1
+        item_sift_down(arr, 0, endd)
+    }
+}
+
+# bisect_right: first index in [lo, hi) with key > val
+function bisect_right(arr: ptr<i64>, lo: i64, hi: i64, val: i64) -> i64 {
+    let mut lo2: i64 = lo
+    let mut hi2: i64 = hi
+    while lo2 < hi2 {
+        let mid: i64 = lo2 + (hi2 - lo2) / 2
+        if arr[mid] <= val {
+            lo2 = mid + 1
+        } else {
+            hi2 = mid
+        }
+    }
+    return lo2
 }
 
 function main() -> i32 {
-    printf("%lld\n", p967_native())
+    let B: i32 = 120
+
+    let primes: array<i32, 64> = [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ]
+    let cnt: i32 = primes_upto(B, &primes[0])
+
+    let mid: i32 = cnt / 2
+    let lcnt: i32 = mid
+    let rcnt: i32 = cnt - mid
+
+    # Left half: primes[0..mid)
+    let an: i64 = gen_half(&primes[0], lcnt, N)
+    let A: ptr<Item> = g_out
+
+    # Right half: primes[mid..cnt)
+    let bn: i64 = gen_half(&primes[mid], rcnt, N)
+    let Bv: ptr<Item> = g_out
+
+    heapsort_items(Bv, bn)
+
+    let bp: ptr<i64> = calloc(bn, 8) as ptr<i64>
+    let mut i: i64 = 0
+    while i < bn {
+        bp[i] = Bv[i].prod
+        i = i + 1
+    }
+
+    # prefix sums of t*s0, t*s1, t*s2
+    let pref0: ptr<i64> = calloc(bn + 1, 8) as ptr<i64>
+    let pref1: ptr<i64> = calloc(bn + 1, 8) as ptr<i64>
+    let pref2: ptr<i64> = calloc(bn + 1, 8) as ptr<i64>
+    pref0[0] = 0
+    pref1[0] = 0
+    pref2[0] = 0
+    let mut i2: i64 = 0
+    while i2 < bn {
+        let t: i64 = Bv[i2].t
+        pref0[i2 + 1] = pref0[i2] + t * Bv[i2].s0
+        pref1[i2 + 1] = pref1[i2] + t * Bv[i2].s1
+        pref2[i2 + 1] = pref2[i2] + t * Bv[i2].s2
+        i2 = i2 + 1
+    }
+
+    let mut ans: i128 = 0
+    let mut a: i64 = 0
+    while a < an {
+        let ap: i64 = A[a].prod
+        if ap > N {
+            a = a + 1
+            continue
+        }
+        let limit: i64 = N / ap
+        let r: i64 = bisect_right(bp, 0, bn, limit)
+        let mut i3: i64 = 0
+        while i3 < r {
+            let v: i64 = limit / bp[i3]
+            if v == 0 { break }
+            let maxb: i64 = limit / v
+            let j: i64 = bisect_right(bp, i3, r, maxb)
+            let s0: i64 = pref0[j] - pref0[i3]
+            let s1: i64 = pref1[j] - pref1[i3]
+            let s2: i64 = pref2[j] - pref2[i3]
+            let comb: i128 = (A[a].s0 as i128) * (s0 as i128)
+                         + (A[a].s1 as i128) * (s2 as i128)
+                         + (A[a].s2 as i128) * (s1 as i128)
+            ans = ans + (A[a].t as i128) * (v as i128) * comb
+            i3 = j
+        }
+        a = a + 1
+    }
+
+    free(A as ptr<void>)
+    free(Bv as ptr<void>)
+    free(bp as ptr<void>)
+    free(pref0 as ptr<void>)
+    free(pref1 as ptr<void>)
+    free(pref2 as ptr<void>)
+
+    printf("%lld\n", ans as i64)
     return 0
 }

@@ -1,12 +1,243 @@
 # Project Euler 787
-# Bezout's Game — H(10^9).
-# Native C helper for linear sieve + Du Jiao sieve + Mobius inversion.
+# Bezout's Game -- H(10^9).
+# Counts winning positions (a,b) with gcd(a,b)=1, a>0, b>0, a+b<=N.
+#
+# Derived rule:
+#   a+b even  -> always winning
+#   a+b odd   -> losing iff min(a,b) is even
+#
+# H(N) = total_coprime_pairs - losing_pairs
+# Total coprime ordered pairs with sum<=N is sum_{s=2..N} phi(s) = S_phi(N)-1.
+# Losing unordered pairs counted via Mobius inversion over odd d.
 
 extern {
-    function p787_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+    function exp(x: f64) -> f64
+    function log(x: f64) -> f64
+}
+
+const HASH_SIZE: i64 = 262144
+const HASH_MASK: i64 = 262143
+
+let mut g_L: i64 = 0
+let mut g_mu: ptr<i8> = null
+let mut g_phi: ptr<i32> = null
+let mut g_pre_mu: ptr<i64> = null
+let mut g_pre_phi: ptr<i64> = null
+let mut g_pre_mu_odd: ptr<i64> = null
+
+let mut g_ht_mu_key: ptr<i64> = null
+let mut g_ht_mu_val: ptr<i64> = null
+let mut g_ht_mu_used: ptr<i8> = null
+let mut g_ht_phi_key: ptr<i64> = null
+let mut g_ht_phi_val: ptr<i64> = null
+let mut g_ht_phi_used: ptr<i8> = null
+let mut g_ht_mu_odd_key: ptr<i64> = null
+let mut g_ht_mu_odd_val: ptr<i64> = null
+let mut g_ht_mu_odd_used: ptr<i8> = null
+
+function hash64(x: i64) -> i64 {
+    let mut v: i64 = x
+    v = v ^ (v >> 33)
+    v = v * (-1718007120)  # 0xff51afd7ed558ccd as signed i64
+    v = v ^ (v >> 33)
+    v = v * (-434726454)   # 0xc4ceb9fe1a85ec53 as signed i64
+    v = v ^ (v >> 33)
+    return v & HASH_MASK
+}
+
+function ht_get(ht_key: ptr<i64>, ht_val: ptr<i64>, ht_used: ptr<i8>, key: i64, out: ptr<i64>) -> i64 {
+    let mut h: i64 = hash64(key)
+    while ht_used[h] != 0 {
+        if ht_key[h] == key {
+            out[0] = ht_val[h]
+            return 1
+        }
+        h = (h + 1) & HASH_MASK
+    }
+    return 0
+}
+
+function ht_put(ht_key: ptr<i64>, ht_val: ptr<i64>, ht_used: ptr<i8>, key: i64, val: i64) -> void {
+    let mut h: i64 = hash64(key)
+    while ht_used[h] != 0 {
+        if ht_key[h] == key {
+            ht_val[h] = val
+            return
+        }
+        h = (h + 1) & HASH_MASK
+    }
+    ht_key[h] = key
+    ht_val[h] = val
+    ht_used[h] = 1
+}
+
+function sieve(limit: i64) -> void {
+    g_mu = calloc(limit + 1, 1) as ptr<i8>
+    g_phi = calloc(limit + 1, 4) as ptr<i32>
+    let is_comp: ptr<i8> = calloc(limit + 1, 1) as ptr<i8>
+    let primes: ptr<i64> = malloc(limit * 8) as ptr<i64>
+    let mut np: i64 = 0
+
+    g_mu[1] = 1
+    g_phi[1] = 1
+
+    let mut i: i64 = 2
+    while i <= limit {
+        if is_comp[i] == 0 {
+            primes[np] = i
+            np = np + 1
+            g_mu[i] = -1
+            g_phi[i] = (i - 1) as i32
+        }
+        let mut j: i64 = 0
+        while j < np {
+            let p: i64 = primes[j]
+            let v: i64 = i * p
+            if v > limit { break }
+            is_comp[v] = 1
+            if i % p == 0 {
+                g_mu[v] = 0
+                g_phi[v] = (g_phi[i] as i64 * p) as i32
+                break
+            } else {
+                g_mu[v] = -g_mu[i]
+                g_phi[v] = (g_phi[i] as i64 * (p - 1)) as i32
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    g_pre_mu = calloc(limit + 1, 8) as ptr<i64>
+    g_pre_phi = calloc(limit + 1, 8) as ptr<i64>
+    g_pre_mu_odd = calloc(limit + 1, 8) as ptr<i64>
+
+    let mut s_mu: i64 = 0
+    let mut s_phi: i64 = 0
+    let mut s_mu_odd: i64 = 0
+    let mut k: i64 = 1
+    while k <= limit {
+        s_mu = s_mu + g_mu[k] as i64
+        s_phi = s_phi + g_phi[k] as i64
+        if (k & 1) != 0 {
+            s_mu_odd = s_mu_odd + g_mu[k] as i64
+        }
+        g_pre_mu[k] = s_mu
+        g_pre_phi[k] = s_phi
+        g_pre_mu_odd[k] = s_mu_odd
+        k = k + 1
+    }
+
+    free(is_comp)
+    free(primes)
+}
+
+function S_mu(n: i64) -> i64 {
+    if n <= g_L { return g_pre_mu[n] }
+    let out: ptr<i64> = malloc(8) as ptr<i64>
+    if ht_get(g_ht_mu_key, g_ht_mu_val, g_ht_mu_used, n, out) == 1 {
+        let v: i64 = out[0]
+        free(out)
+        return v
+    }
+    free(out)
+    let mut res: i64 = 1
+    let mut i: i64 = 2
+    while i <= n {
+        let q: i64 = n / i
+        let j: i64 = n / q
+        res = res - (j - i + 1) * S_mu(q)
+        i = j + 1
+    }
+    ht_put(g_ht_mu_key, g_ht_mu_val, g_ht_mu_used, n, res)
+    return res
+}
+
+function S_phi(n: i64) -> i64 {
+    if n <= g_L { return g_pre_phi[n] }
+    let out: ptr<i64> = malloc(8) as ptr<i64>
+    if ht_get(g_ht_phi_key, g_ht_phi_val, g_ht_phi_used, n, out) == 1 {
+        let v: i64 = out[0]
+        free(out)
+        return v
+    }
+    free(out)
+    let mut res: i64 = n * (n + 1) / 2
+    let mut i: i64 = 2
+    while i <= n {
+        let q: i64 = n / i
+        let j: i64 = n / q
+        res = res - (j - i + 1) * S_phi(q)
+        i = j + 1
+    }
+    ht_put(g_ht_phi_key, g_ht_phi_val, g_ht_phi_used, n, res)
+    return res
+}
+
+function S_mu_odd(n: i64) -> i64 {
+    if n <= g_L { return g_pre_mu_odd[n] }
+    let out: ptr<i64> = malloc(8) as ptr<i64>
+    if ht_get(g_ht_mu_odd_key, g_ht_mu_odd_val, g_ht_mu_odd_used, n, out) == 1 {
+        let v: i64 = out[0]
+        free(out)
+        return v
+    }
+    free(out)
+    let res: i64 = S_mu(n) + S_mu_odd(n / 2)
+    ht_put(g_ht_mu_odd_key, g_ht_mu_odd_val, g_ht_mu_odd_used, n, res)
+    return res
+}
+
+function C_count(M: i64) -> i64 {
+    let t: i64 = (M - 1) / 4
+    if t <= 0 { return 0 }
+    return t * ((M + 1) / 2) - t * (t + 1)
+}
+
+function H(N: i64) -> i64 {
+    # L = N^(2/3) + 10
+    let mut L: i64 = exp(2.0 / 3.0 * log(N as f64)) as i64 + 10
+    if L > N { L = N }
+
+    g_L = L
+    sieve(L)
+
+    g_ht_mu_key = calloc(HASH_SIZE, 8) as ptr<i64>
+    g_ht_mu_val = calloc(HASH_SIZE, 8) as ptr<i64>
+    g_ht_mu_used = calloc(HASH_SIZE, 1) as ptr<i8>
+    g_ht_phi_key = calloc(HASH_SIZE, 8) as ptr<i64>
+    g_ht_phi_val = calloc(HASH_SIZE, 8) as ptr<i64>
+    g_ht_phi_used = calloc(HASH_SIZE, 1) as ptr<i8>
+    g_ht_mu_odd_key = calloc(HASH_SIZE, 8) as ptr<i64>
+    g_ht_mu_odd_val = calloc(HASH_SIZE, 8) as ptr<i64>
+    g_ht_mu_odd_used = calloc(HASH_SIZE, 1) as ptr<i8>
+
+    # Force-fill S_mu memo for N
+    S_mu(N)
+
+    # Total coprime ordered pairs with sum<=N is sum_{s=2..N} phi(s)
+    let total_positions: i64 = S_phi(N) - 1
+
+    # Losing unordered pairs: sum_{d odd} mu(d) * C(floor(N/d))
+    let mut losing_unordered: i64 = 0
+    let mut d: i64 = 1
+    while d <= N {
+        let q: i64 = N / d
+        let nd: i64 = N / q
+        let mu_range_odd: i64 = S_mu_odd(nd) - S_mu_odd(d - 1)
+        losing_unordered = losing_unordered + mu_range_odd * C_count(q)
+        d = nd + 1
+    }
+
+    let losing_ordered: i64 = 2 * losing_unordered
+    return total_positions - losing_ordered
 }
 
 function main() -> i32 {
-    printf("%lld\n", p787_native())
+    printf("%lld\n", H(1000000000))
     return 0
 }

@@ -10,7 +10,7 @@ extern {
     function round(x: f64) -> f64
 }
 
-const MOD: i64 = 1095930893
+const MOD: i64 = 1095912793
 const N: i64 = 1000000000000000
 
 let mut g_spf: ptr<i32> = null

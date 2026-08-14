@@ -1,12 +1,199 @@
-# Project Euler 934
-# Unlucky Primes — CRT residue construction (native).
-# Companion: problems/native/p934.c
+# Project Euler 934: Unlucky Primes
+# U(N) = sum_{n=1..N} u(n) where u(n) is the smallest prime p
+# such that (n mod p) is NOT a multiple of 7.
+# Compute U(10^17) using CRT residue construction + explicit enumeration.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p934_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function realloc(p: ptr<void>, n: i64) -> ptr<void>
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+# Extended Euclid for modular inverse
+function inv_mod(a0: i64, m: i64) -> i64 {
+    let mut a: i64 = a0 % m
+    if a < 0 { a = a + m }
+    let mut t0: i64 = 0
+    let mut t1: i64 = 1
+    let mut r0: i64 = m
+    let mut r1: i64 = a
+    while r1 != 0 {
+        let q: i64 = r0 / r1
+        let tmp: i64 = t0 - q * t1
+        t0 = t1
+        t1 = tmp
+        let tmp2: i64 = r0 - q * r1
+        r0 = r1
+        r1 = tmp2
+    }
+    if r0 != 1 { return -1 }
+    let mut res: i64 = t0 % m
+    if res < 0 { res = res + m }
+    return res
+}
+
+function is_prime(x: i32) -> bool {
+    if x < 2 { return false }
+    if x == 2 { return true }
+    if x % 2 == 0 { return false }
+    let mut i: i32 = 3
+    while (i as i64) * (i as i64) <= (x as i64) {
+        if x % i == 0 { return false }
+        i = i + 2
+    }
+    return true
 }
 
 function main() -> i32 {
-    printf("%lld\n", p934_native())
+    let mut N: i64 = 1
+    let mut i: i32 = 0
+    while i < 17 {
+        N = N * 10
+        i = i + 1
+    }
+
+    let mut ans: i64 = 0
+    let mut c_prev: i64 = N
+
+    # Phase 1: CRT mode
+    let mut M: i64 = 1
+    let mut residues: ptr<i64> = (malloc(8)) as ptr<i64>
+    residues[0] = 0
+    let mut num_residues: i32 = 1
+
+    # Phase 2: explicit survivors
+    let mut survivors: ptr<i64> = null as ptr<i64>
+    let mut num_survivors: i32 = 0
+
+    let mut p: i32 = 2
+    while true {
+        if !is_prime(p) {
+            p = p + 1
+            continue
+        }
+
+        # Allowed residues mod p: multiples of 7 in [0, p-1]
+        let num_allowed: i32 = (p + 6) / 7
+
+        let c: i64 = 0
+
+        if survivors == (null as ptr<i64>) {
+            # CRT mode
+            let M_new: i128 = (M as i128) * (p as i128)
+
+            if M_new <= (N as i128) {
+                # Extend residues using CRT
+                let inv: i64 = inv_mod(M, (p as i64))
+                let M_old: i64 = M
+
+                let new_cap: i32 = num_residues * num_allowed
+                let new_residues: ptr<i64> = (malloc((new_cap as i64) * 8)) as ptr<i64>
+                let mut nr: i32 = 0
+
+                let mut ii: i32 = 0
+                while ii < num_residues {
+                    let r: i64 = residues[ii]
+                    let mut s: i32 = 0
+                    while s < p {
+                        let diff: i64 = (s as i64) - r
+                        let mut t: i64 = ((diff % (p as i64)) * inv) % (p as i64)
+                        if t < 0 { t = t + (p as i64) }
+                        let new_r: i64 = r + M_old * t
+                        new_residues[nr] = new_r
+                        nr = nr + 1
+                        s = s + 7
+                    }
+                    ii = ii + 1
+                }
+
+                free(residues as ptr<void>)
+                residues = new_residues
+                num_residues = nr
+                M = (M_new as i64)
+
+                # Count numbers <= N matching these residues (period M)
+                let q: i64 = N / M
+                let rem: i64 = N % M
+                let mut extra: i64 = 0
+                let mut iii: i32 = 0
+                while iii < num_residues {
+                    if residues[iii] > 0 && residues[iii] <= rem {
+                        extra = extra + 1
+                    }
+                    iii = iii + 1
+                }
+                let cc: i64 = q * (num_residues as i64) + extra
+
+                # Numbers that stop at prime p have u(n) = p
+                ans = ans + (p as i64) * (c_prev - cc)
+                c_prev = cc
+            } else {
+                # Switch to explicit enumeration
+                let inv: i64 = inv_mod(M, (p as i64))
+                let M_old: i64 = M
+
+                survivors = (malloc((num_residues * num_allowed) as i64 * 8)) as ptr<i64>
+                num_survivors = 0
+
+                let mut ii2: i32 = 0
+                while ii2 < num_residues {
+                    let r: i64 = residues[ii2]
+                    let mut s: i32 = 0
+                    while s < p {
+                        let diff: i64 = (s as i64) - r
+                        let mut t: i64 = ((diff % (p as i64)) * inv) % (p as i64)
+                        if t < 0 { t = t + (p as i64) }
+                        let x: i64 = r + M_old * t
+                        if x > 0 && x <= N {
+                            survivors[num_survivors] = x
+                            num_survivors = num_survivors + 1
+                        }
+                        s = s + 7
+                    }
+                    ii2 = ii2 + 1
+                }
+
+                free(residues as ptr<void>)
+                residues = null as ptr<i64>
+                M = (M_new as i64)
+
+                let cc2: i64 = num_survivors as i64
+                ans = ans + (p as i64) * (c_prev - cc2)
+                c_prev = cc2
+            }
+        } else {
+            # Explicit enumeration mode: filter survivors
+            let mut j: i32 = 0
+            let mut jj3: i32 = 0
+            while jj3 < num_survivors {
+                let n: i64 = survivors[jj3]
+                if (n % (p as i64)) % 7 == 0 {
+                    survivors[j] = n
+                    j = j + 1
+                }
+                jj3 = jj3 + 1
+            }
+            num_survivors = j
+
+            let cc3: i64 = num_survivors as i64
+            ans = ans + (p as i64) * (c_prev - cc3)
+            c_prev = cc3
+        }
+
+        if c_prev == 0 { break }
+        p = p + 1
+    }
+
+    if residues != (null as ptr<i64>) {
+        free(residues as ptr<void>)
+    }
+    if survivors != (null as ptr<i64>) {
+        free(survivors as ptr<void>)
+    }
+
+    printf("%lld\n", ans)
     return 0
 }

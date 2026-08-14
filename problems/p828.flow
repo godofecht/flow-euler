@@ -1,12 +1,422 @@
 # Project Euler 828
 # Numbers Challenge: minimum score expression from given numbers.
-# Companion: problems/native/p828.c
+# Pure Flow port of the native C solver.
 
 extern {
-    function p828_native() -> i64
+    function fopen(path: string, mode: string) -> ptr<void>
+    function fgetc(f: ptr<void>) -> i32
+    function fclose(f: ptr<void>) -> i32
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
+    function memset(p: ptr<void>, c: i32, n: i64) -> void
+}
+
+const MOD: i64 = 1005075251
+const CACHE_CAP: i32 = 1048576
+const MAX_PROBS: i32 = 200
+const MAX_NUMS: i32 = 6
+
+struct CacheSlot {
+    key: i64
+    vals: ptr<i32>
+    count: i32
+    used: i32
+}
+
+# Global cache
+let mut g_cache: ptr<CacheSlot> = null
+
+# Global dynamic array state
+let mut g_da_vals: ptr<i32> = null
+let mut g_da_count: i32 = 0
+let mut g_da_cap: i32 = 0
+
+# Problem data
+let mut g_targets: ptr<i32> = null
+let mut g_counts: ptr<i32> = null
+let mut g_nums: ptr<i32> = null
+let mut g_num_problems: i32 = 0
+
+function da_init() -> void {
+    g_da_cap = 16
+    g_da_vals = malloc((g_da_cap as i64) * 4)
+    g_da_count = 0
+}
+
+function da_free() -> void {
+    free(g_da_vals)
+    g_da_vals = null
+    g_da_count = 0
+    g_da_cap = 0
+}
+
+function da_add(v: i32) -> void {
+    if g_da_count >= g_da_cap {
+        let new_cap: i32 = g_da_cap * 2
+        let new_vals: ptr<i32> = malloc((new_cap as i64) * 4)
+        memcpy(new_vals, g_da_vals, (g_da_count as i64) * 4)
+        free(g_da_vals)
+        g_da_vals = new_vals
+        g_da_cap = new_cap
+    }
+    g_da_vals[g_da_count] = v
+    g_da_count = g_da_count + 1
+}
+
+function cache_reset() -> void {
+    g_cache = calloc(CACHE_CAP as i64, 24)
+}
+
+function cache_hash(key: i64) -> i32 {
+    return ((key * 1099511628211) & ((CACHE_CAP as i64) - 1)) as i32
+}
+
+function cache_find(key: i64) -> i32 {
+    let mut h: i32 = cache_hash(key)
+    while g_cache[h].used != 0 {
+        if g_cache[h].key == key { return h }
+        h = (h + 1) & (CACHE_CAP - 1)
+    }
+    return -1
+}
+
+function cache_insert(key: i64) -> i32 {
+    let mut h: i32 = cache_hash(key)
+    while g_cache[h].used != 0 {
+        if g_cache[h].key == key { return h }
+        h = (h + 1) & (CACHE_CAP - 1)
+    }
+    g_cache[h].used = 1
+    g_cache[h].key = key
+    g_cache[h].vals = null
+    g_cache[h].count = 0
+    return h
+}
+
+function encode_key(nums: ptr<i32>, len: i32) -> i64 {
+    let sorted: ptr<i32> = malloc(24)
+    let mut i: i32 = 0
+    while i < len {
+        sorted[i] = nums[i]
+        i = i + 1
+    }
+    let mut i2: i32 = 1
+    while i2 < len {
+        let key: i32 = sorted[i2]
+        let mut j: i32 = i2 - 1
+        while j >= 0 {
+            if sorted[j] > key {
+                sorted[j + 1] = sorted[j]
+                j = j - 1
+            } else {
+                break
+            }
+        }
+        sorted[j + 1] = key
+        i2 = i2 + 1
+    }
+    let mut k: i64 = 0
+    let mut i3: i32 = 0
+    while i3 < len {
+        k = k * 201 + ((sorted[i3] + 1) as i64)
+        i3 = i3 + 1
+    }
+    free(sorted)
+    return k
+}
+
+function sort_i32(arr: ptr<i32>, n: i32) -> void {
+    let mut i: i32 = 1
+    while i < n {
+        let key: i32 = arr[i]
+        let mut j: i32 = i - 1
+        while j >= 0 {
+            if arr[j] > key {
+                arr[j + 1] = arr[j]
+                j = j - 1
+            } else {
+                break
+            }
+        }
+        arr[j + 1] = key
+        i = i + 1
+    }
+}
+
+function dedup_sorted(arr: ptr<i32>, n: i32) -> i32 {
+    if n <= 1 { return n }
+    let mut w: i32 = 1
+    let mut r: i32 = 1
+    while r < n {
+        if arr[r] != arr[r - 1] {
+            arr[w] = arr[r]
+            w = w + 1
+        }
+        r = r + 1
+    }
+    return w
+}
+
+# Generate all achievable values from nums[0..len-1].
+# Results are added to the global dynamic array g_da_vals.
+function generate_values(nums: ptr<i32>, len: i32) -> void {
+    let key: i64 = encode_key(nums, len)
+    let slot_idx: i32 = cache_find(key)
+    if slot_idx >= 0 {
+        let mut i: i32 = 0
+        while i < g_cache[slot_idx].count {
+            da_add(g_cache[slot_idx].vals[i])
+            i = i + 1
+        }
+        return
+    }
+
+    # Build result in a new dynamic array
+    let saved_vals: ptr<i32> = g_da_vals
+    let saved_count: i32 = g_da_count
+    let saved_cap: i32 = g_da_cap
+    da_init()
+
+    if len == 1 {
+        da_add(nums[0])
+    } else {
+        let total: i32 = 1 << len
+        let mut mask: i32 = 1
+        while mask < total - 1 {
+            let complement: i32 = (~mask) & (total - 1)
+            if mask > complement {
+                mask = mask + 1
+                continue
+            }
+
+            let left: ptr<i32> = malloc(24)
+            let right: ptr<i32> = malloc(24)
+            let mut nl: i32 = 0
+            let mut nr: i32 = 0
+            let mut i: i32 = 0
+            while i < len {
+                if (mask & (1 << i)) != 0 {
+                    left[nl] = nums[i]
+                    nl = nl + 1
+                } else {
+                    right[nr] = nums[i]
+                    nr = nr + 1
+                }
+                i = i + 1
+            }
+
+            # Generate values for left group into a temp array
+            let save_l_vals: ptr<i32> = g_da_vals
+            let save_l_count: i32 = g_da_count
+            let save_l_cap: i32 = g_da_cap
+            da_init()
+            generate_values(left, nl)
+            let vl: ptr<i32> = g_da_vals
+            let vl_count: i32 = g_da_count
+
+            # Generate values for right group into a temp array
+            g_da_vals = save_l_vals
+            g_da_count = save_l_count
+            g_da_cap = save_l_cap
+            let save_r_vals: ptr<i32> = g_da_vals
+            let save_r_count: i32 = g_da_count
+            let save_r_cap: i32 = g_da_cap
+            da_init()
+            generate_values(right, nr)
+            let vr: ptr<i32> = g_da_vals
+            let vr_count: i32 = g_da_count
+
+            # Restore to result array
+            g_da_vals = save_r_vals
+            g_da_count = save_r_count
+            g_da_cap = save_r_cap
+
+            # Combine
+            let mut i2: i32 = 0
+            while i2 < vl_count {
+                let mut j: i32 = 0
+                while j < vr_count {
+                    let a: i32 = vl[i2]
+                    let b: i32 = vr[j]
+                    da_add(a + b)
+                    da_add(a * b)
+                    if a > b { da_add(a - b) }
+                    if b > a { da_add(b - a) }
+                    if b > 0 && a % b == 0 { da_add(a / b) }
+                    if a > 0 && b % a == 0 { da_add(b / a) }
+                    j = j + 1
+                }
+                i2 = i2 + 1
+            }
+
+            free(vl)
+            free(vr)
+            free(left)
+            free(right)
+
+            mask = mask + 1
+        }
+    }
+
+    # Sort and dedup
+    sort_i32(g_da_vals, g_da_count)
+    g_da_count = dedup_sorted(g_da_vals, g_da_count)
+
+    # Store in cache
+    let s_idx: i32 = cache_insert(key)
+    let stored_vals: ptr<i32> = malloc((g_da_count as i64) * 4)
+    memcpy(stored_vals, g_da_vals, (g_da_count as i64) * 4)
+    g_cache[s_idx].vals = stored_vals
+    g_cache[s_idx].count = g_da_count
+
+    # Copy results to the caller's array
+    let result_vals: ptr<i32> = g_da_vals
+    let result_count: i32 = g_da_count
+
+    # Restore caller's dynamic array
+    g_da_vals = saved_vals
+    g_da_count = saved_count
+    g_da_cap = saved_cap
+
+    # Add results to caller's array
+    let mut i3: i32 = 0
+    while i3 < result_count {
+        da_add(result_vals[i3])
+        i3 = i3 + 1
+    }
+
+    free(result_vals)
+}
+
+function min_score(target: i32, nums_base: ptr<i32>, nums_offset: i32, count: i32) -> i32 {
+    let mut best: i32 = 0
+    let total: i32 = 1 << count
+    let mut mask: i32 = 1
+    while mask < total {
+        let subset: ptr<i32> = malloc(24)
+        let mut ns: i32 = 0
+        let mut sum: i32 = 0
+        let mut i: i32 = 0
+        while i < count {
+            if (mask & (1 << i)) != 0 {
+                subset[ns] = nums_base[nums_offset + i]
+                sum = sum + nums_base[nums_offset + i]
+                ns = ns + 1
+            }
+            i = i + 1
+        }
+        if best > 0 && sum >= best {
+            free(subset)
+            mask = mask + 1
+            continue
+        }
+
+        da_init()
+        generate_values(subset, ns)
+
+        # Binary search for target
+        let mut lo: i32 = 0
+        let mut hi: i32 = g_da_count - 1
+        let mut found: i32 = 0
+        while lo <= hi {
+            let mid: i32 = (lo + hi) / 2
+            if g_da_vals[mid] == target {
+                found = 1
+                break
+            }
+            if g_da_vals[mid] < target {
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        if found != 0 {
+            if best == 0 || sum < best { best = sum }
+        }
+        da_free()
+        free(subset)
+        mask = mask + 1
+    }
+    return best
+}
+
+function read_data(path: string) -> void {
+    g_targets = malloc((MAX_PROBS as i64) * 4)
+    g_counts = malloc((MAX_PROBS as i64) * 4)
+    g_nums = malloc((MAX_PROBS as i64) * (MAX_NUMS as i64) * 4)
+
+    let f: ptr<void> = fopen(path, "r")
+    if f == null { return }
+
+    g_num_problems = 0
+
+    let mut c: i32 = fgetc(f)
+    while c >= 0 {
+        # Skip whitespace
+        while c >= 0 && c <= 32 { c = fgetc(f) }
+        if c < 0 { break }
+
+        # Read target
+        let mut target: i32 = 0
+        while c >= 48 && c <= 57 {
+            target = target * 10 + (c - 48)
+            c = fgetc(f)
+        }
+        g_targets[g_num_problems] = target
+
+        # Skip ':'
+        if c == 58 { c = fgetc(f) }
+
+        # Read numbers
+        let mut cnt: i32 = 0
+        while c >= 0 && c != 10 && c != 13 {
+            # Skip comma
+            while c == 44 { c = fgetc(f) }
+            if c < 0 || c == 10 || c == 13 { break }
+            # Read number
+            let mut val: i32 = 0
+            while c >= 48 && c <= 57 {
+                val = val * 10 + (c - 48)
+                c = fgetc(f)
+            }
+            if val > 0 {
+                g_nums[g_num_problems * MAX_NUMS + cnt] = val
+                cnt = cnt + 1
+            }
+        }
+        g_counts[g_num_problems] = cnt
+        g_num_problems = g_num_problems + 1
+
+        # Skip to next line
+        while c >= 0 && c != 10 { c = fgetc(f) }
+        if c == 10 { c = fgetc(f) }
+    }
+    fclose(f)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p828_native())
+    cache_reset()
+    read_data("data/0828_number_challenges.txt")
+
+    let mut total: i64 = 0
+    let mut pow3: i64 = 3
+    let mut n: i32 = 0
+    while n < g_num_problems {
+        let target: i32 = g_targets[n]
+        let count: i32 = g_counts[n]
+        let s: i32 = min_score(target, g_nums, n * MAX_NUMS, count)
+        total = (total + pow3 * (s as i64)) % MOD
+        pow3 = (pow3 * 3) % MOD
+        n = n + 1
+    }
+
+    free(g_targets)
+    free(g_counts)
+    free(g_nums)
+    free(g_cache)
+
+    printf("%lld\n", total)
     return 0
 }

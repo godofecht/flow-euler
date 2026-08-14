@@ -1,11 +1,234 @@
 # Project Euler 943
-# Kolakoski-like sequence counts. Native C solver in problems/native/p943.c.
+# Kolakoski-like sequence counts. Ported from native C to pure Flow.
+# Uses a memoized recursive solver with an open-addressing hash table
+# (generation-stamped) to count a-runs and b-runs.
 
 extern {
-    function p943_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+struct Result {
+    count_a: i64,
+    count_b: i64,
+    next_state: i64
+}
+
+# Simulate uint64_t left shift (wraps at 64 bits)
+function u64_shl(val: i64, amt: i64) -> i64 {
+    if amt >= 64 {
+        return 0
+    }
+    let r: i128 = (val as i128) << amt
+    let mask: i128 = ((1 as i128) << 64) - 1
+    return (r & mask) as i64
+}
+
+# Hash table: separate arrays for each field
+let mut ht_key: ptr<i64> = null
+let mut ht_gen: ptr<i64> = null
+let mut ht_ca: ptr<i64> = null
+let mut ht_cb: ptr<i64> = null
+let mut ht_ns: ptr<i64> = null
+let mut ht_mask: i64 = 0
+let mut ht_gen_val: i64 = 0
+let mut ht_count: i64 = 0
+let mut g_a: i64 = 0
+let mut g_b: i64 = 0
+
+function solver_init(a: i64, b: i64) -> void {
+    g_a = a
+    g_b = b
+    ht_gen_val = ht_gen_val + 1
+    ht_count = 0
+}
+
+function solver_ensure_table(need: i64) -> void {
+    if ht_key == null as ptr<i64> {
+        let mut sz: i64 = 1 << 16
+        while sz < need * 3 {
+            sz = sz << 1
+        }
+        ht_key = calloc(sz, 8) as ptr<i64>
+        ht_gen = calloc(sz, 8) as ptr<i64>
+        ht_ca = calloc(sz, 8) as ptr<i64>
+        ht_cb = calloc(sz, 8) as ptr<i64>
+        ht_ns = calloc(sz, 8) as ptr<i64>
+        ht_mask = sz - 1
+    } else {
+        let cap: i64 = ht_mask + 1
+        if ht_count * 3 >= cap {
+            let mut newcap: i64 = cap
+            while newcap < ht_count * 6 {
+                newcap = newcap << 1
+            }
+            let old_key: ptr<i64> = ht_key
+            let old_gen: ptr<i64> = ht_gen
+            let old_ca: ptr<i64> = ht_ca
+            let old_cb: ptr<i64> = ht_cb
+            let old_ns: ptr<i64> = ht_ns
+            let oldcap: i64 = cap
+            ht_key = calloc(newcap, 8) as ptr<i64>
+            ht_gen = calloc(newcap, 8) as ptr<i64>
+            ht_ca = calloc(newcap, 8) as ptr<i64>
+            ht_cb = calloc(newcap, 8) as ptr<i64>
+            ht_ns = calloc(newcap, 8) as ptr<i64>
+            ht_mask = newcap - 1
+            let mut i: i64 = 0
+            while i < oldcap {
+                if old_gen[i] == ht_gen_val && old_key[i] != 0 {
+                    let mut h: i64 = (((old_key[i] as i128) * (2654435761 as i128)) & (ht_mask as i128)) as i64
+                    while ht_key[h] != 0 {
+                        h = (h + 1) & ht_mask
+                    }
+                    ht_key[h] = old_key[i]
+                    ht_gen[h] = old_gen[i]
+                    ht_ca[h] = old_ca[i]
+                    ht_cb[h] = old_cb[i]
+                    ht_ns[h] = old_ns[i]
+                }
+                i = i + 1
+            }
+            free(old_key as ptr<void>)
+            free(old_gen as ptr<void>)
+            free(old_ca as ptr<void>)
+            free(old_cb as ptr<void>)
+            free(old_ns as ptr<void>)
+        }
+    }
+}
+
+# Returns the slot index for a key (empty or matching)
+function solver_lookup(key: i64) -> i64 {
+    let mut h: i64 = (((key as i128) * (2654435761 as i128)) & (ht_mask as i128)) as i64
+    while true {
+        if ht_key[h] == 0 || ht_gen[h] != ht_gen_val {
+            return h
+        }
+        if ht_key[h] == key {
+            return h
+        }
+        h = (h + 1) & ht_mask
+    }
+    return 0
+}
+
+function calc(state: i64, level: i64, maxlen: i64) -> Result {
+    if maxlen == 0 {
+        return Result { count_a: 0, count_b: 0, next_state: state }
+    }
+
+    let length_bit: i64 = u64_shl(2, level)
+    let bit: i64 = state & length_bit
+    let run_len: i64 = 0
+    if bit != 0 {
+        run_len = g_b
+    } else {
+        run_len = g_a
+    }
+    let count: i64 = 0
+    if run_len < maxlen {
+        count = run_len
+    } else {
+        count = maxlen
+    }
+
+    if level == 0 {
+        if (state & 1) == 0 {
+            return Result { count_a: count, count_b: 0, next_state: state ^ 1 }
+        } else {
+            return Result { count_a: 0, count_b: count, next_state: state ^ 1 }
+        }
+    }
+
+    let mut produced_a: i64 = 0
+    let mut produced_b: i64 = 0
+    let mut substate: i64 = state ^ bit
+
+    let mut i: i64 = 0
+    while i < count {
+        let child_key: i64 = substate + u64_shl(2, level)
+        solver_ensure_table(ht_count + 1)
+        let slot: i64 = solver_lookup(child_key)
+        let mut child: Result = Result { count_a: 0, count_b: 0, next_state: 0 }
+        if ht_key[slot] == child_key && ht_gen[slot] == ht_gen_val {
+            child = Result { count_a: ht_ca[slot], count_b: ht_cb[slot], next_state: ht_ns[slot] }
+            let child_total: i64 = child.count_a + child.count_b
+            if produced_a + produced_b + child_total > maxlen {
+                child = calc(substate, level - 1, maxlen - produced_a - produced_b)
+            }
+        } else {
+            child = calc(substate, level - 1, maxlen - produced_a - produced_b)
+        }
+        produced_a = produced_a + child.count_a
+        produced_b = produced_b + child.count_b
+        substate = child.next_state
+        i = i + 1
+    }
+
+    let res_ns: i64 = substate ^ bit ^ u64_shl(1, level)
+    let res: Result = Result { count_a: produced_a, count_b: produced_b, next_state: res_ns }
+
+    # Store in cache
+    let cache_key: i64 = state + u64_shl(4, level)
+    solver_ensure_table(ht_count + 1)
+    let slot2: i64 = solver_lookup(cache_key)
+    if ht_key[slot2] != cache_key || ht_gen[slot2] != ht_gen_val {
+        ht_key[slot2] = cache_key
+        ht_gen[slot2] = ht_gen_val
+        ht_count = ht_count + 1
+    }
+    ht_ca[slot2] = res.count_a
+    ht_cb[slot2] = res.count_b
+    ht_ns[slot2] = res.next_state
+
+    return res
+}
+
+function compute_T(a: i64, b: i64, limit: i64) -> i64 {
+    solver_init(a, b)
+    let mut level: i64 = 0
+    let mut res: Result = Result { count_a: 0, count_b: 0, next_state: 0 }
+    while true {
+        res = calc(0, level, limit)
+        level = level + 1
+        if res.count_a + res.count_b >= limit {
+            break
+        }
+        if level >= 64 {
+            break
+        }
+    }
+    return res.count_a * a + res.count_b * b
 }
 
 function main() -> i32 {
-    printf("%lld\n", p943_native())
+    # Self-tests
+    if compute_T(2, 3, 10) != 25 {
+        printf("self-test 1 failed\n")
+        return 1
+    }
+    if compute_T(4, 2, 10000) != 30004 {
+        printf("self-test 2 failed\n")
+        return 1
+    }
+
+    let MOD: i64 = 2233222333
+    let N: i64 = 22332223332233
+    let mut total: i64 = 0
+    let mut a: i64 = 2
+    while a < 224 {
+        let mut b: i64 = 2
+        while b < 224 {
+            if a != b {
+                let contribution: i64 = compute_T(a, b, N) % MOD
+                total = (total + contribution) % MOD
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    printf("%lld\n", total % MOD)
     return 0
 }

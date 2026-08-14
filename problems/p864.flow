@@ -1,12 +1,458 @@
 # Project Euler 864
 # Square + 1 = Squarefree: count squarefree x^2+1 for 1<=x<=n.
-# Companion: problems/native/p864.c
+# Ported from native C to pure Flow.
 
 extern {
-    function p864_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+const N_VAL: i64 = 123567101113
+const D_VAL: i64 = 30000000
+
+# Globals for roots_minus_one_mod_p2 output
+let mut g_r1: i64 = 0
+let mut g_r2: i64 = 0
+
+# Globals for negative_pell output
+let mut g_pell_x: i64 = 0
+let mut g_pell_y: i64 = 0
+
+# dms globals
+let mut g_dms_n: i64 = 0
+let mut g_dms_D: i64 = 0
+let mut g_dms_ans: i64 = 0
+let mut g_dms_primes: ptr<i32> = null
+let mut g_dms_roots: ptr<i64> = null
+let mut g_dms_P: i32 = 0
+
+# Mobius sieve globals
+let mut g_spf_kmax: ptr<i32> = null
+let mut g_mu_kmax: ptr<i8> = null
+
+# Factoring globals
+let mut g_primes_for_fact: ptr<i32> = null
+let mut g_primes_for_fact_count: i32 = 0
+
+function mod_pow_u32(a0: i32, e0: i64, p: i32) -> i32 {
+    let mut r: i64 = 1
+    let mut b: i64 = (a0 as i64) % (p as i64)
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 { r = r * b % (p as i64) }
+        b = b * b % (p as i64)
+        e = e >> 1
+    }
+    return r as i32
+}
+
+function primes_1mod4_upto(limit: i64) -> ptr<i32> {
+    if limit < 5 { return null }
+    let size: i32 = (limit / 2 + 1) as i32
+    let sieve: ptr<i8> = calloc(size as i64, 1)
+    let mut i: i32 = 0
+    while i < size {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    let r: i32 = sqrt(limit as f64) as i32
+    let mut p: i32 = 3
+    while p <= r {
+        if sieve[p / 2] != 0 {
+            let mut j: i32 = (p * p) / 2
+            while j < size {
+                sieve[j] = 0
+                j = j + p
+            }
+        }
+        p = p + 2
+    }
+    let mut cnt: i32 = 0
+    i = 1
+    while i < size {
+        if sieve[i] != 0 && (2 * i + 1) % 4 == 1 { cnt = cnt + 1 }
+        i = i + 1
+    }
+    let result: ptr<i32> = calloc((cnt + 1) as i64, 4)
+    let mut idx: i32 = 0
+    i = 1
+    while i < size {
+        if sieve[i] != 0 && (2 * i + 1) % 4 == 1 {
+            result[idx] = 2 * i + 1
+            idx = idx + 1
+        }
+        i = i + 1
+    }
+    free(sieve)
+    return result
+}
+
+function sqrt_minus_one_mod_p(p: i32) -> i32 {
+    let exp: i64 = ((p - 1) as i64) / 2
+    let mut g: i32 = 2
+    while mod_pow_u32(g, exp, p) != p - 1 {
+        g = g + 1
+    }
+    return mod_pow_u32(g, ((p - 1) as i64) / 4, p)
+}
+
+function roots_minus_one_mod_p2(p: i32) -> void {
+    let r: i32 = sqrt_minus_one_mod_p(p)
+    let p2: i64 = (p as i64) * (p as i64)
+    let s: i64 = ((r as i64) * (r as i64) + 1) / (p as i64)
+    let inv: i32 = mod_pow_u32((2 * r) % p, (p - 2) as i64, p)
+    let t: i64 = (((p - (s % (p as i64))) as i64) * (inv as i64)) % (p as i64)
+    let R: i64 = ((r as i64) + t * (p as i64)) % p2
+    g_r1 = R
+    g_r2 = (p2 - R) % p2
+}
+
+function crt_combine(out: ptr<i64>, residues: ptr<i64>, len: i32, m: i64, a1: i64, a2: i64, p2: i64) -> void {
+    # Extended GCD for inverse of m mod p2
+    let mut inv: i64 = 0
+    {
+        let mut aw: i128 = (m as i128) % (p2 as i128)
+        let mut bw: i128 = p2 as i128
+        let mut old_r: i128 = aw
+        let mut r: i128 = bw
+        let mut old_s: i128 = 1
+        let mut s: i128 = 0
+        while r != 0 {
+            let q: i128 = old_r / r
+            let tmp: i128 = old_r - q * r
+            old_r = r
+            r = tmp
+            let tmp2: i128 = old_s - q * s
+            old_s = s
+            s = tmp2
+        }
+        inv = ((old_s % (p2 as i128) + (p2 as i128)) % (p2 as i128)) as i64
+    }
+    let mut i: i32 = 0
+    while i < len {
+        let r: i64 = residues[i]
+        let r_mod: i64 = r % p2
+        if r_mod < 0 {
+            # r could be negative? No, residues are non-negative
+        }
+        let diff1: i64 = (a1 + p2 - r_mod) % p2
+        let t1: i64 = ((diff1 as i128) * (inv as i128) % (p2 as i128)) as i64
+        out[2 * i] = (r + m * t1) as i64
+        let diff2: i64 = (a2 + p2 - r_mod) % p2
+        let t2: i64 = ((diff2 as i128) * (inv as i128) % (p2 as i128)) as i64
+        out[2 * i + 1] = (r + m * t2) as i64
+        i = i + 1
+    }
+}
+
+function dms_dfs(start_idx: i32, d: i64, mod: i64, residues: ptr<i64>, len: i32, mu_sign: i32) -> void {
+    let mut i: i32 = start_idx
+    while i < g_dms_P {
+        let p: i32 = g_dms_primes[i]
+        let nd: i64 = d * (p as i64)
+        if nd > g_dms_D { break }
+
+        let p2: i64 = (p as i64) * (p as i64)
+        let a1: i64 = g_dms_roots[2 * i]
+        let a2: i64 = g_dms_roots[2 * i + 1]
+        let nmod: i64 = ((mod as i128) * (p2 as i128)) as i64
+        let nlen: i32 = len * 2
+
+        let nres: ptr<i64> = calloc(nlen as i64, 8)
+        crt_combine(nres, residues, len, mod, a1, a2, p2)
+
+        let mut A: i64 = 0
+        if nmod <= g_dms_n {
+            let q: i64 = g_dms_n / nmod
+            let rem: i64 = g_dms_n % nmod
+            A = q * (nlen as i64)
+            let mut j: i32 = 0
+            while j < nlen {
+                if nres[j] <= rem { A = A + 1 }
+                j = j + 1
+            }
+        } else {
+            let mut j: i32 = 0
+            while j < nlen {
+                if nres[j] <= g_dms_n { A = A + 1 }
+                j = j + 1
+            }
+        }
+
+        let neg_mu: i64 = (0 - (mu_sign as i64)) * A
+        g_dms_ans = g_dms_ans + neg_mu
+
+        dms_dfs(i + 1, nd, nmod, nres, nlen, 0 - mu_sign)
+        free(nres)
+        i = i + 1
+    }
+}
+
+function direct_mobius_sum(n: i64, D: i64) -> i64 {
+    let primes: ptr<i32> = primes_1mod4_upto(D)
+
+    # Count primes
+    let mut pcnt: i32 = 0
+    let mut pi: i32 = 0
+    while true {
+        let p: i32 = primes[pi]
+        if p == 0 { break }
+        pcnt = pcnt + 1
+        pi = pi + 1
+    }
+
+    g_dms_roots = calloc((pcnt * 2) as i64, 8)
+    let mut i: i32 = 0
+    while i < pcnt {
+        roots_minus_one_mod_p2(primes[i])
+        g_dms_roots[2 * i] = g_r1
+        g_dms_roots[2 * i + 1] = g_r2
+        i = i + 1
+    }
+
+    g_dms_n = n
+    g_dms_D = D
+    g_dms_primes = primes
+    g_dms_P = pcnt
+    g_dms_ans = n
+
+    let root_res: ptr<i64> = calloc(1, 8)
+    root_res[0] = 0
+    dms_dfs(0, 1, 1, root_res, 1, 1)
+    free(root_res)
+
+    free(g_dms_roots)
+    free(primes)
+    return g_dms_ans
+}
+
+function negative_pell_fundamental(D: i64, x_limit: i64) -> i32 {
+    let a0: i64 = sqrt(D as f64) as i64
+    if a0 * a0 == D { return 0 }
+
+    let mut m: i64 = 0
+    let mut d: i64 = 1
+    let mut a: i64 = a0
+    let mut p_prev: i64 = 1
+    let mut p: i64 = a0
+    let mut q_prev: i64 = 0
+    let mut q: i64 = 1
+    let mut period: i32 = 0
+
+    while true {
+        m = d * a - m
+        d = (D - m * m) / d
+        a = (a0 + m) / d
+
+        let new_p: i64 = a * p + p_prev
+        let new_q: i64 = a * q + q_prev
+        p_prev = p
+        p = new_p
+        q_prev = q
+        q = new_q
+
+        period = period + 1
+        if p_prev > x_limit { return 0 }
+        if a == 2 * a0 { break }
+    }
+
+    if period % 2 == 0 { return 0 }
+    if p_prev * p_prev - D * q_prev * q_prev != 0 - 1 { return 0 }
+
+    g_pell_x = p_prev
+    g_pell_y = q_prev
+    return 1
+}
+
+function linear_sieve_kmax(Kmax: i64) -> void {
+    g_spf_kmax = calloc(Kmax + 1, 4)
+    g_mu_kmax = calloc(Kmax + 1, 1)
+    let primes: ptr<i32> = calloc(Kmax / 10 + 10000, 4)
+    let mut pc: i32 = 0
+    g_mu_kmax[1] = 1
+    let mut i: i32 = 2
+    while (i as i64) <= Kmax {
+        if g_spf_kmax[i] == 0 {
+            g_spf_kmax[i] = i
+            primes[pc] = i
+            pc = pc + 1
+            g_mu_kmax[i] = 0 - 1
+        }
+        let mut j: i32 = 0
+        while j < pc {
+            let p: i32 = primes[j]
+            let ip: i64 = (i as i64) * (p as i64)
+            if ip > Kmax { break }
+            g_spf_kmax[ip as i32] = p
+            if i % p == 0 {
+                g_mu_kmax[ip as i32] = 0
+                break
+            }
+            g_mu_kmax[ip as i32] = 0 - g_mu_kmax[i]
+            j = j + 1
+        }
+        i = i + 1
+    }
+    free(primes)
+}
+
+function build_primes_for_factoring(limit: i64) -> void {
+    g_primes_for_fact = null
+    g_primes_for_fact_count = 0
+    if limit < 2 { return }
+    let size: i32 = (limit / 2 + 1) as i32
+    let sieve: ptr<i8> = calloc(size as i64, 1)
+    let mut i: i32 = 0
+    while i < size {
+        sieve[i] = 1
+        i = i + 1
+    }
+    sieve[0] = 0
+    let r: i32 = sqrt(limit as f64) as i32
+    let mut p: i32 = 3
+    while p <= r {
+        if sieve[p / 2] != 0 {
+            let mut j: i32 = (p * p) / 2
+            while j < size {
+                sieve[j] = 0
+                j = j + p
+            }
+        }
+        p = p + 2
+    }
+    let mut cnt: i32 = 1
+    i = 1
+    while i < size {
+        if sieve[i] != 0 { cnt = cnt + 1 }
+        i = i + 1
+    }
+    g_primes_for_fact = calloc(cnt as i64, 4)
+    g_primes_for_fact[g_primes_for_fact_count] = 2
+    g_primes_for_fact_count = g_primes_for_fact_count + 1
+    i = 1
+    while i < size {
+        if sieve[i] != 0 {
+            g_primes_for_fact[g_primes_for_fact_count] = 2 * i + 1
+            g_primes_for_fact_count = g_primes_for_fact_count + 1
+        }
+        i = i + 1
+    }
+    free(sieve)
+}
+
+function factor_distinct_primes(n: i64, out: ptr<i32>) -> i32 {
+    let mut cnt: i32 = 0
+    let mut t: i64 = n
+    let mut i: i32 = 0
+    while i < g_primes_for_fact_count {
+        let p: i32 = g_primes_for_fact[i]
+        if (p as i64) * (p as i64) > t { break }
+        if t % (p as i64) == 0 {
+            out[cnt] = p
+            cnt = cnt + 1
+            while t % (p as i64) == 0 { t = t / (p as i64) }
+        }
+        i = i + 1
+    }
+    if t > 1 {
+        out[cnt] = t as i32
+        cnt = cnt + 1
+    }
+    return cnt
+}
+
+function mobius_tail_sum_for_y(y: i64, D: i64) -> i64 {
+    let pf: ptr<i32> = calloc(64, 4)
+    let npf: i32 = factor_distinct_primes(y, pf)
+    let mut total: i64 = 0
+    let subsets: i32 = 1 << npf
+    let mut mask: i32 = 0
+    while mask < subsets {
+        let mut prod: i64 = 1
+        let mut parity: i32 = 0
+        let mut b: i32 = 0
+        while b < npf {
+            if (mask & (1 << b)) != 0 {
+                prod = prod * (pf[b] as i64)
+                parity = parity ^ 1
+            }
+            b = b + 1
+        }
+        if prod > D {
+            if parity != 0 {
+                total = total - 1
+            } else {
+                total = total + 1
+            }
+        }
+        mask = mask + 1
+    }
+    free(pf)
+    return total
+}
+
+function correction_via_pell(n: i64, D: i64) -> i64 {
+    let Kmax: i64 = (((n as i128) * (n as i128) + 1) / ((D as i128) * (D as i128))) as i64
+    if Kmax < 2 { return 0 }
+
+    linear_sieve_kmax(Kmax)
+
+    let isqrt_n: i64 = sqrt(n as f64) as i64
+    build_primes_for_factoring(isqrt_n + 1)
+
+    let mut corr: i64 = 0
+
+    let mut k: i64 = 2
+    while k <= Kmax {
+        if g_mu_kmax[k] != 0 {
+            # Filter: if an odd prime p == 3 (mod 4) divides k, skip
+            let mut t: i64 = k
+            let mut ok: i32 = 1
+            while t > 1 {
+                let p: i32 = g_spf_kmax[t as i32]
+                t = t / (p as i64)
+                if p != 2 && (p & 3) == 3 {
+                    ok = 0
+                    break
+                }
+            }
+            if ok != 0 {
+                if negative_pell_fundamental(k, n) != 0 {
+                    let x: i64 = g_pell_x
+                    let y: i64 = g_pell_y
+
+                    let A: i128 = (x as i128) * (x as i128) + (k as i128) * (y as i128) * (y as i128)
+                    let B: i128 = (2 as i128) * (x as i128) * (y as i128)
+
+                    let mut cx: i64 = x
+                    let mut cy: i64 = y
+                    while cx <= n {
+                        if cy > D {
+                            corr = corr + mobius_tail_sum_for_y(cy, D)
+                        }
+                        let new_x: i128 = A * (cx as i128) + (k as i128) * B * (cy as i128)
+                        let new_y: i128 = B * (cx as i128) + A * (cy as i128)
+                        if new_x > (n as i128) { break }
+                        cx = new_x as i64
+                        cy = new_y as i64
+                    }
+                }
+            }
+        }
+        k = k + 1
+    }
+
+    free(g_spf_kmax)
+    free(g_mu_kmax)
+    free(g_primes_for_fact)
+    return corr
 }
 
 function main() -> i32 {
-    printf("%lld\n", p864_native())
+    let direct: i64 = direct_mobius_sum(N_VAL, D_VAL)
+    let corr: i64 = correction_via_pell(N_VAL, D_VAL)
+    printf("%lld\n", direct + corr)
     return 0
 }

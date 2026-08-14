@@ -1,12 +1,231 @@
-# Project Euler 935
-# Rolling Square — native C solver (Mobius inversion, Du Jiao sieve).
-# Companion: problems/native/p935.c
+# Project Euler 935: Rolling Square
+# Count b in (0,1) such that the rolling square returns to its initial
+# position within N rolls. F(10^8).
+# Uses Mobius inversion with the Dirichlet hyperbola method,
+# accelerated by a Du Jiao sieve for the Mertens function.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p935_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function pow(x: f64, y: f64) -> f64
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+struct MemoEntry {
+    n: i64
+    val: i64
+}
+
+const MEMO_SIZE: i64 = 1048576
+const MEMO_MASK: i64 = 1048575
+
+let mut mu_arr: ptr<i8> = null as ptr<i8>
+let mut M_small: ptr<i64> = null as ptr<i64>
+let mut Modd_small: ptr<i64> = null as ptr<i64>
+let mut sieve_limit: i64 = 0
+let mut memo_M: ptr<MemoEntry> = null as ptr<MemoEntry>
+let mut memo_Modd: ptr<MemoEntry> = null as ptr<MemoEntry>
+
+function build_mu_prefix(limit: i64) -> void {
+    sieve_limit = limit
+    mu_arr = (calloc(limit + 1, 1)) as ptr<i8>
+    let is_comp: ptr<i8> = (calloc(limit + 1, 1)) as ptr<i8>
+    let primes: ptr<i64> = (malloc(limit / 4 * 8 + 800)) as ptr<i64>
+    let mut nprimes: i64 = 0
+
+    mu_arr[1] = 1
+    let mut i: i64 = 2
+    while i <= limit {
+        if is_comp[i] == 0 {
+            primes[nprimes] = i
+            nprimes = nprimes + 1
+            mu_arr[i] = -1
+        }
+        let mut j: i64 = 0
+        while j < nprimes {
+            let ip: i64 = i * primes[j]
+            if ip > limit { break }
+            is_comp[ip] = 1
+            if i % primes[j] == 0 {
+                mu_arr[ip] = 0
+                break
+            }
+            mu_arr[ip] = -mu_arr[i]
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    M_small = (calloc(limit + 1, 8)) as ptr<i64>
+    Modd_small = (calloc(limit + 1, 8)) as ptr<i64>
+
+    let mut s: i64 = 0
+    let mut so: i64 = 0
+    let mut ii: i64 = 1
+    while ii <= limit {
+        s = s + (mu_arr[ii] as i64)
+        M_small[ii] = s
+        if (ii & 1) != 0 {
+            so = so + (mu_arr[ii] as i64)
+        }
+        Modd_small[ii] = so
+        ii = ii + 1
+    }
+
+    free(is_comp as ptr<void>)
+    free(primes as ptr<void>)
+}
+
+function memo_lookup(table: ptr<MemoEntry>, n: i64) -> i64 {
+    let h: i64 = (n * 2654435761) & MEMO_MASK
+    let mut i: i64 = 0
+    while i < MEMO_SIZE {
+        let idx: i64 = (h + i) & MEMO_MASK
+        if table[idx].n == n && table[idx].val != 0 { return table[idx].val }
+        if table[idx].val == 0 && table[idx].n == 0 { return 0 }
+        i = i + 1
+    }
+    return 0
+}
+
+function memo_insert(table: ptr<MemoEntry>, n: i64, val: i64) -> void {
+    let h: i64 = (n * 2654435761) & MEMO_MASK
+    let mut i: i64 = 0
+    while i < MEMO_SIZE {
+        let idx: i64 = (h + i) & MEMO_MASK
+        if table[idx].val == 0 {
+            table[idx].n = n
+            table[idx].val = val
+            return
+        }
+        i = i + 1
+    }
+}
+
+function M_func(n: i64) -> i64
+
+function Modd_func(n: i64) -> i64
+
+function M_func(n: i64) -> i64 {
+    if n <= sieve_limit { return M_small[n] }
+    let found: i64 = memo_lookup(memo_M, n)
+    if found != 0 { return found }
+
+    let mut res: i64 = 1
+    let mut l: i64 = 2
+    while l <= n {
+        let q: i64 = n / l
+        let r: i64 = n / q
+        res = res - (r - l + 1) * M_func(q)
+        l = r + 1
+    }
+
+    memo_insert(memo_M, n, res)
+    return res
+}
+
+function Modd_func(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    if n <= sieve_limit { return Modd_small[n] }
+    let found: i64 = memo_lookup(memo_Modd, n)
+    if found != 0 { return found }
+
+    let res: i64 = M_func(n) + Modd_func(n / 2)
+    memo_insert(memo_Modd, n, res)
+    return res
+}
+
+function tri(n: i64) -> i64 {
+    return n * (n + 1) / 2
+}
+
+function sum_mu_odd(l: i64, r: i64) -> i64 {
+    return Modd_func(r) - Modd_func(l - 1)
+}
+
+function sum_mu_2mod4(l: i64, r: i64) -> i64 {
+    return -Modd_func(r / 2) + Modd_func((l - 1) / 2)
+}
+
+function class_sum(X: i64, cls: i32) -> i64 {
+    let mut A: i64 = 0
+    let mut B: i64 = 0
+    let mut l: i64 = 1
+    while l <= X {
+        let q: i64 = X / l
+        let r: i64 = X / q
+
+        let odd_mu: i64 = sum_mu_odd(l, r)
+        let mu2: i64 = sum_mu_2mod4(l, r)
+
+        if cls == 0 {
+            # div4
+            A = A + q * ((q / 4) * odd_mu + (q / 2) * mu2)
+            B = B + (4 * tri(q / 4)) * odd_mu + (2 * tri(q / 2)) * mu2
+        } else {
+            if cls == 1 {
+                # 2mod4
+                let c: i64 = (q + 2) / 4
+                A = A + q * (c * odd_mu + ((q + 1) / 2) * mu2)
+                B = B + (2 * c * c) * odd_mu + (tri(q) - 2 * tri(q / 2)) * mu2
+            } else {
+                # odd
+                A = A + q * (((q + 1) / 2) * odd_mu)
+                B = B + (tri(q) - 2 * tri(q / 2)) * odd_mu
+            }
+        }
+
+        l = r + 1
+    }
+    return A - B
+}
+
+function F_935(N: i64) -> i64 {
+    if N < 0 { return 0 }
+
+    let X1: i64 = N + 1
+    let X2: i64 = N / 2 + 1
+    let X3: i64 = N / 4 + 1
+
+    let mut res: i64 = 0
+    res = res + class_sum(X1, 0)
+    res = res + class_sum(X2, 1)
+    res = res + class_sum(X3, 2)
+
+    # Remove u=1 (odd class)
+    res = res - (X3 - 1)
+
+    # Integer L = h cases: 4*(h-1) rolls, h >= 2
+    res = res + N / 4
+
+    return res
 }
 
 function main() -> i32 {
-    printf("%lld\n", p935_native())
+    let mut N: i64 = 1
+    let mut i: i32 = 0
+    while i < 8 {
+        N = N * 10
+        i = i + 1
+    }
+
+    let max_X: i64 = N + 1
+    let limit: i64 = (pow((max_X as f64), 2.0 / 3.0) as i64) + 10
+    build_mu_prefix(limit)
+
+    memo_M = (calloc(MEMO_SIZE, 16)) as ptr<MemoEntry>
+    memo_Modd = (calloc(MEMO_SIZE, 16)) as ptr<MemoEntry>
+
+    let result: i64 = F_935(N)
+
+    free(mu_arr as ptr<void>)
+    free(M_small as ptr<void>)
+    free(Modd_small as ptr<void>)
+    free(memo_M as ptr<void>)
+    free(memo_Modd as ptr<void>)
+
+    printf("%lld\n", result)
     return 0
 }

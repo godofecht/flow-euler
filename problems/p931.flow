@@ -1,11 +1,261 @@
 # Project Euler 931: Totient Graph
-# T(10^12) mod 715827883 via Min25 prime sieve and closed-form summation.
+# Compute T(10^12) mod 715827883.
+# Uses Min25-style prime counting/sum sieve and a closed-form summation.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p931_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function sqrt(x: f64) -> f64
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+const MOD: i64 = 715827883
+const TARGET: i64 = 1000000000000
+
+let mut g_v: i32 = 0
+let mut g_primes: ptr<i32> = null as ptr<i32>
+let mut g_num_primes: i32 = 0
+let mut g_vals: ptr<i64> = null as ptr<i64>
+let mut g_g_small: ptr<i64> = null as ptr<i64>
+let mut g_h_small: ptr<i64> = null as ptr<i64>
+let mut g_g_large: ptr<i64> = null as ptr<i64>
+let mut g_h_large: ptr<i64> = null as ptr<i64>
+
+function sieve_primes(limit: i32, count: ptr<i32>) -> ptr<i32> {
+    if limit < 2 {
+        count[0] = 0
+        return null as ptr<i32>
+    }
+    if limit == 2 {
+        let p: ptr<i32> = (malloc(4)) as ptr<i32>
+        p[0] = 2
+        count[0] = 1
+        return p
+    }
+
+    let size: i32 = limit / 2 + 1
+    let is_comp: ptr<i8> = (calloc((size as i64), 1)) as ptr<i8>
+    let primes: ptr<i32> = (malloc(((size + 1) as i64) * 4)) as ptr<i32>
+    let mut pc: i32 = 0
+    primes[pc] = 2
+    pc = pc + 1
+
+    let r: i32 = (sqrt((limit as f64))) as i32
+    let mut i: i32 = 1
+    while i <= r / 2 {
+        if is_comp[i] == 0 {
+            let p: i32 = 2 * i + 1
+            let start: i32 = (p * p) / 2
+            let step: i32 = p
+            let mut j: i32 = start
+            while j < size {
+                is_comp[j] = 1
+                j = j + step
+            }
+        }
+        i = i + 1
+    }
+    i = 1
+    while i < size {
+        if is_comp[i] == 0 {
+            primes[pc] = 2 * i + 1
+            pc = pc + 1
+        }
+        i = i + 1
+    }
+
+    free(is_comp as ptr<void>)
+    count[0] = pc
+    return primes
+}
+
+function tri(x: i64, mod: i64) -> i64 {
+    let val: i128 = ((x as i128) * ((x + 1) as i128)) / 2
+    return (val % (mod as i128)) as i64
+}
+
+function min25_init(n: i64, mod: i64) -> void {
+    g_v = (sqrt((n as f64))) as i32
+    let count_buf: ptr<i32> = (malloc(4)) as ptr<i32>
+    g_primes = sieve_primes(g_v, count_buf)
+    g_num_primes = count_buf[0]
+    free(count_buf as ptr<void>)
+
+    g_vals = (calloc((g_v + 1) as i64, 8)) as ptr<i64>
+    g_g_small = (calloc((g_v + 1) as i64, 8)) as ptr<i64>
+    g_h_small = (calloc((g_v + 1) as i64, 8)) as ptr<i64>
+    g_g_large = (calloc((g_v + 1) as i64, 8)) as ptr<i64>
+    g_h_large = (calloc((g_v + 1) as i64, 8)) as ptr<i64>
+
+    # Initialize small
+    let mut x: i32 = 0
+    while x <= g_v {
+        if x >= 2 {
+            g_g_small[x] = (x - 1) as i64
+            g_h_small[x] = ((((x as i128) * ((x + 1) as i128) / 2) - 1) % (mod as i128)) as i64
+        } else {
+            g_g_small[x] = 0
+            g_h_small[x] = 0
+        }
+        x = x + 1
+    }
+
+    # Initialize large
+    let mut i: i32 = 1
+    while i <= g_v {
+        let xx: i64 = n / (i as i64)
+        g_vals[i] = xx
+        if xx >= 2 {
+            g_g_large[i] = xx - 1
+            g_h_large[i] = ((((xx as i128) * ((xx + 1) as i128) / 2) - 1) % (mod as i128)) as i64
+        } else {
+            g_g_large[i] = 0
+            g_h_large[i] = 0
+        }
+        i = i + 1
+    }
+
+    # Process primes
+    let mut pi: i32 = 0
+    while pi < g_num_primes {
+        let p: i64 = g_primes[pi] as i64
+        let p2: i64 = p * p
+        if p2 > n { break }
+
+        let g_p1: i64 = g_g_small[(p - 1) as i32]
+        let h_p1: i64 = g_h_small[(p - 1) as i32]
+
+        # Update large values, increasing i
+        let mut i_max: i64 = n / p2
+        if i_max > (g_v as i64) { i_max = g_v as i64 }
+
+        let mut i2: i32 = 1
+        while (i2 as i64) <= i_max {
+            let y: i64 = g_vals[i2] / p
+            let mut g_y: i64 = 0
+            let mut h_y: i64 = 0
+            if y <= (g_v as i64) {
+                g_y = g_g_small[y as i32]
+                h_y = g_h_small[y as i32]
+            } else {
+                let k: i32 = (n / y) as i32
+                g_y = g_g_large[k]
+                h_y = g_h_large[k]
+            }
+
+            g_g_large[i2] = g_g_large[i2] - (g_y - g_p1)
+
+            let mut diff: i64 = h_y - h_p1
+            if diff < 0 { diff = diff + mod }
+            let hh: i128 = (p as i128) * (diff as i128) % (mod as i128)
+            g_h_large[i2] = (g_h_large[i2] - (hh as i64)) % mod
+            if g_h_large[i2] < 0 { g_h_large[i2] = g_h_large[i2] + mod }
+            i2 = i2 + 1
+        }
+
+        # Update small values descending
+        let mut xx2: i64 = g_v as i64
+        while xx2 >= p2 {
+            let y: i32 = (xx2 / p) as i32
+            g_g_small[xx2 as i32] = g_g_small[xx2 as i32] - (g_g_small[y] - g_p1)
+
+            let mut diff2: i64 = g_h_small[y] - h_p1
+            if diff2 < 0 { diff2 = diff2 + mod }
+            let hh2: i128 = (p as i128) * (diff2 as i128) % (mod as i128)
+            g_h_small[xx2 as i32] = (g_h_small[xx2 as i32] - (hh2 as i64)) % mod
+            if g_h_small[xx2 as i32] < 0 { g_h_small[xx2 as i32] = g_h_small[xx2 as i32] + mod }
+            xx2 = xx2 - 1
+        }
+        pi = pi + 1
+    }
+}
+
+function pi_func(x: i64) -> i64 {
+    if x <= (g_v as i64) { return g_g_small[x as i32] }
+    return g_g_large[(TARGET / x) as i32]
+}
+
+function psum(x: i64) -> i64 {
+    if x <= (g_v as i64) { return g_h_small[x as i32] }
+    return g_h_large[(TARGET / x) as i32]
+}
+
+function compute_T_mod(N: i64, mod: i64) -> i64 {
+    if N <= 1 { return 0 }
+
+    let sqrtN: i32 = (sqrt((N as f64))) as i32
+    min25_init(N, mod)
+
+    let mut total: i64 = 0
+
+    # Part 1: primes p <= sqrt(N), all exponents e >= 1
+    let mut pi: i32 = 0
+    while pi < g_num_primes {
+        let p: i64 = g_primes[pi] as i64
+        if p * p > N { break }
+
+        # e = 1
+        let x1: i64 = N / p
+        let x2: i64 = N / (p * p)
+        let mut f: i64 = (tri(x1, mod) - (p % mod) * tri(x2, mod)) % mod
+        if f < 0 { f = f + mod }
+        total = (total + ((p - 2) % mod) * f) % mod
+
+        # e >= 2
+        let mut pe: i64 = p * p
+        let mut p_pow: i64 = p
+        while pe <= N {
+            let xe: i64 = N / pe
+            let xnext: i64 = N / (pe * p)
+            let A: i64 = (p - 1) * p_pow - 1
+            let mut f2: i64 = (tri(xe, mod) - (p % mod) * tri(xnext, mod)) % mod
+            if f2 < 0 { f2 = f2 + mod }
+            total = (total + (A % mod) * f2) % mod
+            p_pow = p_pow * p
+            pe = pe * p
+        }
+        pi = pi + 1
+    }
+
+    # Part 2: primes p > sqrt(N), only e=1. Group by q=floor(N/p)
+    let mut q: i64 = 1
+    while q < (sqrtN as i64) {
+        let hi: i64 = N / q
+        if hi <= (sqrtN as i64) { break }
+
+        let mut lo: i64 = N / (q + 1) + 1
+        if lo <= (sqrtN as i64) { lo = (sqrtN as i64) + 1 }
+        if lo > hi {
+            q = q + 1
+            continue
+        }
+
+        let mut sum_p: i64 = (psum(hi) - psum(lo - 1)) % mod
+        if sum_p < 0 { sum_p = sum_p + mod }
+        let cnt_p: i64 = pi_func(hi) - pi_func(lo - 1)
+        let mut term2: i64 = (sum_p - (2 * (cnt_p % mod)) % mod) % mod
+        if term2 < 0 { term2 = term2 + mod }
+        total = (total + tri(q, mod) * term2) % mod
+        q = q + 1
+    }
+
+    total = total % mod
+    if total < 0 { total = total + mod }
+
+    free(g_vals as ptr<void>)
+    free(g_g_small as ptr<void>)
+    free(g_h_small as ptr<void>)
+    free(g_g_large as ptr<void>)
+    free(g_h_large as ptr<void>)
+    free(g_primes as ptr<void>)
+
+    return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p931_native())
+    let result: i64 = compute_T_mod(TARGET, MOD)
+    printf("%lld\n", result)
     return 0
 }

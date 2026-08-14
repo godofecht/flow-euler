@@ -1,11 +1,478 @@
 # Project Euler 966: Triangle Circle Intersection
-# sum I(a,b,c) for a+b+c <= 200.
+# sum I(a,b,c) for 1<=a<=b<=c<a+b, a+b+c<=200, where I(a,b,c) is the
+# largest intersection area between the triangle and a circle of equal
+# area, with the circle free to translate.
 
 extern {
-    function p966_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+    function fabs(x: f64) -> f64
+    function atan2(y: f64, x: f64) -> f64
+    function hypot(x: f64, y: f64) -> f64
+    function acos(x: f64) -> f64
+}
+
+const EPS: f64 = 1e-12
+
+struct TriTuple {
+    a: i32,
+    b: i32,
+    c: i32,
+    g2: i64
+}
+
+let mut g_pi: f64 = 0.0
+
+# ---------- segment / circle intersection ----------
+
+function segment_circle_ts(ax: f64, ay: f64, bx: f64, by: f64,
+                            r2: f64, t1_out: ptr<f64>, t2_out: ptr<f64>) -> i32 {
+    let dx: f64 = bx - ax
+    let dy: f64 = by - ay
+    let qa: f64 = dx * dx + dy * dy
+    if qa < 1e-18 {
+        t1_out[0] = 0.0
+        t2_out[0] = 0.0
+        return 0
+    }
+
+    let qb: f64 = 2.0 * (ax * dx + ay * dy)
+    let qc: f64 = ax * ax + ay * ay - r2
+    let mut disc: f64 = qb * qb - 4.0 * qa * qc
+    if disc < 0.0 - 1e-12 {
+        t1_out[0] = 0.0
+        t2_out[0] = 0.0
+        return 0
+    }
+    if disc < 0.0 { disc = 0.0 }
+
+    let sdisc: f64 = sqrt(disc)
+    let inv2a: f64 = 0.5 / qa
+    let t1: f64 = (0.0 - qb - sdisc) * inv2a
+    let t2: f64 = (0.0 - qb + sdisc) * inv2a
+
+    let ts: array<f64, 2> = [0.0, 0.0]
+    let mut nts: i32 = 0
+    if (0.0 - EPS) <= t1 && t1 <= 1.0 + EPS {
+        let mut tv: f64 = t1
+        if tv < 0.0 { tv = 0.0 }
+        if tv > 1.0 { tv = 1.0 }
+        ts[nts] = tv
+        nts = nts + 1
+    }
+    if (0.0 - EPS) <= t2 && t2 <= 1.0 + EPS {
+        let mut t2c: f64 = t2
+        if t2c < 0.0 { t2c = 0.0 }
+        if t2c > 1.0 { t2c = 1.0 }
+        if nts == 0 || fabs(t2c - ts[0]) > 1e-11 {
+            ts[nts] = t2c
+            nts = nts + 1
+        }
+    }
+
+    if nts == 0 {
+        t1_out[0] = 0.0
+        t2_out[0] = 0.0
+        return 0
+    }
+    if nts == 1 {
+        t1_out[0] = ts[0]
+        t2_out[0] = 0.0
+        return 1
+    }
+    if ts[0] > ts[1] {
+        let tmp: f64 = ts[0]
+        ts[0] = ts[1]
+        ts[1] = tmp
+    }
+    t1_out[0] = ts[0]
+    t2_out[0] = ts[1]
+    return 2
+}
+
+function tri_or_sector(px: f64, py: f64, qx: f64, qy: f64, r2: f64) -> f64 {
+    let cross: f64 = px * qy - py * qx
+    let p2: f64 = px * px + py * py
+    let q2: f64 = qx * qx + qy * qy
+    if p2 <= r2 + 1e-12 && q2 <= r2 + 1e-12 {
+        return 0.5 * cross
+    }
+    let dot: f64 = px * qx + py * qy
+    let ang: f64 = atan2(cross, dot)
+    return 0.5 * r2 * ang
+}
+
+function project_to_circle(x: f64, y: f64, r: f64, ox: ptr<f64>, oy: ptr<f64>) -> void {
+    let d: f64 = hypot(x, y)
+    if d < 1e-18 {
+        ox[0] = x
+        oy[0] = y
+        return
+    }
+    let s: f64 = r / d
+    ox[0] = x * s
+    oy[0] = y * s
+}
+
+function edge_contrib(ax: f64, ay: f64, bx: f64, by: f64, r2: f64) -> f64 {
+    let tbuf: array<f64, 2> = [0.0, 0.0]
+    let k: i32 = segment_circle_ts(ax, ay, bx, by, r2, &tbuf[0], &tbuf[1])
+    let t1: f64 = tbuf[0]
+    let t2: f64 = tbuf[1]
+    if k == 0 {
+        return tri_or_sector(ax, ay, bx, by, r2)
+    }
+
+    let dx: f64 = bx - ax
+    let dy: f64 = by - ay
+    let r: f64 = sqrt(r2)
+
+    if k == 1 {
+        let mut ix: f64 = ax + dx * t1
+        let mut iy: f64 = ay + dy * t1
+        project_to_circle(ix, iy, r, &ix, &iy)
+        return tri_or_sector(ax, ay, ix, iy, r2)
+             + tri_or_sector(ix, iy, bx, by, r2)
+    }
+
+    let mut i1x: f64 = ax + dx * t1
+    let mut i1y: f64 = ay + dy * t1
+    let mut i2x: f64 = ax + dx * t2
+    let mut i2y: f64 = ay + dy * t2
+    project_to_circle(i1x, i1y, r, &i1x, &i1y)
+    project_to_circle(i2x, i2y, r, &i2x, &i2y)
+    return tri_or_sector(ax, ay, i1x, i1y, r2)
+         + tri_or_sector(i1x, i1y, i2x, i2y, r2)
+         + tri_or_sector(i2x, i2y, bx, by, r2)
+}
+
+function tri_circle_area(ax: f64, ay: f64, bx: f64, by: f64,
+                         cx: f64, cy: f64,
+                         ox: f64, oy: f64, r: f64) -> f64 {
+    let r2: f64 = r * r
+    let a1x: f64 = ax - ox
+    let a1y: f64 = ay - oy
+    let b1x: f64 = bx - ox
+    let b1y: f64 = by - oy
+    let c1x: f64 = cx - ox
+    let c1y: f64 = cy - oy
+    let mut total: f64 = 0.0
+    total = total + edge_contrib(a1x, a1y, b1x, b1y, r2)
+    total = total + edge_contrib(b1x, b1y, c1x, c1y, r2)
+    total = total + edge_contrib(c1x, c1y, a1x, a1y, r2)
+    return fabs(total)
+}
+
+# ---------- triangle construction ----------
+
+function tri_coords(a: i32, b: i32, c: i32,
+                    ax: ptr<f64>, ay: ptr<f64>, bx: ptr<f64>, by: ptr<f64>,
+                    cx: ptr<f64>, cy: ptr<f64>) -> void {
+    ax[0] = 0.0
+    ay[0] = 0.0
+    bx[0] = c as f64
+    by[0] = 0.0
+    let x: f64 = ((b * b + c * c - a * a) as f64) / (2.0 * (c as f64))
+    let mut y2: f64 = (b * b) as f64 - x * x
+    if y2 < 0.0 && y2 > 0.0 - 1e-12 { y2 = 0.0 }
+    if y2 > 0.0 {
+        cy[0] = sqrt(y2)
+    } else {
+        cy[0] = 0.0
+    }
+    cx[0] = x
+}
+
+function tri_area(ax: f64, ay: f64, bx: f64, by: f64,
+                  cx: f64, cy: f64) -> f64 {
+    return fabs(0.5 * ((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)))
+}
+
+function circumcenter(ax: f64, ay: f64, bx: f64, by: f64,
+                      cx: f64, cy: f64, ux: ptr<f64>, uy: ptr<f64>) -> i32 {
+    let d: f64 = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if fabs(d) < 1e-15 { return 0 }
+    let a2: f64 = ax * ax + ay * ay
+    let b2: f64 = bx * bx + by * by
+    let c2: f64 = cx * cx + cy * cy
+    ux[0] = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d
+    uy[0] = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d
+    return 1
+}
+
+function fmin_val(a: f64, b: f64) -> f64 {
+    if a < b { return a }
+    return b
+}
+
+function fmax_val(a: f64, b: f64) -> f64 {
+    if a > b { return a }
+    return b
+}
+
+# ---------- maximization (pattern search) ----------
+
+function maximize_intersection(a: i32, b: i32, c: i32) -> f64 {
+    let abuf: array<f64, 1> = [0.0]
+    let aybuf: array<f64, 1> = [0.0]
+    let bbuf: array<f64, 1> = [0.0]
+    let bybuf: array<f64, 1> = [0.0]
+    let cbuf: array<f64, 1> = [0.0]
+    let cybuf: array<f64, 1> = [0.0]
+    tri_coords(a, b, c, &abuf[0], &aybuf[0], &bbuf[0], &bybuf[0], &cbuf[0], &cybuf[0])
+    let ax: f64 = abuf[0]
+    let ay: f64 = aybuf[0]
+    let bx: f64 = bbuf[0]
+    let by: f64 = bybuf[0]
+    let cx: f64 = cbuf[0]
+    let cy: f64 = cybuf[0]
+    let area: f64 = tri_area(ax, ay, bx, by, cx, cy)
+    if area <= 0.0 { return 0.0 }
+
+    let r: f64 = sqrt(area / g_pi)
+
+    let xmin: f64 = fmin_val(ax, fmin_val(bx, cx)) - r
+    let xmax: f64 = fmax_val(ax, fmax_val(bx, cx)) + r
+    let ymin: f64 = fmin_val(ay, fmin_val(by, cy)) - r
+    let ymax: f64 = fmax_val(ay, fmax_val(by, cy)) + r
+
+    let cenx: f64 = (ax + bx + cx) / 3.0
+    let ceny: f64 = (ay + by + cy) / 3.0
+
+    let per: i32 = a + b + c
+    let incx: f64 = ((a as f64) * ax + (b as f64) * bx + (c as f64) * cx) / (per as f64)
+    let incy: f64 = ((a as f64) * ay + (b as f64) * by + (c as f64) * cy) / (per as f64)
+
+    let ccbuf: array<f64, 2> = [0.0, 0.0]
+    let has_cc: i32 = circumcenter(ax, ay, bx, by, cx, cy, &ccbuf[0], &ccbuf[1])
+    let ccx: f64 = ccbuf[0]
+    let ccy: f64 = ccbuf[1]
+
+    # starts: 16 x 2
+    let starts: array<f64, 32> = [
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    ]
+    let mut ns: i32 = 0
+    starts[ns * 2 + 0] = cenx; starts[ns * 2 + 1] = ceny; ns = ns + 1
+    starts[ns * 2 + 0] = incx; starts[ns * 2 + 1] = incy; ns = ns + 1
+    starts[ns * 2 + 0] = ax;   starts[ns * 2 + 1] = ay;   ns = ns + 1
+    starts[ns * 2 + 0] = bx;   starts[ns * 2 + 1] = by;   ns = ns + 1
+    starts[ns * 2 + 0] = cx;   starts[ns * 2 + 1] = cy;   ns = ns + 1
+    starts[ns * 2 + 0] = (ax + bx) * 0.5; starts[ns * 2 + 1] = (ay + by) * 0.5; ns = ns + 1
+    starts[ns * 2 + 0] = (bx + cx) * 0.5; starts[ns * 2 + 1] = (by + cy) * 0.5; ns = ns + 1
+    starts[ns * 2 + 0] = (cx + ax) * 0.5; starts[ns * 2 + 1] = (cy + ay) * 0.5; ns = ns + 1
+    if has_cc != 0 {
+        starts[ns * 2 + 0] = ccx; starts[ns * 2 + 1] = ccy; ns = ns + 1
+    }
+
+    # clamp helper
+    let mut bestx: f64 = cenx
+    let mut besty: f64 = ceny
+    if bestx < xmin { bestx = xmin }
+    if bestx > xmax { bestx = xmax }
+    if besty < ymin { besty = ymin }
+    if besty > ymax { besty = ymax }
+
+    let mut bestv: f64 = tri_circle_area(ax, ay, bx, by, cx, cy, bestx, besty, r)
+    if bestv < 0.0 { bestv = 0.0 }
+    if bestv > area { bestv = area }
+
+    let mut s: i32 = 0
+    while s < ns {
+        let mut sx: f64 = starts[s * 2 + 0]
+        let mut sy: f64 = starts[s * 2 + 1]
+        if sx < xmin { sx = xmin }
+        if sx > xmax { sx = xmax }
+        if sy < ymin { sy = ymin }
+        if sy > ymax { sy = ymax }
+        let mut v: f64 = tri_circle_area(ax, ay, bx, by, cx, cy, sx, sy, r)
+        if v < 0.0 { v = 0.0 }
+        if v > area { v = area }
+        if v > bestv {
+            bestv = v
+            bestx = sx
+            besty = sy
+        }
+        s = s + 1
+    }
+
+    let span: f64 = fmax_val(xmax - xmin, ymax - ymin)
+    let mut step: f64 = fmax_val(span, r)
+
+    let dirs: array<f64, 16> = [
+        1.0, 0.0, 0.0 - 1.0, 0.0, 0.0, 1.0, 0.0, 0.0 - 1.0,
+        1.0, 1.0, 1.0, 0.0 - 1.0, 0.0 - 1.0, 1.0, 0.0 - 1.0, 0.0 - 1.0
+    ]
+
+    let tol_step: f64 = fmax_val(1e-7, 1e-7 * fmax_val(1.0, r))
+
+    while step > tol_step {
+        let mut moved_any: i32 = 0
+        let mut cont_outer: bool = true
+        while cont_outer {
+            let mut improved: i32 = 0
+            let mut bx0: f64 = bestx
+            let mut by0: f64 = besty
+            let mut bv0: f64 = bestv
+            let mut d: i32 = 0
+            while d < 8 {
+                let mut px: f64 = bestx + dirs[d * 2 + 0] * step
+                let mut py: f64 = besty + dirs[d * 2 + 1] * step
+                if px < xmin { px = xmin }
+                if px > xmax { px = xmax }
+                if py < ymin { py = ymin }
+                if py > ymax { py = ymax }
+                let mut v: f64 = tri_circle_area(ax, ay, bx, by, cx, cy, px, py, r)
+                if v < 0.0 { v = 0.0 }
+                if v > area { v = area }
+                if v > bv0 + 1e-13 {
+                    bv0 = v
+                    bx0 = px
+                    by0 = py
+                    improved = 1
+                }
+                d = d + 1
+            }
+            if improved != 0 {
+                bestv = bv0
+                bestx = bx0
+                besty = by0
+                moved_any = 1
+            } else {
+                cont_outer = false
+            }
+        }
+        if moved_any == 0 {
+            step = step * 0.5
+        }
+    }
+
+    return bestv
+}
+
+# ---------- heapsort for TriTuple ----------
+
+function tt_less(a: TriTuple, b: TriTuple) -> bool {
+    if a.a != b.a { return a.a < b.a }
+    if a.b != b.b { return a.b < b.b }
+    return a.c < b.c
+}
+
+function tt_sift_down(arr: ptr<TriTuple>, start: i32, endd: i32) -> void {
+    let mut root: i32 = start
+    let mut cont: bool = true
+    while cont {
+        let mut child: i32 = 2 * root + 1
+        if child > endd {
+            cont = false
+        } else {
+            if child + 1 <= endd && tt_less(arr[child], arr[child + 1]) {
+                child = child + 1
+            }
+            if tt_less(arr[root], arr[child]) {
+                let t: TriTuple = arr[root]
+                arr[root] = arr[child]
+                arr[child] = t
+                root = child
+            } else {
+                cont = false
+            }
+        }
+    }
+}
+
+function heapsort_tt(arr: ptr<TriTuple>, n: i32) -> void {
+    if n <= 1 { return }
+    let mut start: i32 = n / 2 - 1
+    while start >= 0 {
+        tt_sift_down(arr, start, n - 1)
+        start = start - 1
+    }
+    let mut endd: i32 = n - 1
+    while endd > 0 {
+        let t: TriTuple = arr[0]
+        arr[0] = arr[endd]
+        arr[endd] = t
+        endd = endd - 1
+        tt_sift_down(arr, 0, endd)
+    }
+}
+
+function gcd_int(a0: i32, b0: i32) -> i32 {
+    let mut a: i32 = a0
+    let mut b: i32 = b0
+    while b != 0 {
+        let t: i32 = a % b
+        a = b
+        b = t
+    }
+    return a
 }
 
 function main() -> i32 {
-    printf("%.2f\n", p966_native())
+    g_pi = acos(0.0 - 1.0)
+    let limit: i32 = 200
+
+    # Collect (primitive_shape, g^2) tuples for every triangle.
+    let cap: i32 = 300000
+    let tuples: ptr<TriTuple> = calloc((cap as i64), 24) as ptr<TriTuple>
+    let mut nt: i32 = 0
+
+    let mut a: i32 = 1
+    while a <= limit {
+        let mut b: i32 = a
+        while b <= limit {
+            let maxc1: i32 = a + b - 1
+            let maxc2: i32 = limit - a - b
+            let maxc: i32 = maxc1
+            if maxc2 < maxc1 { maxc = maxc2 }
+            if maxc >= b {
+                let mut c: i32 = b
+                while c <= maxc {
+                    let g: i32 = gcd_int(gcd_int(a, b), c)
+                    tuples[nt] = TriTuple {
+                        a: a / g,
+                        b: b / g,
+                        c: c / g,
+                        g2: (g as i64) * (g as i64)
+                    }
+                    nt = nt + 1
+                    c = c + 1
+                }
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+
+    heapsort_tt(tuples, nt)
+
+    # Merge duplicates and accumulate weights with Kahan summation.
+    let mut total: f64 = 0.0
+    let mut corr: f64 = 0.0
+    let mut i: i32 = 0
+    while i < nt {
+        let ta: i32 = tuples[i].a
+        let tb: i32 = tuples[i].b
+        let tc: i32 = tuples[i].c
+        let mut weight: i64 = 0
+        while i < nt && tuples[i].a == ta && tuples[i].b == tb && tuples[i].c == tc {
+            weight = weight + tuples[i].g2
+            i = i + 1
+        }
+        let Ival: f64 = maximize_intersection(ta, tb, tc)
+        let term: f64 = Ival * (weight as f64)
+        let y: f64 = term - corr
+        let t: f64 = total + y
+        corr = (t - total) - y
+        total = t
+    }
+
+    free(tuples as ptr<void>)
+    printf("%.2f\n", total)
     return 0
 }

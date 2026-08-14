@@ -1,12 +1,267 @@
 # Project Euler 834
 # Add and Divide - U(1234567).
-# Real solver in native/p834.c.
+# Pure Flow port of the native C solver.
 
 extern {
-    function p834_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+}
+
+const N_LIMIT: i32 = 1234567
+
+# Global SPF array
+let mut g_spf: ptr<i32> = null
+let mut g_cnt: i64 = 0
+let mut g_sum: i64 = 0
+
+function build_spf(limit: i32) -> void {
+    g_spf = calloc((limit as i64) + 1, 4)
+    let primes: ptr<i32> = malloc(((limit as i64) + 1) * 4)
+    let mut pcnt: i32 = 0
+    let mut i: i32 = 2
+    while i <= limit {
+        if g_spf[i] == 0 {
+            g_spf[i] = i
+            primes[pcnt] = i
+            pcnt = pcnt + 1
+        }
+        let mut j: i32 = 0
+        while j < pcnt {
+            let ip: i32 = i * primes[j]
+            if ip > limit { break }
+            g_spf[ip] = primes[j]
+            if primes[j] == g_spf[i] { break }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    free(primes)
+    g_spf[0] = 0
+    if limit >= 1 { g_spf[1] = 1 }
+}
+
+# Divisor data: sorted divisors, prefix sums, total sum
+struct DivData {
+    divs: ptr<i32>
+    pre: ptr<i64>
+    count: i32
+    total: i64
+}
+
+function insertion_sort(arr: ptr<i32>, n: i32) -> void {
+    let mut i: i32 = 1
+    while i < n {
+        let key: i32 = arr[i]
+        let mut j: i32 = i - 1
+        while j >= 0 {
+            if arr[j] > key {
+                arr[j + 1] = arr[j]
+                j = j - 1
+            } else {
+                break
+            }
+        }
+        arr[j + 1] = key
+        i = i + 1
+    }
+}
+
+function divisors_with_prefix(odd_x: i32) -> DivData {
+    if odd_x == 1 {
+        let divs: ptr<i32> = malloc(4)
+        divs[0] = 1
+        let pre: ptr<i64> = malloc(16)
+        pre[0] = 0
+        pre[1] = 1
+        return DivData { divs: divs, pre: pre, count: 1, total: 1 }
+    }
+
+    # Factorize using SPF
+    let factors_p: ptr<i32> = malloc(256)
+    let factors_e: ptr<i32> = malloc(256)
+    let mut nfac: i32 = 0
+    let mut x: i32 = odd_x
+    while x > 1 {
+        let p: i32 = g_spf[x]
+        let mut e: i32 = 0
+        while x % p == 0 {
+            x = x / p
+            e = e + 1
+        }
+        factors_p[nfac] = p
+        factors_e[nfac] = e
+        nfac = nfac + 1
+    }
+
+    # Generate divisors
+    let mut cap: i32 = 1
+    let mut i: i32 = 0
+    while i < nfac {
+        cap = cap * (factors_e[i] + 1)
+        i = i + 1
+    }
+    let divs: ptr<i32> = malloc((cap as i64) * 4)
+    let mut ndiv: i32 = 1
+    divs[0] = 1
+    let mut i2: i32 = 0
+    while i2 < nfac {
+        let p: i32 = factors_p[i2]
+        let e: i32 = factors_e[i2]
+        let base_ndiv: i32 = ndiv
+        let mut mult: i32 = 1
+        let mut k: i32 = 1
+        while k <= e {
+            mult = mult * p
+            let mut j: i32 = 0
+            while j < base_ndiv {
+                divs[ndiv] = divs[j] * mult
+                ndiv = ndiv + 1
+                j = j + 1
+            }
+            k = k + 1
+        }
+        i2 = i2 + 1
+    }
+
+    insertion_sort(divs, ndiv)
+
+    let pre: ptr<i64> = malloc(((ndiv as i64) + 1) * 8)
+    let mut s: i64 = 0
+    let mut i3: i32 = 0
+    while i3 < ndiv {
+        s = s + (divs[i3] as i64)
+        pre[i3 + 1] = s
+        i3 = i3 + 1
+    }
+
+    free(factors_p)
+    free(factors_e)
+    return DivData { divs: divs, pre: pre, count: ndiv, total: s }
+}
+
+# Binary search: rightmost index where divs[idx] <= bound
+function bisect_right(divs: ptr<i32>, count: i32, bound: i32) -> i32 {
+    let mut lo: i32 = 0
+    let mut hi: i32 = count
+    while lo < hi {
+        let mid: i32 = (lo + hi) / 2
+        if divs[mid] <= bound {
+            lo = mid + 1
+        } else {
+            hi = mid
+        }
+    }
+    return lo
+}
+
+# Over pairs (a in small, b in large), count and sum where a*b > bound
+# Results stored in g_cnt and g_sum
+function count_sum_products_gt(
+    small: ptr<i32>, ns: i32, large: ptr<i32>, nl: i32,
+    lpre: ptr<i64>, ltotal: i64,
+    bound: i32) -> void {
+    g_cnt = 0
+    g_sum = 0
+    let mut i: i32 = 0
+    while i < ns {
+        let a: i32 = small[i]
+        let idx: i32 = bisect_right(large, nl, bound / a)
+        if idx != nl {
+            g_cnt = g_cnt + (nl - idx) as i64
+            g_sum = g_sum + (a as i64) * (ltotal - lpre[idx])
+        }
+        i = i + 1
+    }
+}
+
+function compute_T(n: i64, two: i32, dA: DivData, dB: DivData) -> i64 {
+    let mut small: ptr<i32> = null
+    let mut large: ptr<i32> = null
+    let mut ns: i32 = 0
+    let mut nl: i32 = 0
+    let mut preL: ptr<i64> = null
+    let mut sumL: i64 = 0
+
+    if dA.count <= dB.count {
+        small = dA.divs; ns = dA.count
+        large = dB.divs; nl = dB.count
+        preL = dB.pre; sumL = dB.total
+    } else {
+        small = dB.divs; ns = dB.count
+        large = dA.divs; nl = dA.count
+        preL = dA.pre; sumL = dA.total
+    }
+
+    let n_i32: i32 = n as i32
+    let bound1: i32 = n_i32
+    let bound2: i32 = n_i32 / two
+
+    count_sum_products_gt(small, ns, large, nl, preL, sumL, bound1)
+    let cnt1: i64 = g_cnt
+    let sum1: i64 = g_sum
+    count_sum_products_gt(small, ns, large, nl, preL, sumL, bound2)
+    let cnt2: i64 = g_cnt
+    let sum2: i64 = g_sum
+
+    let count_total: i64 = cnt1 + cnt2
+    let sum_d: i64 = sum1 + (two as i64) * sum2
+    return sum_d - n * count_total
 }
 
 function main() -> i32 {
-    printf("%lld\n", p834_native())
+    let N: i32 = N_LIMIT
+    build_spf(N)
+
+    let mut total: i64 = 0
+    let mut lastA: i32 = -1
+    let mut lastB: i32 = -1
+    let mut dataA: DivData = DivData { divs: null, pre: null, count: 0, total: 0 }
+    let mut dataB: DivData = DivData { divs: null, pre: null, count: 0, total: 0 }
+
+    let mut n: i32 = 3
+    while n <= N {
+        let even: i32
+        let B: i32
+        if (n & 1) != 0 {
+            even = n - 1
+            B = n
+        } else {
+            even = n
+            B = n - 1
+        }
+
+        # odd part and 2^v2
+        let two: i32 = even & (0 - even)
+        let A: i32 = even / two
+
+        if A != lastA {
+            if lastA != -1 {
+                free(dataA.divs)
+                free(dataA.pre)
+            }
+            dataA = divisors_with_prefix(A)
+            lastA = A
+        }
+        if B != lastB {
+            if lastB != -1 {
+                free(dataB.divs)
+                free(dataB.pre)
+            }
+            dataB = divisors_with_prefix(B)
+            lastB = B
+        }
+
+        total = total + compute_T(n as i64, two, dataA, dataB)
+        n = n + 1
+    }
+
+    free(dataA.divs)
+    free(dataA.pre)
+    free(dataB.divs)
+    free(dataB.pre)
+    free(g_spf)
+
+    printf("%lld\n", total)
     return 0
 }

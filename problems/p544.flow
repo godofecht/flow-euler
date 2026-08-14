@@ -1,11 +1,415 @@
 # Project Euler 544
-# Chromatic Conundrum - native helper for correctness.
+# Chromatic Conundrum - frontier DP for chromatic polynomial + Lagrange interpolation.
 
 extern {
-    function p544_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function malloc(n: i64) -> ptr<void>
+    function memset(dst: ptr<void>, c: i32, n: i64) -> ptr<void>
+}
+
+const MOD: i64 = 1000000007
+const R: i64 = 9
+const C: i64 = 10
+const MAXSTATES: i64 = 65536
+const MAXPOLY: i64 = 128
+
+let mut g_dp_keys: ptr<i8> = null
+let mut g_dp_coeffs: ptr<i64> = null
+let mut g_dp_lens: ptr<i32> = null
+let mut g_dp_used: ptr<i8> = null
+
+let mut g_ndp_keys: ptr<i8> = null
+let mut g_ndp_coeffs: ptr<i64> = null
+let mut g_ndp_lens: ptr<i32> = null
+let mut g_ndp_used: ptr<i8> = null
+
+function mod_pow(base0: i64, exp0: i64, mod: i64) -> i64 {
+    let mut r: i64 = 1 % mod
+    let mut base: i64 = base0 % mod
+    if base < 0 { base = base + mod }
+    let mut exp: i64 = exp0
+    while exp > 0 {
+        if (exp & 1) == 1 {
+            r = ((r as i128) * (base as i128) % (mod as i128)) as i64
+        }
+        base = ((base as i128) * (base as i128) % (mod as i128)) as i64
+        exp = exp >> 1
+    }
+    return r
+}
+
+function mod_inv(a: i64, mod: i64) -> i64 {
+    return mod_pow(a, mod - 2, mod)
+}
+
+function state_hash(key: ptr<i8>) -> i32 {
+    let mut h: i32 = 0
+    let mut i: i32 = 0
+    while i < 9 {
+        h = h * 31 + ((key[i] as i32) + 2)
+        i = i + 1
+    }
+    return h & 65535
+}
+
+function state_eq_at(base: ptr<i8>, idx: i32, key: ptr<i8>) -> i32 {
+    let mut i: i32 = 0
+    while i < 9 {
+        if base[idx * 9 + i] != key[i] { return 0 }
+        i = i + 1
+    }
+    return 1
+}
+
+function canon(src: ptr<i8>, dst: ptr<i8>) -> void {
+    let mp: array<i8, 11> = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+    let mut nxt: i32 = 0
+    let mut i: i32 = 0
+    while i < 9 {
+        if src[i] == -1 {
+            dst[i] = -1
+        } else {
+            let idx: i32 = (src[i] as i32) + 1
+            let y: i8 = mp[idx]
+            if y == -1 {
+                mp[idx] = nxt as i8
+                dst[i] = nxt as i8
+                nxt = nxt + 1
+            } else {
+                dst[i] = y
+            }
+        }
+        i = i + 1
+    }
+}
+
+function ht_get_or_create(keys: ptr<i8>, coeffs: ptr<i64>, lens: ptr<i32>, used: ptr<i8>, key: ptr<i8>) -> i32 {
+    let h: i32 = state_hash(key)
+    let mut i: i32 = 0
+    while i < 65536 {
+        let idx: i32 = (h + i) & 65535
+        if used[idx] == 0 {
+            let mut j: i32 = 0
+            while j < 9 {
+                keys[idx * 9 + j] = key[j]
+                j = j + 1
+            }
+            used[idx] = 1
+            lens[idx] = 0
+            return idx
+        }
+        if state_eq_at(keys, idx, key) == 1 {
+            return idx
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+function poly_add(dst_coeffs: ptr<i64>, dst_lens: ptr<i32>, dst_idx: i32, src_coeffs: ptr<i64>, src_lens: ptr<i32>, src_idx: i32) -> void {
+    let src_len: i32 = src_lens[src_idx]
+    let mut dst_len: i32 = dst_lens[dst_idx]
+    if src_len > dst_len {
+        let mut i: i32 = dst_len
+        while i < src_len {
+            dst_coeffs[(dst_idx as i64) * MAXPOLY + (i as i64)] = 0
+            i = i + 1
+        }
+        dst_len = src_len
+        dst_lens[dst_idx] = dst_len
+    }
+    let mut i: i32 = 0
+    while i < src_len {
+        let di: i64 = dst_coeffs[(dst_idx as i64) * MAXPOLY + (i as i64)]
+        let si: i64 = src_coeffs[(src_idx as i64) * MAXPOLY + (i as i64)]
+        let mut v: i64 = di + si
+        if v >= MOD { v = v - MOD }
+        dst_coeffs[(dst_idx as i64) * MAXPOLY + (i as i64)] = v
+        i = i + 1
+    }
+}
+
+function poly_add_q_minus_m(dst_coeffs: ptr<i64>, dst_lens: ptr<i32>, dst_idx: i32, src_coeffs: ptr<i64>, src_lens: ptr<i32>, src_idx: i32, m0: i64) -> void {
+    let src_len: i32 = src_lens[src_idx]
+    let need: i32 = src_len + 1
+    let mut dst_len: i32 = dst_lens[dst_idx]
+    if need > dst_len {
+        let mut i: i32 = dst_len
+        while i < need {
+            dst_coeffs[(dst_idx as i64) * MAXPOLY + (i as i64)] = 0
+            i = i + 1
+        }
+        dst_len = need
+        dst_lens[dst_idx] = dst_len
+    }
+    let mm: i64 = m0 % MOD
+    let mut j: i32 = 0
+    while j < src_len {
+        let v: i64 = src_coeffs[(src_idx as i64) * MAXPOLY + (j as i64)]
+        let sub: i64 = ((mm as i128) * (v as i128) % (MOD as i128)) as i64
+        let cur: i64 = dst_coeffs[(dst_idx as i64) * MAXPOLY + (j as i64)]
+        dst_coeffs[(dst_idx as i64) * MAXPOLY + (j as i64)] = (cur - sub + MOD) % MOD
+        let cur2: i64 = dst_coeffs[(dst_idx as i64) * MAXPOLY + ((j + 1) as i64)]
+        let mut v2: i64 = cur2 + v
+        if v2 >= MOD { v2 = v2 - MOD }
+        dst_coeffs[(dst_idx as i64) * MAXPOLY + ((j + 1) as i64)] = v2
+        j = j + 1
+    }
+}
+
+function clear_table(used: ptr<i8>) -> void {
+    memset(used as ptr<void>, 0, MAXSTATES)
+}
+
+function swap_tables() -> void {
+    let tmp_keys: ptr<i8> = g_dp_keys
+    g_dp_keys = g_ndp_keys
+    g_ndp_keys = tmp_keys
+
+    let tmp_coeffs: ptr<i64> = g_dp_coeffs
+    g_dp_coeffs = g_ndp_coeffs
+    g_ndp_coeffs = tmp_coeffs
+
+    let tmp_lens: ptr<i32> = g_dp_lens
+    g_dp_lens = g_ndp_lens
+    g_ndp_lens = tmp_lens
+
+    let tmp_used: ptr<i8> = g_dp_used
+    g_dp_used = g_ndp_used
+    g_ndp_used = tmp_used
+}
+
+function chromatic_poly(out_coeffs: ptr<i64>, out_len: ptr<i32>) -> void {
+    let start: array<i8, 9> = [-1, -1, -1, -1, -1, -1, -1, -1, -1]
+    let start_idx: i32 = ht_get_or_create(g_dp_keys, g_dp_coeffs, g_dp_lens, g_dp_used, start as ptr<i8>)
+    g_dp_lens[start_idx] = 1
+    g_dp_coeffs[(start_idx as i64) * MAXPOLY] = 1
+
+    let mut col: i64 = 0
+    while col < C {
+        let mut row: i64 = 0
+        while row < R {
+            let has_up: i32 = if row > 0 { 1 } else { 0 }
+            let has_left: i32 = if col > 0 { 1 } else { 0 }
+            clear_table(g_ndp_used)
+
+            let mut idx: i64 = 0
+            while idx < MAXSTATES {
+                if g_dp_used[idx] == 0 { idx = idx + 1; continue }
+
+                let st: array<i8, 9> = [-1, -1, -1, -1, -1, -1, -1, -1, -1]
+                let mut j: i32 = 0
+                while j < 9 {
+                    st[j] = g_dp_keys[idx * 9 + (j as i64)]
+                    j = j + 1
+                }
+
+                let mut mx: i32 = -1
+                j = 0
+                while j < 9 {
+                    let v: i32 = st[j] as i32
+                    if v > mx { mx = v }
+                    j = j + 1
+                }
+                let m: i32 = mx + 1
+
+                let up: i8 = if has_up == 1 { st[(row - 1) as i32] } else { -2 }
+                let left: i8 = if has_left == 1 { st[row as i32] } else { -2 }
+
+                let mut lab: i32 = 0
+                while lab < m {
+                    if lab == (up as i32) || lab == (left as i32) { lab = lab + 1; continue }
+                    let ns: array<i8, 9> = [-1, -1, -1, -1, -1, -1, -1, -1, -1]
+                    j = 0
+                    while j < 9 {
+                        ns[j] = st[j]
+                        j = j + 1
+                    }
+                    ns[row as i32] = lab as i8
+                    let ns_canon: array<i8, 9> = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+                    canon(ns as ptr<i8>, ns_canon as ptr<i8>)
+                    let tgt: i32 = ht_get_or_create(g_ndp_keys, g_ndp_coeffs, g_ndp_lens, g_ndp_used, ns_canon as ptr<i8>)
+                    if tgt >= 0 {
+                        poly_add(g_ndp_coeffs, g_ndp_lens, tgt, g_dp_coeffs, g_dp_lens, idx as i32)
+                    }
+                    lab = lab + 1
+                }
+
+                let ns2: array<i8, 9> = [-1, -1, -1, -1, -1, -1, -1, -1, -1]
+                j = 0
+                while j < 9 {
+                    ns2[j] = st[j]
+                    j = j + 1
+                }
+                ns2[row as i32] = m as i8
+                let ns2_canon: array<i8, 9> = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+                canon(ns2 as ptr<i8>, ns2_canon as ptr<i8>)
+                let tgt2: i32 = ht_get_or_create(g_ndp_keys, g_ndp_coeffs, g_ndp_lens, g_ndp_used, ns2_canon as ptr<i8>)
+                if tgt2 >= 0 {
+                    poly_add_q_minus_m(g_ndp_coeffs, g_ndp_lens, tgt2, g_dp_coeffs, g_dp_lens, idx as i32, m as i64)
+                }
+
+                idx = idx + 1
+            }
+            swap_tables()
+            row = row + 1
+        }
+        col = col + 1
+    }
+
+    let mut i: i64 = 0
+    while i < R {
+        clear_table(g_ndp_used)
+        let mut idx: i64 = 0
+        while idx < MAXSTATES {
+            if g_dp_used[idx] == 0 { idx = idx + 1; continue }
+            let st: array<i8, 9> = [-1, -1, -1, -1, -1, -1, -1, -1, -1]
+            let mut j: i32 = 0
+            while j < 9 {
+                st[j] = g_dp_keys[idx * 9 + (j as i64)]
+                j = j + 1
+            }
+            st[i as i32] = -1
+            let ns: array<i8, 9> = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+            canon(st as ptr<i8>, ns as ptr<i8>)
+            let tgt: i32 = ht_get_or_create(g_ndp_keys, g_ndp_coeffs, g_ndp_lens, g_ndp_used, ns as ptr<i8>)
+            if tgt >= 0 {
+                poly_add(g_ndp_coeffs, g_ndp_lens, tgt, g_dp_coeffs, g_dp_lens, idx as i32)
+            }
+            idx = idx + 1
+        }
+        swap_tables()
+        i = i + 1
+    }
+
+    let start2: array<i8, 9> = [-1, -1, -1, -1, -1, -1, -1, -1, -1]
+    let final_idx: i32 = ht_get_or_create(g_dp_keys, g_dp_coeffs, g_dp_lens, g_dp_used, start2 as ptr<i8>)
+    let flen: i32 = g_dp_lens[final_idx]
+    out_len[0] = flen
+    let mut j: i32 = 0
+    while j < flen {
+        out_coeffs[j as i64] = g_dp_coeffs[(final_idx as i64) * MAXPOLY + (j as i64)]
+        j = j + 1
+    }
+}
+
+function poly_eval(coeffs: ptr<i64>, len: i32, x0: i64) -> i64 {
+    let mut x: i64 = x0 % MOD
+    if x < 0 { x = x + MOD }
+    let mut res: i64 = 0
+    let mut pw: i64 = 1
+    let mut i: i32 = 0
+    while i < len {
+        res = (res + ((coeffs[i as i64] as i128) * (pw as i128) % (MOD as i128)) as i64) % MOD
+        pw = ((pw as i128) * (x as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+    return res
+}
+
+function lagrange_eval(values: ptr<i64>, n: i32, x0: i64) -> i64 {
+    if x0 >= 0 && x0 <= (n as i64) { return values[x0] % MOD }
+    let mut x: i64 = x0 % MOD
+    if x < 0 { x = x + MOD }
+
+    let nn: i64 = (n + 1) as i64
+    let fac: ptr<i64> = calloc(nn, 8) as ptr<i64>
+    fac[0] = 1
+    let mut i: i32 = 1
+    while i <= n {
+        fac[i as i64] = ((fac[(i - 1) as i64] as i128) * (i as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+
+    let invfac: ptr<i64> = calloc(nn, 8) as ptr<i64>
+    invfac[n as i64] = mod_inv(fac[n as i64], MOD)
+    i = n
+    while i > 0 {
+        invfac[(i - 1) as i64] = ((invfac[i as i64] as i128) * (i as i128) % (MOD as i128)) as i64
+        i = i - 1
+    }
+
+    let pre: ptr<i64> = calloc(nn + 2, 8) as ptr<i64>
+    pre[0] = 1
+    i = 0
+    while i <= n {
+        let mut term: i64 = (x - (i as i64)) % MOD
+        if term < 0 { term = term + MOD }
+        pre[(i + 1) as i64] = ((pre[i as i64] as i128) * (term as i128) % (MOD as i128)) as i64
+        i = i + 1
+    }
+
+    let suf: ptr<i64> = calloc(nn + 2, 8) as ptr<i64>
+    suf[(n + 1) as i64] = 1
+    i = n
+    while i >= 0 {
+        let mut term: i64 = (x - (i as i64)) % MOD
+        if term < 0 { term = term + MOD }
+        suf[i as i64] = ((suf[(i + 1) as i64] as i128) * (term as i128) % (MOD as i128)) as i64
+        i = i - 1
+    }
+
+    let mut ans: i64 = 0
+    i = 0
+    while i <= n {
+        let num: i64 = ((pre[i as i64] as i128) * (suf[(i + 1) as i64] as i128) % (MOD as i128)) as i64
+        let mut den: i64 = ((invfac[i as i64] as i128) * (invfac[(n - i) as i64] as i128) % (MOD as i128)) as i64
+        if ((n - i) & 1) == 1 { den = (MOD - den) % MOD }
+        let mut term: i64 = ((values[i as i64] as i128) * (num as i128) % (MOD as i128)) as i64
+        term = ((term as i128) * (den as i128) % (MOD as i128)) as i64
+        ans = (ans + term) % MOD
+        i = i + 1
+    }
+
+    free(fac)
+    free(invfac)
+    free(pre)
+    free(suf)
+    return ans
 }
 
 function main() -> i32 {
-    printf("%lld\n", p544_native())
+    g_dp_keys = calloc(MAXSTATES * 9, 1) as ptr<i8>
+    g_dp_coeffs = calloc(MAXSTATES * MAXPOLY, 8) as ptr<i64>
+    g_dp_lens = calloc(MAXSTATES, 4) as ptr<i32>
+    g_dp_used = calloc(MAXSTATES, 1) as ptr<i8>
+    g_ndp_keys = calloc(MAXSTATES * 9, 1) as ptr<i8>
+    g_ndp_coeffs = calloc(MAXSTATES * MAXPOLY, 8) as ptr<i64>
+    g_ndp_lens = calloc(MAXSTATES, 4) as ptr<i32>
+    g_ndp_used = calloc(MAXSTATES, 1) as ptr<i8>
+
+    let out_coeffs: ptr<i64> = calloc(MAXPOLY, 8) as ptr<i64>
+    let out_len: ptr<i32> = calloc(1, 4) as ptr<i32>
+
+    chromatic_poly(out_coeffs, out_len)
+
+    let deg: i64 = R * C
+    let m: i64 = deg + 1
+    let prefix: ptr<i64> = calloc(m + 2, 8) as ptr<i64>
+    prefix[0] = 0
+    let mut acc: i64 = 0
+    let mut k: i64 = 1
+    while k <= m + 1 {
+        acc = (acc + poly_eval(out_coeffs, out_len[0], k)) % MOD
+        prefix[k] = acc
+        k = k + 1
+    }
+
+    let n_val: i64 = 1112131415
+    let ans: i64 = lagrange_eval(prefix, m as i32, n_val)
+    printf("%lld\n", ans)
+
+    free(g_dp_keys)
+    free(g_dp_coeffs)
+    free(g_dp_lens)
+    free(g_dp_used)
+    free(g_ndp_keys)
+    free(g_ndp_coeffs)
+    free(g_ndp_lens)
+    free(g_ndp_used)
+    free(out_coeffs)
+    free(out_len)
+    free(prefix)
     return 0
 }
