@@ -1,11 +1,376 @@
-# Project Euler 888
-# Coin Game: count losing positions with m=1249 piles, N=12491249, mod 912491249.
+# Project Euler 888: Coin Game
+# Count losing positions (XOR of Grundy numbers = 0) with m piles, each size [1..N].
+# Uses a 16-point +/-1 filter over 4 bits of Grundy values.
 
 extern {
-    function p888_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const N_VAL: i64 = 12491249
+const M_VAL: i32 = 1249
+const MOD: i64 = 912491249
+const PRE: i32 = 322
+const PERIOD: i32 = 11060
+const SPLIT_LIMIT: i32 = 600
+
+# ---- modular arithmetic with i128 ----
+
+function mulmod(a: i64, b: i64, m: i64) -> i64 {
+    return ((a as i128 * b as i128) % (m as i128)) as i64
+}
+
+function powmod(a0: i64, e0: i64, m: i64) -> i64 {
+    let mut r: i64 = 1 % m
+    let mut a: i64 = a0 % m
+    if a < 0 { a = a + m }
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) == 1 { r = mulmod(r, a, m) }
+        a = mulmod(a, a, m)
+        e = e >> 1
+    }
+    return r
+}
+
+function inv_mod(a0: i64, modv: i64) -> i64 {
+    let mut a: i64 = a0 % modv
+    if a < 0 { a = a + modv }
+    let mut x0: i64 = 1
+    let mut x1: i64 = 0
+    let mut aa: i64 = a
+    let mut mm: i64 = modv
+    while mm != 0 {
+        let q: i64 = aa / mm
+        let t: i64 = aa - q * mm
+        aa = mm
+        mm = t
+        let t2: i64 = x0 - q * x1
+        x0 = x1
+        x1 = t2
+    }
+    if aa != 1 { return -1 }
+    let mut result: i64 = x0 % modv
+    if result < 0 { result = result + modv }
+    return result
+}
+
+function popcount(x: i32) -> i32 {
+    let mut n: i32 = 0
+    let mut v: i32 = x
+    while v != 0 {
+        n = n + 1
+        v = v & (v - 1)
+    }
+    return n
+}
+
+# ---- strip p from x: return x_without_p, set v via pointer ----
+
+function strip_p(x: i64, p: i64, x_free: ptr<i64>, v: ptr<i32>) -> void {
+    x_free[0] = x
+    v[0] = 0
+    while x_free[0] % p == 0 {
+        x_free[0] = x_free[0] / p
+        v[0] = v[0] + 1
+    }
+}
+
+# ---- factor n into prime powers (parallel arrays) ----
+
+function factor_prime_powers(n: i64, out_p: ptr<i64>, out_pe: ptr<i64>) -> i32 {
+    let mut count: i32 = 0
+    let mut x: i64 = n
+    let mut p: i64 = 2
+    while p * p <= x {
+        if x % p == 0 {
+            let mut pe: i64 = 1
+            while x % p == 0 {
+                x = x / p
+                pe = pe * p
+            }
+            out_p[count] = p
+            out_pe[count] = pe
+            count = count + 1
+        }
+        if p == 2 { p = 3 } else { p = p + 2 }
+    }
+    if x > 1 {
+        out_p[count] = x
+        out_pe[count] = x
+        count = count + 1
+    }
+    return count
+}
+
+# ---- compute Grundy numbers g[0..limit] ----
+
+function compute_grundy(g: ptr<i32>, limit: i32, split_limit: i32) -> void {
+    let mut n: i32 = 1
+    while n <= limit {
+        let mut seen: i32 = 0
+        # REMOVE = {1, 2, 4, 9}
+        if n >= 1 { seen = seen | (1 << g[n - 1]) }
+        if n >= 2 { seen = seen | (1 << g[n - 2]) }
+        if n >= 4 { seen = seen | (1 << g[n - 4]) }
+        if n >= 9 { seen = seen | (1 << g[n - 9]) }
+
+        let mut max_i: i32 = n - 1
+        if split_limit > 0 && split_limit < n - 1 { max_i = split_limit }
+        let mut i: i32 = 1
+        while i <= max_i {
+            seen = seen | (1 << (g[i] ^ g[n - i]))
+            i = i + 1
+        }
+        let mut mex: i32 = 0
+        while ((seen >> mex) & 1) == 1 {
+            mex = mex + 1
+        }
+        g[n] = mex
+        n = n + 1
+    }
+}
+
+# ---- denominator tables (using parallel global arrays) ----
+
+let mut dt_p: ptr<i64> = null
+let mut dt_pe: ptr<i64> = null
+let mut dt_den_free: ptr<ptr<i64> > = null
+let mut dt_den_v: ptr<ptr<i32> > = null
+let mut dt_inv_free: ptr<ptr<i64> > = null
+
+function precompute_den_tables(idx: i32, p: i64, pe: i64, m: i32) -> void {
+    dt_p[idx] = p
+    dt_pe[idx] = pe
+    dt_den_free[idx] = malloc(((m + 1) as i64) * 8) as ptr<i64>
+    dt_den_v[idx] = malloc(((m + 1) as i64) * 4) as ptr<i32>
+    dt_inv_free[idx] = malloc(((m + 1) as i64) * 8) as ptr<i64>
+    dt_den_free[idx][0] = 1
+    dt_inv_free[idx][0] = 1
+    let mut i: i32 = 1
+    while i <= m {
+        let xf_ptr: ptr<i64> = malloc(8) as ptr<i64>
+        let v_ptr: ptr<i32> = malloc(4) as ptr<i32>
+        strip_p(i as i64, p, xf_ptr, v_ptr)
+        dt_den_free[idx][i] = xf_ptr[0]
+        dt_den_v[idx][i] = v_ptr[0]
+        dt_inv_free[idx][i] = inv_mod(xf_ptr[0] % pe, pe)
+        free(xf_ptr as ptr<void>)
+        free(v_ptr as ptr<void>)
+        i = i + 1
+    }
+}
+
+# ---- coefficient of x^m in (1-x)^(-a) * (1+x)^(-(N-a)) mod p^e ----
+
+function coeff_term_mod_prime_power(N_val: i64, m: i32, a: i64, idx: i32) -> i64 {
+    let p: i64 = dt_p[idx]
+    let pe: i64 = dt_pe[idx]
+    let A: i64 = a
+    let B: i64 = N_val - a
+
+    let u: ptr<i64> = calloc((m + 1) as i64, 8) as ptr<i64>
+    let w: ptr<i64> = calloc((m + 1) as i64, 8) as ptr<i64>
+
+    u[0] = 1 % pe
+    if A != 0 {
+        let mut res: i64 = 1 % pe
+        let mut exp: i32 = 0
+        let mut i: i32 = 1
+        while i <= m {
+            let num: i64 = A + (i as i64) - 1
+            let num_free_ptr: ptr<i64> = malloc(8) as ptr<i64>
+            let v_num_ptr: ptr<i32> = malloc(4) as ptr<i32>
+            strip_p(num, p, num_free_ptr, v_num_ptr)
+            exp = exp + v_num_ptr[0]
+            exp = exp - dt_den_v[idx][i]
+            res = mulmod(res, num_free_ptr[0] % pe, pe)
+            res = mulmod(res, dt_inv_free[idx][i], pe)
+            u[i] = mulmod(res, powmod(p, exp as i64, pe), pe)
+            free(num_free_ptr as ptr<void>)
+            free(v_num_ptr as ptr<void>)
+            i = i + 1
+        }
+    }
+
+    w[0] = 1 % pe
+    if B != 0 {
+        let mut res: i64 = 1 % pe
+        let mut exp: i32 = 0
+        let mut i: i32 = 1
+        while i <= m {
+            let num: i64 = B + (i as i64) - 1
+            let num_free_ptr: ptr<i64> = malloc(8) as ptr<i64>
+            let v_num_ptr: ptr<i32> = malloc(4) as ptr<i32>
+            strip_p(num, p, num_free_ptr, v_num_ptr)
+            exp = exp + v_num_ptr[0]
+            exp = exp - dt_den_v[idx][i]
+            res = mulmod(res, num_free_ptr[0] % pe, pe)
+            res = mulmod(res, dt_inv_free[idx][i], pe)
+            let mut val: i64 = mulmod(res, powmod(p, exp as i64, pe), pe)
+            if (i & 1) == 1 { val = (pe - val) % pe }
+            w[i] = val
+            free(num_free_ptr as ptr<void>)
+            free(v_num_ptr as ptr<void>)
+            i = i + 1
+        }
+    }
+
+    let mut out: i64 = 0
+    let mut i: i32 = 0
+    while i <= m {
+        out = (out + mulmod(u[i], w[m - i], pe)) % pe
+        i = i + 1
+    }
+
+    free(u as ptr<void>)
+    free(w as ptr<void>)
+    return out
+}
+
+# ---- count Grundy values in [1..N] using periodicity ----
+
+function grundy_counts_up_to(N_val: i64, g: ptr<i32>, pre: i32, period: i32, counts: ptr<i64>, max_g: i32) -> void {
+    let mut k: i32 = 0
+    while k < max_g {
+        counts[k] = 0
+        k = k + 1
+    }
+    if N_val <= 0 { return }
+
+    if N_val < (pre as i64) {
+        let mut n: i64 = 1
+        while n <= N_val {
+            counts[g[n]] = counts[g[n]] + 1
+            n = n + 1
+        }
+        return
+    }
+
+    let mut n: i32 = 1
+    while n < pre {
+        counts[g[n]] = counts[g[n]] + 1
+        n = n + 1
+    }
+
+    let per_counts: ptr<i64> = calloc(16, 8) as ptr<i64>
+    let mut pn: i32 = pre
+    while pn < pre + period {
+        per_counts[g[pn]] = per_counts[g[pn]] + 1
+        pn = pn + 1
+    }
+
+    let total_period_terms: i64 = N_val - (pre as i64) + 1
+    let q: i64 = total_period_terms / (period as i64)
+    let r: i64 = total_period_terms % (period as i64)
+
+    k = 0
+    while k < max_g {
+        counts[k] = counts[k] + per_counts[k] * q
+        k = k + 1
+    }
+
+    let mut rn: i64 = pre as i64
+    while rn < (pre as i64) + r {
+        counts[g[rn]] = counts[g[rn]] + 1
+        rn = rn + 1
+    }
+    free(per_counts as ptr<void>)
+}
+
+function S_mod(N_val: i64, m: i32, modv: i64, g: ptr<i32>, pre: i32, period: i32) -> i64 {
+    let max_g: i32 = 16
+    let counts: ptr<i64> = calloc(16, 8) as ptr<i64>
+    grundy_counts_up_to(N_val, g, pre, period, counts, max_g)
+
+    let pp_p: ptr<i64> = calloc(20, 8) as ptr<i64>
+    let pp_pe: ptr<i64> = calloc(20, 8) as ptr<i64>
+    let npp: i32 = factor_prime_powers(modv, pp_p, pp_pe)
+
+    let mods: ptr<i64> = calloc(20, 8) as ptr<i64>
+    let Ms: ptr<i64> = calloc(20, 8) as ptr<i64>
+    let inv_Ms: ptr<i64> = calloc(20, 8) as ptr<i64>
+    let mut i: i32 = 0
+    while i < npp {
+        mods[i] = pp_pe[i]
+        Ms[i] = modv / pp_pe[i]
+        inv_Ms[i] = inv_mod(Ms[i] % pp_pe[i], pp_pe[i])
+        i = i + 1
+    }
+
+    # allocate den table arrays
+    dt_p = calloc(20, 8) as ptr<i64>
+    dt_pe = calloc(20, 8) as ptr<i64>
+    dt_den_free = calloc(20, 8) as ptr<ptr<i64> >
+    dt_den_v = calloc(20, 8) as ptr<ptr<i32> >
+    dt_inv_free = calloc(20, 8) as ptr<ptr<i64> >
+
+    i = 0
+    while i < npp {
+        precompute_den_tables(i, pp_p[i], pp_pe[i], m)
+        i = i + 1
+    }
+
+    let inv16: i64 = inv_mod(16, modv)
+    let mut total: i64 = 0
+
+    let mut s: i32 = 0
+    while s < 16 {
+        let mut a: i64 = 0
+        let mut gv: i32 = 0
+        while gv < max_g {
+            if counts[gv] != 0 && (popcount(gv & s) & 1) == 0 {
+                a = a + counts[gv]
+            }
+            gv = gv + 1
+        }
+
+        # CRT combine
+        let mut x: i64 = 0
+        i = 0
+        while i < npp {
+            let resid: i64 = coeff_term_mod_prime_power(N_val, m, a, i)
+            x = (x + mulmod(mulmod(resid % mods[i], Ms[i], modv), inv_Ms[i], modv)) % modv
+            i = i + 1
+        }
+
+        total = (total + x) % modv
+        s = s + 1
+    }
+
+    # free den tables
+    i = 0
+    while i < npp {
+        free(dt_den_free[i] as ptr<void>)
+        free(dt_den_v[i] as ptr<void>)
+        free(dt_inv_free[i] as ptr<void>)
+        i = i + 1
+    }
+    free(dt_p as ptr<void>)
+    free(dt_pe as ptr<void>)
+    free(dt_den_free as ptr<void>)
+    free(dt_den_v as ptr<void>)
+    free(dt_inv_free as ptr<void>)
+    free(counts as ptr<void>)
+    free(pp_p as ptr<void>)
+    free(pp_pe as ptr<void>)
+    free(mods as ptr<void>)
+    free(Ms as ptr<void>)
+    free(inv_Ms as ptr<void>)
+
+    return mulmod(total, inv16, modv)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p888_native())
+    let precomp_limit: i32 = PRE + 2 * PERIOD
+    let g_fast: ptr<i32> = malloc(((precomp_limit + 1) as i64) * 4) as ptr<i32>
+    g_fast[0] = 0
+    compute_grundy(g_fast, precomp_limit, SPLIT_LIMIT)
+
+    let ans: i64 = S_mod(N_VAL, M_VAL, MOD, g_fast, PRE, PERIOD)
+
+    printf("%lld\n", ans)
+    free(g_fast as ptr<void>)
     return 0
 }

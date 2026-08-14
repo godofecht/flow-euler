@@ -1,11 +1,490 @@
 # Project Euler 893: Matchsticks
-# T(10^6) = sum M(n) for n=1..10^6.
+# T(10^6) = sum M(n) for n=1..10^6, where M(n) is the minimum matchsticks
+# to display an expression (digits, +, x with standard precedence) evaluating to n.
+#
+# Phases:
+#  1. P(n): min cost using only digits and multiplication.
+#  2. M(n): min cost allowing two-term sums a+b.
+#  3. Three-term fix: allow a+b+c when it beats 1- and 2-term forms.
+
+import euler.nt { isqrt }
 
 extern {
-    function p893_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const OP_COST: i32 = 2
+const MAXCOST: i32 = 48
+const N: i32 = 1000000
+
+# Global bucket state (replaces C static globals)
+let mut bucket_data: ptr<i32> = null
+let mut bucket_off: ptr<i32> = null
+
+# ---- heapsort (replaces qsort) ----
+
+function sift_down_i32(arr: ptr<i32>, start: i32, endd: i32) -> void {
+    let mut root: i32 = start
+    let mut cont: bool = true
+    while cont {
+        let mut child: i32 = 2 * root + 1
+        if child > endd {
+            cont = false
+        } else {
+            if child + 1 <= endd && arr[child + 1] > arr[child] {
+                child = child + 1
+            }
+            if arr[child] > arr[root] {
+                let t: i32 = arr[root]
+                arr[root] = arr[child]
+                arr[child] = t
+                root = child
+            } else {
+                cont = false
+            }
+        }
+    }
+}
+
+function heapsort_i32(arr: ptr<i32>, n: i32) -> void {
+    if n <= 1 { return }
+    let mut start: i32 = n / 2 - 1
+    while start >= 0 {
+        sift_down_i32(arr, start, n - 1)
+        start = start - 1
+    }
+    let mut endd: i32 = n - 1
+    while endd > 0 {
+        let t: i32 = arr[0]
+        arr[0] = arr[endd]
+        arr[endd] = t
+        endd = endd - 1
+        sift_down_i32(arr, 0, endd)
+    }
+}
+
+# ---- SPF sieve ----
+
+function spf_sieve(n_max: i32, spf: ptr<i32>) -> void {
+    let mut i: i32 = 0
+    while i <= n_max {
+        spf[i] = i
+        i = i + 1
+    }
+    let limit: i32 = isqrt(n_max as i64) as i32
+    i = 2
+    while i <= limit {
+        if spf[i] == i {
+            let mut j: i32 = i * i
+            while j <= n_max {
+                if spf[j] == j { spf[j] = i }
+                j = j + i
+            }
+        }
+        i = i + 1
+    }
+}
+
+# ---- digit cost ----
+
+function digit_cost(d: i32) -> i32 {
+    if d == 0 { return 6 }
+    if d == 1 { return 2 }
+    if d == 2 { return 5 }
+    if d == 3 { return 5 }
+    if d == 4 { return 4 }
+    if d == 5 { return 5 }
+    if d == 6 { return 6 }
+    if d == 7 { return 3 }
+    if d == 8 { return 7 }
+    return 6
+}
+
+# ---- compute P(n): min cost using digits and multiplication ----
+
+function compute_P(n_max: i32, spf: ptr<i32>, P: ptr<i32>) -> void {
+    P[0] = 0
+    let mut n: i32 = 1
+    while n <= n_max {
+        P[n] = P[n / 10] + digit_cost(n % 10)
+        n = n + 1
+    }
+    P[0] = 255
+
+    let divs: ptr<i32> = calloc(4096, 4) as ptr<i32>
+    let fp: ptr<i32> = calloc(16, 4) as ptr<i32>
+    let fe: ptr<i32> = calloc(16, 4) as ptr<i32>
+
+    n = 2
+    while n <= n_max {
+        if spf[n] != n {
+            let mut m: i32 = n
+            let mut nf: i32 = 0
+            while m > 1 {
+                let p: i32 = spf[m]
+                let mut e: i32 = 0
+                while m % p == 0 {
+                    m = m / p
+                    e = e + 1
+                }
+                fp[nf] = p
+                fe[nf] = e
+                nf = nf + 1
+            }
+
+            let mut ndiv: i32 = 1
+            divs[0] = 1
+            let mut i: i32 = 0
+            while i < nf {
+                let p: i32 = fp[i]
+                let e: i32 = fe[i]
+                let prev: i32 = ndiv
+                let mut pe: i32 = 1
+                let mut j: i32 = 0
+                while j < e {
+                    pe = pe * p
+                    let mut k: i32 = 0
+                    while k < prev {
+                        divs[ndiv] = divs[k] * pe
+                        ndiv = ndiv + 1
+                        k = k + 1
+                    }
+                    j = j + 1
+                }
+                i = i + 1
+            }
+
+            let r: i32 = isqrt(n as i64) as i32
+            let mut best: i32 = P[n]
+            i = 0
+            while i < ndiv {
+                let d: i32 = divs[i]
+                if d > 1 && d <= r {
+                    let q: i32 = n / d
+                    let cand: i32 = P[d] + P[q] + OP_COST
+                    if cand < best { best = cand }
+                }
+                i = i + 1
+            }
+            P[n] = best
+        }
+        n = n + 1
+    }
+
+    free(divs as ptr<void>)
+    free(fp as ptr<void>)
+    free(fe as ptr<void>)
+}
+
+# ---- build buckets by cost ----
+
+function build_buckets(n_max: i32, P: ptr<i32>) -> void {
+    let counts: ptr<i32> = calloc(MAXCOST + 1, 4) as ptr<i32>
+    let mut x: i32 = 1
+    while x <= n_max {
+        let c: i32 = P[x]
+        if c <= MAXCOST { counts[c] = counts[c] + 1 }
+        x = x + 1
+    }
+    bucket_off[0] = 0
+    let mut c: i32 = 1
+    while c <= MAXCOST {
+        bucket_off[c] = bucket_off[c - 1] + counts[c - 1]
+        c = c + 1
+    }
+    bucket_data = malloc((n_max as i64) * 4) as ptr<i32>
+    let pos: ptr<i32> = calloc(MAXCOST + 1, 4) as ptr<i32>
+    c = 0
+    while c <= MAXCOST {
+        pos[c] = bucket_off[c]
+        c = c + 1
+    }
+    x = 1
+    while x <= n_max {
+        let cc: i32 = P[x]
+        if cc <= MAXCOST {
+            bucket_data[pos[cc]] = x
+            pos[cc] = pos[cc] + 1
+        }
+        x = x + 1
+    }
+    free(counts as ptr<void>)
+    free(pos as ptr<void>)
+}
+
+# ---- enumerate pairs from buckets[c1] x buckets[c2] with a+b <= n_max ----
+
+function enum_pairs(n_max: i32, c1: i32, c2: i32, cost: i32, target: ptr<i32>) -> void {
+    if c1 > MAXCOST || c2 > MAXCOST { return }
+    let a_off: i32 = bucket_off[c1]
+    let alen: i32 = bucket_off[c1 + 1] - bucket_off[c1]
+    let b_off: i32 = bucket_off[c2]
+    let blen: i32 = bucket_off[c2 + 1] - bucket_off[c2]
+    if alen == 0 || blen == 0 { return }
+
+    if c1 == c2 {
+        let mut i: i32 = 0
+        while i < alen {
+            let a: i32 = bucket_data[a_off + i]
+            let max_b: i32 = n_max - a
+            let mut hi: i32 = alen - 1
+            while hi >= i && bucket_data[a_off + hi] > max_b {
+                hi = hi - 1
+            }
+            let mut j: i32 = i
+            while j <= hi {
+                let s: i32 = a + bucket_data[a_off + j]
+                if cost < target[s] { target[s] = cost }
+                j = j + 1
+            }
+            i = i + 1
+        }
+    } else {
+        let outer_off: i32 = 0
+        let inner_off: i32 = 0
+        let mut olen: i32 = alen
+        let mut ilen: i32 = blen
+        if alen <= blen {
+            outer_off = a_off
+            inner_off = b_off
+            olen = alen
+            ilen = blen
+        } else {
+            outer_off = b_off
+            inner_off = a_off
+            olen = blen
+            ilen = alen
+        }
+        let mut hi: i32 = ilen - 1
+        let mut oi: i32 = 0
+        while oi < olen {
+            let a: i32 = bucket_data[outer_off + oi]
+            let max_b: i32 = n_max - a
+            while hi >= 0 && bucket_data[inner_off + hi] > max_b {
+                hi = hi - 1
+            }
+            let mut j: i32 = 0
+            while j <= hi {
+                let s: i32 = a + bucket_data[inner_off + j]
+                if cost < target[s] { target[s] = cost }
+                j = j + 1
+            }
+            oi = oi + 1
+        }
+    }
+}
+
+# ---- compute M with two-term sums ----
+
+function compute_M_two_terms(n_max: i32, P: ptr<i32>, M: ptr<i32>) -> void {
+    let mut i: i32 = 0
+    while i <= n_max {
+        M[i] = P[i]
+        i = i + 1
+    }
+
+    let mut c1: i32 = 2
+    while c1 <= 32 {
+        let max_c2: i32 = 32 - c1
+        if max_c2 < c1 { break }
+        let mut c2: i32 = c1
+        while c2 <= max_c2 {
+            let cand_cost: i32 = c1 + c2 + OP_COST
+            enum_pairs(n_max, c1, c2, cand_cost, M)
+            c2 = c2 + 1
+        }
+        c1 = c1 + 1
+    }
+
+    # Fallback scan for high-cost cases using low P(a) summands.
+    let mut low_count: i32 = 0
+    let mut c: i32 = 2
+    while c <= 18 {
+        low_count = low_count + (bucket_off[c + 1] - bucket_off[c])
+        c = c + 1
+    }
+    let low_sum: ptr<i32> = malloc((low_count as i64) * 4) as ptr<i32>
+    let mut li: i32 = 0
+    c = 2
+    while c <= 18 {
+        let mut j: i32 = bucket_off[c]
+        while j < bucket_off[c + 1] {
+            low_sum[li] = bucket_data[j]
+            li = li + 1
+            j = j + 1
+        }
+        c = c + 1
+    }
+    heapsort_i32(low_sum, low_count)
+
+    let mut n: i32 = 1
+    while n <= n_max {
+        if M[n] > 34 {
+            let mut best: i32 = M[n]
+            let half: i32 = n / 2
+            let mut j: i32 = 0
+            while j < low_count && low_sum[j] <= half {
+                let a: i32 = low_sum[j]
+                let b: i32 = n - a
+                let cand: i32 = P[a] + P[b] + OP_COST
+                if cand < best { best = cand }
+                j = j + 1
+            }
+            M[n] = best
+        }
+        n = n + 1
+    }
+    free(low_sum as ptr<void>)
+}
+
+# ---- three-term fix ----
+
+function apply_three_term_fix(n_max: i32, P: ptr<i32>, M: ptr<i32>) -> void {
+    let best2: ptr<i32> = malloc(((n_max + 1) as i64) * 4) as ptr<i32>
+    let mut i: i32 = 0
+    while i <= n_max {
+        best2[i] = 255
+        i = i + 1
+    }
+
+    let mut c1: i32 = 2
+    while c1 <= 30 {
+        let max_c2: i32 = 30 - c1
+        if max_c2 < c1 { break }
+        let mut c2: i32 = c1
+        while c2 <= max_c2 {
+            let psum: i32 = c1 + c2
+            enum_pairs(n_max, c1, c2, psum, best2)
+            c2 = c2 + 1
+        }
+        c1 = c1 + 1
+    }
+
+    # Cheap third terms: P(c) <= 20
+    let mut cheap_count: i32 = 0
+    let mut c: i32 = 2
+    while c <= 20 {
+        cheap_count = cheap_count + (bucket_off[c + 1] - bucket_off[c])
+        c = c + 1
+    }
+    let cheap_c: ptr<i32> = malloc((cheap_count as i64) * 4) as ptr<i32>
+    let mut ci: i32 = 0
+    c = 2
+    while c <= 20 {
+        let mut j: i32 = bucket_off[c]
+        while j < bucket_off[c + 1] {
+            cheap_c[ci] = bucket_data[j]
+            ci = ci + 1
+            j = j + 1
+        }
+        c = c + 1
+    }
+    heapsort_i32(cheap_c, cheap_count)
+
+    # Small remainders r where best2[r] <= 8
+    let mut small_count: i32 = 0
+    let mut r: i32 = 2
+    while r <= n_max {
+        if best2[r] != 255 && best2[r] <= 8 { small_count = small_count + 1 }
+        r = r + 1
+    }
+    let small_r: ptr<i32> = malloc((small_count as i64) * 4) as ptr<i32>
+    let mut si: i32 = 0
+    r = 2
+    while r <= n_max {
+        if best2[r] != 255 && best2[r] <= 8 {
+            small_r[si] = r
+            si = si + 1
+        }
+        r = r + 1
+    }
+
+    let mut n: i32 = 1
+    while n <= n_max {
+        let cur: i32 = M[n]
+        if cur >= 33 {
+            let target_val: i32 = cur - 1
+            let psum_limit: i32 = target_val - 4
+            if psum_limit >= 6 {
+                let mut best: i32 = cur
+
+                let mut j: i32 = 0
+                while j < cheap_count {
+                    let cc: i32 = cheap_c[j]
+                    if cc >= n { break }
+                    let pc: i32 = P[cc]
+                    if pc <= psum_limit {
+                        let rr: i32 = n - cc
+                        let v: i32 = best2[rr]
+                        if v != 255 && v + pc <= psum_limit {
+                            let cand: i32 = v + pc + 4
+                            if cand < best {
+                                best = cand
+                                if best == target_val { break }
+                            }
+                        }
+                    }
+                    j = j + 1
+                }
+
+                if best > target_val {
+                    let mut j: i32 = 0
+                    while j < small_count {
+                        let rr: i32 = small_r[j]
+                        if rr >= n { break }
+                        let v: i32 = best2[rr]
+                        let cc: i32 = n - rr
+                        let pc: i32 = P[cc]
+                        if v + pc <= psum_limit {
+                            let cand: i32 = v + pc + 4
+                            if cand < best {
+                                best = cand
+                                if best == target_val { break }
+                            }
+                        }
+                        j = j + 1
+                    }
+                }
+
+                M[n] = best
+            }
+        }
+        n = n + 1
+    }
+
+    free(best2 as ptr<void>)
+    free(cheap_c as ptr<void>)
+    free(small_r as ptr<void>)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p893_native())
+    let spf: ptr<i32> = malloc(((N + 1) as i64) * 4) as ptr<i32>
+    spf_sieve(N, spf)
+
+    let P: ptr<i32> = malloc(((N + 1) as i64) * 4) as ptr<i32>
+    compute_P(N, spf, P)
+    free(spf as ptr<void>)
+
+    bucket_off = calloc((MAXCOST + 1) as i64, 4) as ptr<i32>
+    build_buckets(N, P)
+
+    let M: ptr<i32> = malloc(((N + 1) as i64) * 4) as ptr<i32>
+    compute_M_two_terms(N, P, M)
+    apply_three_term_fix(N, P, M)
+
+    let mut total: i64 = 0
+    let mut n: i32 = 1
+    while n <= N {
+        total = total + (M[n] as i64)
+        n = n + 1
+    }
+
+    printf("%lld\n", total)
+    free(P as ptr<void>)
+    free(M as ptr<void>)
+    free(bucket_data as ptr<void>)
+    free(bucket_off as ptr<void>)
     return 0
 }
