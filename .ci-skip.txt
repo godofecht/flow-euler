@@ -4,7 +4,6 @@
 #
 # Timeout (>120s) on local scan:
 535  timeout
-542  timeout
 #
 # Runtime crash / abort:
 #

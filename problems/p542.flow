@@ -1,46 +1,39 @@
 # Project Euler 542
 # Geometric Progression with Maximum Sum — T(10^17) via piecewise S(k).
 
-extern {
-    function calloc(n: i64, size: i64) -> ptr<void>
-    function free(p: ptr<void>) -> void
-}
-
-const CAP: i64 = 65536
 const N: i64 = 100000000000000000
+
+function ipow128(base: i64, exp: i64) -> i128 {
+    let mut r: i128 = 1 as i128
+    let mut b: i128 = base as i128
+    let mut e: i64 = exp
+    while e > 0 {
+        if (e & 1) != 0 { r = r * b }
+        b = b * b
+        e = e >> 1
+    }
+    return r
+}
 
 function iroot(n: i64, k: i64) -> i64 {
     if k <= 1 { return n }
     if n <= 0 { return 0 }
-    let mut x: i64 = 1
-    while x * x <= n && x < 1000000 {
-        x = x * 2
+    if n == 1 { return 1 }
+    let mut lo: i64 = 1
+    let mut hi: i64 = 2
+    while ipow128(hi, k) <= (n as i128) {
+        if hi > 2000000000 { break }
+        hi = hi * 2
     }
-    x = x / 2
-    if x < 1 { x = 1 }
-    while true {
-        let mut p: i128 = 1 as i128
-        let mut i: i64 = 0
-        while i < k {
-            p = p * (x as i128)
-            if p > (n as i128) { break }
-            i = i + 1
-        }
-        if p <= (n as i128) {
-            let x1: i64 = x + 1
-            let mut p1: i128 = 1 as i128
-            i = 0
-            while i < k {
-                p1 = p1 * (x1 as i128)
-                if p1 > (n as i128) { break }
-                i = i + 1
-            }
-            if p1 <= (n as i128) { x = x1 } else { break }
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if ipow128(mid, k) <= (n as i128) {
+            lo = mid
         } else {
-            x = x - 1
+            hi = mid
         }
     }
-    return x
+    return lo
 }
 
 function ipow(base: i64, exp: i64) -> i64 {
@@ -55,7 +48,7 @@ function ipow(base: i64, exp: i64) -> i64 {
     return r as i64
 }
 
-function S_val(k: i64) -> i64 {
+function S_val_brute(k: i64) -> i64 {
     if k < 4 { return 0 }
     let mut best: i64 = 0
     let mut t_max: i64 = 0
@@ -68,16 +61,6 @@ function S_val(k: i64) -> i64 {
     while t >= 2 {
         let p_max: i64 = iroot(k, t)
         if p_max < 2 {
-            t = t - 1
-            continue
-        }
-        let ub1: i64 = t + 1
-        let ub2: i64 = p_max
-        let mut ub: i64 = ub1
-        if ub2 < ub { ub = ub2 }
-        ub = ub * k
-        if ub <= best {
-            if p_max >= t + 1 { break }
             t = t - 1
             continue
         }
@@ -96,24 +79,66 @@ function S_val(k: i64) -> i64 {
     return best
 }
 
-function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
-    let mut h: i64 = key % CAP
-    if h < 0 { h = h + CAP }
-    while used[h] == 1 && keys[h] != key {
-        h = h + 1
-        if h == CAP { h = 0 }
+function S_val(k: i64) -> i64 {
+    if k < 4 { return 0 }
+    if k <= 1249 { return S_val_brute(k) }
+    let mut best: i64 = 0
+    # t=3: floor-division blocking with P = k^(1/4)
+    let p_max3: i64 = iroot(k, 3)
+    if p_max3 >= 2 {
+        let mut P: i64 = iroot(k, 4)
+        if P < 2 { P = 2 }
+        if P > p_max3 { P = p_max3 }
+        let mut p: i64 = 2
+        while p <= P {
+            let d: i64 = p * p * p
+            let b: i64 = k / d
+            let c: i64 = ipow(p, 4) - ipow(p - 1, 4)
+            let val: i64 = b * c
+            if val > best { best = val }
+            p = p + 1
+        }
+        let Pp1: i64 = P + 1
+        let Pp1cubed: i64 = ipow(Pp1, 3)
+        let b_max: i64 = k / Pp1cubed
+        let mut b: i64 = 1
+        while b <= b_max {
+            let p2: i64 = iroot(k / b, 3)
+            if p2 >= Pp1 {
+                let mut pp: i64 = p2
+                if pp > p_max3 { pp = p_max3 }
+                let c: i64 = ipow(pp, 4) - ipow(pp - 1, 4)
+                let val: i64 = b * c
+                if val > best { best = val }
+            }
+            b = b + 1
+        }
     }
-    return h
-}
-
-function S_cached(k: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>) -> i64 {
-    let s: i64 = hslot(k, keys, used)
-    if used[s] == 1 { return vals[s] }
-    let v: i64 = S_val(k)
-    used[s] = 1
-    keys[s] = k
-    vals[s] = v
-    return v
+    # t >= 4: check all p
+    let mut t_max: i64 = 0
+    let mut tmp: i64 = k
+    while tmp > 1 {
+        t_max = t_max + 1
+        tmp = tmp >> 1
+    }
+    let mut t: i64 = 4
+    while t <= t_max {
+        let p_max: i64 = iroot(k, t)
+        if p_max >= 2 {
+            let mut p: i64 = 2
+            while p <= p_max {
+                let d: i64 = ipow(p, t)
+                let b: i64 = k / d
+                if b == 0 { break }
+                let c: i64 = ipow(p, t + 1) - ipow(p - 1, t + 1)
+                let val: i64 = b * c
+                if val > best { best = val }
+                p = p + 1
+            }
+        }
+        t = t + 1
+    }
+    return best
 }
 
 function alt_sum(a: i64, b: i64) -> i64 {
@@ -124,21 +149,21 @@ function alt_sum(a: i64, b: i64) -> i64 {
     return -1
 }
 
-function T(n: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>) -> i64 {
+function T(n: i64) -> i64 {
     if n < 4 { return 0 }
     let mut total: i64 = 0
     let mut k: i64 = 4
     while k <= n {
-        let v: i64 = S_cached(k, keys, vals, used)
+        let v: i64 = S_val(k)
         let mut step: i64 = 1
         let mut hi: i64 = k + step
         if hi > n { hi = n }
-        let mut v_hi: i64 = S_cached(hi, keys, vals, used)
+        let mut v_hi: i64 = S_val(hi)
         while v_hi == v && hi < n {
             step = step * 2
             hi = k + step
             if hi > n { hi = n }
-            v_hi = S_cached(hi, keys, vals, used)
+            v_hi = S_val(hi)
         }
         if hi == n && v_hi == v {
             total = total + v * alt_sum(k, n)
@@ -148,7 +173,7 @@ function T(n: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>) -> i64 {
         let mut r: i64 = hi
         while lo < r {
             let mid: i64 = (lo + r) / 2
-            if S_cached(mid, keys, vals, used) == v {
+            if S_val(mid) == v {
                 lo = mid + 1
             } else {
                 r = mid
@@ -161,11 +186,6 @@ function T(n: i64, keys: ptr<i64>, vals: ptr<i64>, used: ptr<i8>) -> i64 {
 }
 
 function main() -> i32 {
-    let keys: ptr<i64> = calloc(CAP, 8)
-    let vals: ptr<i64> = calloc(CAP, 8)
-    let used: ptr<i8> = calloc(CAP, 1)
-    if keys == null || vals == null || used == null { return 1 }
-    printf("%lld\n", T(N, keys, vals, used))
-    free(keys); free(vals); free(used)
+    printf("%lld\n", T(N))
     return 0
 }
