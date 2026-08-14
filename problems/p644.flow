@@ -1,11 +1,506 @@
-# Project Euler 644
-# Squares on the Line: compute f(200, 500) for the random first move game.
+# Project Euler 644: Squares on the Line.
+# Computes f(200, 500) for the random first move game.
+# Ported from C. Uses f64 math with preallocated arrays.
 
 extern {
-    function p644_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+    function fabs(x: f64) -> f64
+}
+
+const SQRT2: f64 = 1.4142135623730950488016887242096980785696718753769
+const EPS: f64 = 1e-12
+const MAX_VALS: i32 = 200000
+const MAX_EVENTS: i32 = 2000000
+
+function dmerge_sort(arr: ptr<f64>, lo: i32, hi: i32, tmp: ptr<f64>) -> void {
+    if hi - lo <= 1 { return }
+    let mid: i32 = (lo + hi) / 2
+    dmerge_sort(arr, lo, mid, tmp)
+    dmerge_sort(arr, mid, hi, tmp)
+    let mut i: i32 = lo
+    let mut j: i32 = mid
+    let mut k: i32 = lo
+    while i < mid && j < hi {
+        if arr[i] <= arr[j] { tmp[k] = arr[i]; i = i + 1 }
+        else { tmp[k] = arr[j]; j = j + 1 }
+        k = k + 1
+    }
+    while i < mid { tmp[k] = arr[i]; i = i + 1; k = k + 1 }
+    while j < hi { tmp[k] = arr[j]; j = j + 1; k = k + 1 }
+    let mut x: i32 = lo
+    while x < hi { arr[x] = tmp[x]; x = x + 1 }
+}
+
+function dsort(arr: ptr<f64>, len: i32) -> void {
+    let tmp: ptr<f64> = calloc(len as i64, 8)
+    dmerge_sort(arr, 0, len, tmp)
+    free(tmp as ptr<void>)
+}
+
+function dedup_double(arr: ptr<f64>, len: i32) -> i32 {
+    if len <= 1 { return len }
+    let mut j: i32 = 0
+    let mut i: i32 = 1
+    while i < len {
+        if arr[i] != arr[j] {
+            j = j + 1
+            arr[j] = arr[i]
+        }
+        i = i + 1
+    }
+    return j + 1
+}
+
+function upper_index(arr: ptr<f64>, len: i32, x: f64) -> i32 {
+    let mut lo: i32 = 0
+    let mut hi: i32 = len
+    while lo < hi {
+        let mid: i32 = (lo + hi) / 2
+        if arr[mid] <= x { lo = mid + 1 }
+        else { hi = mid }
+    }
+    return lo
+}
+
+function generate_ring(max_l: f64, vals: ptr<f64>) -> i32 {
+    let mut len: i32 = 0
+    vals[len] = 0.0
+    len = len + 1
+    let max_b: i32 = (max_l / SQRT2) as i32 + 1
+    let mut b: i32 = 0
+    while b <= max_b {
+        let base: f64 = (b as f64) * SQRT2
+        let max_a: i32 = (max_l - base + 1e-12) as i32
+        let mut a: i32 = 0
+        while a <= max_a {
+            vals[len] = (a as f64) + base
+            len = len + 1
+            a = a + 1
+        }
+        b = b + 1
+    }
+    dsort(vals, len)
+    len = dedup_double(vals, len)
+    return len
+}
+
+function compute_grundy_intervals(max_l: f64, starts: ptr<f64>, ends: ptr<f64>, grundy: ptr<i32>) -> i32 {
+    let vals: ptr<f64> = calloc(MAX_VALS as i64, 8)
+    let n: i32 = generate_ring(max_l, vals) - 1
+
+    let mut s_len: i32 = 0
+    let mut e_len: i32 = 0
+    let mut g_len: i32 = 0
+
+    let moves_cap: i32 = 256
+    let moves: ptr<i8> = calloc(moves_cap as i64, 1)
+    let mut max_g: i32 = 0
+
+    let mut idx: i32 = 0
+    while idx < n {
+        let a: f64 = vals[idx]
+        let b: f64 = vals[idx + 1]
+        let L: f64 = (a + b) * 0.5
+
+        let mut i: i32 = 0
+        while i <= max_g {
+            moves[i] = 0
+            i = i + 1
+        }
+
+        let mut xi: i32 = 0
+        while xi < 2 {
+            let x: f64 = if xi == 0 { 1.0 } else { SQRT2 }
+            let skip: i32 = if L < x { 1 } else { if s_len == 0 { 1 } else { 0 } }
+            if skip == 0 {
+                let S: f64 = L - x
+                let mut u_idx: i32 = upper_index(starts, s_len, S) - 1
+                let mut t_idx: i32 = 0
+                let done: ptr<i32> = calloc(1, 4)
+                while t_idx <= u_idx && done[0] == 0 {
+                    let t_start: f64 = starts[t_idx]
+                    if t_start >= S { done[0] = 1 }
+                    if done[0] == 0 {
+                        let mut t_end: f64 = ends[t_idx]
+                        if t_end > S { t_end = S }
+                        let mut u_end: f64 = ends[u_idx]
+                        if u_end > S { u_end = S }
+                        let u_start: f64 = starts[u_idx]
+                        let mut left: f64 = S - u_end
+                        if t_start > left { left = t_start }
+                        let mut right: f64 = S - u_start
+                        if t_end < right { right = t_end }
+                        if left < right {
+                            let g: i32 = grundy[t_idx] ^ grundy[u_idx]
+                            if g < moves_cap { moves[g] = 1 }
+                            if g > max_g { max_g = g }
+                        }
+                        if t_end < S - u_start { t_idx = t_idx + 1 }
+                        else { u_idx = u_idx - 1 }
+                    }
+                }
+                free(done as ptr<void>)
+            }
+            xi = xi + 1
+        }
+
+        let mut g: i32 = 0
+        while g < moves_cap && moves[g] == 1 { g = g + 1 }
+
+        if g_len > 0 && grundy[g_len - 1] == g && fabs(ends[e_len - 1] - a) < EPS {
+            ends[e_len - 1] = b
+        } else {
+            starts[s_len] = a
+            s_len = s_len + 1
+            ends[e_len] = b
+            e_len = e_len + 1
+            grundy[g_len] = g
+            g_len = g_len + 1
+        }
+        idx = idx + 1
+    }
+
+    free(moves as ptr<void>)
+    free(vals as ptr<void>)
+    return g_len
+}
+
+function ev_merge_sort(idx: ptr<i32>, lo: i32, hi: i32, pos: ptr<f64>, tmp: ptr<i32>) -> void {
+    if hi - lo <= 1 { return }
+    let mid: i32 = (lo + hi) / 2
+    ev_merge_sort(idx, lo, mid, pos, tmp)
+    ev_merge_sort(idx, mid, hi, pos, tmp)
+    let mut i: i32 = lo
+    let mut j: i32 = mid
+    let mut k: i32 = lo
+    while i < mid && j < hi {
+        if pos[idx[i]] <= pos[idx[j]] {
+            tmp[k] = idx[i]
+            i = i + 1
+        } else {
+            tmp[k] = idx[j]
+            j = j + 1
+        }
+        k = k + 1
+    }
+    while i < mid { tmp[k] = idx[i]; i = i + 1; k = k + 1 }
+    while j < hi { tmp[k] = idx[j]; j = j + 1; k = k + 1 }
+    let mut x: i32 = lo
+    while x < hi { idx[x] = tmp[x]; x = x + 1 }
+}
+
+function build_w_segments(starts: ptr<f64>, ends: ptr<f64>, grundy: ptr<i32>, g_len: i32, max_s: f64,
+                          seg_starts: ptr<f64>, seg_ends: ptr<f64>, seg_slopes: ptr<f64>, seg_vals: ptr<f64>) -> i32 {
+    let mut max_g: i32 = 0
+    let mut i: i32 = 0
+    while i < g_len {
+        if grundy[i] > max_g { max_g = grundy[i] }
+        i = i + 1
+    }
+
+    let gsz: ptr<i32> = calloc((max_g + 1) as i64, 4)
+    let mut i2: i32 = 0
+    while i2 < g_len { gsz[grundy[i2]] = gsz[grundy[i2]] + 1; i2 = i2 + 1 }
+
+    # Flat arrays with offsets per grundy group
+    let goff: ptr<i32> = calloc((max_g + 2) as i64, 4)
+    let mut g3: i32 = 0
+    while g3 <= max_g {
+        goff[g3 + 1] = goff[g3] + gsz[g3]
+        g3 = g3 + 1
+    }
+    let total: i32 = goff[max_g + 1]
+    let ga: ptr<f64> = calloc(total as i64, 8)
+    let gb: ptr<f64> = calloc(total as i64, 8)
+    let gidx: ptr<i32> = calloc((max_g + 1) as i64, 4)
+    let mut i3: i32 = 0
+    while i3 < g_len {
+        let gg: i32 = grundy[i3]
+        let off: i32 = goff[gg] + gidx[gg]
+        ga[off] = starts[i3]
+        gb[off] = ends[i3]
+        gidx[gg] = gidx[gg] + 1
+        i3 = i3 + 1
+    }
+
+    let ev_pos: ptr<f64> = calloc(MAX_EVENTS as i64, 8)
+    let ev_delta: ptr<i32> = calloc(MAX_EVENTS as i64, 4)
+    let mut ev_count: i32 = 0
+
+    let mut g2: i32 = 0
+    while g2 <= max_g {
+        let m: i32 = gsz[g2]
+        let off2: i32 = goff[g2]
+        let mut i4: i32 = 0
+        while i4 < m {
+            let a1: f64 = ga[off2 + i4]
+            let b1: f64 = gb[off2 + i4]
+            let mut j: i32 = i4
+            while j < m {
+                let a2: f64 = ga[off2 + j]
+                let b2: f64 = gb[off2 + j]
+                let w: i32 = if i4 == j { 1 } else { 2 }
+                let p0: f64 = a1 + a2
+                let p1: f64 = a1 + b2
+                let p2: f64 = b1 + a2
+                let p3: f64 = b1 + b2
+                if p0 > max_s + EPS { break }
+                let skip: i32 = if p3 < 0.0 { 1 } else { 0 }
+                if skip == 0 {
+                    let mut pp0: f64 = p0
+                    let mut pp3: f64 = p3
+                    if pp0 < 0.0 { pp0 = 0.0 }
+                    if pp3 > max_s { pp3 = max_s }
+                    let q1: f64 = if p1 < p2 { p1 } else { p2 }
+                    let q2: f64 = if p1 < p2 { p2 } else { p1 }
+
+                    ev_pos[ev_count] = pp0; ev_delta[ev_count] = w; ev_count = ev_count + 1
+                    ev_pos[ev_count] = q1; ev_delta[ev_count] = -w; ev_count = ev_count + 1
+                    ev_pos[ev_count] = q2; ev_delta[ev_count] = -w; ev_count = ev_count + 1
+                    ev_pos[ev_count] = pp3; ev_delta[ev_count] = w; ev_count = ev_count + 1
+                }
+                j = j + 1
+            }
+            i4 = i4 + 1
+        }
+        g2 = g2 + 1
+    }
+
+    let ev_idx: ptr<i32> = calloc(MAX_EVENTS as i64, 4)
+    let ev_tmp: ptr<i32> = calloc(MAX_EVENTS as i64, 4)
+    let mut ei: i32 = 0
+    while ei < ev_count { ev_idx[ei] = ei; ei = ei + 1 }
+    ev_merge_sort(ev_idx, 0, ev_count, ev_pos, ev_tmp)
+
+    let m_pos: ptr<f64> = calloc(MAX_EVENTS as i64, 8)
+    let m_delta: ptr<i32> = calloc(MAX_EVENTS as i64, 4)
+    let mut m_count: i32 = 0
+    if ev_count > 0 {
+        let mut cur_pos: f64 = ev_pos[ev_idx[0]]
+        let mut cur_delta: i32 = ev_delta[ev_idx[0]]
+        let mut i5: i32 = 1
+        while i5 < ev_count {
+            let ip: i32 = ev_idx[i5]
+            if fabs(ev_pos[ip] - cur_pos) < EPS {
+                cur_delta = cur_delta + ev_delta[ip]
+            } else {
+                m_pos[m_count] = cur_pos
+                m_delta[m_count] = cur_delta
+                m_count = m_count + 1
+                cur_pos = ev_pos[ip]
+                cur_delta = ev_delta[ip]
+            }
+            i5 = i5 + 1
+        }
+        m_pos[m_count] = cur_pos
+        m_delta[m_count] = cur_delta
+        m_count = m_count + 1
+    }
+
+    let mut seg_count: i32 = 0
+    let mut slope: f64 = 0.0
+    let mut val: f64 = 0.0
+    let mut prev: f64 = 0.0
+    let mut i6: i32 = 0
+    while i6 < m_count {
+        let pos: f64 = m_pos[i6]
+        let delta: i32 = m_delta[i6]
+        if pos > max_s { break }
+        if pos > prev {
+            seg_starts[seg_count] = prev
+            seg_ends[seg_count] = pos
+            seg_slopes[seg_count] = slope
+            seg_vals[seg_count] = val
+            seg_count = seg_count + 1
+            val = val + slope * (pos - prev)
+            prev = pos
+        }
+        slope = slope + (delta as f64)
+        i6 = i6 + 1
+    }
+    if prev < max_s {
+        seg_starts[seg_count] = prev
+        seg_ends[seg_count] = max_s
+        seg_slopes[seg_count] = slope
+        seg_vals[seg_count] = val
+        seg_count = seg_count + 1
+    }
+
+    free(ga as ptr<void>)
+    free(gb as ptr<void>)
+    free(gsz as ptr<void>)
+    free(goff as ptr<void>)
+    free(gidx as ptr<void>)
+    free(ev_pos as ptr<void>)
+    free(ev_delta as ptr<void>)
+    free(ev_idx as ptr<void>)
+    free(ev_tmp as ptr<void>)
+    free(m_pos as ptr<void>)
+    free(m_delta as ptr<void>)
+
+    return seg_count
+}
+
+function w_value(seg_starts: ptr<f64>, seg_ends: ptr<f64>, seg_slopes: ptr<f64>, seg_vals: ptr<f64>, seg_count: i32, x: f64, out_val: ptr<f64>, out_slope: ptr<f64>) -> void {
+    let mut lo: i32 = 0
+    let mut hi: i32 = seg_count
+    while lo < hi {
+        let mid: i32 = (lo + hi) / 2
+        if seg_ends[mid] <= x { lo = mid + 1 }
+        else { hi = mid }
+    }
+    if lo >= seg_count {
+        out_val[0] = 0.0
+        out_slope[0] = 0.0
+        return
+    }
+    let start: f64 = seg_starts[lo]
+    let slope: f64 = seg_slopes[lo]
+    let val: f64 = seg_vals[lo] + slope * (x - start)
+    out_val[0] = val
+    out_slope[0] = slope
+}
+
+function term_deriv(m: f64, b0: f64, c: f64, L: f64) -> f64 {
+    return (m * L * L - 2.0 * m * c * L - b0 * c) / ((L - c) * (L - c))
+}
+
+function e_local_func(L: f64, m1: f64, b1: f64, m2: f64, b2: f64) -> f64 {
+    return 0.5 * L * ((m1 * L + b1) / (L - 1.0) + (m2 * L + b2) / (L - SQRT2))
+}
+
+function de_local_func(L: f64, m1: f64, b1: f64, m2: f64, b2: f64) -> f64 {
+    return 0.5 * (term_deriv(m1, b1, 1.0, L) + term_deriv(m2, b2, SQRT2, L))
+}
+
+function bisect_func(lo: f64, hi: f64, dlo: f64, m1: f64, b1: f64, m2: f64, b2: f64) -> f64 {
+    let mut lo2: f64 = lo
+    let mut hi2: f64 = hi
+    let mut dlo2: f64 = dlo
+    let mut iter: i32 = 0
+    while iter < 60 {
+        let m: f64 = (lo2 + hi2) * 0.5
+        let dm: f64 = de_local_func(m, m1, b1, m2, b2)
+        if dm == 0.0 { return m }
+        if dm * dlo2 > 0.0 { lo2 = m; dlo2 = dm }
+        else { hi2 = m }
+        iter = iter + 1
+    }
+    return (lo2 + hi2) * 0.5
+}
+
+function f_value(a: f64, b: f64, seg_starts: ptr<f64>, seg_ends: ptr<f64>, seg_slopes: ptr<f64>, seg_vals: ptr<f64>, seg_count: i32) -> f64 {
+    let points: ptr<f64> = calloc(MAX_VALS as i64, 8)
+    let mut p_len: i32 = 0
+    points[p_len] = a; p_len = p_len + 1
+    points[p_len] = b; p_len = p_len + 1
+
+    let mut i: i32 = 0
+    while i < seg_count {
+        let p: f64 = seg_starts[i]
+        let v1: f64 = p + 1.0
+        if a < v1 && v1 < b { points[p_len] = v1; p_len = p_len + 1 }
+        let v2: f64 = p + SQRT2
+        if a < v2 && v2 < b { points[p_len] = v2; p_len = p_len + 1 }
+        i = i + 1
+    }
+    let mut i2: i32 = 0
+    while i2 < seg_count {
+        let p: f64 = seg_ends[i2]
+        let v1: f64 = p + 1.0
+        if a < v1 && v1 < b { points[p_len] = v1; p_len = p_len + 1 }
+        let v2: f64 = p + SQRT2
+        if a < v2 && v2 < b { points[p_len] = v2; p_len = p_len + 1 }
+        i2 = i2 + 1
+    }
+
+    dsort(points, p_len)
+    p_len = dedup_double(points, p_len)
+
+    let mut best: f64 = -1.0
+
+    let mut i3: i32 = 0
+    while i3 < p_len - 1 {
+        let L0: f64 = points[i3]
+        let L1: f64 = points[i3 + 1]
+        if L1 - L0 >= 1e-12 {
+            let mid: f64 = (L0 + L1) * 0.5
+
+            let w1p: ptr<f64> = calloc(1, 8)
+            let m1p: ptr<f64> = calloc(1, 8)
+            let w2p: ptr<f64> = calloc(1, 8)
+            let m2p: ptr<f64> = calloc(1, 8)
+            w_value(seg_starts, seg_ends, seg_slopes, seg_vals, seg_count, mid - 1.0, w1p, m1p)
+            w_value(seg_starts, seg_ends, seg_slopes, seg_vals, seg_count, mid - SQRT2, w2p, m2p)
+            let w1: f64 = w1p[0]
+            let m1: f64 = m1p[0]
+            let w2: f64 = w2p[0]
+            let m2: f64 = m2p[0]
+            let b1: f64 = w1 - m1 * mid
+            let b2: f64 = w2 - m2 * mid
+            free(w1p as ptr<void>)
+            free(m1p as ptr<void>)
+            free(w2p as ptr<void>)
+            free(m2p as ptr<void>)
+
+            let val0: f64 = e_local_func(L0, m1, b1, m2, b2)
+            if val0 > best { best = val0 }
+            let val1: f64 = e_local_func(mid, m1, b1, m2, b2)
+            if val1 > best { best = val1 }
+            let val2: f64 = e_local_func(L1, m1, b1, m2, b2)
+            if val2 > best { best = val2 }
+
+            let left: f64 = L0 + 1e-10
+            let right: f64 = L1 - 1e-10
+            if left < right {
+                let dl: f64 = de_local_func(left, m1, b1, m2, b2)
+                let dm: f64 = de_local_func(mid, m1, b1, m2, b2)
+                let dr: f64 = de_local_func(right, m1, b1, m2, b2)
+
+                if dl * dm < 0.0 {
+                    let root: f64 = bisect_func(left, mid, dl, m1, b1, m2, b2)
+                    let val: f64 = e_local_func(root, m1, b1, m2, b2)
+                    if val > best { best = val }
+                }
+                if dm * dr < 0.0 {
+                    let root: f64 = bisect_func(mid, right, dm, m1, b1, m2, b2)
+                    let val: f64 = e_local_func(root, m1, b1, m2, b2)
+                    if val > best { best = val }
+                }
+            }
+        }
+        i3 = i3 + 1
+    }
+
+    free(points as ptr<void>)
+    return best
 }
 
 function main() -> i32 {
-    printf("%.8f\n", p644_native())
+    let max_l: f64 = 500.0
+    let starts: ptr<f64> = calloc(MAX_VALS as i64, 8)
+    let ends: ptr<f64> = calloc(MAX_VALS as i64, 8)
+    let grundy: ptr<i32> = calloc(MAX_VALS as i64, 4)
+    let g_len: i32 = compute_grundy_intervals(max_l, starts, ends, grundy)
+
+    let seg_starts: ptr<f64> = calloc(MAX_VALS as i64, 8)
+    let seg_ends: ptr<f64> = calloc(MAX_VALS as i64, 8)
+    let seg_slopes: ptr<f64> = calloc(MAX_VALS as i64, 8)
+    let seg_vals: ptr<f64> = calloc(MAX_VALS as i64, 8)
+    let seg_count: i32 = build_w_segments(starts, ends, grundy, g_len, max_l, seg_starts, seg_ends, seg_slopes, seg_vals)
+
+    let answer: f64 = f_value(200.0, 500.0, seg_starts, seg_ends, seg_slopes, seg_vals, seg_count)
+
+    printf("%.8f\n", answer)
+
+    free(starts as ptr<void>)
+    free(ends as ptr<void>)
+    free(grundy as ptr<void>)
+    free(seg_starts as ptr<void>)
+    free(seg_ends as ptr<void>)
+    free(seg_slopes as ptr<void>)
+    free(seg_vals as ptr<void>)
     return 0
 }
