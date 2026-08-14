@@ -1,11 +1,338 @@
-# Project Euler 792
-# Too Many Twos — 2-adic valuation of a tail sum of (-2)^k * C(2k,k).
+# Project Euler 792: Too Many Twos
+# S(n) = sum_{k=1..n} (-2)^k * C(2k,k)
+# u(n) = v2(3*S(n) + 4)  (2-adic valuation)
+# U(N) = sum_{n=1..N} u(n^3), N = 10000.
+#
+# In the 2-adics 3*sum_{k>=1} (-2)^k*C(2k,k) + 4 = 0, so
+#   3*S(n) + 4 = -3 * sum_{k>n} R(k),  R(k) = (-2)^k * C(2k,k).
+# -3 is odd, so u(n) = v2( sum_{k>n} R(k) ).
+#
+# R(k+1)/R(k) = -4 * (2k+1)/(k+1),  v2(R(k)) = k + popcount(k).
+#
+# We sum the tail k = n+1 .. n+m (m up to 220) keeping only odd parts
+# modulo 2^P (powers of two tracked separately).  The remainder for
+# k >= n+m+1 is divisible by 2^(n+m+1), so once the partial sum's
+# valuation drops below n+m+1 it equals u(n).  Precision P starts at
+# 256 bits and is doubled when the reduced sum vanishes mod 2^P.
 
 extern {
-    function p792_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function malloc(n: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+}
+
+const MAXLIMBS: i32 = 32
+
+# ---- helpers: popcount and ctz for u64 ----
+
+function popcount64(x0: u64) -> i64 {
+    let mut x: u64 = x0
+    let mut c: i64 = 0
+    while x != 0 {
+        c = c + 1
+        x = x & (x - 1)
+    }
+    return c
+}
+
+function ctz64(x: u64) -> i32 {
+    if x == 0 { return 64 }
+    let mut n: i32 = 0
+    let mut v: u64 = x
+    while (v & 1) == 0 {
+        n = n + 1
+        v = v >> 1
+    }
+    return n
+}
+
+# ---- bignum mod 2^(64*nl), little-endian u64 limbs ----
+
+function bn_is_zero(a: ptr<u64>, nl: i32) -> bool {
+    let mut i: i32 = 0
+    while i < nl {
+        if a[i] != 0 { return false }
+        i = i + 1
+    }
+    return true
+}
+
+function bn_v2(a: ptr<u64>, nl: i32) -> i32 {
+    let mut i: i32 = 0
+    while i < nl {
+        if a[i] != 0 { return i * 64 + ctz64(a[i]) }
+        i = i + 1
+    }
+    return nl * 64
+}
+
+function bn_zero(a: ptr<u64>, nl: i32) -> void {
+    let mut i: i32 = 0
+    while i < nl {
+        a[i] = 0
+        i = i + 1
+    }
+}
+
+function bn_copy(dst: ptr<u64>, src: ptr<u64>, nl: i32) -> void {
+    let mut i: i32 = 0
+    while i < nl {
+        dst[i] = src[i]
+        i = i + 1
+    }
+}
+
+function bn_from_u64(a: ptr<u64>, v: u64, nl: i32) -> void {
+    bn_zero(a, nl)
+    a[0] = v
+}
+
+function bn_from_i64(a: ptr<u64>, v: i64, nl: i32) -> void {
+    let all_ones: u64 = 0
+    let fill: u64 = if v < 0 { all_ones - 1 } else { 0 }
+    let mut i: i32 = 1
+    while i < nl {
+        a[i] = fill
+        i = i + 1
+    }
+    a[0] = v as u64
+}
+
+function bn_add(dst: ptr<u64>, a: ptr<u64>, b: ptr<u64>, nl: i32) -> void {
+    let mut carry: u64 = 0
+    let mut i: i32 = 0
+    while i < nl {
+        let s: i128 = (a[i] as i128) + (b[i] as i128) + (carry as i128)
+        dst[i] = s as u64
+        carry = (s >> 64) as u64
+        i = i + 1
+    }
+}
+
+function bn_shl(dst: ptr<u64>, a: ptr<u64>, shift: i32, nl: i32) -> void {
+    if shift <= 0 { bn_copy(dst, a, nl); return }
+    if shift >= nl * 64 { bn_zero(dst, nl); return }
+    let ws: i32 = shift / 64
+    let bs: i32 = shift % 64
+    bn_zero(dst, nl)
+    if bs == 0 {
+        let mut i: i32 = nl - 1
+        while i >= ws {
+            dst[i] = a[i - ws]
+            i = i - 1
+        }
+    } else {
+        let mut i: i32 = nl - 1
+        while i >= ws {
+            let lo: u64 = a[i - ws] << bs
+            let hi: u64 = if i - ws - 1 >= 0 { a[i - ws - 1] >> (64 - bs) } else { 0 }
+            dst[i] = lo | hi
+            i = i - 1
+        }
+    }
+}
+
+function bn_mul(dst: ptr<u64>, a: ptr<u64>, b: ptr<u64>, nl: i32) -> void {
+    let tmp: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let mut i: i32 = 0
+    while i < nl {
+        let mut carry: u64 = 0
+        let mut j: i32 = 0
+        while j < nl - i {
+            let p: i128 = (a[i] as i128) * (b[j] as i128) + (tmp[i + j] as i128) + (carry as i128)
+            tmp[i + j] = p as u64
+            carry = (p >> 64) as u64
+            j = j + 1
+        }
+        i = i + 1
+    }
+    bn_copy(dst, tmp, nl)
+    free(tmp as ptr<void>)
+}
+
+function bn_inv_odd(dst: ptr<u64>, a: ptr<u64>, nl: i32) -> void {
+    let x: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let t: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let two: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let ax: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let s: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let neg: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let all_ones: u64 = 0
+    all_ones = all_ones - 1
+
+    bn_from_u64(x, 1, nl)
+    bn_from_u64(two, 2, nl)
+    let bits: i32 = nl * 64
+    let mut it: i32 = 0
+    while (1 << it) < bits {
+        bn_mul(ax, a, x, nl)
+        let mut i: i32 = 0
+        while i < nl {
+            neg[i] = all_ones ^ ax[i]
+            i = i + 1
+        }
+        let mut c: u64 = 1
+        i = 0
+        while i < nl && c != 0 {
+            let s2: i128 = (neg[i] as i128) + (c as i128)
+            neg[i] = s2 as u64
+            c = (s2 >> 64) as u64
+            i = i + 1
+        }
+        bn_add(s, neg, two, nl)
+        bn_mul(t, x, s, nl)
+        bn_copy(x, t, nl)
+        it = it + 1
+    }
+    bn_copy(dst, x, nl)
+    free(x as ptr<void>)
+    free(t as ptr<void>)
+    free(two as ptr<void>)
+    free(ax as ptr<void>)
+    free(s as ptr<void>)
+    free(neg as ptr<void>)
+}
+
+# ---- inverse cache (parallel arrays) ----
+
+let mut inv_key: ptr<u64> = null
+let mut inv_val: ptr<u64> = null
+let mut inv_cache_n: i32 = 0
+
+function inv_odd(denom_odd: u64, nl: i32) -> i32 {
+    let mut i: i32 = 0
+    while i < inv_cache_n {
+        if inv_key[i] == denom_odd { return i }
+        i = i + 1
+    }
+    let a: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    bn_from_u64(a, denom_odd, nl)
+    let idx: i32 = inv_cache_n
+    bn_inv_odd(inv_val + (idx as i64 * MAXLIMBS as i64), a, nl)
+    inv_key[idx] = denom_odd
+    inv_cache_n = inv_cache_n + 1
+    free(a as ptr<void>)
+    return idx
+}
+
+# ---- core: u(n) ----
+
+function u_of(n: i64) -> i64 {
+    let P_list: ptr<i32> = calloc(4, 4) as ptr<i32>
+    P_list[0] = 256; P_list[1] = 512; P_list[2] = 1024; P_list[3] = 2048
+
+    let odd: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let scaled_sum: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let tmp: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let tmp2: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let odd_new: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+    let factor: ptr<u64> = calloc(MAXLIMBS as i64, 8) as ptr<u64>
+
+    let mut pi: i32 = 0
+    while pi < 4 {
+        let P: i32 = P_list[pi]
+        let nl: i32 = P / 64
+        inv_cache_n = 0
+
+        let mut k: i64 = n + 1
+        let mut exp: i64 = k + popcount64(k as u64)
+
+        bn_from_u64(odd, 1, nl)
+
+        let mut have_min: bool = false
+        let mut min_exp: i64 = 0
+        bn_zero(scaled_sum, nl)
+
+        let mut m: i32 = 1
+        while m <= 220 {
+            if !have_min {
+                min_exp = exp
+                bn_copy(scaled_sum, odd, nl)
+                have_min = true
+            } else {
+                if exp < min_exp {
+                    let shift: i64 = min_exp - exp
+                    if shift < (P as i64) { bn_shl(scaled_sum, scaled_sum, shift as i32, nl) }
+                    else { bn_zero(scaled_sum, nl) }
+                    min_exp = exp
+                    bn_add(scaled_sum, scaled_sum, odd, nl)
+                } else {
+                    let shift: i64 = exp - min_exp
+                    if shift < (P as i64) {
+                        bn_shl(tmp, odd, shift as i32, nl)
+                        bn_add(scaled_sum, scaled_sum, tmp, nl)
+                    }
+                }
+            }
+
+            if bn_is_zero(scaled_sum, nl) { break }
+
+            let v_partial: i64 = min_exp + (bn_v2(scaled_sum, nl) as i64)
+            if v_partial < n + (m as i64) + 1 {
+                free(P_list as ptr<void>)
+                free(odd as ptr<void>)
+                free(scaled_sum as ptr<void>)
+                free(tmp as ptr<void>)
+                free(tmp2 as ptr<void>)
+                free(odd_new as ptr<void>)
+                free(factor as ptr<void>)
+                return v_partial
+            }
+
+            # advance R(k) -> R(k+1): ratio = -4*(2k+1)/(k+1)
+            let denom: i64 = k + 1
+            let t: i32 = ctz64(denom as u64)
+            let denom_odd: u64 = (denom as u64) >> t
+
+            let inv_idx: i32 = inv_odd(denom_odd, nl)
+            let inv_ptr: ptr<u64> = inv_val + (inv_idx as i64 * MAXLIMBS as i64)
+
+            bn_from_i64(factor, -(2 * k + 1), nl)
+            bn_mul(tmp2, factor, inv_ptr, nl)
+            bn_mul(odd_new, odd, tmp2, nl)
+            bn_copy(odd, odd_new, nl)
+
+            exp = exp + 2 - (t as i64)
+            k = denom
+
+            if exp != k + popcount64(k as u64) {
+                free(P_list as ptr<void>)
+                free(odd as ptr<void>)
+                free(scaled_sum as ptr<void>)
+                free(tmp as ptr<void>)
+                free(tmp2 as ptr<void>)
+                free(odd_new as ptr<void>)
+                free(factor as ptr<void>)
+                return -1
+            }
+            m = m + 1
+        }
+        pi = pi + 1
+    }
+    free(P_list as ptr<void>)
+    free(odd as ptr<void>)
+    free(scaled_sum as ptr<void>)
+    free(tmp as ptr<void>)
+    free(tmp2 as ptr<void>)
+    free(odd_new as ptr<void>)
+    free(factor as ptr<void>)
+    return -1
 }
 
 function main() -> i32 {
-    printf("%lld\n", p792_native())
+    inv_key = calloc(256, 8) as ptr<u64>
+    inv_val = calloc(256 * MAXLIMBS as i64, 8) as ptr<u64>
+
+    let mut total: i64 = 0
+    let mut n: i64 = 1
+    while n <= 10000 {
+        let nc: i64 = n * n * n
+        total = total + u_of(nc)
+        n = n + 1
+    }
+
+    printf("%lld\n", total)
+    free(inv_key as ptr<void>)
+    free(inv_val as ptr<void>)
     return 0
 }
