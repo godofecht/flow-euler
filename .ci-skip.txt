@@ -20,7 +20,6 @@
 275  slow-11s
 304  slow-9s
 337  slow-7s
-370  slow-58s
 411  slow-23s
 413  slow-10s
 415  slow-15s
@@ -35,16 +34,10 @@
 505  slow-12s
 526  slow-19s
 529  slow-15s
-545  slow-39s
 557  slow-13s
 566  slow-9s
 570  slow-13s
 571  slow-15s
-585  slow-35s
 662  slow-22s
 678  slow-26s
-681  slow-49s
 701  slow-16s
-829  slow-40s
-989  slow-30s
-994  slow-41s

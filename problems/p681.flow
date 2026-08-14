@@ -7,6 +7,51 @@ import euler.nt { isqrt }
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
+    function sqrt(x: f64) -> f64
+}
+
+# Hardware-sqrt integer square root (faster than Newton iteration).
+function isq(n: i64) -> i64 {
+    if n <= 0 { return 0 }
+    let r: i64 = sqrt(n as f64) as i64
+    while r > 0 && r * r > n { r = r - 1 }
+    while (r + 1) * (r + 1) <= n { r = r + 1 }
+    return r
+}
+
+function sift_down(a: ptr<i64>, start: i64, end: i64) -> void {
+    let mut root: i64 = start
+    while 2 * root + 1 <= end {
+        let mut child: i64 = 2 * root + 1
+        if child + 1 <= end {
+            if a[child] < a[child + 1] { child = child + 1 }
+        }
+        if a[root] < a[child] {
+            let t: i64 = a[root]
+            a[root] = a[child]
+            a[child] = t
+            root = child
+        } else {
+            return
+        }
+    }
+}
+
+function heapsort_i64(a: ptr<i64>, n: i64) -> void {
+    if n < 2 { return }
+    let mut start: i64 = n / 2 - 1
+    while start >= 0 {
+        sift_down(a, start, n - 1)
+        start = start - 1
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        let t: i64 = a[0]
+        a[0] = a[end]
+        a[end] = t
+        end = end - 1
+        sift_down(a, 0, end)
+    }
 }
 
 function main() -> i32 {
@@ -84,16 +129,8 @@ function main() -> i32 {
             }
         }
 
-        # Sort divs (insertion sort, small arrays)
-        for i in 1..ndivs {
-            let key: i64 = divs[i]
-            let mut j: i64 = i
-            while j > 0 && divs[j - 1] > key {
-                divs[j] = divs[j - 1]
-                j = j - 1
-            }
-            divs[j] = key
-        }
+        # Sort divs (heapsort — O(d log d) vs O(d^2) insertion sort).
+        heapsort_i64(divs, ndivs)
 
         let dlen: i64 = ndivs
 
@@ -111,14 +148,14 @@ function main() -> i32 {
                 if k2_div_T % W != 0 { continue }
 
                 let R: i64 = k2_div_T / W
-                let mut vmax: i64 = isqrt(R)
+                let mut vmax: i64 = isq(R)
                 if vmax < W { break }
                 if vmax > k { vmax = k }
 
                 let S: i64 = W + T
                 # disc = S^2 + 4*R
                 let disc: i64 = S * S + 4 * R
-                let rt: i64 = isqrt(disc)
+                let rt: i64 = isq(disc)
                 let mut vmin: i64 = (rt - S) / 2 + 1
                 if vmin < W { vmin = W }
                 if vmin > vmax { continue }

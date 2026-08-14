@@ -13,8 +13,9 @@ const MOD: i64 = 1000000009
 const TARGET_LIMIT: i64 = 100000000000000
 const SMALL_LIMIT: i64 = 8
 
+# MOD < 2^30, so a*b < 2^60 fits in i64 (avoids slow i128 division).
 function mulmod(a: i64, b: i64) -> i64 {
-    return ((a as i128) * (b as i128) % MOD) as i64
+    return (a * b) % MOD
 }
 
 function mod_pow(a0: i64, e0: i64) -> i64 {
@@ -52,7 +53,7 @@ function tonelli_shanks(n0: i64, p: i64) -> i64 {
         let mut i: i64 = 1
         let mut t2i: i64 = mulmod(t, t)
         while t2i != 1 { t2i = mulmod(t2i, t2i); i = i + 1 }
-        let b: i64 = mod_pow(c, 1 << (m - i - 1))
+        let b: i64 = mod_pow(c, (1 as i64) << (m - i - 1))
         r = mulmod(r, b)
         c = mulmod(b, b)
         t = mulmod(t, c)

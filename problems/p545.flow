@@ -32,15 +32,57 @@ function gcd(a0: i64, b0: i64) -> i64 {
     return a
 }
 
+# Miller-Rabin primality (deterministic for n < 2^32 via bases 2,7,61).
+# Replaces trial division which was O(sqrt(n)) per survivor.
+function mulmod_pp(a: i64, b: i64, m: i64) -> i64 {
+    return (a * b) % m
+}
+
+function powmod_pp(a0: i64, e0: i64, m: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut a: i64 = a0 % m
+    let mut e: i64 = e0
+    while e > 0 {
+        if (e & 1) != 0 { r = mulmod_pp(r, a, m) }
+        a = mulmod_pp(a, a, m)
+        e = e >> 1
+    }
+    return r
+}
+
+function mr_witness(n: i64, d: i64, s: i64, a0: i64) -> i32 {
+    let a: i64 = a0 % n
+    if a == 0 { return 1 }
+    let mut x: i64 = powmod_pp(a, d, n)
+    if x == 1 { return 1 }
+    if x == n - 1 { return 1 }
+    let mut j: i64 = 0
+    while j < s - 1 {
+        x = mulmod_pp(x, x, n)
+        if x == n - 1 { return 1 }
+        j = j + 1
+    }
+    return 0
+}
+
 function is_prime_small(n: i64) -> i32 {
     if n < 2 { return 0 }
-    if (n & 1) == 0 { if n == 2 { return 1 } else { return 0 } }
-    let r: i64 = isqrt(n)
-    let mut d: i64 = 3
-    while d <= r {
-        if n % d == 0 { return 0 }
-        d = d + 2
-    }
+    if n == 2 { return 1 }
+    if n == 3 { return 1 }
+    if n == 5 { return 1 }
+    if n == 7 { return 1 }
+    if n == 61 { return 1 }
+    if (n & 1) == 0 { return 0 }
+    if n % 3 == 0 { return 0 }
+    if n % 5 == 0 { return 0 }
+    if n % 7 == 0 { return 0 }
+    if n % 61 == 0 { return 0 }
+    let mut d: i64 = n - 1
+    let mut s: i64 = 0
+    while (d & 1) == 0 { d = d >> 1; s = s + 1 }
+    if mr_witness(n, d, s, 2) == 0 { return 0 }
+    if mr_witness(n, d, s, 7) == 0 { return 0 }
+    if mr_witness(n, d, s, 61) == 0 { return 0 }
     return 1
 }
 
