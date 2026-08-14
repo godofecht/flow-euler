@@ -650,7 +650,6 @@ function F_square(a: i32, b: i32, c: i32) -> i64 {
 
 function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
     let ctx: FC = FC { a: a, b: b, c: c, ab: (a as i64) * (b as i64), sqrtc: sqrt((c as f64)) }
-    printf("  F_nonsquare init a=%d b=%d c=%d ab=%lld\n", a, b, c, ctx.ab)
 
     let s0: Point = canonical01(ctx.ab / (a as i64), 0, ctx)
     let s1: Point = canonical01(ctx.ab / (b as i64), 0, ctx)
@@ -673,11 +672,12 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
     let hashQ0: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
     let hashQ1: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
     let hashQ2: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
-    memset(hashP0 as ptr<void>, 255, (CAP as i64) * 8)
-    memset(hashP1 as ptr<void>, 255, (CAP as i64) * 8)
-    memset(hashP2 as ptr<void>, 255, (CAP as i64) * 8)
+    let occ0: ptr<i32> = calloc(CAP as i64, 4) as ptr<i32>
+    let occ1: ptr<i32> = calloc(CAP as i64, 4) as ptr<i32>
+    let occ2: ptr<i32> = calloc(CAP as i64, 4) as ptr<i32>
     let hashP: array<ptr<i64>, 3> = [hashP0, hashP1, hashP2]
     let hashQ: array<ptr<i64>, 3> = [hashQ0, hashQ1, hashQ2]
+    let occ: array<ptr<i32>, 3> = [occ0, occ1, occ2]
 
     let stackP0: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
     let stackP1: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
@@ -693,14 +693,18 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
     while ph < 3 {
         let sp: i64 = sP[ph]
         let sq: i64 = sQ[ph]
-        let h0idx: i32 = 0 & MASK
-        hashP[ph][h0idx] = 0
-        hashQ[ph][h0idx] = 0
-        let mut h1: i64 = sp * 2654435761 + sq
+        let mut h0: i64 = 0 * 31 + 0
+        if h0 < 0 { h0 = 0 - h0 }
+        let idx0: i32 = (h0 & (MASK as i64)) as i32
+        hashP[ph][idx0] = 0
+        hashQ[ph][idx0] = 0
+        occ[ph][idx0] = 1
+        let mut h1: i64 = sp * 31 + sq
         if h1 < 0 { h1 = 0 - h1 }
         let idx1: i32 = (h1 & (MASK as i64)) as i32
         hashP[ph][idx1] = sp
         hashQ[ph][idx1] = sq
+        occ[ph][idx1] = 1
         stackP[ph][0] = 0
         stackQ[ph][0] = 0
         stackP[ph][1] = sp
@@ -710,14 +714,8 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
     }
 
     let mut progressed: bool = true
-    let mut iter: i32 = 0
     while progressed {
         progressed = false
-        iter = iter + 1
-        if iter > 100 {
-            printf("  DFS stuck at iter %d\n", iter)
-            break
-        }
         ph = 0
         while ph < 3 {
             let prev: i32 = (ph + 2) % 3
@@ -729,16 +727,17 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
                 let cmp: i32 = cmpPoints(yP, yQ, thrP[prev], thrQ[prev], ctx.ab, ctx.c)
                 if cmp < 0 {
                     let x: Point = addP(yP, yQ, sP[prev], sQ[prev], ctx)
-                    let mut h: i64 = x.P * 2654435761 + x.Q
+                    let mut h: i64 = x.P * 31 + x.Q
                     if h < 0 { h = 0 - h }
                     let idx: i32 = (h & (MASK as i64)) as i32
                     let mut inserted: bool = false
                     let mut probe: i32 = 0
                     while probe < CAP {
                         let pidx: i32 = (idx + probe) & MASK
-                        if hashP[prev][pidx] == -1 {
+                        if occ[prev][pidx] == 0 {
                             hashP[prev][pidx] = x.P
                             hashQ[prev][pidx] = x.Q
+                            occ[prev][pidx] = 1
                             inserted = true
                             break
                         }
@@ -755,16 +754,17 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
                 }
                 if cmp > 0 {
                     let x: Point = oneMinus(yP, yQ, ctx)
-                    let mut h: i64 = x.P * 2654435761 + x.Q
+                    let mut h: i64 = x.P * 31 + x.Q
                     if h < 0 { h = 0 - h }
                     let idx: i32 = (h & (MASK as i64)) as i32
                     let mut inserted: bool = false
                     let mut probe: i32 = 0
                     while probe < CAP {
                         let pidx: i32 = (idx + probe) & MASK
-                        if hashP[prev][pidx] == -1 {
+                        if occ[prev][pidx] == 0 {
                             hashP[prev][pidx] = x.P
                             hashQ[prev][pidx] = x.Q
+                            occ[prev][pidx] = 1
                             inserted = true
                             break
                         }
@@ -795,11 +795,10 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
     let mut m: i32 = -1
     ph = 0
     while ph < 3 {
-        printf("  phase %d: collecting points\n", ph)
         let mut count: i32 = 0
         let mut idx: i32 = 0
         while idx < CAP {
-            if hashP[ph][idx] != -1 {
+            if occ[ph][idx] != 0 {
                 ptsP[ph][count] = hashP[ph][idx]
                 ptsQ[ph][count] = hashQ[ph][idx]
                 count = count + 1
@@ -816,6 +815,9 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
             free(hashQ0 as ptr<void>)
             free(hashQ1 as ptr<void>)
             free(hashQ2 as ptr<void>)
+            free(occ0 as ptr<void>)
+            free(occ1 as ptr<void>)
+            free(occ2 as ptr<void>)
             free(stackP0 as ptr<void>)
             free(stackP1 as ptr<void>)
             free(stackP2 as ptr<void>)
@@ -879,6 +881,9 @@ function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
     free(hashQ0 as ptr<void>)
     free(hashQ1 as ptr<void>)
     free(hashQ2 as ptr<void>)
+    free(occ0 as ptr<void>)
+    free(occ1 as ptr<void>)
+    free(occ2 as ptr<void>)
     free(stackP0 as ptr<void>)
     free(stackP1 as ptr<void>)
     free(stackP2 as ptr<void>)

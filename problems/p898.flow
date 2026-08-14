@@ -1,11 +1,322 @@
 # Project Euler 898
-# Claire Voyant: optimal probability of guessing coin toss.
+# Claire Voyant: optimal probability that Claire guesses the coin toss.
+# Meet-in-the-middle with f64 log2 likelihood ratios and Kahan summation.
+# 51 students with lie probabilities 25%..75%, paired into 25 3-outcome variables.
 
 extern {
-    function p898_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function log2(x: f64) -> f64
+}
+
+# Variable parallel arrays (flat: var_idx * 3 + outcome_idx)
+let mut var_n_outcomes: ptr<i32> = null
+let mut var_mul_n: ptr<i32> = null
+let mut var_mul_d: ptr<i32> = null
+let mut var_ph: ptr<f64> = null
+let mut var_pt: ptr<f64> = null
+let mut var_log_n: ptr<f64> = null
+let mut var_log_d: ptr<f64> = null
+let mut n_vars: i32 = 0
+
+# Right state parallel arrays
+let mut r_log_ratio: ptr<f64> = null
+let mut r_ph: ptr<f64> = null
+let mut r_pt: ptr<f64> = null
+let mut n_r: i32 = 0
+
+# Suffix sums
+let mut suf_h: ptr<f64> = null
+let mut suf_t: ptr<f64> = null
+
+# Kahan summation globals
+let mut pHA: f64 = 0.0
+let mut cH: f64 = 0.0
+let mut pTA: f64 = 0.0
+let mut cT: f64 = 0.0
+
+let mut n_left: i32 = 0
+
+function build_variables(ps: ptr<i32>, n_ps: i32) -> void {
+    let counts: ptr<i32> = calloc(101, 4) as ptr<i32>
+    let mut i: i32 = 0
+    while i < n_ps {
+        counts[ps[i]] = counts[ps[i]] + 1
+        i = i + 1
+    }
+    n_vars = 0
+    let mut k: i32 = 0
+    while k < 50 {
+        let mut m: i32 = counts[k]
+        if counts[100 - k] < m {
+            m = counts[100 - k]
+        }
+        if m > 0 {
+            counts[k] = counts[k] - m
+            counts[100 - k] = counts[100 - k] - m
+            let a: i32 = 100 - k
+            let b: i32 = k
+            let num_plus: i32 = a * a
+            let den_plus: i32 = b * b
+            let num_minus: i32 = b * b
+            let den_minus: i32 = a * a
+            let p_plus_H: f64 = (a * a) as f64 / 10000.0
+            let p_zero: f64 = (2 * a * b) as f64 / 10000.0
+            let p_minus_H: f64 = (b * b) as f64 / 10000.0
+            let mut r: i32 = 0
+            while r < m {
+                let vi: i32 = n_vars
+                n_vars = n_vars + 1
+                var_n_outcomes[vi] = 3
+                var_mul_n[vi * 3 + 0] = num_minus
+                var_mul_d[vi * 3 + 0] = den_minus
+                var_ph[vi * 3 + 0] = p_minus_H
+                var_pt[vi * 3 + 0] = p_plus_H
+                var_mul_n[vi * 3 + 1] = 1
+                var_mul_d[vi * 3 + 1] = 1
+                var_ph[vi * 3 + 1] = p_zero
+                var_pt[vi * 3 + 1] = p_zero
+                var_mul_n[vi * 3 + 2] = num_plus
+                var_mul_d[vi * 3 + 2] = den_plus
+                var_ph[vi * 3 + 2] = p_plus_H
+                var_pt[vi * 3 + 2] = p_minus_H
+                let mut o: i32 = 0
+                while o < 3 {
+                    var_log_n[vi * 3 + o] = log2(var_mul_n[vi * 3 + o] as f64)
+                    var_log_d[vi * 3 + o] = log2(var_mul_d[vi * 3 + o] as f64)
+                    o = o + 1
+                }
+                r = r + 1
+            }
+        }
+        k = k + 1
+    }
+    counts[50] = 0
+    k = 0
+    while k <= 100 {
+        let mut r: i32 = 0
+        while r < counts[k] {
+            let vi: i32 = n_vars
+            n_vars = n_vars + 1
+            let a: i32 = 100 - k
+            let b: i32 = k
+            var_n_outcomes[vi] = 2
+            var_mul_n[vi * 3 + 0] = b
+            var_mul_d[vi * 3 + 0] = a
+            var_ph[vi * 3 + 0] = b as f64 / 100.0
+            var_pt[vi * 3 + 0] = a as f64 / 100.0
+            var_mul_n[vi * 3 + 1] = a
+            var_mul_d[vi * 3 + 1] = b
+            var_ph[vi * 3 + 1] = a as f64 / 100.0
+            var_pt[vi * 3 + 1] = b as f64 / 100.0
+            let mut o: i32 = 0
+            while o < 2 {
+                var_log_n[vi * 3 + o] = log2(var_mul_n[vi * 3 + o] as f64)
+                var_log_d[vi * 3 + o] = log2(var_mul_d[vi * 3 + o] as f64)
+                o = o + 1
+            }
+            r = r + 1
+        }
+        k = k + 1
+    }
+    free(counts as ptr<void>)
+}
+
+function merge_r(tmp_lr: ptr<f64>, tmp_ph: ptr<f64>, tmp_pt: ptr<f64>, lo: i32, mid: i32, hi: i32) -> void {
+    let mut i: i32 = lo
+    let mut j: i32 = mid
+    let mut k: i32 = lo
+    while i < mid && j < hi {
+        if r_log_ratio[i] <= r_log_ratio[j] {
+            tmp_lr[k] = r_log_ratio[i]
+            tmp_ph[k] = r_ph[i]
+            tmp_pt[k] = r_pt[i]
+            i = i + 1
+        } else {
+            tmp_lr[k] = r_log_ratio[j]
+            tmp_ph[k] = r_ph[j]
+            tmp_pt[k] = r_pt[j]
+            j = j + 1
+        }
+        k = k + 1
+    }
+    while i < mid {
+        tmp_lr[k] = r_log_ratio[i]
+        tmp_ph[k] = r_ph[i]
+        tmp_pt[k] = r_pt[i]
+        i = i + 1
+        k = k + 1
+    }
+    while j < hi {
+        tmp_lr[k] = r_log_ratio[j]
+        tmp_ph[k] = r_ph[j]
+        tmp_pt[k] = r_pt[j]
+        j = j + 1
+        k = k + 1
+    }
+    i = lo
+    while i < hi {
+        r_log_ratio[i] = tmp_lr[i]
+        r_ph[i] = tmp_ph[i]
+        r_pt[i] = tmp_pt[i]
+        i = i + 1
+    }
+}
+
+function merge_sort_r(tmp_lr: ptr<f64>, tmp_ph: ptr<f64>, tmp_pt: ptr<f64>, lo: i32, hi: i32) -> void {
+    if hi - lo <= 1 { return }
+    let mid: i32 = (lo + hi) / 2
+    merge_sort_r(tmp_lr, tmp_ph, tmp_pt, lo, mid)
+    merge_sort_r(tmp_lr, tmp_ph, tmp_pt, mid, hi)
+    merge_r(tmp_lr, tmp_ph, tmp_pt, lo, mid, hi)
+}
+
+function enumerate_right(start: i32, n: i32) -> void {
+    let mut count: i32 = 1
+    let mut log_ratios: ptr<f64> = calloc(1, 8) as ptr<f64>
+    let mut phs: ptr<f64> = calloc(1, 8) as ptr<f64>
+    let mut pts: ptr<f64> = calloc(1, 8) as ptr<f64>
+    log_ratios[0] = 0.0
+    phs[0] = 1.0
+    pts[0] = 1.0
+    let mut v: i32 = start
+    while v < n {
+        let no: i32 = var_n_outcomes[v]
+        let new_count: i32 = count * no
+        let nr: ptr<f64> = calloc(new_count as i64, 8) as ptr<f64>
+        let nph: ptr<f64> = calloc(new_count as i64, 8) as ptr<f64>
+        let npt: ptr<f64> = calloc(new_count as i64, 8) as ptr<f64>
+        let mut idx: i32 = 0
+        let mut i: i32 = 0
+        while i < count {
+            let mut o: i32 = 0
+            while o < no {
+                nr[idx] = log_ratios[i] + var_log_n[v * 3 + o] - var_log_d[v * 3 + o]
+                nph[idx] = phs[i] * var_ph[v * 3 + o]
+                npt[idx] = pts[i] * var_pt[v * 3 + o]
+                idx = idx + 1
+                o = o + 1
+            }
+            i = i + 1
+        }
+        free(log_ratios as ptr<void>)
+        free(phs as ptr<void>)
+        free(pts as ptr<void>)
+        log_ratios = nr
+        phs = nph
+        pts = npt
+        count = new_count
+        v = v + 1
+    }
+    n_r = count
+    let mut i2: i32 = 0
+    while i2 < count {
+        r_log_ratio[i2] = log_ratios[i2]
+        r_ph[i2] = phs[i2]
+        r_pt[i2] = pts[i2]
+        i2 = i2 + 1
+    }
+    free(log_ratios as ptr<void>)
+    free(phs as ptr<void>)
+    free(pts as ptr<void>)
+    let tmp_lr: ptr<f64> = calloc(count as i64, 8) as ptr<f64>
+    let tmp_ph: ptr<f64> = calloc(count as i64, 8) as ptr<f64>
+    let tmp_pt: ptr<f64> = calloc(count as i64, 8) as ptr<f64>
+    merge_sort_r(tmp_lr, tmp_ph, tmp_pt, 0, count)
+    free(tmp_lr as ptr<void>)
+    free(tmp_ph as ptr<void>)
+    free(tmp_pt as ptr<void>)
+    suf_h[count] = 0.0
+    suf_t[count] = 0.0
+    let mut i3: i32 = count - 1
+    while i3 >= 0 {
+        suf_h[i3] = suf_h[i3 + 1] + r_ph[i3]
+        suf_t[i3] = suf_t[i3 + 1] + r_pt[i3]
+        i3 = i3 - 1
+    }
+}
+
+function enum_left(vi: i32, ph: f64, pt: f64, log_ratio: f64) -> void {
+    if vi == n_left {
+        let threshold: f64 = 0.0 - log_ratio
+        let mut lo: i32 = 0
+        let mut hi: i32 = n_r
+        while lo < hi {
+            let mid: i32 = (lo + hi) / 2
+            if r_log_ratio[mid] < threshold {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        let j: i32 = lo
+        let y_h: f64 = ph * suf_h[j] - cH
+        let t_h: f64 = pHA + y_h
+        cH = (t_h - pHA) - y_h
+        pHA = t_h
+        let y_t: f64 = pt * suf_t[j] - cT
+        let t_t: f64 = pTA + y_t
+        cT = (t_t - pTA) - y_t
+        pTA = t_t
+        return
+    }
+    let no: i32 = var_n_outcomes[vi]
+    let mut o: i32 = 0
+    while o < no {
+        let new_log_ratio: f64 = log_ratio + var_log_n[vi * 3 + o] - var_log_d[vi * 3 + o]
+        enum_left(vi + 1, ph * var_ph[vi * 3 + o], pt * var_pt[vi * 3 + o], new_log_ratio)
+        o = o + 1
+    }
 }
 
 function main() -> i32 {
-    printf("%.10f\n", p898_native())
+    var_n_outcomes = calloc(60, 4) as ptr<i32>
+    var_mul_n = calloc(180, 4) as ptr<i32>
+    var_mul_d = calloc(180, 4) as ptr<i32>
+    var_ph = calloc(180, 8) as ptr<f64>
+    var_pt = calloc(180, 8) as ptr<f64>
+    var_log_n = calloc(180, 8) as ptr<f64>
+    var_log_d = calloc(180, 8) as ptr<f64>
+    let ps: ptr<i32> = calloc(51, 4) as ptr<i32>
+    let mut i: i32 = 0
+    while i < 51 {
+        ps[i] = 25 + i
+        i = i + 1
+    }
+    build_variables(ps, 51)
+    free(ps as ptr<void>)
+    if n_vars == 0 {
+        printf("0.5\n")
+        return 0
+    }
+    let mid: i32 = n_vars / 2
+    n_left = mid
+    r_log_ratio = calloc(2000000, 8) as ptr<f64>
+    r_ph = calloc(2000000, 8) as ptr<f64>
+    r_pt = calloc(2000000, 8) as ptr<f64>
+    suf_h = calloc(2000001, 8) as ptr<f64>
+    suf_t = calloc(2000001, 8) as ptr<f64>
+    enumerate_right(mid, n_vars)
+    pHA = 0.0
+    cH = 0.0
+    pTA = 0.0
+    cT = 0.0
+    enum_left(0, 1.0, 1.0, 0.0)
+    let mut tv: f64 = pHA - pTA
+    if tv < -1.0 { tv = -1.0 }
+    if tv > 1.0 { tv = 1.0 }
+    printf("%.10f\n", 0.5 * (1.0 + tv))
+    free(var_n_outcomes as ptr<void>)
+    free(var_mul_n as ptr<void>)
+    free(var_mul_d as ptr<void>)
+    free(var_ph as ptr<void>)
+    free(var_pt as ptr<void>)
+    free(var_log_n as ptr<void>)
+    free(var_log_d as ptr<void>)
+    free(r_log_ratio as ptr<void>)
+    free(r_ph as ptr<void>)
+    free(r_pt as ptr<void>)
+    free(suf_h as ptr<void>)
+    free(suf_t as ptr<void>)
     return 0
 }
