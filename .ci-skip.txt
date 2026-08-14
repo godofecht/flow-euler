@@ -6,8 +6,6 @@
 353  timeout
 535  timeout
 542  timeout
-610  timeout
-634  timeout
 #
 # Runtime crash / abort:
 #

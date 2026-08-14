@@ -9,7 +9,7 @@ extern {
 }
 
 const MOD: i64 = 1000000000
-const CAP: i64 = 1048576
+const CAP: i64 = 2097152
 
 function sum_1_to_m(m: i64) -> i64 {
     if m <= 0 { return 0 }
@@ -31,8 +31,11 @@ function sum_floor_sqrt(m: i64) -> i64 {
 }
 
 function hslot(key: i64, keys: ptr<i64>, used: ptr<i8>) -> i64 {
-    let mut h: i64 = key % CAP
-    if h < 0 { h = h + CAP }
+    # Mix bits from multiple positions to avoid clustering when keys
+    # share trailing zeros (e.g. N=10^18=2^18*5^18).
+    let mut h: i64 = (key >> 21) ^ (key >> 10) ^ key
+    h = h & (CAP - 1)
+    if h < 0 { h = 0 - h }
     while used[h] == 1 && keys[h] != key {
         h = h + 1
         if h == CAP { h = 0 }

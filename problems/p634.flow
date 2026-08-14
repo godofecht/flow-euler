@@ -19,11 +19,19 @@ function isqrt(n: i64) -> i64 {
 function iroot3(n: i64) -> i64 {
     let mut lo: i64 = 0
     let mut hi: i64 = 2
-    while hi * hi * hi <= n { hi = hi * 2 }
+    while true {
+        let mut p: i128 = 1 as i128
+        let mut i: i64 = 0
+        while i < 3 { p = p * (hi as i128); i = i + 1 }
+        if p > (n as i128) { break }
+        hi = hi * 2
+    }
     while lo + 1 < hi {
         let mid: i64 = (lo + hi) / 2
-        if mid * mid * mid <= n { lo = mid }
-        if mid * mid * mid > n { hi = mid }
+        let mut p: i128 = 1 as i128
+        let mut i: i64 = 0
+        while i < 3 { p = p * (mid as i128); i = i + 1 }
+        if p <= (n as i128) { lo = mid } else { hi = mid }
     }
     return lo
 }
@@ -31,14 +39,18 @@ function iroot3(n: i64) -> i64 {
 function iroot6(n: i64) -> i64 {
     let mut lo: i64 = 0
     let mut hi: i64 = 2
-    let mut p: i64 = 1
-    while p <= n { p = p * 64; hi = hi * 2 }
+    while true {
+        let mut p: i128 = 1 as i128
+        let mut i: i64 = 0
+        while i < 6 { p = p * (hi as i128); i = i + 1 }
+        if p > (n as i128) { break }
+        hi = hi * 2
+    }
     while lo + 1 < hi {
         let mid: i64 = (lo + hi) / 2
-        let m2: i64 = mid * mid
-        let m3: i64 = m2 * m2 * m2
-        if m3 <= n { lo = mid }
-        if m3 > n { hi = mid }
+        let m2: i128 = (mid as i128) * (mid as i128)
+        let m3: i128 = m2 * m2 * m2
+        if m3 <= (n as i128) { lo = mid } else { hi = mid }
     }
     return lo
 }
@@ -76,8 +88,10 @@ function cubefree_count(m: i64, mu: ptr<i8>) -> i64 {
 function main() -> i32 {
     let N: i64 = 9000000000000000000  # 9 * 10^18
 
-    # Compute Möbius function up to isqrt(N) (for squarefree_count)
-    let L: i64 = isqrt(N)
+    # Compute Möbius function up to cbrt(isqrt(N)) (only need for cubefree_count)
+    # cubefree_count(R, mu) iterates d while d^3 <= R, so needs mu up to cbrt(R).
+    # R = isqrt(N) ≈ 3*10^9, cbrt(R) ≈ 1442.  Use iroot6(N)+10 for safety margin.
+    let L: i64 = iroot6(N) + 10
     let mu: ptr<i8> = calloc(L + 1, 1)
     let is_comp: ptr<i8> = calloc(L + 1, 1)
     let primes: ptr<i32> = calloc(L / 5 + 10, 4)
