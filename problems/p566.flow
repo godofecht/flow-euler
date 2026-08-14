@@ -1,11 +1,938 @@
 # Project Euler 566
-# Cake Icing Puzzle — signed-permutation atomization + CRT on flip cycles.
+# G(53) = sum of F(a,b,c) for 9 <= a < b < c <= 53.
+# Ported from C++ using i128 field arithmetic, partition building, CRT.
 
 extern {
-    function pe566_answer() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function memset(p: ptr<void>, v: i32, n: i64) -> ptr<void>
+    function floor(x: f64) -> f64
+    function sqrt(x: f64) -> f64
+    function llround(x: f64) -> i64
+}
+
+struct Point { P: i64, Q: i64 }
+struct FC { a: i32, b: i32, c: i32, ab: i64, sqrtc: f64 }
+struct CRTResult { a: i64, m: i64, valid: i32 }
+
+function llgcd(a0: i64, b0: i64) -> i64 {
+    let mut a: i64 = a0
+    let mut b: i64 = b0
+    if a < 0 { a = 0 - a }
+    if b < 0 { b = 0 - b }
+    while b != 0 {
+        let t: i64 = a % b
+        a = b
+        b = t
+    }
+    return a
+}
+
+function lllcm(a: i64, b: i64) -> i64 {
+    return a / llgcd(a, b) * b
+}
+
+function sign_AB_sqrtc(A: i128, B: i128, c: i32) -> i32 {
+    let zero: i128 = 0 as i128
+    if B == zero {
+        if A == zero { return 0 }
+        if A > zero { return 1 }
+        return -1
+    }
+    if A == zero {
+        if B > zero { return 1 }
+        return -1
+    }
+    if (A > zero && B > zero) || (A < zero && B < zero) {
+        if A > zero { return 1 }
+        return -1
+    }
+    let A2: i128 = A * A
+    let B2c: i128 = B * B * (c as i128)
+    if A < zero && B > zero {
+        if B2c == A2 { return 0 }
+        if B2c > A2 { return 1 }
+        return -1
+    }
+    if B2c == A2 { return 0 }
+    if B2c > A2 { return -1 }
+    return 1
+}
+
+function cmpPoints(aP: i64, aQ: i64, bP: i64, bQ: i64, ab: i64, c: i32) -> i32 {
+    let dP: i64 = aP - bP
+    let dQ: i64 = aQ - bQ
+    let A: i128 = (dP as i128) * (c as i128)
+    let B: i128 = (dQ as i128) * (ab as i128)
+    return sign_AB_sqrtc(A, B, c)
+}
+
+function canonical01(P0: i64, Q0: i64, ctx: FC) -> Point {
+    let mut P: i64 = P0
+    let Q: i64 = Q0
+    let approx: f64 = (P as f64) / (ctx.ab as f64) + (Q as f64) * ctx.sqrtc / (ctx.c as f64)
+    let n: i64 = floor(approx) as i64
+    P = P - n * ctx.ab
+    while sign_AB_sqrtc((P as i128) * (ctx.c as i128), (Q as i128) * (ctx.ab as i128), ctx.c) < 0 {
+        P = P + ctx.ab
+    }
+    while sign_AB_sqrtc(((P - ctx.ab) as i128) * (ctx.c as i128), (Q as i128) * (ctx.ab as i128), ctx.c) >= 0 {
+        P = P - ctx.ab
+    }
+    return Point { P: P, Q: Q }
+}
+
+function addP(xP: i64, xQ: i64, sP: i64, sQ: i64, ctx: FC) -> Point {
+    return canonical01(xP + sP, xQ + sQ, ctx)
+}
+
+function subP(xP: i64, xQ: i64, sP: i64, sQ: i64, ctx: FC) -> Point {
+    return canonical01(xP - sP, xQ - sQ, ctx)
+}
+
+function oneMinus(xP: i64, xQ: i64, ctx: FC) -> Point {
+    return canonical01(ctx.ab - xP, 0 - xQ, ctx)
+}
+
+function sortI64(arr: ptr<i64>, n: i32) -> void {
+    if n < 2 { return }
+    let stack: ptr<i32> = calloc((n * 2) as i64, 4) as ptr<i32>
+    let mut sp: i32 = 0
+    stack[sp] = 0
+    sp = sp + 1
+    stack[sp] = n - 1
+    sp = sp + 1
+    while sp > 0 {
+        sp = sp - 1
+        let hi: i32 = stack[sp]
+        sp = sp - 1
+        let lo: i32 = stack[sp]
+        let pivot: i64 = arr[hi]
+        let mut i: i32 = lo - 1
+        let mut j: i32 = lo
+        while j < hi {
+            if arr[j] <= pivot {
+                i = i + 1
+                let tmp: i64 = arr[i]
+                arr[i] = arr[j]
+                arr[j] = tmp
+            }
+            j = j + 1
+        }
+        i = i + 1
+        let tmp: i64 = arr[i]
+        arr[i] = arr[hi]
+        arr[hi] = tmp
+        let p: i32 = i
+        if p - 1 > lo {
+            stack[sp] = lo
+            sp = sp + 1
+            stack[sp] = p - 1
+            sp = sp + 1
+        }
+        if p + 1 < hi {
+            stack[sp] = p + 1
+            sp = sp + 1
+            stack[sp] = hi
+            sp = sp + 1
+        }
+    }
+    free(stack as ptr<void>)
+}
+
+function sortPoints(ptsP: ptr<i64>, ptsQ: ptr<i64>, n: i32, ab: i64, c: i32) -> void {
+    if n < 2 { return }
+    let stack: ptr<i32> = calloc((n * 2) as i64, 4) as ptr<i32>
+    let mut sp: i32 = 0
+    stack[sp] = 0
+    sp = sp + 1
+    stack[sp] = n - 1
+    sp = sp + 1
+    while sp > 0 {
+        sp = sp - 1
+        let hi: i32 = stack[sp]
+        sp = sp - 1
+        let lo: i32 = stack[sp]
+        let pivotP: i64 = ptsP[hi]
+        let pivotQ: i64 = ptsQ[hi]
+        let mut i: i32 = lo - 1
+        let mut j: i32 = lo
+        while j < hi {
+            if cmpPoints(ptsP[j], ptsQ[j], pivotP, pivotQ, ab, c) <= 0 {
+                i = i + 1
+                let tmpP: i64 = ptsP[i]
+                let tmpQ: i64 = ptsQ[i]
+                ptsP[i] = ptsP[j]
+                ptsQ[i] = ptsQ[j]
+                ptsP[j] = tmpP
+                ptsQ[j] = tmpQ
+            }
+            j = j + 1
+        }
+        i = i + 1
+        let tmpP: i64 = ptsP[i]
+        let tmpQ: i64 = ptsQ[i]
+        ptsP[i] = ptsP[hi]
+        ptsQ[i] = ptsQ[hi]
+        ptsP[hi] = tmpP
+        ptsQ[hi] = tmpQ
+        let p: i32 = i
+        if p - 1 > lo {
+            stack[sp] = lo
+            sp = sp + 1
+            stack[sp] = p - 1
+            sp = sp + 1
+        }
+        if p + 1 < hi {
+            stack[sp] = p + 1
+            sp = sp + 1
+            stack[sp] = hi
+            sp = sp + 1
+        }
+    }
+    free(stack as ptr<void>)
+}
+
+function kmpPrefix(pat: ptr<i32>, n: i32, pi: ptr<i32>) -> void {
+    if n > 0 { pi[0] = 0 }
+    let mut i: i32 = 1
+    let mut j: i32 = 0
+    while i < n {
+        while j > 0 && pat[i] != pat[j] {
+            j = pi[j - 1]
+        }
+        if pat[i] == pat[j] {
+            j = j + 1
+        }
+        pi[i] = j
+        i = i + 1
+    }
+}
+
+function findRotations(w: ptr<i32>, e: ptr<i32>, n: i32, shifts: ptr<i32>, shiftCount: ptr<i32>) -> void {
+    shiftCount[0] = 0
+    let text: ptr<i32> = calloc((2 * n) as i64, 4) as ptr<i32>
+    let pi: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+    let mut i: i32 = 0
+    while i < n {
+        text[i] = w[i]
+        text[i + n] = w[i]
+        i = i + 1
+    }
+    kmpPrefix(e, n, pi)
+    let mut j: i32 = 0
+    i = 0
+    while i < 2 * n - 1 {
+        while j > 0 && text[i] != e[j] {
+            j = pi[j - 1]
+        }
+        if text[i] == e[j] {
+            j = j + 1
+        }
+        if j == n {
+            let pos: i32 = i - n + 1
+            if pos < n {
+                let shift: i32 = (n - pos) % n
+                shifts[shiftCount[0]] = shift
+                shiftCount[0] = shiftCount[0] + 1
+            }
+            j = pi[j - 1]
+        }
+        i = i + 1
+    }
+    free(text as ptr<void>)
+    free(pi as ptr<void>)
+}
+
+function modinv_egcd(a: i64, b: i64) -> i64 {
+    let mut old_r: i64 = a
+    let mut r: i64 = b
+    let mut old_s: i64 = 1
+    let mut s: i64 = 0
+    while r != 0 {
+        let q: i64 = old_r / r
+        let nr: i64 = old_r - q * r
+        let ns: i64 = old_s - q * s
+        old_r = r
+        r = nr
+        old_s = s
+        s = ns
+    }
+    return old_s
+}
+
+function crtPair(a1: i64, m1: i64, a2: i64, m2: i64) -> CRTResult {
+    let g: i64 = llgcd(m1, m2)
+    let diff: i64 = a2 - a1
+    if diff % g != 0 {
+        return CRTResult { a: 0, m: 0, valid: 0 }
+    }
+    let m1g: i64 = m1 / g
+    let m2g: i64 = m2 / g
+    let mut x: i64 = modinv_egcd(m1g, m2g) % m2g
+    if x < 0 { x = x + m2g }
+    let mut t: i128 = ((diff / g) as i128) * (x as i128) % (m2g as i128)
+    if t < 0 { t = t + (m2g as i128) }
+    let l: i128 = (m1 as i128) / (g as i128) * (m2 as i128)
+    let res: i128 = (a1 as i128) + (m1 as i128) * t
+    let mod: i64 = l as i64
+    let mut ans: i64 = (res % l) as i64
+    if ans < 0 { ans = ans + mod }
+    return CRTResult { a: ans, m: mod, valid: 1 }
+}
+
+function mergeCRT(sols: ptr<i64>, solCount: ptr<i32>, M: ptr<i64>, residues: ptr<i64>, resCount: i32, P: i64) -> void {
+    let sc: i32 = solCount[0]
+    let newM: i64 = lllcm(M[0], P)
+    let maxNext: i64 = (sc as i64) * (resCount as i64) + 1
+    let next: ptr<i64> = calloc(maxNext, 8) as ptr<i64>
+    let mut nextCount: i32 = 0
+    let mut i: i32 = 0
+    while i < sc {
+        let mut j: i32 = 0
+        while j < resCount {
+            let result: CRTResult = crtPair(sols[i], M[0], residues[j], P)
+            if result.valid != 0 {
+                next[nextCount] = result.a
+                nextCount = nextCount + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    sortI64(next, nextCount)
+    let mut dedup: i32 = 0
+    let mut k: i32 = 0
+    while k < nextCount {
+        if dedup == 0 || next[k] != next[dedup - 1] {
+            next[dedup] = next[k]
+            dedup = dedup + 1
+        }
+        k = k + 1
+    }
+    let mut idx: i32 = 0
+    while idx < dedup {
+        sols[idx] = next[idx]
+        idx = idx + 1
+    }
+    solCount[0] = dedup
+    M[0] = newM
+    free(next as ptr<void>)
+}
+
+function cycleConstraint(f: ptr<i32>, L: i32, outP: ptr<i64>, good: ptr<i64>, goodCount: ptr<i32>) -> void {
+    let n: i32 = L / 3
+    let mut total_f: i32 = 0
+    let mut i: i32 = 0
+    while i < L {
+        total_f = total_f ^ f[i]
+        i = i + 1
+    }
+    let P: i64 = if total_f == 0 { L as i64 } else { (2 * L) as i64 }
+    outP[0] = P
+
+    let a: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+    let b: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+    let cc: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+    i = 0
+    while i < n {
+        a[i] = f[3 * i]
+        b[i] = f[3 * i + 1]
+        cc[i] = f[3 * i + 2]
+        i = i + 1
+    }
+
+    let w: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+    let mut total_w: i32 = 0
+    i = 0
+    while i < n {
+        w[i] = a[i] ^ b[i] ^ cc[i]
+        total_w = total_w ^ w[i]
+        i = i + 1
+    }
+
+    let pref: ptr<i32> = calloc((n + 1) as i64, 4) as ptr<i32>
+    pref[0] = 0
+    i = 0
+    while i < n {
+        pref[i + 1] = pref[i] ^ w[i]
+        i = i + 1
+    }
+
+    goodCount[0] = 0
+
+    let mut R: i32 = 0
+    while R < 3 {
+        let t: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+        if R == 0 {
+            let mut j: i32 = 0
+            while j < n {
+                t[j] = 0
+                j = j + 1
+            }
+        } else {
+            if R == 1 {
+                let mut j: i32 = 0
+                while j < n {
+                    t[j] = a[j]
+                    j = j + 1
+                }
+            } else {
+                let mut j: i32 = 0
+                while j < n {
+                    t[j] = a[j] ^ b[j]
+                    j = j + 1
+                }
+            }
+        }
+
+        let dt: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+        let e: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+        let mut j: i32 = 0
+        while j < n {
+            dt[j] = t[j] ^ t[(j + 1) % n]
+            e[j] = w[j] ^ dt[j]
+            j = j + 1
+        }
+
+        let shifts: ptr<i32> = calloc(n as i64, 4) as ptr<i32>
+        let scPtr: ptr<i32> = calloc(1, 4) as ptr<i32>
+        findRotations(w, e, n, shifts, scPtr)
+        let sc: i32 = scPtr[0]
+
+        let mut si: i32 = 0
+        while si < sc {
+            let sShift: i32 = shifts[si]
+            let mut q: i32 = 0
+            while q < 2 {
+                let mTrip: i32 = sShift + q * n
+                let h0: i32 = pref[sShift] ^ (q * total_w)
+                let target: i32 = t[mTrip % n]
+                if h0 == target {
+                    let Nval: i64 = 3 * (mTrip as i64) + (R as i64)
+                    let Nmod: i64 = Nval % P
+                    good[goodCount[0]] = Nmod
+                    goodCount[0] = goodCount[0] + 1
+                }
+                q = q + 1
+            }
+            si = si + 1
+        }
+
+        free(t as ptr<void>)
+        free(dt as ptr<void>)
+        free(e as ptr<void>)
+        free(shifts as ptr<void>)
+        free(scPtr as ptr<void>)
+        R = R + 1
+    }
+
+    sortI64(good, goodCount[0])
+    let mut dedup: i32 = 0
+    let mut k: i32 = 0
+    while k < goodCount[0] {
+        if dedup == 0 || good[k] != good[dedup - 1] {
+            good[dedup] = good[k]
+            dedup = dedup + 1
+        }
+        k = k + 1
+    }
+    goodCount[0] = dedup
+
+    free(a as ptr<void>)
+    free(b as ptr<void>)
+    free(cc as ptr<void>)
+    free(w as ptr<void>)
+    free(pref as ptr<void>)
+}
+
+function findIntervalIndex(ptsP: ptr<i64>, ptsQ: ptr<i64>, m: i32, xP: i64, xQ: i64, ab: i64, c: i32) -> i32 {
+    let mut lo: i32 = 0
+    let mut hi: i32 = m
+    while lo + 1 < hi {
+        let mid: i32 = (lo + hi) / 2
+        if cmpPoints(ptsP[mid], ptsQ[mid], xP, xQ, ab, c) <= 0 {
+            lo = mid
+        } else {
+            hi = mid
+        }
+    }
+    return lo
+}
+
+function solvePermutation(nxt: ptr<i32>, flip: ptr<i32>, N: i32, m: i32) -> i64 {
+    let vis: ptr<i32> = calloc(N as i64, 4) as ptr<i32>
+    let mut i: i32 = 0
+    while i < N {
+        vis[i] = 0
+        i = i + 1
+    }
+
+    let constrP: ptr<i64> = calloc(N as i64, 8) as ptr<i64>
+    let constrResOff: ptr<i32> = calloc(N as i64, 4) as ptr<i32>
+    let constrResCnt: ptr<i32> = calloc(N as i64, 4) as ptr<i32>
+    let allRes: ptr<i64> = calloc(((2 * N + 1) as i64), 8) as ptr<i64>
+    let mut allResOff: i32 = 0
+    let mut constrCnt: i32 = 0
+
+    let mut sIdx: i32 = 0
+    while sIdx < N {
+        if vis[sIdx] != 0 {
+            sIdx = sIdx + 1
+            continue
+        }
+
+        let cyc: ptr<i32> = calloc(N as i64, 4) as ptr<i32>
+        let mut cycLen: i32 = 0
+        let mut cur: i32 = sIdx
+        while vis[cur] == 0 {
+            vis[cur] = 1
+            cyc[cycLen] = cur
+            cycLen = cycLen + 1
+            cur = nxt[cur]
+        }
+
+        let mut rot: i32 = 0
+        let mut j: i32 = 0
+        while j < cycLen {
+            if cyc[j] < m {
+                rot = j
+                break
+            }
+            j = j + 1
+        }
+
+        let f: ptr<i32> = calloc(cycLen as i64, 4) as ptr<i32>
+        let mut j2: i32 = 0
+        while j2 < cycLen {
+            f[j2] = flip[cyc[(rot + j2) % cycLen]]
+            j2 = j2 + 1
+        }
+
+        let PPtr: ptr<i64> = calloc(1, 8) as ptr<i64>
+        let good: ptr<i64> = calloc(((2 * cycLen + 1) as i64), 8) as ptr<i64>
+        let goodCnt: ptr<i32> = calloc(1, 4) as ptr<i32>
+        cycleConstraint(f, cycLen, PPtr, good, goodCnt)
+
+        constrP[constrCnt] = PPtr[0]
+        constrResOff[constrCnt] = allResOff
+        constrResCnt[constrCnt] = goodCnt[0]
+        let mut g: i32 = 0
+        while g < goodCnt[0] {
+            allRes[allResOff] = good[g]
+            allResOff = allResOff + 1
+            g = g + 1
+        }
+        constrCnt = constrCnt + 1
+
+        free(cyc as ptr<void>)
+        free(f as ptr<void>)
+        free(PPtr as ptr<void>)
+        free(good as ptr<void>)
+        free(goodCnt as ptr<void>)
+
+        sIdx = sIdx + 1
+    }
+
+    let mut ci: i32 = 1
+    while ci < constrCnt {
+        let curP: i64 = constrP[ci]
+        let curOff: i32 = constrResOff[ci]
+        let curCnt: i32 = constrResCnt[ci]
+        let mut cj: i32 = ci
+        while cj > 0 && constrP[cj - 1] > curP {
+            constrP[cj] = constrP[cj - 1]
+            constrResOff[cj] = constrResOff[cj - 1]
+            constrResCnt[cj] = constrResCnt[cj - 1]
+            cj = cj - 1
+        }
+        constrP[cj] = curP
+        constrResOff[cj] = curOff
+        constrResCnt[cj] = curCnt
+        ci = ci + 1
+    }
+
+    let sols: ptr<i64> = calloc(100000, 8) as ptr<i64>
+    sols[0] = 0
+    let solCnt: ptr<i32> = calloc(1, 4) as ptr<i32>
+    solCnt[0] = 1
+    let M: ptr<i64> = calloc(1, 8) as ptr<i64>
+    M[0] = 1
+
+    ci = 0
+    while ci < constrCnt {
+        let rc: i32 = constrResCnt[ci]
+        let residues: ptr<i64> = calloc((rc as i64) + 1, 8) as ptr<i64>
+        let mut g: i32 = 0
+        while g < rc {
+            residues[g] = allRes[constrResOff[ci] + g]
+            g = g + 1
+        }
+        mergeCRT(sols, solCnt, M, residues, rc, constrP[ci])
+        free(residues as ptr<void>)
+        ci = ci + 1
+    }
+
+    let mut best: i64 = 9223372036854775807
+    let mut ri: i32 = 0
+    while ri < solCnt[0] {
+        if sols[ri] != 0 && sols[ri] < best {
+            best = sols[ri]
+        }
+        ri = ri + 1
+    }
+    if best == 9223372036854775807 {
+        best = M[0]
+    }
+
+    free(vis as ptr<void>)
+    free(constrP as ptr<void>)
+    free(constrResOff as ptr<void>)
+    free(constrResCnt as ptr<void>)
+    free(allRes as ptr<void>)
+    free(sols as ptr<void>)
+    free(solCnt as ptr<void>)
+    free(M as ptr<void>)
+
+    return best
+}
+
+function isSquare(c: i32) -> bool {
+    let r: i32 = llround(sqrt((c as f64))) as i32
+    return r * r == c
+}
+
+function F_square(a: i32, b: i32, c: i32) -> i64 {
+    let k: i32 = llround(sqrt((c as f64))) as i32
+    let mut D: i64 = 1
+    D = lllcm(D, a as i64)
+    D = lllcm(D, b as i64)
+    D = lllcm(D, k as i64)
+
+    let S0: i64 = D / (a as i64)
+    let S1: i64 = D / (b as i64)
+    let S2: i64 = D / (k as i64)
+    let m: i32 = D as i32
+    let N: i32 = 3 * m
+
+    let nxt: ptr<i32> = calloc(N as i64, 4) as ptr<i32>
+    let flip: ptr<i32> = calloc(N as i64, 4) as ptr<i32>
+
+    let Sarr: array<i64, 3> = [S0, S1, S2]
+    let mut ph: i32 = 0
+    while ph < 3 {
+        let Sph: i64 = Sarr[ph]
+        let mut j: i32 = 0
+        while j < m {
+            let mut j2: i32 = 0
+            let mut fbit: i32 = 0
+            if (j as i64) < Sph {
+                j2 = m - 1 - j
+                fbit = 1
+            } else {
+                j2 = ((j as i64) - Sph) as i32
+                fbit = 0
+            }
+            let cur: i32 = ph * m + j
+            let nxtph: i32 = (ph + 1) % 3
+            nxt[cur] = nxtph * m + j2
+            flip[cur] = fbit
+            j = j + 1
+        }
+        ph = ph + 1
+    }
+
+    let result: i64 = solvePermutation(nxt, flip, N, m)
+    free(nxt as ptr<void>)
+    free(flip as ptr<void>)
+    return result
+}
+
+function F_nonsquare(a: i32, b: i32, c: i32) -> i64 {
+    let ctx: FC = FC { a: a, b: b, c: c, ab: (a as i64) * (b as i64), sqrtc: sqrt((c as f64)) }
+    printf("  F_nonsquare init a=%d b=%d c=%d ab=%lld\n", a, b, c, ctx.ab)
+
+    let s0: Point = canonical01(ctx.ab / (a as i64), 0, ctx)
+    let s1: Point = canonical01(ctx.ab / (b as i64), 0, ctx)
+    let s2: Point = canonical01(0, 1, ctx)
+    let sP: array<i64, 3> = [s0.P, s1.P, s2.P]
+    let sQ: array<i64, 3> = [s0.Q, s1.Q, s2.Q]
+
+    let thr0: Point = oneMinus(s0.P, s0.Q, ctx)
+    let thr1: Point = oneMinus(s1.P, s1.Q, ctx)
+    let thr2: Point = oneMinus(s2.P, s2.Q, ctx)
+    let thrP: array<i64, 3> = [thr0.P, thr1.P, thr2.P]
+    let thrQ: array<i64, 3> = [thr0.Q, thr1.Q, thr2.Q]
+
+    let CAP: i32 = 8192
+    let MASK: i32 = CAP - 1
+
+    let hashP0: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let hashP1: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let hashP2: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let hashQ0: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let hashQ1: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let hashQ2: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    memset(hashP0 as ptr<void>, 255, (CAP as i64) * 8)
+    memset(hashP1 as ptr<void>, 255, (CAP as i64) * 8)
+    memset(hashP2 as ptr<void>, 255, (CAP as i64) * 8)
+    let hashP: array<ptr<i64>, 3> = [hashP0, hashP1, hashP2]
+    let hashQ: array<ptr<i64>, 3> = [hashQ0, hashQ1, hashQ2]
+
+    let stackP0: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let stackP1: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let stackP2: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let stackQ0: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let stackQ1: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let stackQ2: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let stackP: array<ptr<i64>, 3> = [stackP0, stackP1, stackP2]
+    let stackQ: array<ptr<i64>, 3> = [stackQ0, stackQ1, stackQ2]
+    let mut stackCnt: array<i32, 3> = [0, 0, 0]
+
+    let mut ph: i32 = 0
+    while ph < 3 {
+        let sp: i64 = sP[ph]
+        let sq: i64 = sQ[ph]
+        let h0idx: i32 = 0 & MASK
+        hashP[ph][h0idx] = 0
+        hashQ[ph][h0idx] = 0
+        let mut h1: i64 = sp * 2654435761 + sq
+        if h1 < 0 { h1 = 0 - h1 }
+        let idx1: i32 = (h1 & (MASK as i64)) as i32
+        hashP[ph][idx1] = sp
+        hashQ[ph][idx1] = sq
+        stackP[ph][0] = 0
+        stackQ[ph][0] = 0
+        stackP[ph][1] = sp
+        stackQ[ph][1] = sq
+        stackCnt[ph] = 2
+        ph = ph + 1
+    }
+
+    let mut progressed: bool = true
+    let mut iter: i32 = 0
+    while progressed {
+        progressed = false
+        iter = iter + 1
+        if iter > 100 {
+            printf("  DFS stuck at iter %d\n", iter)
+            break
+        }
+        ph = 0
+        while ph < 3 {
+            let prev: i32 = (ph + 2) % 3
+            while stackCnt[ph] > 0 {
+                progressed = true
+                stackCnt[ph] = stackCnt[ph] - 1
+                let yP: i64 = stackP[ph][stackCnt[ph]]
+                let yQ: i64 = stackQ[ph][stackCnt[ph]]
+                let cmp: i32 = cmpPoints(yP, yQ, thrP[prev], thrQ[prev], ctx.ab, ctx.c)
+                if cmp < 0 {
+                    let x: Point = addP(yP, yQ, sP[prev], sQ[prev], ctx)
+                    let mut h: i64 = x.P * 2654435761 + x.Q
+                    if h < 0 { h = 0 - h }
+                    let idx: i32 = (h & (MASK as i64)) as i32
+                    let mut inserted: bool = false
+                    let mut probe: i32 = 0
+                    while probe < CAP {
+                        let pidx: i32 = (idx + probe) & MASK
+                        if hashP[prev][pidx] == -1 {
+                            hashP[prev][pidx] = x.P
+                            hashQ[prev][pidx] = x.Q
+                            inserted = true
+                            break
+                        }
+                        if hashP[prev][pidx] == x.P && hashQ[prev][pidx] == x.Q {
+                            break
+                        }
+                        probe = probe + 1
+                    }
+                    if inserted {
+                        stackP[prev][stackCnt[prev]] = x.P
+                        stackQ[prev][stackCnt[prev]] = x.Q
+                        stackCnt[prev] = stackCnt[prev] + 1
+                    }
+                }
+                if cmp > 0 {
+                    let x: Point = oneMinus(yP, yQ, ctx)
+                    let mut h: i64 = x.P * 2654435761 + x.Q
+                    if h < 0 { h = 0 - h }
+                    let idx: i32 = (h & (MASK as i64)) as i32
+                    let mut inserted: bool = false
+                    let mut probe: i32 = 0
+                    while probe < CAP {
+                        let pidx: i32 = (idx + probe) & MASK
+                        if hashP[prev][pidx] == -1 {
+                            hashP[prev][pidx] = x.P
+                            hashQ[prev][pidx] = x.Q
+                            inserted = true
+                            break
+                        }
+                        if hashP[prev][pidx] == x.P && hashQ[prev][pidx] == x.Q {
+                            break
+                        }
+                        probe = probe + 1
+                    }
+                    if inserted {
+                        stackP[prev][stackCnt[prev]] = x.P
+                        stackQ[prev][stackCnt[prev]] = x.Q
+                        stackCnt[prev] = stackCnt[prev] + 1
+                    }
+                }
+            }
+            ph = ph + 1
+        }
+    }
+
+    let ptsP0: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let ptsP1: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let ptsP2: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let ptsQ0: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let ptsQ1: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let ptsQ2: ptr<i64> = calloc(CAP as i64, 8) as ptr<i64>
+    let ptsP: array<ptr<i64>, 3> = [ptsP0, ptsP1, ptsP2]
+    let ptsQ: array<ptr<i64>, 3> = [ptsQ0, ptsQ1, ptsQ2]
+    let mut m: i32 = -1
+    ph = 0
+    while ph < 3 {
+        printf("  phase %d: collecting points\n", ph)
+        let mut count: i32 = 0
+        let mut idx: i32 = 0
+        while idx < CAP {
+            if hashP[ph][idx] != -1 {
+                ptsP[ph][count] = hashP[ph][idx]
+                ptsQ[ph][count] = hashQ[ph][idx]
+                count = count + 1
+            }
+            idx = idx + 1
+        }
+        sortPoints(ptsP[ph], ptsQ[ph], count, ctx.ab, ctx.c)
+        if m < 0 { m = count }
+        if m != count {
+            printf("Partition size mismatch for (%d,%d,%d)\n", a, b, c)
+            free(hashP0 as ptr<void>)
+            free(hashP1 as ptr<void>)
+            free(hashP2 as ptr<void>)
+            free(hashQ0 as ptr<void>)
+            free(hashQ1 as ptr<void>)
+            free(hashQ2 as ptr<void>)
+            free(stackP0 as ptr<void>)
+            free(stackP1 as ptr<void>)
+            free(stackP2 as ptr<void>)
+            free(stackQ0 as ptr<void>)
+            free(stackQ1 as ptr<void>)
+            free(stackQ2 as ptr<void>)
+            free(ptsP0 as ptr<void>)
+            free(ptsP1 as ptr<void>)
+            free(ptsP2 as ptr<void>)
+            free(ptsQ0 as ptr<void>)
+            free(ptsQ1 as ptr<void>)
+            free(ptsQ2 as ptr<void>)
+            return -1
+        }
+        ph = ph + 1
+    }
+
+    let N: i32 = 3 * m
+    let nxt: ptr<i32> = calloc(N as i64, 4) as ptr<i32>
+    let flip: ptr<i32> = calloc(N as i64, 4) as ptr<i32>
+
+    ph = 0
+    while ph < 3 {
+        let mut i: i32 = 0
+        while i < m {
+            let lP: i64 = ptsP[ph][i]
+            let lQ: i64 = ptsQ[ph][i]
+            let mut rP: i64 = ctx.ab
+            let mut rQ: i64 = 0
+            if i + 1 < m {
+                rP = ptsP[ph][i + 1]
+                rQ = ptsQ[ph][i + 1]
+            }
+            let inside: bool = cmpPoints(lP, lQ, sP[ph], sQ[ph], ctx.ab, ctx.c) < 0
+            let mut yLeftP: i64 = 0
+            let mut yLeftQ: i64 = 0
+            if inside {
+                let yLeft: Point = oneMinus(rP, rQ, ctx)
+                yLeftP = yLeft.P
+                yLeftQ = yLeft.Q
+            } else {
+                let yLeft: Point = subP(lP, lQ, sP[ph], sQ[ph], ctx)
+                yLeftP = yLeft.P
+                yLeftQ = yLeft.Q
+            }
+            let nxtph: i32 = (ph + 1) % 3
+            let j: i32 = findIntervalIndex(ptsP[nxtph], ptsQ[nxtph], m, yLeftP, yLeftQ, ctx.ab, ctx.c)
+            let cur: i32 = ph * m + i
+            nxt[cur] = nxtph * m + j
+            flip[cur] = if inside { 1 } else { 0 }
+            i = i + 1
+        }
+        ph = ph + 1
+    }
+
+    let result: i64 = solvePermutation(nxt, flip, N, m)
+
+    free(hashP0 as ptr<void>)
+    free(hashP1 as ptr<void>)
+    free(hashP2 as ptr<void>)
+    free(hashQ0 as ptr<void>)
+    free(hashQ1 as ptr<void>)
+    free(hashQ2 as ptr<void>)
+    free(stackP0 as ptr<void>)
+    free(stackP1 as ptr<void>)
+    free(stackP2 as ptr<void>)
+    free(stackQ0 as ptr<void>)
+    free(stackQ1 as ptr<void>)
+    free(stackQ2 as ptr<void>)
+    free(ptsP0 as ptr<void>)
+    free(ptsP1 as ptr<void>)
+    free(ptsP2 as ptr<void>)
+    free(ptsQ0 as ptr<void>)
+    free(ptsQ1 as ptr<void>)
+    free(ptsQ2 as ptr<void>)
+    free(nxt as ptr<void>)
+    free(flip as ptr<void>)
+
+    return result
+}
+
+function F(a: i32, b: i32, c: i32) -> i64 {
+    if isSquare(c) { return F_square(a, b, c) }
+    return F_nonsquare(a, b, c)
+}
+
+function computeG(n: i32) -> i64 {
+    let mut sum: i64 = 0
+    let mut a: i32 = 9
+    while a <= n - 2 {
+        let mut b: i32 = a + 1
+        while b <= n - 1 {
+            let mut c: i32 = b + 1
+            while c <= n {
+                sum = sum + F(a, b, c)
+                c = c + 1
+            }
+            b = b + 1
+        }
+        a = a + 1
+    }
+    return sum
+}
+
+function validate_samples() -> bool {
+    if F(9, 10, 11) != 60 { return false }
+    if F(10, 14, 16) != 506 { return false }
+    if F(15, 16, 17) != 785232 { return false }
+    if computeG(11) != 60 { return false }
+    if computeG(14) != 58020 { return false }
+    if computeG(17) != 1269260 { return false }
+    return true
 }
 
 function main() -> i32 {
-    printf("%lld\n", pe566_answer())
+    printf("start F(9,10,11)\n")
+    let r1: i64 = F(9, 10, 11)
+    printf("F(9,10,11) = %lld\n", r1)
     return 0
 }

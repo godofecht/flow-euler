@@ -1,11 +1,402 @@
 # Project Euler 995
-# S(p) product over primes < 20000, needs MPFR for large exponent.
+# S(p) product over primes < 20000, computed with f64 log10 DP.
+# Ported from the pure f64 log10 C version (no GMP/MPFR needed).
 
 extern {
-    function p995_print()
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
+    function printf(fmt: ptr<i8>, ...) -> i32
+    function log10(x: f64) -> f64
+    function pow(x: f64, y: f64) -> f64
+    function floor(x: f64) -> f64
+}
+
+const LIMIT: i32 = 20000
+const PRIME_SEARCH_LIMIT: i32 = 2000000
+
+let mut is_prime_arr: ptr<i8> = 0 as ptr<i8>
+let mut primes: ptr<i32> = 0 as ptr<i32>
+let mut num_primes: i32 = 0
+let mut dlog_table: ptr<i32> = 0 as ptr<i32>
+let mut s_log_cache: ptr<f64> = 0 as ptr<f64>
+
+function init_globals() -> void {
+    s_log_cache = calloc(LIMIT as i64, 8)
+    let mut i: i32 = 0
+    while i < LIMIT {
+        s_log_cache[i] = -1.0
+        i = i + 1
+    }
+}
+
+function sieve(n: i32) -> void {
+    is_prime_arr = calloc((n + 1) as i64, 1)
+    let mut i: i32 = 0
+    while i <= n {
+        is_prime_arr[i] = 1
+        i = i + 1
+    }
+    is_prime_arr[0] = 0
+    is_prime_arr[1] = 0
+    let mut ii: i32 = 2
+    while (ii as i64) * (ii as i64) <= (n as i64) {
+        if is_prime_arr[ii] == 1 {
+            let mut j: i64 = (ii as i64) * (ii as i64)
+            while j <= (n as i64) {
+                is_prime_arr[j as i32] = 0
+                j = j + (ii as i64)
+            }
+        }
+        ii = ii + 1
+    }
+    primes = calloc(((n / 8 + 1000) as i64), 4)
+    num_primes = 0
+    let mut k: i32 = 2
+    while k <= n {
+        if is_prime_arr[k] == 1 {
+            primes[num_primes] = k
+            num_primes = num_primes + 1
+        }
+        k = k + 1
+    }
+}
+
+function factorize(n: i32, out_p: ptr<i32>, out_e: ptr<i32>) -> i32 {
+    let mut count: i32 = 0
+    let mut t: i32 = n
+    let mut i: i32 = 0
+    while i < num_primes {
+        let p: i32 = primes[i]
+        if (p as i64) * (p as i64) > (t as i64) {
+            break
+        }
+        if t % p == 0 {
+            let mut e: i32 = 0
+            while t % p == 0 {
+                t = t / p
+                e = e + 1
+            }
+            out_p[count] = p
+            out_e[count] = e
+            count = count + 1
+        }
+        i = i + 1
+    }
+    if t > 1 {
+        out_p[count] = t
+        out_e[count] = 1
+        count = count + 1
+    }
+    return count
+}
+
+function divisors_from_factors(fac_p: ptr<i32>, fac_e: ptr<i32>, nf: i32, divs: ptr<i32>) -> i32 {
+    let mut ndivs: i32 = 1
+    divs[0] = 1
+    let mut i: i32 = 0
+    while i < nf {
+        let p: i32 = fac_p[i]
+        let e: i32 = fac_e[i]
+        let old_ndivs: i32 = ndivs
+        let mut power: i32 = 1
+        let mut j: i32 = 0
+        while j < e {
+            power = power * p
+            let mut k: i32 = 0
+            while k < old_ndivs {
+                divs[ndivs] = divs[k] * power
+                ndivs = ndivs + 1
+                k = k + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    # Insertion sort
+    let mut i2: i32 = 1
+    while i2 < ndivs {
+        let key: i32 = divs[i2]
+        let mut j2: i32 = i2 - 1
+        while j2 >= 0 {
+            if divs[j2] > key {
+                divs[j2 + 1] = divs[j2]
+                j2 = j2 - 1
+            } else {
+                break
+            }
+        }
+        divs[j2 + 1] = key
+        i2 = i2 + 1
+    }
+    return ndivs
+}
+
+function gcd_int(a: i32, b: i32) -> i32 {
+    let mut x: i32 = a
+    let mut y: i32 = b
+    while y != 0 {
+        let t: i32 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function primitive_root(p: i32, fac_p: ptr<i32>, nf: i32) -> i32 {
+    if p == 2 {
+        return 1
+    }
+    let m: i32 = p - 1
+    let mut g: i32 = 2
+    while g < p {
+        let mut ok: i32 = 1
+        let mut i: i32 = 0
+        while i < nf {
+            let q: i32 = fac_p[i]
+            let mut base: i64 = g as i64
+            let mut expv: i64 = (m / q) as i64
+            let mut result: i64 = 1
+            let modv: i64 = p as i64
+            while expv > 0 {
+                if (expv & 1) == 1 {
+                    result = (result * base) % modv
+                }
+                base = (base * base) % modv
+                expv = expv >> 1
+            }
+            if result == 1 {
+                ok = 0
+                break
+            }
+            i = i + 1
+        }
+        if ok == 1 {
+            return g
+        }
+        g = g + 1
+    }
+    return -1
+}
+
+function build_dlog_table(p: i32, root: i32) -> void {
+    dlog_table = calloc(p as i64, 4)
+    let mut i: i32 = 0
+    while i < p {
+        dlog_table[i] = -1
+        i = i + 1
+    }
+    let mut x: i64 = 1
+    let m: i32 = p - 1
+    let mut k: i32 = 0
+    while k < m {
+        dlog_table[x as i32] = k
+        x = (x * (root as i64)) % (p as i64)
+        k = k + 1
+    }
+}
+
+function bsearch_divs(divs: ptr<i32>, ndivs: i32, val: i32) -> i32 {
+    let mut lo: i32 = 0
+    let mut hi: i32 = ndivs - 1
+    while lo <= hi {
+        let mid: i32 = (lo + hi) / 2
+        if divs[mid] == val {
+            return mid
+        }
+        if divs[mid] < val {
+            lo = mid + 1
+        } else {
+            hi = mid - 1
+        }
+    }
+    return -1
+}
+
+function S_for_prime_log(p: i32) -> f64 {
+    if s_log_cache[p] >= 0.0 {
+        return s_log_cache[p]
+    }
+    if p == 2 {
+        s_log_cache[p] = 0.0
+        return 0.0
+    }
+    let m: i32 = p - 1
+    let fac_p: ptr<i32> = calloc(32, 4)
+    let fac_e: ptr<i32> = calloc(32, 4)
+    let nf: i32 = factorize(m, fac_p, fac_e)
+    let divs: ptr<i32> = calloc(1024, 4)
+    let ndivs: i32 = divisors_from_factors(fac_p, fac_e, nf, divs)
+    let root: i32 = primitive_root(p, fac_p, nf)
+    build_dlog_table(p, root)
+    # For each proper divisor c of m, find least rational prime q with gcd(dlog[q%p], m) == c
+    let needed: i32 = ndivs - 1
+    let least_prime_for_c: ptr<i32> = calloc(ndivs as i64, 4)
+    let mut i: i32 = 0
+    while i < ndivs {
+        least_prime_for_c[i] = -1
+        i = i + 1
+    }
+    let mut found: i32 = 0
+    let mut qi: i32 = 0
+    while qi < num_primes {
+        if found >= needed {
+            break
+        }
+        let q: i32 = primes[qi]
+        if q == p {
+            qi = qi + 1
+            continue
+        }
+        let r: i32 = q % p
+        let dl: i32 = dlog_table[r]
+        let c: i32 = gcd_int(dl, m)
+        if c >= m {
+            qi = qi + 1
+            continue
+        }
+        let idx: i32 = bsearch_divs(divs, ndivs, c)
+        if idx >= 0 {
+            if least_prime_for_c[idx] < 0 {
+                least_prime_for_c[idx] = q
+                found = found + 1
+            }
+        }
+        qi = qi + 1
+    }
+    # best_q as flat array: best_q_data[Mi * ndivs + di]
+    let best_q_data: ptr<i32> = calloc((ndivs as i64) * (ndivs as i64), 4)
+    let mut Mi: i32 = 0
+    while Mi < ndivs {
+        let mut di_init: i32 = 0
+        while di_init < ndivs {
+            best_q_data[Mi * ndivs + di_init] = -1
+            di_init = di_init + 1
+        }
+        let M: i32 = divs[Mi]
+        if M == 1 {
+            Mi = Mi + 1
+            continue
+        }
+        let mut ci: i32 = 0
+        while ci < ndivs {
+            if least_prime_for_c[ci] < 0 {
+                ci = ci + 1
+                continue
+            }
+            let c2: i32 = divs[ci]
+            let d: i32 = gcd_int(c2, M)
+            if d >= M {
+                ci = ci + 1
+                continue
+            }
+            let di2: i32 = bsearch_divs(divs, ndivs, d)
+            if di2 >= 0 {
+                let cur: i32 = best_q_data[Mi * ndivs + di2]
+                let lpc: i32 = least_prime_for_c[ci]
+                if cur < 0 {
+                    best_q_data[Mi * ndivs + di2] = lpc
+                } else {
+                    if lpc < cur {
+                        best_q_data[Mi * ndivs + di2] = lpc
+                    }
+                }
+            }
+            ci = ci + 1
+        }
+        Mi = Mi + 1
+    }
+    # DP using log10
+    let dp_log: ptr<f64> = calloc(ndivs as i64, 8)
+    let dp_set: ptr<i32> = calloc(ndivs as i64, 4)
+    dp_log[0] = 0.0
+    dp_set[0] = 1
+    let mut hi: i32 = 0
+    while hi < ndivs {
+        if dp_set[hi] == 0 {
+            hi = hi + 1
+            continue
+        }
+        let h: i32 = divs[hi]
+        let M2: i32 = m / h
+        if M2 == 1 {
+            hi = hi + 1
+            continue
+        }
+        let Mi2: i32 = bsearch_divs(divs, ndivs, M2)
+        if Mi2 < 0 {
+            hi = hi + 1
+            continue
+        }
+        let mut Li: i32 = 0
+        while Li < ndivs {
+            let L: i32 = divs[Li]
+            if L <= 1 {
+                Li = Li + 1
+                continue
+            }
+            if M2 % L != 0 {
+                Li = Li + 1
+                continue
+            }
+            let next_h: i32 = h * L
+            let nhi: i32 = bsearch_divs(divs, ndivs, next_h)
+            if nhi < 0 {
+                Li = Li + 1
+                continue
+            }
+            let d3: i32 = M2 / L
+            let di3: i32 = bsearch_divs(divs, ndivs, d3)
+            if di3 < 0 {
+                Li = Li + 1
+                continue
+            }
+            let q2: i32 = best_q_data[Mi2 * ndivs + di3]
+            if q2 < 0 {
+                Li = Li + 1
+                continue
+            }
+            let candidate_log: f64 = dp_log[hi] + ((L - 1) as f64) * log10(q2 as f64)
+            if dp_set[nhi] == 0 {
+                dp_log[nhi] = candidate_log
+                dp_set[nhi] = 1
+            } else {
+                if candidate_log < dp_log[nhi] {
+                    dp_log[nhi] = candidate_log
+                }
+            }
+            Li = Li + 1
+        }
+        hi = hi + 1
+    }
+    let mi: i32 = ndivs - 1
+    s_log_cache[p] = dp_log[mi]
+    free(best_q_data as ptr<void>)
+    free(dp_log as ptr<void>)
+    free(dp_set as ptr<void>)
+    free(least_prime_for_c as ptr<void>)
+    free(dlog_table as ptr<void>)
+    free(divs as ptr<void>)
+    free(fac_p as ptr<void>)
+    free(fac_e as ptr<void>)
+    return s_log_cache[p]
 }
 
 function main() -> i32 {
-    p995_print()
+    init_globals()
+    sieve(PRIME_SEARCH_LIMIT)
+    let mut total_log: f64 = 0.0
+    let mut i: i32 = 0
+    while i < num_primes {
+        let p: i32 = primes[i]
+        if p >= LIMIT {
+            break
+        }
+        total_log = total_log + S_for_prime_log(p)
+        i = i + 1
+    }
+    let exponent: i32 = floor(total_log) as i32
+    let mantissa_log: f64 = total_log - (exponent as f64)
+    let mantissa: f64 = pow(10.0, mantissa_log)
+    printf("%.5fe%d\n", mantissa, exponent)
     return 0
 }
