@@ -192,9 +192,19 @@ function dfs(r: i64, m: i64, unused_mask: i64, remaining_mask: i64) -> void {
     let best_i: i64 = g_best_i
     let remaining2: i64 = remaining_mask & ~((1 as i64) << (best_i - 1))
 
+    # Copy candidates to local storage: g_best_cands and g_best_n are globals
+    # that get overwritten by recursive dfs calls.
+    let local_n: i64 = g_best_n
+    let mut local_cands: [i32; 36]
+    let mut ci: i64 = 0
+    while ci < local_n {
+        local_cands[ci] = g_best_cands[ci]
+        ci = ci + 1
+    }
+
     let mut idx: i64 = 0
-    while idx < g_best_n {
-        let j: i64 = g_best_cands[idx] as i64
+    while idx < local_n {
+        let j: i64 = local_cands[idx] as i64
         let r2_val: i64 = ((0 - j) % best_i + best_i) % best_i
         let new_r: i64 = crt_merge(r_mod, m, r2_val, best_i)
         if new_r >= 0 {

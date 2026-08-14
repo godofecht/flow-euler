@@ -26,6 +26,17 @@ function icbrt(n: i64) -> i64 {
     return lo
 }
 
+function isqrt_i128(n: i128) -> i64 {
+    if n < 2 { return n as i64 }
+    let mut x: i128 = n
+    let mut y: i128 = (x + 1) / 2
+    while y < x {
+        x = y
+        y = (x + n / x) / 2
+    }
+    return x as i64
+}
+
 # Mobius sieve
 let mut g_mu: ptr<i8> = null
 let mut g_mertens_small: ptr<i64> = null
@@ -117,8 +128,8 @@ function squarefree_count(n: i64) -> i64 {
     return res
 }
 
-function count_f(n: i64) -> i64 {
-    let M: i64 = isqrt(n)
+function count_f(n: i128) -> i64 {
+    let M: i64 = isqrt_i128(n)
     let z_max: i64 = isqrt(M)
 
     let c: i64 = icbrt(z_max)
@@ -136,16 +147,19 @@ function count_f(n: i64) -> i64 {
 
     let mut S0: i64 = 0
     let mut S1: i64 = 0
-    for y in 1..(Y + 1) {
+    let mut y: i64 = 1
+    while y <= Y {
         let y3: i64 = y * y * y
         let R: i64 = isqrt(M / y3)
         let yp1: i64 = y + 1
         let yp13: i64 = yp1 * yp1 * yp1
         let L: i64
         if yp13 <= M { L = isqrt(M / yp13) } else { L = 0 }
-        if R == L { continue }
-        S0 = S0 + y * (squarefree_count(R) - squarefree_count(L))
-        S1 = S1 + y * (mertens(R) - mertens(L))
+        if R != L {
+            S0 = S0 + y * (squarefree_count(R) - squarefree_count(L))
+            S1 = S1 + y * (mertens(R) - mertens(L))
+        }
+        y = y + 1
     }
 
     free(g_mertens_val)
@@ -158,7 +172,7 @@ function count_f(n: i64) -> i64 {
 }
 
 function main() -> i32 {
-    let n: i64 = 1000000000000000000000000000000000000  # 10^36
+    let n: i128 = 1000000000000000000000000000000000000  # 10^36
     printf("%lld\n", count_f(n))
     return 0
 }

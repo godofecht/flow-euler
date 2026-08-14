@@ -31,7 +31,7 @@ function nCk(n: i64, r: i64, fact: ptr<i64>, invfact: ptr<i64>) -> i64 {
 
 function fk_mod(k: i64, N0: i64, fact: ptr<i64>, invfact: ptr<i64>,
                 coeffs: ptr<i64>, max_depth: i64) -> i64 {
-    let ns: ptr<i64> = calloc(20, 8)
+    let ns: ptr<i64> = calloc(64, 8)
     if ns == null { return 0 }
     ns[0] = N0
     let mut depth: i64 = 0
@@ -151,9 +151,17 @@ function build_coeffs(k: i64, max_j: i64, coeffs: ptr<i64>, max_depth: i64) -> v
     }
 }
 
+function compute_depth(k: i64, N0: i64) -> i64 {
+    let mut d: i64 = 0
+    let mut n: i64 = N0
+    while n >= k {
+        d = d + 1
+        n = n / k
+    }
+    return d
+}
+
 function main() -> i32 {
-    let max_depth: i64 = 15
-    let stride: i64 = max_depth + 2
     let fact_max: i64 = 200
     let fact: ptr<i64> = calloc(fact_max + 1, 8)
     let invfact: ptr<i64> = calloc(fact_max + 1, 8)
@@ -173,10 +181,12 @@ function main() -> i32 {
     let mut ans: i64 = 0
     let mut k: i64 = 2
     while k <= 10 {
-        let coeffs: ptr<i64> = calloc(11 * k * stride, 8)
+        let depth: i64 = compute_depth(k, N)
+        let stride: i64 = depth + 2
+        let coeffs: ptr<i64> = calloc((depth + 1) * k * stride, 8)
         if coeffs == null { break }
-        build_coeffs(k, max_depth, coeffs, max_depth)
-        ans = (ans + fk_mod(k, N, fact, invfact, coeffs, max_depth)) % MOD
+        build_coeffs(k, depth, coeffs, depth)
+        ans = (ans + fk_mod(k, N, fact, invfact, coeffs, depth)) % MOD
         free(coeffs)
         k = k + 1
     }

@@ -69,7 +69,7 @@ function count_by_L(n: i64, L: i64, attack: ptr<i64>) -> i64 {
     if L >= n - 1 { return nqueens_classic(n) }
     let all: i64 = (1 << n) - 1
     let shift: i64 = 4
-    let keep: i64 = (1 << (shift * L)) - 1
+    let keep: i64 = ((1 as i64) << (shift * L)) - 1
     let keys: ptr<i64> = calloc(CAP, 8)
     let vals: ptr<i64> = calloc(CAP, 8)
     let used: ptr<i8> = calloc(CAP, 1)

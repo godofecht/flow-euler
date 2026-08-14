@@ -438,6 +438,12 @@ function mk_sum(k: i64, N: i64, mod0: i64) -> i64 {
                     new_vals[j] = 0
                     j = j + 1
                 }
+                # copy existing state values first
+                let mut j0: i64 = 0
+                while j0 < non_ones_n {
+                    new_vals[j0] = stk_state[base + j0]
+                    j0 = j0 + 1
+                }
                 let mut pos: i64 = non_ones_n
                 let mut j2: i64 = 0
                 while j2 < non_ones_n {
@@ -449,7 +455,7 @@ function mk_sum(k: i64, N: i64, mod0: i64) -> i64 {
                 }
                 let mut j3: i64 = non_ones_n
                 while j3 > pos {
-                    new_vals[j3] = stk_state[base + j3 - 1]
+                    new_vals[j3] = new_vals[j3 - 1]
                     j3 = j3 - 1
                 }
                 new_vals[pos] = new_val as i64

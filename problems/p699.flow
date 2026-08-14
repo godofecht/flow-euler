@@ -213,6 +213,7 @@ function dfs(n: i64, num: i64, den: i64) -> void {
 
         let mut pp: i64 = 1
         for e in 1..(fes[i] + 1) {
+            if pp > N / p { break }
             pp = pp * p
             if n > N / pp { break }
 
@@ -238,7 +239,7 @@ function main() -> i32 {
     # Build seeds: n = 2^a * 3^b * 5^c, b >= 1, n <= N
     let pow2: ptr<i64> = calloc(50, 8)
     let pow3: ptr<i64> = calloc(30, 8)
-    let pow5: ptr<i64> = calloc(20, 8)
+    let pow5: ptr<i64> = calloc(30, 8)
 
     pow2[0] = 1
     let mut n2: i64 = 1

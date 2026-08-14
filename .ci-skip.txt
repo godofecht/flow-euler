@@ -13,10 +13,7 @@
 #
 # Runtime crash / abort:
 534  runtime-error invalid-shift
-546  runtime-error segfault
 617  runtime-error invalid-shift
-641  runtime-error segfault
-699  runtime-error division-by-zero
 #
 # Compilation error:
 547  compile-error undeclared-identifier

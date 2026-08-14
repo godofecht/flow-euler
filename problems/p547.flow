@@ -50,12 +50,12 @@ function build_tables(max_n: i64, A: ptr<f64>, F3: ptr<f64>, P5: ptr<f64>, off: 
     while a <= max_n {
         let a2: f64 = (a * a) as f64
         let a4: f64 = a2 * a2
-        y = -max_n
+        let mut y: i64 = -max_n
         while y <= max_n {
             if a == 0 {
                 let yf: f64 = y as f64
                 let ay: f64 = iabs(y) as f64
-                F3[a * size + (y + off)] = yf * ay * ay / 4.0
+                F3[a * size + (y + off)] = yf * ay * ay * ay / 4.0
             } else {
                 let yf: f64 = y as f64
                 let r: f64 = sqrt(a2 + yf * yf)
@@ -72,7 +72,7 @@ function build_tables(max_n: i64, A: ptr<f64>, F3: ptr<f64>, P5: ptr<f64>, off: 
         let mut b: i64 = 0
         while b <= max_n {
             let bb: f64 = (b * b) as f64
-            P5[a * (max_n + 1) + b] = (aa + bb) * sqrt(aa + bb)
+            P5[a * (max_n + 1) + b] = (aa + bb) * (aa + bb) * sqrt(aa + bb)
             b = b + 1
         }
         a = a + 1
@@ -118,20 +118,21 @@ function seg_term(x0: i64, x1: i64, mx: f64, cx: f64,
 function cross_integral(outer_w: i64, outer_h: i64, inner_w: i64, inner_h: i64, left: i64, bottom: i64,
                         A: ptr<f64>, F3: ptr<f64>, P5: ptr<f64>, off: i64, size: i64, max_n: i64) -> f64 {
     let right: i64 = outer_w - left - inner_w
+    let top: i64 = outer_h - bottom - inner_h
     let mut total: f64 = 0.0
     let a0: i64 = -(left + inner_w)
     let a1: i64 = -left
     if a0 != a1 {
         total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, -(bottom + inner_h), -bottom, 1.0, (bottom + inner_h) as f64, A, F3, P5, off, size, max_n)
-        total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, -bottom, right, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
-        total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, right, outer_w - left, -1.0, (outer_w - left) as f64, A, F3, P5, off, size, max_n)
+        total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, -bottom, top, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
+        total = total + seg_term(a0, a1, 1.0, (left + inner_w) as f64, top, outer_h - bottom, -1.0, (outer_h - bottom) as f64, A, F3, P5, off, size, max_n)
     }
     total = total + seg_term(-left, right, 0.0, inner_h as f64, -(bottom + inner_h), -bottom, 1.0, (bottom + inner_h) as f64, A, F3, P5, off, size, max_n)
-    total = total + seg_term(-left, right, 0.0, inner_h as f64, -bottom, right, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
-    total = total + seg_term(-left, right, 0.0, inner_h as f64, right, outer_w - left, -1.0, (outer_w - left) as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(-left, right, 0.0, inner_h as f64, -bottom, top, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(-left, right, 0.0, inner_h as f64, top, outer_h - bottom, -1.0, (outer_h - bottom) as f64, A, F3, P5, off, size, max_n)
     total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, -(bottom + inner_h), -bottom, 1.0, (bottom + inner_h) as f64, A, F3, P5, off, size, max_n)
-    total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, -bottom, right, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
-    total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, right, outer_w - left, -1.0, (outer_w - left) as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, -bottom, top, 0.0, inner_h as f64, A, F3, P5, off, size, max_n)
+    total = total + seg_term(right, outer_w - left, -1.0, (outer_w - left) as f64, top, outer_h - bottom, -1.0, (outer_h - bottom) as f64, A, F3, P5, off, size, max_n)
     return total
 }
 
@@ -158,7 +159,7 @@ function solve_S(n: i64) -> f64 {
     let mut S_total: f64 = 0.0
     w = 1
     while w < n - 1 {
-        h = 1
+        let mut h: i64 = 1
         while h < n - 1 {
             let area: f64 = (n * n - w * h) as f64
             let inv_area2: f64 = 1.0 / (area * area)

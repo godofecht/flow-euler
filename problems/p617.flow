@@ -92,7 +92,7 @@ function count_for_exponent(N: i64, e: i64) -> i64 {
     while nbs < MAXB {
         let exp: i64 = ipow(e, b)
         if exp > max_exp { break }
-        if 2 + (1 << exp) > N { break }
+        if 2 + ((1 as i64) << exp) > N { break }
         bs[nbs] = b
         nbs = nbs + 1
         b = b + 1
@@ -159,7 +159,7 @@ function main() -> i32 {
     let N: i64 = 1000000000000000000
     let mut total: i64 = 0
     let mut e: i64 = 2
-    while 2 + (1 << e) <= N {
+    while 2 + ((1 as i64) << e) <= N {
         total = total + count_for_exponent(N, e)
         e = e + 1
     }

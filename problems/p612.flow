@@ -84,7 +84,7 @@ function main() -> i32 {
     }
 
     let counts: ptr<i64> = calloc(MASKS, 8)
-    k = 0
+    let mut k: i64 = 0
     while k < SZ {
         let started: i64 = (k / 2) % 2
         if started == 1 && dp[k] != 0 {
