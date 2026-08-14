@@ -1,12 +1,287 @@
 # Project Euler 964
-# P(7): a very small rational, printed in scientific notation.
-# Native solver in problems/native/p964.c (exact GMP arithmetic).
+# P(k) for k=7 using exact rational arithmetic with i128.
+# P = (1/n!) * sum_{m=0}^{n-1} (-1)^m * prod_i mult_i / dim^(k-1)
 
 extern {
-    function p964_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+}
+
+const K: i32 = 7
+const N: i32 = 22
+const TBITS: i32 = 524288
+const TMASK: i32 = 524287
+
+# Hash table for memoization of count_paths
+# Keys stored as flat byte array: ht_keydata[h*64 .. h*64+63]
+let mut ht_keydata: ptr<i8> = 0 as ptr<i8>
+let mut ht_vals: ptr<i128> = 0 as ptr<i128>
+let mut ht_used: ptr<i32> = 0 as ptr<i32>
+
+function init_globals() -> void {
+    ht_keydata = calloc(TBITS * 64, 1)
+    ht_vals = calloc(TBITS, 16)
+    ht_used = calloc(TBITS, 4)
+}
+
+function hash_str(s: ptr<i8>) -> i64 {
+    let mut h: i64 = 1469598103934665603
+    let mut i: i32 = 0
+    while s[i] != 0 {
+        h = h ^ (s[i] as i64)
+        h = h * 1099511628211
+        i = i + 1
+    }
+    return h
+}
+
+function key_eq(a: ptr<i8>, b: ptr<i8>) -> i32 {
+    let mut i: i32 = 0
+    while a[i] != 0 || b[i] != 0 {
+        if a[i] != b[i] { return 0 }
+        i = i + 1
+    }
+    return 1
+}
+
+function lookup(key: ptr<i8>, out: ptr<i128>) -> i32 {
+    let mut h: i32 = (hash_str(key) & TMASK as i64) as i32
+    while ht_used[h] != 0 {
+        let slot_key: ptr<i8> = ht_keydata + h * 64
+        if key_eq(key, slot_key) == 1 {
+            out[0] = ht_vals[h]
+            return 1
+        }
+        h = (h + 1) & TMASK
+    }
+    return 0
+}
+
+function insert(key: ptr<i8>, val: i128) -> void {
+    let mut h: i32 = (hash_str(key) & TMASK as i64) as i32
+    while ht_used[h] != 0 {
+        let slot_key: ptr<i8> = ht_keydata + h * 64
+        if key_eq(key, slot_key) == 1 {
+            ht_vals[h] = val
+            return
+        }
+        h = (h + 1) & TMASK
+    }
+    # Copy key into slot
+    let slot_key: ptr<i8> = ht_keydata + h * 64
+    let mut i: i32 = 0
+    while key[i] != 0 {
+        slot_key[i] = key[i]
+        i = i + 1
+    }
+    slot_key[i] = 0
+    ht_vals[h] = val
+    ht_used[h] = 1
+}
+
+function make_key(buf: ptr<i8>, start: ptr<i32>, len: i32, i: i32) -> void {
+    buf[0] = i as i8
+    let mut j: i32 = 0
+    while j < len {
+        buf[1 + j] = start[j] as i8
+        j = j + 1
+    }
+    buf[1 + len] = 0
+}
+
+function count_paths(start: ptr<i32>, len: i32, i: i32) -> i128 {
+    let mut sum: i32 = 0
+    let mut j: i32 = 0
+    while j < len {
+        sum = sum + start[j]
+        j = j + 1
+    }
+    if sum < i { return 0 }
+    if len == 1 && start[0] == i { return 1 }
+
+    let keybuf: ptr<i8> = calloc(64, 1)
+    make_key(keybuf, start, len, i)
+    let out: ptr<i128> = calloc(1, 16)
+    if lookup(keybuf, out) == 1 {
+        let result: i128 = out[0]
+        free(keybuf as ptr<void>)
+        free(out as ptr<void>)
+        return result
+    }
+    free(out as ptr<void>)
+
+    let mut total: i128 = 0
+    let newp: ptr<i32> = calloc(32, 4)
+    let mut r: i32 = 0
+    while r < len {
+        let is_corner: i32 = if r == len - 1 { 1 } else { if start[r + 1] < start[r] { 1 } else { 0 } }
+        if is_corner == 1 {
+            let mut nlen: i32 = len
+            let mut j2: i32 = 0
+            while j2 < len {
+                newp[j2] = start[j2]
+                j2 = j2 + 1
+            }
+            newp[r] = newp[r] - 1
+            if newp[r] == 0 {
+                let mut j3: i32 = r
+                while j3 < nlen - 1 {
+                    newp[j3] = newp[j3 + 1]
+                    j3 = j3 + 1
+                }
+                nlen = nlen - 1
+            }
+            if nlen == 0 { r = r + 1; continue }
+            if newp[0] < i { r = r + 1; continue }
+            total = total + count_paths(newp, nlen, i)
+        }
+        r = r + 1
+    }
+    free(newp as ptr<void>)
+
+    insert(keybuf, total)
+    free(keybuf as ptr<void>)
+    return total
+}
+
+function binom(n: i32, k: i32) -> i128 {
+    if k < 0 || k > n { return 0 }
+    if k == 0 || k == n { return 1 }
+    let kk: i32 = if k > n - k { n - k } else { k }
+    let mut r: i128 = 1
+    let mut i: i32 = 0
+    while i < kk {
+        r = r * ((n - i) as i128) / ((i + 1) as i128)
+        i = i + 1
+    }
+    return r
+}
+
+function gcd128(a: i128, b: i128) -> i128 {
+    let mut x: i128 = a
+    if x < 0 { x = 0 - x }
+    let mut y: i128 = b
+    if y < 0 { y = 0 - y }
+    while y != 0 {
+        let t: i128 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function i128_to_f64(x: i128) -> f64 {
+    if x == 0 { return 0.0 }
+    let neg: i32 = 0
+    let mut v: i128 = x
+    if v < 0 { neg = 1; v = 0 - v }
+    let lo: i64 = v as i64
+    let hi: i64 = (v >> 64) as i64
+    let mut result: f64 = 0.0
+    if hi != 0 {
+        result = (hi as f64) * 18446744073709551616.0 + (lo as f64)
+    } else {
+        result = lo as f64
+    }
+    if neg == 1 { result = 0 - result }
+    return result
 }
 
 function main() -> i32 {
-    printf("%.10e\n", p964_native())
+    init_globals()
+
+    let mut sum_num: i128 = 0
+    let mut sum_den: i128 = 1
+
+    let mut m: i32 = 0
+    while m < N {
+        let lam: ptr<i32> = calloc(32, 4)
+        let lamlen: i32 = 0
+        if m == 0 {
+            lam[0] = N
+            lamlen = 1
+        } else {
+            lam[0] = N - m
+            let mut j: i32 = 1
+            while j <= m {
+                lam[j] = 1
+                j = j + 1
+            }
+            lamlen = m + 1
+        }
+
+        let mut prod: i128 = 1
+        let mut prod_zero: i32 = 0
+        let mut i: i32 = 1
+        while i <= K {
+            let mult: i128 = count_paths(lam, lamlen, i)
+            if mult == 0 { prod_zero = 1; break }
+            prod = prod * mult
+            i = i + 1
+        }
+        free(lam as ptr<void>)
+
+        if prod_zero == 1 {
+            m = m + 1
+            continue
+        }
+
+        let dim: i128 = binom(N - 1, m)
+        let mut d6: i128 = 1
+        let mut e: i32 = 0
+        while e < K - 1 {
+            d6 = d6 * dim
+            e = e + 1
+        }
+
+        let mut term_num: i128 = prod
+        if m % 2 == 1 { term_num = 0 - term_num }
+        let term_den: i128 = d6
+
+        # Reduce term
+        let mut g: i128 = gcd128(term_num, term_den)
+        if g > 1 {
+            term_num = term_num / g
+            term_den = term_den / g
+        }
+
+        # sum = sum + term
+        let new_num: i128 = sum_num * term_den + term_num * sum_den
+        let new_den: i128 = sum_den * term_den
+
+        sum_num = new_num
+        sum_den = new_den
+
+        # Reduce
+        g = gcd128(sum_num, sum_den)
+        if g > 1 {
+            sum_num = sum_num / g
+            sum_den = sum_den / g
+        }
+
+        m = m + 1
+    }
+
+    # P = sum_num / (sum_den * n!)
+    let mut nfact: i128 = 1
+    let mut i2: i32 = 2
+    while i2 <= N {
+        nfact = nfact * (i2 as i128)
+        i2 = i2 + 1
+    }
+
+    let p_den: i128 = sum_den * nfact
+    let mut g2: i128 = gcd128(sum_num, p_den)
+    if g2 > 1 {
+        sum_num = sum_num / g2
+    }
+    let mut p_den_reduced: i128 = p_den
+    if g2 > 1 {
+        p_den_reduced = p_den / g2
+    }
+
+    let P: f64 = i128_to_f64(sum_num) / i128_to_f64(p_den_reduced)
+    printf("%.10e\n", P)
     return 0
 }
