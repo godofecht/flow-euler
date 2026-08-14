@@ -1,8 +1,14 @@
 # Project Euler 693
-# f(3,000,000): max g(x) for x ≤ 3*10^6.
-# g(x) = max chain length over y < x of sequence a_z+1 = a_z² mod z.
-# Track active set A_z = {a² mod z : a ∈ A_{z-1}} \ {0,1} until empty.
-# Use branch-and-bound to find max efficiently.
+# f(3,000,000): max g(x) for x <= 3*10^6.
+# g(x) = max chain length over y < x of sequence a_{z+1} = a_z^2 mod z.
+# Track active set A_z = {a^2 mod z : a in A_{z-1}} \ {0,1} until empty.
+#
+# f(n) via best-first branch-and-bound.  Valid upper bound: for r >= x,
+# dropping the first (r-x) terms of any chain starting at x yields a valid
+# chain starting at r, so g(x) <= g(r) + (r - x).  Hence for an interval
+# [l, r] whose right endpoint r has known g(r): max_{l<=x<=r} g(x) <=
+# g(r) + (r - l).  Splitting at m keeps g(r) for the right child [m, r]
+# and uses g(m) for the left child [l, m], so every bound stays valid.
 
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
@@ -14,7 +20,7 @@ function g_x(x: i64, mark_buf: ptr<i8>, active_buf: ptr<i64>) -> i64 {
     if x < 2 { return 0 }
     if x == 2 { return 1 }
 
-    # Initial active set: union of y² mod x for y=2..x/2, excluding 0 and 1
+    # Initial active set: union of y^2 mod x for y=2..x/2, excluding 0 and 1
     let mut n_active: i64 = 0
     let mut y: i64 = 2
     while y <= x / 2 {
@@ -67,65 +73,68 @@ function g_x(x: i64, mark_buf: ptr<i8>, active_buf: ptr<i64>) -> i64 {
     return length
 }
 
+# Cached g(x)
+function G(x: i64, gcache: ptr<i32>, gdone: ptr<i8>,
+           mark_buf: ptr<i8>, active_buf: ptr<i64>) -> i64 {
+    if gdone[x] == 1 { return gcache[x] as i64 }
+    let v: i64 = g_x(x, mark_buf, active_buf)
+    gcache[x] = v as i32
+    gdone[x] = 1
+    return v
+}
+
 function main() -> i32 {
     let N: i64 = 3000000
 
-    # Allocate buffers for g(x) computation
-    # mark_buf needs to be at least x+1 in size, but x can be up to N
-    # active_buf needs to be at most x in size
     let BUFSZ: i64 = N * 2
     let mark_buf: ptr<i8> = calloc(BUFSZ, 1)
     let active_buf: ptr<i64> = calloc(BUFSZ, 8)
     if mark_buf == null || active_buf == null { return 1 }
 
-    # Branch-and-bound: evaluate g at grid points, then refine
-    # Upper bound: g(x) <= g(r) + (r - x) for r >= x
-    # So max over [l, r] <= g(r) + (r - l)
+    let gcache: ptr<i32> = calloc(N + 2, 4)
+    let gdone: ptr<i8> = calloc(N + 2, 1)
+    if gcache == null || gdone == null { return 1 }
 
-    # Use a priority queue (simple array-based) for intervals
-    # Each interval: (lo, hi, upper_bound)
-    # We store them in arrays and process the one with highest upper bound
-
-    let MAX_INTERVALS: i64 = 100000
+    let MAX_INTERVALS: i64 = 400000
     let il: ptr<i64> = calloc(MAX_INTERVALS, 8)
-    let ih: ptr<i64> = calloc(MAX_INTERVALS, 8)
+    let ir: ptr<i64> = calloc(MAX_INTERVALS, 8)
     let iub: ptr<i64> = calloc(MAX_INTERVALS, 8)
-    if il == null || ih == null || iub == null { return 1 }
+    let igr: ptr<i64> = calloc(MAX_INTERVALS, 8)
+    if il == null || ir == null || iub == null || igr == null { return 1 }
 
-    # Phase 1: evaluate g at grid points
-    let GRID: i64 = 1000
+    let grid: i64 = 200000
     let mut best: i64 = 0
     let mut n_intervals: i64 = 0
-    let mut prev: i64 = 2
-    let mut x: i64 = GRID
+
+    # Coarse grid: evaluate g at 2, 2+grid, ...; intervals between consecutive
+    # grid points use the right endpoint's g for the upper bound.
+    let mut prev_pt: i64 = 2
+    let mut gprev: i64 = G(2, gcache, gdone, mark_buf, active_buf)
+    if gprev > best { best = gprev }
+    let mut x: i64 = 2 + grid
     while x <= N {
-        let gx: i64 = g_x(x, mark_buf, active_buf)
+        let gx: i64 = G(x, gcache, gdone, mark_buf, active_buf)
         if gx > best { best = gx }
-        # Create interval [prev, x-1] with upper bound g(x) + (x - prev)
-        if x - 1 >= prev {
-            il[n_intervals] = prev
-            ih[n_intervals] = x - 1
-            iub[n_intervals] = gx + (x - prev)
-            n_intervals = n_intervals + 1
-        }
-        prev = x + 1
-        x = x + GRID
+        il[n_intervals] = prev_pt
+        ir[n_intervals] = x
+        iub[n_intervals] = gx + (x - prev_pt)
+        igr[n_intervals] = gx
+        n_intervals = n_intervals + 1
+        prev_pt = x
+        x = x + grid
     }
-    # Handle last interval
-    if prev <= N {
-        let gx: i64 = g_x(N, mark_buf, active_buf)
-        if gx > best { best = gx }
-        if N - 1 >= prev {
-            il[n_intervals] = prev
-            ih[n_intervals] = N - 1
-            iub[n_intervals] = gx + (N - prev)
-            n_intervals = n_intervals + 1
-        }
+    if prev_pt < N {
+        let gN: i64 = G(N, gcache, gdone, mark_buf, active_buf)
+        if gN > best { best = gN }
+        il[n_intervals] = prev_pt
+        ir[n_intervals] = N
+        iub[n_intervals] = gN + (N - prev_pt)
+        igr[n_intervals] = gN
+        n_intervals = n_intervals + 1
     }
 
-    # Phase 2: branch-and-bound
+    # Branch-and-bound: always pop the interval with the highest upper bound.
     while n_intervals > 0 {
-        # Find interval with highest upper bound
         let mut max_idx: i64 = 0
         let mut max_ub: i64 = iub[0]
         let mut mi: i64 = 1
@@ -133,54 +142,57 @@ function main() -> i32 {
             if iub[mi] > max_ub { max_ub = iub[mi]; max_idx = mi }
             mi = mi + 1
         }
-
-        # If best >= max_ub, we're done
         if best >= max_ub { break }
 
-        # Pop the max interval
         let lo: i64 = il[max_idx]
-        let hi: i64 = ih[max_idx]
-        let ub: i64 = iub[max_idx]
-        # Swap with last and remove
+        let hi: i64 = ir[max_idx]
+        let gr: i64 = igr[max_idx]
         n_intervals = n_intervals - 1
         if max_idx < n_intervals {
             il[max_idx] = il[n_intervals]
-            ih[max_idx] = ih[n_intervals]
+            ir[max_idx] = ir[n_intervals]
             iub[max_idx] = iub[n_intervals]
+            igr[max_idx] = igr[n_intervals]
         }
 
-        if lo == hi {
-            # Single point, evaluate g(lo)
-            let gx: i64 = g_x(lo, mark_buf, active_buf)
-            if gx > best { best = gx }
-        } else {
-            # Split at midpoint
+        if hi - lo > 1 {
             let mid: i64 = (lo + hi) / 2
-            let gmid: i64 = g_x(mid, mark_buf, active_buf)
+            let gmid: i64 = G(mid, gcache, gdone, mark_buf, active_buf)
             if gmid > best { best = gmid }
 
-            # Left interval [lo, mid-1] with ub = g(mid) + (mid - lo)
-            if mid - 1 >= lo {
-                il[n_intervals] = lo
-                ih[n_intervals] = mid - 1
-                iub[n_intervals] = gmid + (mid - lo)
-                n_intervals = n_intervals + 1
+            # Left child [lo, mid]: right endpoint is mid.
+            if mid - lo > 1 {
+                let ub_left: i64 = gmid + (mid - lo)
+                if ub_left > best {
+                    il[n_intervals] = lo
+                    ir[n_intervals] = mid
+                    iub[n_intervals] = ub_left
+                    igr[n_intervals] = gmid
+                    n_intervals = n_intervals + 1
+                }
             }
-            # Right interval [mid+1, hi] with ub = g(mid) + (hi - mid)
-            if hi >= mid + 1 {
-                il[n_intervals] = mid + 1
-                ih[n_intervals] = hi
-                iub[n_intervals] = gmid + (hi - mid)
-                n_intervals = n_intervals + 1
+            # Right child [mid, hi]: right endpoint stays hi, keep g(hi).
+            if hi - mid > 1 {
+                let ub_right: i64 = gr + (hi - mid)
+                if ub_right > best {
+                    il[n_intervals] = mid
+                    ir[n_intervals] = hi
+                    iub[n_intervals] = ub_right
+                    igr[n_intervals] = gr
+                    n_intervals = n_intervals + 1
+                }
             }
         }
     }
 
     printf("%lld\n", best)
 
+    free(igr)
     free(iub)
-    free(ih)
+    free(ir)
     free(il)
+    free(gdone)
+    free(gcache)
     free(active_buf)
     free(mark_buf)
     return 0

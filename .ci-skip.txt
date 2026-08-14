@@ -5,7 +5,6 @@
 # Timeout (>120s) on local scan:
 353  timeout
 433  timeout
-508  timeout
 535  timeout
 542  timeout
 610  timeout
@@ -42,15 +41,11 @@
 566  slow-9s
 570  slow-13s
 571  slow-15s
-583  slow-55s
 585  slow-35s
 662  slow-22s
 678  slow-26s
 681  slow-49s
-693  slow-57s
 701  slow-16s
-714  slow-74s
-737  slow-66s
 829  slow-40s
 989  slow-30s
 994  slow-41s

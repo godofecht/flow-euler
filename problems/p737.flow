@@ -1,71 +1,200 @@
 # Project Euler 737: Coin Loops
 # Coins of radius 1 touch a vertical line, each resting on the one below,
-# and the stack must stay balanced. Build the stack from the top down: the
-# centre of mass of the top m coins (mean of m unit vectors around the line)
-# must lie within distance 1 of the next coin's centre, so the next coin can
-# advance at most acos(rho/2) past the CoM direction, where rho = |W|/m.
-# Greedily take that maximum each step (verified optimal against a nonlinear
-# solver on small stacks; reproduces the given values 31, 154, 6947).
-# All angles are kept O(1): the bottom coin's geometric angle is psi - delta,
-# and the total winding is accumulated with Kahan compensation to avoid the
-# systematic drift a large unwrapped angle accumulator suffers over 7.6e8
-# steps. Stop at the first coin count whose winding exceeds 2*pi*2020.
+# and the stack must stay balanced.  Build the stack top-down: the centre of
+# mass of the top m coins (mean of m unit vectors) must lie within distance 1
+# of the next coin's centre.
+#
+# Key identity: |G_m|^2 = H_m / m where H_m is the m-th harmonic number, so
+# the whole problem reduces to a 1D rotation sum
+#   S(n) = alpha_n + sum_{m=2}^{n-1} beta_m
+# where alpha_n = acos(r/2), beta_m = atan(sqrt(1-r^2/4)/(r*(t+1/2))) with
+# t = m-1 and r = sqrt(H_t / t).  Both depend only on harmonic numbers.
+# The answer for k loops is the smallest n with S(n) > 2*pi*k.
+#
+# H_t and prefix sums of beta are precomputed exactly up to M; the tail is
+# approximated with Euler-Maclaurin (integral via Gauss-Legendre in log
+# space, plus endpoint correction).  A binary search over n then finds the
+# answer in O(log n) evaluations.  Reproduces 31, 154, 6947 for 1, 2, 10.
 
 extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>) -> void
     function sqrt(x: f64) -> f64
-    function atan2(y: f64, x: f64) -> f64
+    function log(x: f64) -> f64
+    function atan(x: f64) -> f64
     function acos(x: f64) -> f64
-    function cos(x: f64) -> f64
-    function sin(x: f64) -> f64
-    function fmod(x: f64, y: f64) -> f64
+    function exp(x: f64) -> f64
+}
+
+function harmonic_asymp(t: f64, gamma: f64) -> f64 {
+    let inv: f64 = 1.0 / t
+    let inv2: f64 = inv * inv
+    let inv4: f64 = inv2 * inv2
+    let inv6: f64 = inv4 * inv2
+    let inv8: f64 = inv4 * inv4
+    return log(t) + gamma + 0.5 * inv - (1.0 / 12.0) * inv2 + (1.0 / 120.0) * inv4 - (1.0 / 252.0) * inv6 + (1.0 / 240.0) * inv8
+}
+
+function beta_from_t(t: f64, Ht: f64) -> f64 {
+    let r: f64 = sqrt(Ht / t)
+    let q: f64 = sqrt(1.0 - 0.25 * r * r) / (r * (t + 0.5))
+    return atan(q)
+}
+
+function beta_real(m: f64, gamma: f64) -> f64 {
+    let t: f64 = m - 1.0
+    return beta_from_t(t, harmonic_asymp(t, gamma))
+}
+
+function alpha_from_t(t: f64, Ht: f64) -> f64 {
+    let r: f64 = sqrt(Ht / t)
+    return acos(0.5 * r)
+}
+
+function integral_beta_log(a: f64, b: f64, gl_x: ptr<f64>, gl_w: ptr<f64>, gamma: f64) -> f64 {
+    if b <= a { return 0.0 }
+    let ua: f64 = log(a)
+    let ub: f64 = log(b)
+    let seg_u: f64 = 0.5
+    let span: f64 = ub - ua
+    let mut steps: i64 = (span / seg_u) as i64
+    if (steps as f64) * seg_u < span { steps = steps + 1 }
+    if steps < 1 { steps = 1 }
+    let du: f64 = span / (steps as f64)
+    let mut total: f64 = 0.0
+    let mut i: i64 = 0
+    while i < steps {
+        let u0: f64 = ua + (i as f64) * du
+        let u1: f64 = ua + ((i + 1) as f64) * du
+        let mid: f64 = 0.5 * (u0 + u1)
+        let half: f64 = 0.5 * (u1 - u0)
+        let mut s: f64 = 0.0
+        let mut j: i64 = 0
+        while j < 16 {
+            let u: f64 = mid + half * gl_x[j]
+            let m: f64 = exp(u)
+            s = s + gl_w[j] * beta_real(m, gamma) * m
+            j = j + 1
+        }
+        total = total + s * half
+        i = i + 1
+    }
+    return total
+}
+
+function tail_sum_beta(a: f64, b: f64, gl_x: ptr<f64>, gl_w: ptr<f64>, gamma: f64) -> f64 {
+    if b < a { return 0.0 }
+    let integ: f64 = integral_beta_log(a, b, gl_x, gl_w, gamma)
+    let fa: f64 = beta_real(a, gamma)
+    let fb: f64 = beta_real(b, gamma)
+    return integ + 0.5 * (fa + fb)
+}
+
+function rotation_sum(n: i64, M: i64, H: ptr<f64>, pref_beta: ptr<f64>,
+                      gl_x: ptr<f64>, gl_w: ptr<f64>, gamma: f64) -> f64 {
+    if n < 2 { return 0.0 }
+    let t: i64 = n - 1
+    let tf: f64 = (t as f64)
+    let Ht: f64 = 0.0
+    if t <= M {
+        Ht = H[t]
+    } else {
+        Ht = harmonic_asymp(tf, gamma)
+    }
+    let alpha: f64 = alpha_from_t(tf, Ht)
+    if t <= M {
+        return alpha + pref_beta[t]
+    }
+    return alpha + pref_beta[M] + tail_sum_beta(((M + 1) as f64), tf, gl_x, gl_w, gamma)
+}
+
+function coins_for_loops(loops: i64, M: i64, H: ptr<f64>, pref_beta: ptr<f64>,
+                         gl_x: ptr<f64>, gl_w: ptr<f64>, gamma: f64) -> i64 {
+    let pi: f64 = 3.14159265358979323846
+    let target: f64 = 2.0 * pi * (loops as f64)
+    let mut lo: i64 = 1
+    let mut hi: i64 = 2
+    if loops * 5 > 2 { hi = loops * 5 } else { hi = 2 }
+    while rotation_sum(hi, M, H, pref_beta, gl_x, gl_w, gamma) <= target {
+        hi = hi * 2
+    }
+    while lo + 1 < hi {
+        let mid: i64 = (lo + hi) / 2
+        if rotation_sum(mid, M, H, pref_beta, gl_x, gl_w, gamma) > target {
+            hi = mid
+        } else {
+            lo = mid
+        }
+    }
+    return hi
 }
 
 function main() -> i32 {
-    let pi: f64 = 3.14159265358979323846
-    let twopi: f64 = 2.0 * pi
-    let target: f64 = twopi * 2020.0
+    let M: i64 = 500000
+    let gamma: f64 = 0.5772156649015329
 
-    let mut b: f64 = 0.0
-    let mut wx: f64 = 1.0
-    let mut wy: f64 = 0.0
-    let mut wxc: f64 = 0.0
-    let mut wyc: f64 = 0.0
-    let mut span: f64 = 0.0
-    let mut spanc: f64 = 0.0
-    let mut m: i64 = 1
+    let H: ptr<f64> = calloc(M + 2, 8)
+    let pref_beta: ptr<f64> = calloc(M + 2, 8)
+    let gl_x: ptr<f64> = calloc(16, 8)
+    let gl_w: ptr<f64> = calloc(16, 8)
+    if H == null || pref_beta == null || gl_x == null || gl_w == null { return 1 }
 
-    while span <= target {
-        let rho: f64 = sqrt(wx * wx + wy * wy) / (m as f64)
-        let psi: f64 = atan2(wy, wx)
-        let delta: f64 = acos(rho / 2.0)
-        let mut theta: f64 = fmod(b - psi + delta, twopi)
-        if theta < 0.0 {
-            theta = theta + twopi
-        }
+    gl_x[0] = -0.9894009349916499
+    gl_x[1] = -0.9445750230732326
+    gl_x[2] = -0.8656312023878318
+    gl_x[3] = -0.755404408355003
+    gl_x[4] = -0.6178762444026438
+    gl_x[5] = -0.45801677765722737
+    gl_x[6] = -0.2816035507792589
+    gl_x[7] = -0.09501250983763744
+    gl_x[8] = 0.09501250983763744
+    gl_x[9] = 0.2816035507792589
+    gl_x[10] = 0.45801677765722737
+    gl_x[11] = 0.6178762444026438
+    gl_x[12] = 0.755404408355003
+    gl_x[13] = 0.8656312023878318
+    gl_x[14] = 0.9445750230732326
+    gl_x[15] = 0.9894009349916499
 
-        let ys: f64 = theta - spanc
-        let ts: f64 = span + ys
-        spanc = (ts - span) - ys
-        span = ts
+    gl_w[0] = 0.027152459411754058
+    gl_w[1] = 0.062253523938647776
+    gl_w[2] = 0.0951585116824929
+    gl_w[3] = 0.12462897125553395
+    gl_w[4] = 0.14959598881657682
+    gl_w[5] = 0.16915651939500256
+    gl_w[6] = 0.1826034150449236
+    gl_w[7] = 0.18945061045506847
+    gl_w[8] = 0.18945061045506847
+    gl_w[9] = 0.1826034150449236
+    gl_w[10] = 0.16915651939500256
+    gl_w[11] = 0.14959598881657682
+    gl_w[12] = 0.12462897125553395
+    gl_w[13] = 0.0951585116824929
+    gl_w[14] = 0.062253523938647776
+    gl_w[15] = 0.027152459411754058
 
-        b = psi - delta
-        if b <= 0.0 - pi {
-            b = b + twopi
-        }
-
-        let yx: f64 = cos(b) - wxc
-        let tx: f64 = wx + yx
-        wxc = (tx - wx) - yx
-        wx = tx
-
-        let yy: f64 = sin(b) - wyc
-        let ty: f64 = wy + yy
-        wyc = (ty - wy) - yy
-        wy = ty
-
+    let mut Hval: f64 = 0.0
+    let mut t: i64 = 1
+    while t <= M {
+        Hval = Hval + 1.0 / (t as f64)
+        H[t] = Hval
+        t = t + 1
+    }
+    let mut s: f64 = 0.0
+    let mut m: i64 = 2
+    while m <= M {
+        let tt: i64 = m - 1
+        s = s + beta_from_t((tt as f64), H[tt])
+        pref_beta[m] = s
         m = m + 1
     }
 
-    printf("%lld\n", m)
+    let ans: i64 = coins_for_loops(2020, M, H, pref_beta, gl_x, gl_w, gamma)
+    printf("%lld\n", ans)
+
+    free(gl_w)
+    free(gl_x)
+    free(pref_beta)
+    free(H)
     return 0
 }
