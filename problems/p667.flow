@@ -1,10 +1,335 @@
 # Project Euler 667: Moving Pentagon
+# Nested golden-section + bisection optimization over pentagon shape and scale.
+# Ported from C. Uses f64 math throughout. Function pointers inlined.
 
 extern {
-    function p667_native() -> f64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+    function sqrt(x: f64) -> f64
+    function cos(x: f64) -> f64
+    function sin(x: f64) -> f64
+    function fabs(x: f64) -> f64
+}
+
+const PI: f64 = 3.14159265358979323846
+const PHI: f64 = 0.61803398874989484820
+
+function heron(a: f64, b: f64, c: f64) -> f64 {
+    let s: f64 = (a + b + c) * 0.5
+    let v: f64 = s * (s - a) * (s - b) * (s - c)
+    if v > 0.0 { return sqrt(v) }
+    return 0.0
+}
+
+function base_area(r: f64) -> f64 {
+    return 2.0 * heron(1.0, 1.0, r) + heron(r, r, 1.0)
+}
+
+# Pentagon points: parallel arrays px[5], py[5]
+function build_unit_pentagon(r: f64, px: ptr<f64>, py: ptr<f64>) -> i32 {
+    if !(r > 0.5 && r < 2.0) { return 0 }
+    let h2: f64 = r * r - 0.25
+    if h2 <= 0.0 { return 0 }
+    let h: f64 = sqrt(h2)
+    # A = (0,0), E = (1,0), C = (0.5, h)
+    let d: f64 = r
+    if d >= 2.0 { return 0 }
+    let k2: f64 = 1.0 - (d * 0.5) * (d * 0.5)
+    if k2 <= 0.0 { return 0 }
+    let k: f64 = sqrt(k2)
+    let Mx: f64 = 0.25
+    let My: f64 = h * 0.5
+    let ux: f64 = -h / d
+    let uy: f64 = 0.5 / d
+    let Bx: f64 = Mx + k * ux
+    let By: f64 = My + k * uy
+    # A, B, C, D, E
+    px[0] = 0.0; py[0] = 0.0
+    px[1] = Bx;  py[1] = By
+    px[2] = 0.5; py[2] = h
+    px[3] = 1.0 - Bx; py[3] = By
+    px[4] = 1.0; py[4] = 0.0
+    return 1
+}
+
+function rotate_points(inx: ptr<f64>, iny: ptr<f64>, outx: ptr<f64>, outy: ptr<f64>, theta: f64) -> void {
+    let c: f64 = cos(theta)
+    let s: f64 = sin(theta)
+    let mut i: i32 = 0
+    while i < 5 {
+        outx[i] = c * inx[i] - s * iny[i]
+        outy[i] = s * inx[i] + c * iny[i]
+        i = i + 1
+    }
+}
+
+function min_x_above_y(ptsx: ptr<f64>, ptsy: ptr<f64>, ythr: f64) -> f64 {
+    let mut mn: f64 = 1e308
+    let mut i: i32 = 0
+    while i < 5 {
+        let p1x: f64 = ptsx[i]
+        let p1y: f64 = ptsy[i]
+        let i2: i32 = (i + 1) % 5
+        let p2x: f64 = ptsx[i2]
+        let p2y: f64 = ptsy[i2]
+        if p1y >= ythr && p1x < mn { mn = p1x }
+        if p2y >= ythr && p2x < mn { mn = p2x }
+        let dy: f64 = p2y - p1y
+        if dy == 0.0 { i = i + 1; continue }
+        let t: f64 = (ythr - p1y) / dy
+        if t >= 0.0 && t <= 1.0 {
+            let x: f64 = p1x + (p2x - p1x) * t
+            if x < mn { mn = x }
+        }
+        i = i + 1
+    }
+    return mn
+}
+
+function clearance_for_theta(ptsx: ptr<f64>, ptsy: ptr<f64>, min_y: f64, max_x: f64, scale: f64, eps_y: f64) -> f64 {
+    let ythr: f64 = min_y + (1.0 + eps_y) / scale
+    let x_min: f64 = min_x_above_y(ptsx, ptsy, ythr)
+    if x_min > 1e290 { return 1e308 }
+    return 1.0 + scale * (x_min - max_x)
+}
+
+# Precomputed rotation data: arrays of size n_theta
+# precomp_ptsx: ptr<ptr<f64>>, precomp_ptsy: ptr<ptr<f64>>
+# precomp_miny: ptr<f64>, precomp_maxx: ptr<f64>
+
+function min_clearance(px: ptr<f64>, py: ptr<f64>, precomp_ptsx: ptr<ptr<f64> >, precomp_ptsy: ptr<ptr<f64> >, precomp_miny: ptr<f64>, precomp_maxx: ptr<f64>, thetas: ptr<f64>, n_theta: i32, scale: f64, eps_y: f64, local_k: i32, local_iters: i32) -> f64 {
+    let vals: ptr<f64> = calloc((n_theta as i64), 8)
+    let mut best: f64 = 1e308
+    let mut i: i32 = 0
+    while i < n_theta {
+        vals[i] = clearance_for_theta(precomp_ptsx[i], precomp_ptsy[i], precomp_miny[i], precomp_maxx[i], scale, eps_y)
+        if vals[i] < best { best = vals[i] }
+        i = i + 1
+    }
+    # Selection sort top local_k indices
+    let idx_sorted: ptr<i32> = calloc((n_theta as i64), 4)
+    let mut ii: i32 = 0
+    while ii < n_theta { idx_sorted[ii] = ii; ii = ii + 1 }
+    let mut kk: i32 = 0
+    while kk < local_k && kk < n_theta {
+        let mut min_idx: i32 = kk
+        let mut j: i32 = kk + 1
+        while j < n_theta {
+            if vals[idx_sorted[j]] < vals[idx_sorted[min_idx]] { min_idx = j }
+            j = j + 1
+        }
+        let tmp: i32 = idx_sorted[kk]; idx_sorted[kk] = idx_sorted[min_idx]; idx_sorted[min_idx] = tmp
+        kk = kk + 1
+    }
+    let mut ki: i32 = 0
+    while ki < local_k && ki < n_theta {
+        let idx: i32 = idx_sorted[ki]
+        let a: f64 = thetas[if idx > 0 { idx - 1 } else { 0 }]
+        let b: f64 = thetas[if idx < n_theta - 1 { idx + 1 } else { n_theta - 1 }]
+        if b - a <= 1e-15 { ki = ki + 1; continue }
+        let mut c: f64 = b - (b - a) * PHI
+        let mut d: f64 = a + (b - a) * PHI
+        let rcx: ptr<f64> = calloc(5, 8)
+        let rcy: ptr<f64> = calloc(5, 8)
+        let rdx: ptr<f64> = calloc(5, 8)
+        let rdy: ptr<f64> = calloc(5, 8)
+        rotate_points(px, py, rcx, rcy, c)
+        rotate_points(px, py, rdx, rdy, d)
+        let mut rc_min: f64 = 1e308; let mut rc_max: f64 = -1e308
+        let mut rd_min: f64 = 1e308; let mut rd_max: f64 = -1e308
+        let mut j2: i32 = 0
+        while j2 < 5 {
+            if rcy[j2] < rc_min { rc_min = rcy[j2] }
+            if rcx[j2] > rc_max { rc_max = rcx[j2] }
+            if rdy[j2] < rd_min { rd_min = rdy[j2] }
+            if rdx[j2] > rd_max { rd_max = rdx[j2] }
+            j2 = j2 + 1
+        }
+        let mut fc: f64 = clearance_for_theta(rcx, rcy, rc_min, rc_max, scale, eps_y)
+        let mut fd: f64 = clearance_for_theta(rdx, rdy, rd_min, rd_max, scale, eps_y)
+        let mut iter: i32 = 0
+        while iter < local_iters {
+            if fc < fd {
+                b = d; d = c; fd = fc
+                c = b - (b - a) * PHI
+                rotate_points(px, py, rcx, rcy, c)
+                rc_min = 1e308; rc_max = -1e308
+                let mut j3: i32 = 0
+                while j3 < 5 {
+                    if rcy[j3] < rc_min { rc_min = rcy[j3] }
+                    if rcx[j3] > rc_max { rc_max = rcx[j3] }
+                    j3 = j3 + 1
+                }
+                fc = clearance_for_theta(rcx, rcy, rc_min, rc_max, scale, eps_y)
+            } else {
+                a = c; c = d; fc = fd
+                d = a + (b - a) * PHI
+                rotate_points(px, py, rdx, rdy, d)
+                rd_min = 1e308; rd_max = -1e308
+                let mut j4: i32 = 0
+                while j4 < 5 {
+                    if rdy[j4] < rd_min { rd_min = rdy[j4] }
+                    if rdx[j4] > rd_max { rd_max = rdx[j4] }
+                    j4 = j4 + 1
+                }
+                fd = clearance_for_theta(rdx, rdy, rd_min, rd_max, scale, eps_y)
+            }
+            iter = iter + 1
+        }
+        if fc < best { best = fc }
+        if fd < best { best = fd }
+        free(rcx as ptr<void>); free(rcy as ptr<void>)
+        free(rdx as ptr<void>); free(rdy as ptr<void>)
+        ki = ki + 1
+    }
+    free(vals as ptr<void>)
+    free(idx_sorted as ptr<void>)
+    return best
+}
+
+function max_scale(px: ptr<f64>, py: ptr<f64>, n_theta: i32, bisection_iters: i32, eps_y: f64) -> f64 {
+    let thetas: ptr<f64> = calloc((n_theta as i64), 8)
+    let precomp_ptsx: ptr<ptr<f64> > = calloc((n_theta as i64), 8)
+    let precomp_ptsy: ptr<ptr<f64> > = calloc((n_theta as i64), 8)
+    let precomp_miny: ptr<f64> = calloc((n_theta as i64), 8)
+    let precomp_maxx: ptr<f64> = calloc((n_theta as i64), 8)
+    let mut i: i32 = 0
+    while i < n_theta {
+        thetas[i] = (PI / 2.0) * (i as f64) / ((n_theta - 1) as f64)
+        precomp_ptsx[i] = calloc(5, 8)
+        precomp_ptsy[i] = calloc(5, 8)
+        rotate_points(px, py, precomp_ptsx[i], precomp_ptsy[i], thetas[i])
+        let mut mn_y: f64 = 1e308; let mut mx_x: f64 = -1e308
+        let mut j: i32 = 0
+        while j < 5 {
+            if precomp_ptsy[i][j] < mn_y { mn_y = precomp_ptsy[i][j] }
+            if precomp_ptsx[i][j] > mx_x { mx_x = precomp_ptsx[i][j] }
+            j = j + 1
+        }
+        precomp_miny[i] = mn_y
+        precomp_maxx[i] = mx_x
+        i = i + 1
+    }
+    let mut lo: f64 = 0.0; let mut hi: f64 = 2.0
+    # Expand hi until infeasible
+    let mut expanding: i32 = 1
+    while expanding == 1 {
+        let mc: f64 = min_clearance(px, py, precomp_ptsx, precomp_ptsy, precomp_miny, precomp_maxx, thetas, n_theta, hi, eps_y, 3, 22)
+        if mc < -1e-13 { break }
+        hi = hi * 1.3
+        if hi > 50.0 { break }
+    }
+    let mut iter: i32 = 0
+    while iter < bisection_iters {
+        let mid: f64 = (lo + hi) * 0.5
+        let mc: f64 = min_clearance(px, py, precomp_ptsx, precomp_ptsy, precomp_miny, precomp_maxx, thetas, n_theta, mid, eps_y, 3, 22)
+        if mc >= -1e-13 { lo = mid } else { hi = mid }
+        iter = iter + 1
+    }
+    # Cleanup precomp
+    let mut ci: i32 = 0
+    while ci < n_theta {
+        free(precomp_ptsx[ci] as ptr<void>)
+        free(precomp_ptsy[ci] as ptr<void>)
+        ci = ci + 1
+    }
+    free(thetas as ptr<void>)
+    free(precomp_ptsx as ptr<void>)
+    free(precomp_ptsy as ptr<void>)
+    free(precomp_miny as ptr<void>)
+    free(precomp_maxx as ptr<void>)
+    return lo
+}
+
+function objective(r: f64, n_theta: i32, bisection_iters: i32, eps_y: f64) -> f64 {
+    let px: ptr<f64> = calloc(5, 8)
+    let py: ptr<f64> = calloc(5, 8)
+    if build_unit_pentagon(r, px, py) == 0 { free(px as ptr<void>); free(py as ptr<void>); return -1.0 }
+    let s: f64 = max_scale(px, py, n_theta, bisection_iters, eps_y)
+    let area: f64 = base_area(r) * s * s
+    free(px as ptr<void>)
+    free(py as ptr<void>)
+    return area
+}
+
+# Cache for f_mid
+let mut cache_keys: ptr<f64> = null
+let mut cache_vals: ptr<f64> = null
+let mut cache_count: i32 = 0
+
+function cache_get(key: f64) -> f64 {
+    let mut i: i32 = 0
+    while i < cache_count {
+        if fabs(cache_keys[i] - key) < 1e-15 { return cache_vals[i] }
+        i = i + 1
+    }
+    let val: f64 = objective(key, 1400, 55, 1e-14)
+    if cache_count < 10000 {
+        cache_keys[cache_count] = key
+        cache_vals[cache_count] = val
+        cache_count = cache_count + 1
+    }
+    return val
+}
+
+# Inlined golden_max for f_mid_cached
+function golden_max_mid(a: f64, b: f64, iters: i32) -> f64 {
+    let mut c: f64 = b - (b - a) * PHI
+    let mut d: f64 = a + (b - a) * PHI
+    let mut fc: f64 = cache_get(c)
+    let mut fd: f64 = cache_get(d)
+    let mut i: i32 = 0
+    while i < iters {
+        if fc > fd {
+            b = d; d = c; fd = fc
+            c = b - (b - a) * PHI
+            fc = cache_get(c)
+        } else {
+            a = c; c = d; fc = fd
+            d = a + (b - a) * PHI
+            fd = cache_get(d)
+        }
+        i = i + 1
+    }
+    if fc > fd { return c }
+    return d
 }
 
 function main() -> i32 {
-    printf("%.10f\n", p667_native())
+    # 1) Coarse scan
+    let rmin: f64 = 0.75
+    let rmax: f64 = 1.05
+    let steps: i32 = 240
+    let mut best_r: f64 = 0.0
+    let mut best_val: f64 = -1.0
+    let mut i: i32 = 0
+    while i <= steps {
+        let r: f64 = rmin + (rmax - rmin) * (i as f64) / (steps as f64)
+        let val: f64 = objective(r, 450, 35, 1e-12)
+        if val > best_val { best_val = val; best_r = r }
+        i = i + 1
+    }
+
+    # 2) Golden refine with mid precision + cache
+    cache_keys = calloc(10000, 8)
+    cache_vals = calloc(10000, 8)
+    cache_count = 0
+    let a: f64 = best_r - 0.02
+    let b: f64 = best_r + 0.02
+    let r1: f64 = golden_max_mid(a, b, 26)
+
+    # 3) Narrow refine
+    let a2: f64 = r1 - 0.002
+    let b2: f64 = r1 + 0.002
+    let r2: f64 = golden_max_mid(a2, b2, 35)
+
+    # 4) Final high precision
+    let final_area: f64 = objective(r2, 8000, 75, 1e-15)
+
+    free(cache_keys as ptr<void>)
+    free(cache_vals as ptr<void>)
+
+    printf("%.10f\n", final_area)
     return 0
 }
