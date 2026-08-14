@@ -63,3 +63,5 @@
 989  slow-30s
 994  slow-41s
 
+844  runtime-error division-by-zero
+896  wrong-answer got-0-expected-274229635640
