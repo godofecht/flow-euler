@@ -1,9 +1,737 @@
-# Wrapper for native C solver.
+# Project Euler 827: Pythagorean Triple Occurrence
+# sum_{k=1..18} Q(10^k) mod 409120391
+# Uses f64 log2 for comparison (sufficient precision for this problem).
+
 extern {
-    function p827_native() -> i64
+    function calloc(n: i64, size: i64) -> ptr<void>
+    function free(p: ptr<void>)
+    function printf(fmt: ptr<i8>, ...) -> i32
+    function log2(x: f64) -> f64
+    function sqrt(x: f64) -> f64
+}
+
+const MOD: i64 = 409120391
+const MAX_EXPS: i32 = 50
+const MAX_PRIMES: i32 = 80
+
+# Global primes
+let mut primes_p1: ptr<i32> = 0 as ptr<i32>
+let mut primes_p3: ptr<i32> = 0 as ptr<i32>
+let mut log2_p1: ptr<f64> = 0 as ptr<f64>
+let mut log2_p3: ptr<f64> = 0 as ptr<f64>
+let mut np1: i32 = 0
+let mut np3: i32 = 0
+let mut log2_2: f64 = 1.0
+
+# Memoization for dfs_min_rep - parallel arrays
+let mut memo_rem: ptr<i64> = 0 as ptr<i64>
+let mut memo_idx: ptr<i32> = 0 as ptr<i32>
+let mut memo_prev_f: ptr<i32> = 0 as ptr<i32>
+let mut memo_pset: ptr<i32> = 0 as ptr<i32>
+let mut memo_valid: ptr<i32> = 0 as ptr<i32>
+let mut memo_n: ptr<i32> = 0 as ptr<i32>
+let mut memo_log2_val: ptr<f64> = 0 as ptr<f64>
+let mut memo_exps_off: ptr<i32> = 0 as ptr<i32>
+let mut memo_count: i32 = 0
+let mut exps_pool: ptr<i32> = 0 as ptr<i32>
+let mut exps_pool_next: i32 = 0
+
+# DRep cache - parallel arrays
+let mut d_keys: ptr<i64> = 0 as ptr<i64>
+let mut d_e2: ptr<i64> = 0 as ptr<i64>
+let mut d_log2: ptr<f64> = 0 as ptr<f64>
+let mut d_rep3_n: ptr<i32> = 0 as ptr<i32>
+let mut d_rep3_log2: ptr<f64> = 0 as ptr<f64>
+let mut d_rep3_off: ptr<i32> = 0 as ptr<i32>
+let mut d_count: i32 = 0
+
+# Q cache - parallel arrays
+let mut q_keys: ptr<i64> = 0 as ptr<i64>
+let mut q_e2: ptr<i64> = 0 as ptr<i64>
+let mut q_rep1_n: ptr<i32> = 0 as ptr<i32>
+let mut q_rep1_log2: ptr<f64> = 0 as ptr<f64>
+let mut q_rep1_off: ptr<i32> = 0 as ptr<i32>
+let mut q_rep3_n: ptr<i32> = 0 as ptr<i32>
+let mut q_rep3_log2: ptr<f64> = 0 as ptr<f64>
+let mut q_rep3_off: ptr<i32> = 0 as ptr<i32>
+let mut q_count: i32 = 0
+
+function mulmod(a: i64, b: i64, m: i64) -> i64 {
+    return ((a as i128) * (b as i128) % (m as i128)) as i64
+}
+
+function powmod(a: i64, d: i64, n: i64) -> i64 {
+    let mut r: i64 = 1
+    let mut aa: i64 = a % n
+    let mut dd: i64 = d
+    while dd > 0 {
+        if (dd & 1) == 1 { r = mulmod(r, aa, n) }
+        aa = mulmod(aa, aa, n)
+        dd = dd >> 1
+    }
+    return r
+}
+
+function is_prime_u64(n: i64) -> i32 {
+    if n < 2 { return 0 }
+    let mut i: i32 = 0
+    while i < 12 {
+        let sp: i64 = 0
+        if i == 0 { sp = 2 }
+        if i == 1 { sp = 3 }
+        if i == 2 { sp = 5 }
+        if i == 3 { sp = 7 }
+        if i == 4 { sp = 11 }
+        if i == 5 { sp = 13 }
+        if i == 6 { sp = 17 }
+        if i == 7 { sp = 19 }
+        if i == 8 { sp = 23 }
+        if i == 9 { sp = 29 }
+        if i == 10 { sp = 31 }
+        if i == 11 { sp = 37 }
+        if n == sp { return 1 }
+        if n % sp == 0 { return 0 }
+        i = i + 1
+    }
+    let mut d: i64 = n - 1
+    let mut s: i32 = 0
+    while d % 2 == 0 {
+        d = d / 2
+        s = s + 1
+    }
+    let mut i2: i32 = 0
+    while i2 < 7 {
+        let a: i64 = 0
+        if i2 == 0 { a = 2 % n }
+        if i2 == 1 { a = 325 % n }
+        if i2 == 2 { a = 9375 % n }
+        if i2 == 3 { a = 28178 % n }
+        if i2 == 4 { a = 450775 % n }
+        if i2 == 5 { a = 9780504 % n }
+        if i2 == 6 { a = 1795265022 % n }
+        if a == 0 { i2 = i2 + 1; continue }
+        let mut x: i64 = powmod(a, d, n)
+        if x == 1 { i2 = i2 + 1; continue }
+        if x == n - 1 { i2 = i2 + 1; continue }
+        let mut found: i32 = 0
+        let mut j: i32 = 0
+        while j < s - 1 {
+            x = mulmod(x, x, n)
+            if x == n - 1 { found = 1; break }
+            j = j + 1
+        }
+        if found == 0 { return 0 }
+        i2 = i2 + 1
+    }
+    return 1
+}
+
+function gcd_u64(a: i64, b: i64) -> i64 {
+    let mut x: i64 = a
+    let mut y: i64 = b
+    while y != 0 {
+        let t: i64 = x % y
+        x = y
+        y = t
+    }
+    return x
+}
+
+function pollard_rho(n: i64) -> i64 {
+    if n % 2 == 0 { return 2 }
+    if n % 3 == 0 { return 3 }
+    if n % 5 == 0 { return 5 }
+    let mut ci: i32 = 0
+    while ci < 12 {
+        let c: i64 = 0
+        if ci == 0 { c = 1 }
+        if ci == 1 { c = 3 }
+        if ci == 2 { c = 5 }
+        if ci == 3 { c = 7 }
+        if ci == 4 { c = 11 }
+        if ci == 5 { c = 13 }
+        if ci == 6 { c = 17 }
+        if ci == 7 { c = 19 }
+        if ci == 8 { c = 23 }
+        if ci == 9 { c = 29 }
+        if ci == 10 { c = 31 }
+        if ci == 11 { c = 37 }
+        let mut x: i64 = 3
+        let mut y: i64 = 3
+        let mut d: i64 = 1
+        while d == 1 {
+            x = (mulmod(x, x, n) + c) % n
+            y = (mulmod(y, y, n) + c) % n
+            y = (mulmod(y, y, n) + c) % n
+            let diff: i64 = if x > y { x - y } else { y - x }
+            d = gcd_u64(diff, n)
+        }
+        if d != n { return d }
+        ci = ci + 1
+    }
+    return n
+}
+
+# Factorize: returns count, fills fac_p[] and fac_e[]
+function factorize(n_in: i64, fac_p: ptr<i64>, fac_e: ptr<i32>) -> i32 {
+    let mut n: i64 = n_in
+    let mut nf: i32 = 0
+    let mut i: i32 = 0
+    while i < 12 {
+        let sp: i64 = 0
+        if i == 0 { sp = 2 }
+        if i == 1 { sp = 3 }
+        if i == 2 { sp = 5 }
+        if i == 3 { sp = 7 }
+        if i == 4 { sp = 11 }
+        if i == 5 { sp = 13 }
+        if i == 6 { sp = 17 }
+        if i == 7 { sp = 19 }
+        if i == 8 { sp = 23 }
+        if i == 9 { sp = 29 }
+        if i == 10 { sp = 31 }
+        if i == 11 { sp = 37 }
+        if n % sp == 0 {
+            let mut e: i32 = 0
+            while n % sp == 0 {
+                n = n / sp
+                e = e + 1
+            }
+            fac_p[nf] = sp
+            fac_e[nf] = e
+            nf = nf + 1
+        }
+        i = i + 1
+    }
+    let stack: ptr<i64> = calloc(64, 8)
+    let mut sp2: i32 = 0
+    if n > 1 {
+        stack[sp2] = n
+        sp2 = sp2 + 1
+    }
+    while sp2 > 0 {
+        sp2 = sp2 - 1
+        let m: i64 = stack[sp2]
+        if m == 1 { continue }
+        if is_prime_u64(m) == 1 {
+            let mut found: i32 = 0
+            let mut i2: i32 = 0
+            while i2 < nf {
+                if fac_p[i2] == m {
+                    fac_e[i2] = fac_e[i2] + 1
+                    found = 1
+                    break
+                }
+                i2 = i2 + 1
+            }
+            if found == 0 {
+                fac_p[nf] = m
+                fac_e[nf] = 1
+                nf = nf + 1
+            }
+            continue
+        }
+        let d: i64 = pollard_rho(m)
+        if d == m {
+            let mut found: i32 = 0
+            let mut i3: i32 = 0
+            while i3 < nf {
+                if fac_p[i3] == m {
+                    fac_e[i3] = fac_e[i3] + 1
+                    found = 1
+                    break
+                }
+                i3 = i3 + 1
+            }
+            if found == 0 {
+                fac_p[nf] = m
+                fac_e[nf] = 1
+                nf = nf + 1
+            }
+            continue
+        }
+        stack[sp2] = d
+        sp2 = sp2 + 1
+        stack[sp2] = m / d
+        sp2 = sp2 + 1
+    }
+    free(stack as ptr<void>)
+    return nf
+}
+
+function odd_divisors(n: i64, out: ptr<i64>) -> i32 {
+    let fac_p: ptr<i64> = calloc(20, 8)
+    let fac_e: ptr<i32> = calloc(20, 4)
+    let nf: i32 = factorize(n, fac_p, fac_e)
+    let odd_p: ptr<i64> = calloc(20, 8)
+    let odd_e: ptr<i32> = calloc(20, 4)
+    let mut onf: i32 = 0
+    let mut i: i32 = 0
+    while i < nf {
+        if fac_p[i] != 2 {
+            odd_p[onf] = fac_p[i]
+            odd_e[onf] = fac_e[i]
+            onf = onf + 1
+        }
+        i = i + 1
+    }
+    let mut nd: i32 = 1
+    out[0] = 1
+    let mut i2: i32 = 0
+    while i2 < onf {
+        let cur: i32 = nd
+        let mut pe: i64 = 1
+        let mut e: i32 = 1
+        while e <= odd_e[i2] {
+            pe = pe * odd_p[i2]
+            let mut j: i32 = 0
+            while j < cur {
+                out[nd] = out[j] * pe
+                nd = nd + 1
+                j = j + 1
+            }
+            e = e + 1
+        }
+        i2 = i2 + 1
+    }
+    let mut i3: i32 = 1
+    while i3 < nd {
+        let key: i64 = out[i3]
+        let mut j2: i32 = i3 - 1
+        while j2 >= 0 && out[j2] > key {
+            out[j2 + 1] = out[j2]
+            j2 = j2 - 1
+        }
+        out[j2 + 1] = key
+        i3 = i3 + 1
+    }
+    free(fac_p as ptr<void>)
+    free(fac_e as ptr<void>)
+    free(odd_p as ptr<void>)
+    free(odd_e as ptr<void>)
+    return nd
+}
+
+function gen_primes() -> void {
+    let mut x: i32 = 2
+    while np1 < MAX_PRIMES || np3 < MAX_PRIMES {
+        let mut is_p: i32 = 1
+        let mut d: i32 = 2
+        while d * d <= x {
+            if x % d == 0 {
+                is_p = 0
+                break
+            }
+            d = d + 1
+        }
+        if is_p == 1 {
+            if x % 4 == 1 && np1 < MAX_PRIMES {
+                primes_p1[np1] = x
+                log2_p1[np1] = log2((x as f64))
+                np1 = np1 + 1
+            } else {
+                if x % 4 == 3 && np3 < MAX_PRIMES {
+                    primes_p3[np3] = x
+                    log2_p3[np3] = log2((x as f64))
+                    np3 = np3 + 1
+                }
+            }
+        }
+        x = x + 1
+    }
+    log2_2 = log2(2.0)
+}
+
+# Allocate exps from pool
+function alloc_exps(n: i32) -> i32 {
+    let off: i32 = exps_pool_next
+    exps_pool_next = exps_pool_next + n
+    return off
+}
+
+# Memo lookup: returns 1 if found valid, 0 if found invalid, -1 if not found
+function memo_lookup(rem: i64, idx: i32, prev_f: i32, pset: i32, out_n: ptr<i32>, out_log2: ptr<f64>, out_off: ptr<i32>) -> i32 {
+    let mut i: i32 = 0
+    while i < memo_count {
+        if memo_rem[i] == rem && memo_idx[i] == idx && memo_prev_f[i] == prev_f && memo_pset[i] == pset {
+            if memo_valid[i] == 1 {
+                out_n[0] = memo_n[i]
+                out_log2[0] = memo_log2_val[i]
+                out_off[0] = memo_exps_off[i]
+                return 1
+            }
+            return 0
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+function memo_store(rem: i64, idx: i32, prev_f: i32, pset: i32, valid: i32, n: i32, log2_val: f64, off: i32) -> void {
+    memo_rem[memo_count] = rem
+    memo_idx[memo_count] = idx
+    memo_prev_f[memo_count] = prev_f
+    memo_pset[memo_count] = pset
+    memo_valid[memo_count] = valid
+    if valid == 1 {
+        memo_n[memo_count] = n
+        memo_log2_val[memo_count] = log2_val
+        memo_exps_off[memo_count] = off
+    }
+    memo_count = memo_count + 1
+}
+
+# dfs_min_rep: find minimum representation of rem as product of prime^e
+# Returns 1 if found, 0 if not. Fills out_n, out_log2, out_off.
+function dfs_min_rep(rem: i64, idx: i32, prev_f: i32, primes: ptr<i32>, logs: ptr<f64>, nprimes: i32, pset: i32, out_n: ptr<i32>, out_log2: ptr<f64>, out_off: ptr<i32>) -> i32 {
+    if rem == 1 {
+        out_n[0] = 0
+        out_log2[0] = 0.0
+        out_off[0] = 0
+        return 1
+    }
+    if idx >= nprimes { return 0 }
+
+    let dummy_n: ptr<i32> = calloc(1, 4)
+    let dummy_l: ptr<f64> = calloc(1, 8)
+    let dummy_o: ptr<i32> = calloc(1, 4)
+    let cached: i32 = memo_lookup(rem, idx, prev_f, pset, dummy_n, dummy_l, dummy_o)
+    if cached >= 0 {
+        if cached == 1 {
+            out_n[0] = dummy_n[0]
+            out_log2[0] = dummy_l[0]
+            out_off[0] = dummy_o[0]
+        }
+        free(dummy_n as ptr<void>)
+        free(dummy_l as ptr<void>)
+        free(dummy_o as ptr<void>)
+        return cached
+    }
+    free(dummy_n as ptr<void>)
+    free(dummy_l as ptr<void>)
+    free(dummy_o as ptr<void>)
+
+    let divs: ptr<i64> = calloc(20000, 8)
+    let nd: i32 = odd_divisors(rem, divs)
+
+    let mut best_n: i32 = -1
+    let mut best_log2: f64 = 0.0
+    let mut best_off: i32 = 0
+    let mut found: i32 = 0
+
+    let mut i: i32 = nd - 1
+    while i >= 0 {
+        let f: i64 = divs[i]
+        if f == 1 { i = i - 1; continue }
+        if f > (prev_f as i64) { i = i - 1; continue }
+        let e: i32 = ((f - 1) / 2) as i32
+        if e <= 0 { i = i - 1; continue }
+
+        let sub_n: ptr<i32> = calloc(1, 4)
+        let sub_log2: ptr<f64> = calloc(1, 8)
+        let sub_off: ptr<i32> = calloc(1, 4)
+        if dfs_min_rep(rem / f, idx + 1, f as i32, primes, logs, nprimes, pset, sub_n, sub_log2, sub_off) == 1 {
+            let cur_log: f64 = logs[idx] * (e as f64) + sub_log2[0]
+            if best_n < 0 || cur_log < best_log2 {
+                best_n = sub_n[0] + 1
+                let new_off: i32 = alloc_exps(best_n)
+                exps_pool[new_off] = e
+                let mut j: i32 = 0
+                while j < sub_n[0] {
+                    exps_pool[new_off + 1 + j] = exps_pool[sub_off[0] + j]
+                    j = j + 1
+                }
+                best_off = new_off
+                best_log2 = cur_log
+            }
+            found = 1
+        }
+        free(sub_n as ptr<void>)
+        free(sub_log2 as ptr<void>)
+        free(sub_off as ptr<void>)
+        i = i - 1
+    }
+
+    free(divs as ptr<void>)
+
+    if found == 1 {
+        out_n[0] = best_n
+        out_log2[0] = best_log2
+        out_off[0] = best_off
+        memo_store(rem, idx, prev_f, pset, 1, best_n, best_log2, best_off)
+        return 1
+    }
+    memo_store(rem, idx, prev_f, pset, 0, 0, 0.0, 0)
+    return 0
+}
+
+function min_rep_for_product(P: i64, primes: ptr<i32>, logs: ptr<f64>, nprimes: i32, pset: i32, out_n: ptr<i32>, out_log2: ptr<f64>, out_off: ptr<i32>) -> void {
+    out_n[0] = -1
+    if P == 1 {
+        out_n[0] = 0
+        out_log2[0] = 0.0
+        out_off[0] = 0
+        return
+    }
+    dfs_min_rep(P, 0, P as i32, primes, logs, nprimes, pset, out_n, out_log2, out_off)
+}
+
+function best_rep_for_D(D: i64, out_e2: ptr<i64>, out_log2: ptr<f64>, out_rep3_n: ptr<i32>, out_rep3_log2: ptr<f64>, out_rep3_off: ptr<i32>) -> i32 {
+    if D == 1 {
+        out_e2[0] = 0
+        out_rep3_n[0] = 0
+        out_rep3_log2[0] = 0.0
+        out_rep3_off[0] = 0
+        out_log2[0] = 0.0
+        return 1
+    }
+
+    let mut i: i32 = 0
+    while i < d_count {
+        if d_keys[i] == D {
+            out_e2[0] = d_e2[i]
+            out_log2[0] = d_log2[i]
+            out_rep3_n[0] = d_rep3_n[i]
+            out_rep3_log2[0] = d_rep3_log2[i]
+            out_rep3_off[0] = d_rep3_off[i]
+            return 1
+        }
+        i = i + 1
+    }
+
+    let divs: ptr<i64> = calloc(20000, 8)
+    let nd: i32 = odd_divisors(D, divs)
+
+    let mut best_e2: i64 = -1
+    let mut best_log2: f64 = 0.0
+    let mut best_rep3_n: i32 = 0
+    let mut best_rep3_log2: f64 = 0.0
+    let mut best_rep3_off: i32 = 0
+    let mut initialized: i32 = 0
+
+    let mut i2: i32 = 0
+    while i2 < nd {
+        let a2: i64 = divs[i2]
+        let e2: i64 = if a2 == 1 { 0 } else { (a2 + 1) / 2 }
+        let C: i64 = D / a2
+        let rn: ptr<i32> = calloc(1, 4)
+        let rl: ptr<f64> = calloc(1, 8)
+        let ro: ptr<i32> = calloc(1, 4)
+        min_rep_for_product(C, primes_p3, log2_p3, np3, 1, rn, rl, ro)
+        if rn[0] >= 0 {
+            let cur_log: f64 = log2_2 * (e2 as f64) + rl[0]
+            if initialized == 0 || cur_log < best_log2 {
+                best_e2 = e2
+                best_rep3_n = rn[0]
+                best_rep3_log2 = rl[0]
+                best_rep3_off = ro[0]
+                best_log2 = cur_log
+                initialized = 1
+            }
+        }
+        free(rn as ptr<void>)
+        free(rl as ptr<void>)
+        free(ro as ptr<void>)
+        i2 = i2 + 1
+    }
+
+    free(divs as ptr<void>)
+
+    if initialized == 1 {
+        out_e2[0] = best_e2
+        out_log2[0] = best_log2
+        out_rep3_n[0] = best_rep3_n
+        out_rep3_log2[0] = best_rep3_log2
+        out_rep3_off[0] = best_rep3_off
+
+        d_keys[d_count] = D
+        d_e2[d_count] = best_e2
+        d_log2[d_count] = best_log2
+        d_rep3_n[d_count] = best_rep3_n
+        d_rep3_log2[d_count] = best_rep3_log2
+        d_rep3_off[d_count] = best_rep3_off
+        d_count = d_count + 1
+        return 1
+    }
+    return 0
+}
+
+function Q_rep(n: i64, out_e2: ptr<i64>, out_rep1_n: ptr<i32>, out_rep1_log2: ptr<f64>, out_rep1_off: ptr<i32>, out_rep3_n: ptr<i32>, out_rep3_log2: ptr<f64>, out_rep3_off: ptr<i32>) -> i32 {
+    let mut i: i32 = 0
+    while i < q_count {
+        if q_keys[i] == n {
+            out_e2[0] = q_e2[i]
+            out_rep1_n[0] = q_rep1_n[i]
+            out_rep1_log2[0] = q_rep1_log2[i]
+            out_rep1_off[0] = q_rep1_off[i]
+            out_rep3_n[0] = q_rep3_n[i]
+            out_rep3_log2[0] = q_rep3_log2[i]
+            out_rep3_off[0] = q_rep3_off[i]
+            return 1
+        }
+        i = i + 1
+    }
+
+    let S: i64 = n + 1
+    let divs: ptr<i64> = calloc(20000, 8)
+    let nd: i32 = odd_divisors(S, divs)
+
+    let mut best_e2: i64 = -1
+    let mut best_log2: f64 = 0.0
+    let mut best_rep1_n: i32 = 0
+    let mut best_rep1_log2: f64 = 0.0
+    let mut best_rep1_off: i32 = 0
+    let mut best_rep3_n: i32 = 0
+    let mut best_rep3_log2: f64 = 0.0
+    let mut best_rep3_off: i32 = 0
+    let mut found: i32 = 0
+
+    let mut i2: i32 = 0
+    while i2 < nd {
+        let B: i64 = divs[i2]
+        let rn: ptr<i32> = calloc(1, 4)
+        let rl: ptr<f64> = calloc(1, 8)
+        let ro: ptr<i32> = calloc(1, 4)
+        min_rep_for_product(B, primes_p1, log2_p1, np1, 0, rn, rl, ro)
+        if rn[0] >= 0 {
+            let D: i64 = (2 * S) / B - 1
+            let de2: ptr<i64> = calloc(1, 8)
+            let dl: ptr<f64> = calloc(1, 8)
+            let drn: ptr<i32> = calloc(1, 4)
+            let drl: ptr<f64> = calloc(1, 8)
+            let dro: ptr<i32> = calloc(1, 4)
+            if best_rep_for_D(D, de2, dl, drn, drl, dro) == 1 {
+                let cur_log: f64 = rl[0] + dl[0]
+                if found == 0 || cur_log < best_log2 {
+                    found = 1
+                    best_rep1_n = rn[0]
+                    best_rep1_log2 = rl[0]
+                    best_rep1_off = ro[0]
+                    best_e2 = de2[0]
+                    best_rep3_n = drn[0]
+                    best_rep3_log2 = drl[0]
+                    best_rep3_off = dro[0]
+                    best_log2 = cur_log
+                }
+            }
+            free(de2 as ptr<void>)
+            free(dl as ptr<void>)
+            free(drn as ptr<void>)
+            free(drl as ptr<void>)
+            free(dro as ptr<void>)
+        }
+        free(rn as ptr<void>)
+        free(rl as ptr<void>)
+        free(ro as ptr<void>)
+        i2 = i2 + 1
+    }
+
+    free(divs as ptr<void>)
+
+    if found == 1 {
+        out_e2[0] = best_e2
+        out_rep1_n[0] = best_rep1_n
+        out_rep1_log2[0] = best_rep1_log2
+        out_rep1_off[0] = best_rep1_off
+        out_rep3_n[0] = best_rep3_n
+        out_rep3_log2[0] = best_rep3_log2
+        out_rep3_off[0] = best_rep3_off
+
+        q_keys[q_count] = n
+        q_e2[q_count] = best_e2
+        q_rep1_n[q_count] = best_rep1_n
+        q_rep1_log2[q_count] = best_rep1_log2
+        q_rep1_off[q_count] = best_rep1_off
+        q_rep3_n[q_count] = best_rep3_n
+        q_rep3_log2[q_count] = best_rep3_log2
+        q_rep3_off[q_count] = best_rep3_off
+        q_count = q_count + 1
+        return 1
+    }
+    return 0
+}
+
+function Q_mod(n: i64) -> i64 {
+    let e2: ptr<i64> = calloc(1, 8)
+    let r1n: ptr<i32> = calloc(1, 4)
+    let r1l: ptr<f64> = calloc(1, 8)
+    let r1o: ptr<i32> = calloc(1, 4)
+    let r3n: ptr<i32> = calloc(1, 4)
+    let r3l: ptr<f64> = calloc(1, 8)
+    let r3o: ptr<i32> = calloc(1, 4)
+    Q_rep(n, e2, r1n, r1l, r1o, r3n, r3l, r3o)
+    let mut r: i64 = 1
+    let mut i: i32 = 0
+    while i < r1n[0] {
+        let pe: i64 = powmod(primes_p1[i] as i64, exps_pool[r1o[0] + i] as i64, MOD)
+        r = r * pe % MOD
+        i = i + 1
+    }
+    let p2: i64 = powmod(2, e2[0], MOD)
+    r = r * p2 % MOD
+    let mut i2: i32 = 0
+    while i2 < r3n[0] {
+        let pe: i64 = powmod(primes_p3[i2] as i64, exps_pool[r3o[0] + i2] as i64, MOD)
+        r = r * pe % MOD
+        i2 = i2 + 1
+    }
+    free(e2 as ptr<void>)
+    free(r1n as ptr<void>)
+    free(r1l as ptr<void>)
+    free(r1o as ptr<void>)
+    free(r3n as ptr<void>)
+    free(r3l as ptr<void>)
+    free(r3o as ptr<void>)
+    return r
+}
+
+
+function init_globals() -> void {
+    primes_p1 = calloc(200, 4)
+    primes_p3 = calloc(200, 4)
+    log2_p1 = calloc(200, 8)
+    log2_p3 = calloc(200, 8)
+    memo_rem = calloc(500000, 8)
+    memo_idx = calloc(500000, 4)
+    memo_prev_f = calloc(500000, 4)
+    memo_pset = calloc(500000, 4)
+    memo_valid = calloc(500000, 4)
+    memo_n = calloc(500000, 4)
+    memo_log2_val = calloc(500000, 8)
+    memo_exps_off = calloc(500000, 4)
+    exps_pool = calloc(10000000, 4)
+    d_keys = calloc(65536, 8)
+    d_e2 = calloc(65536, 8)
+    d_log2 = calloc(65536, 8)
+    d_rep3_n = calloc(65536, 4)
+    d_rep3_log2 = calloc(65536, 8)
+    d_rep3_off = calloc(65536, 4)
+    q_keys = calloc(256, 8)
+    q_e2 = calloc(256, 8)
+    q_rep1_n = calloc(256, 4)
+    q_rep1_log2 = calloc(256, 8)
+    q_rep1_off = calloc(256, 4)
+    q_rep3_n = calloc(256, 4)
+    q_rep3_log2 = calloc(256, 8)
+    q_rep3_off = calloc(256, 4)
 }
 
 function main() -> i32 {
-    printf("%lld\n", p827_native())
+    init_globals()
+    gen_primes()
+    let mut total: i64 = 0
+    let mut k: i32 = 1
+    while k <= 18 {
+        let mut n: i64 = 1
+        let mut j: i32 = 0
+        while j < k {
+            n = n * 10
+            j = j + 1
+        }
+        let q: i64 = Q_mod(n)
+        total = (total + q) % MOD
+        k = k + 1
+    }
+    printf("%lld\n", total)
     return 0
 }
