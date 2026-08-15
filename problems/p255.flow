@@ -10,10 +10,8 @@ extern {
 
 function pow10(e: i64) -> i64 {
     let mut r: i64 = 1
-    let mut i: i64 = 0
-    while i < e {
+    for i in 0..e {
         r = r * 10
-        i = i + 1
     }
     return r
 }
@@ -53,13 +51,11 @@ function print_average(total: i64, count: i64) -> void {
     let mut ip: i64 = total / count
     let mut rem: i64 = total % count
     let mut fp: i64 = 0
-    let mut di: i64 = 0
-    while di < 10 {
+    for di in 0..10 {
         rem = rem * 10
         let digit: i64 = floordiv(rem, count)
         fp = fp * 10 + digit
         rem = rem % count
-        di = di + 1
     }
     if 2 * rem >= count {
         fp = fp + 1

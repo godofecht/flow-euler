@@ -77,9 +77,9 @@ function pi_lehmer(x: i64) -> i64 {
     let cached: i64 = cache_get(g_pi_cache, x)
     if cached >= 0 { return cached }
 
-    let a: i64 = pi_lehmer(isqrt(isqrt(x)))
-    let b: i64 = pi_lehmer(isqrt(x))
-    let c: i64 = pi_lehmer(icbrt(x))
+    let a: i64 = x |> isqrt |> isqrt |> pi_lehmer
+    let b: i64 = x |> isqrt |> pi_lehmer
+    let c: i64 = x |> icbrt |> pi_lehmer
 
     let mut result: i64 = phi(x, a) + ((b + a - 2) * (b - a + 1)) / 2
     let mut i: i64 = a + 1

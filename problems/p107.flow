@@ -9,6 +9,12 @@ extern {
     function free(p: ptr<void>) -> void
 }
 
+struct Edge {
+    u: i32,
+    v: i32,
+    w: i32
+}
+
 function find(parent: ptr<i32>, x0: i32) -> i32 {
     let mut x: i32 = x0
     while parent[x] != x {
@@ -28,10 +34,8 @@ function main() -> i32 {
 
     # edges: u,v,w — at most n*(n-1)/2
     let max_e: i32 = n * n
-    let eu: ptr<i32> = calloc(max_e as i64, 4)
-    let ev: ptr<i32> = calloc(max_e as i64, 4)
-    let ew: ptr<i32> = calloc(max_e as i64, 4)
-    if eu == null || ev == null || ew == null { return 1 }
+    let edges: ptr<Edge> = calloc(max_e as i64, 12) as ptr<Edge>
+    if edges == null { return 1 }
 
     let mut ec: i32 = 0
     let mut total: i64 = 0
@@ -51,9 +55,9 @@ function main() -> i32 {
         } else {
             if in_num {
                 if c > r {
-                    eu[ec] = r
-                    ev[ec] = c
-                    ew[ec] = cur
+                    edges[ec].u = r
+                    edges[ec].v = c
+                    edges[ec].w = cur
                     ec = ec + 1
                     total = total + (cur as i64)
                 }
@@ -70,9 +74,9 @@ function main() -> i32 {
         ch = fgetc(f)
     }
     if in_num && c > r {
-        eu[ec] = r
-        ev[ec] = c
-        ew[ec] = cur
+        edges[ec].u = r
+        edges[ec].v = c
+        edges[ec].w = cur
         ec = ec + 1
         total = total + (cur as i64)
     }
@@ -84,16 +88,16 @@ function main() -> i32 {
         let mut i: i32 = gap
         while i < ec {
             let mut j: i32 = i
-            while j >= gap && ew[j] < ew[j - gap] {
-                let tu: i32 = eu[j]
-                let tv: i32 = ev[j]
-                let tw: i32 = ew[j]
-                eu[j] = eu[j - gap]
-                ev[j] = ev[j - gap]
-                ew[j] = ew[j - gap]
-                eu[j - gap] = tu
-                ev[j - gap] = tv
-                ew[j - gap] = tw
+            while j >= gap && edges[j].w < edges[j - gap].w {
+                let tu: i32 = edges[j].u
+                let tv: i32 = edges[j].v
+                let tw: i32 = edges[j].w
+                edges[j].u = edges[j - gap].u
+                edges[j].v = edges[j - gap].v
+                edges[j].w = edges[j - gap].w
+                edges[j - gap].u = tu
+                edges[j - gap].v = tv
+                edges[j - gap].w = tw
                 j = j - gap
             }
             i = i + 1
@@ -113,11 +117,11 @@ function main() -> i32 {
     let mut used: i32 = 0
     i = 0
     while i < ec && used < n - 1 {
-        let a: i32 = find(parent, eu[i])
-        let b: i32 = find(parent, ev[i])
+        let a: i32 = find(parent, edges[i].u)
+        let b: i32 = find(parent, edges[i].v)
         if a != b {
             parent[a] = b
-            mst = mst + (ew[i] as i64)
+            mst = mst + (edges[i].w as i64)
             used = used + 1
         }
         i = i + 1
@@ -125,8 +129,6 @@ function main() -> i32 {
 
     printf("%lld\n", total - mst)
     free(parent)
-    free(eu)
-    free(ev)
-    free(ew)
+    free(edges)
     return 0
 }

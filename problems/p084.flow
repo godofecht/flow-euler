@@ -69,32 +69,38 @@ function main() -> i32 {
                                 while card < 16 {
                                     let mut np: i32 = pos
                                     let mut nd2: i32 = nd
-                                    if card == 0 { np = 0 }
-                                    elif card == 1 { np = 10; nd2 = 0 }
-                                    elif card == 2 { np = 11 }
-                                    elif card == 3 { np = 24 }
-                                    elif card == 4 { np = 39 }
-                                    elif card == 5 { np = 5 }
-                                    elif card == 6 || card == 7 { np = next_rail(pos) }
-                                    elif card == 8 { np = next_util(pos) }
-                                    elif card == 9 {
-                                        np = (pos + 37) % 40
-                                        # back 3 may land on CC
-                                        if np == 33 || np == 2 || np == 17 {
-                                            # nested CC
-                                            let mut c2: i32 = 0
-                                            while c2 < 16 {
-                                                let mut npp: i32 = np
-                                                let mut nd3: i32 = nd2
-                                                if c2 == 0 { npp = 0 }
-                                                elif c2 == 1 { npp = 10; nd3 = 0 }
-                                                if npp == 30 { npp = 10; nd3 = 0 }
-                                                q[npp * 3 + nd3] = q[npp * 3 + nd3] + pr / 16.0 / 16.0
-                                                c2 = c2 + 1
+                                    match card {
+                                        0 => { np = 0 }
+                                        1 => { np = 10; nd2 = 0 }
+                                        2 => { np = 11 }
+                                        3 => { np = 24 }
+                                        4 => { np = 39 }
+                                        5 => { np = 5 }
+                                        6 | 7 => { np = next_rail(pos) }
+                                        8 => { np = next_util(pos) }
+                                        9 => {
+                                            np = (pos + 37) % 40
+                                            # back 3 may land on CC
+                                            if np == 33 || np == 2 || np == 17 {
+                                                # nested CC
+                                                let mut c2: i32 = 0
+                                                while c2 < 16 {
+                                                    let mut npp: i32 = np
+                                                    let mut nd3: i32 = nd2
+                                                    match c2 {
+                                                        0 => { npp = 0 }
+                                                        1 => { npp = 10; nd3 = 0 }
+                                                        _ => { }
+                                                    }
+                                                    if npp == 30 { npp = 10; nd3 = 0 }
+                                                    q[npp * 3 + nd3] = q[npp * 3 + nd3] + pr / 16.0 / 16.0
+                                                    c2 = c2 + 1
+                                                }
+                                                card = card + 1
+                                                continue
                                             }
-                                            card = card + 1
-                                            continue
                                         }
+                                        _ => { }
                                     }
                                     if np == 30 { np = 10; nd2 = 0 }
                                     q[np * 3 + nd2] = q[np * 3 + nd2] + pr / 16.0
@@ -107,8 +113,11 @@ function main() -> i32 {
                                 while card < 16 {
                                     let mut np: i32 = pos
                                     let mut nd2: i32 = nd
-                                    if card == 0 { np = 0 }
-                                    elif card == 1 { np = 10; nd2 = 0 }
+                                    match card {
+                                        0 => { np = 0 }
+                                        1 => { np = 10; nd2 = 0 }
+                                        _ => { }
+                                    }
                                     if np == 30 { np = 10; nd2 = 0 }
                                     q[np * 3 + nd2] = q[np * 3 + nd2] + pr / 16.0
                                     card = card + 1

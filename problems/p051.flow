@@ -6,6 +6,11 @@ extern {
     function free(p: ptr<void>) -> void
 }
 
+struct DigitSlot {
+    dig: i32,
+    rep: i32
+}
+
 function pow10(n: i32) -> i64 {
     let mut r: i64 = 1
     let mut i: i32 = 0
@@ -34,9 +39,8 @@ function main() -> i32 {
         p = p + 1
     }
 
-    let digs: ptr<i32> = calloc(10, 4)
-    let repl: ptr<i32> = calloc(10, 4)
-    if digs == null || repl == null { return 1 }
+    let slots: ptr<DigitSlot> = calloc(10, 8) as ptr<DigitSlot>
+    if slots == null { return 1 }
 
     let mut ans: i64 = 0
     let mut n: i64 = 10
@@ -45,11 +49,11 @@ function main() -> i32 {
             let mut x: i64 = n
             let mut nd: i32 = 0
             while x > 0 {
-                digs[nd] = (x % 10) as i32
+                slots[nd].dig = (x % 10) as i32
                 x = x / 10
                 nd = nd + 1
             }
-            # digs[0] = LSD; digs[nd-1] = MSD
+            # slots[0].dig = LSD; slots[nd-1].dig = MSD
             let masks: i32 = (1 << nd) - 1
             let mut mask: i32 = 1
             while mask <= masks {
@@ -60,8 +64,8 @@ function main() -> i32 {
                 while i < nd {
                     if (mask & (1 << i)) != 0 {
                         if same < 0 {
-                            same = digs[i]
-                        } elif digs[i] != same {
+                            same = slots[i].dig
+                        } elif slots[i].dig != same {
                             ok_mask = false
                             break
                         }
@@ -79,7 +83,7 @@ function main() -> i32 {
                         let mut lead_zero: bool = false
                         i = 0
                         while i < nd {
-                            let mut digit: i32 = digs[i]
+                            let mut digit: i32 = slots[i].dig
                             if (mask & (1 << i)) != 0 {
                                 digit = d
                             }
@@ -114,8 +118,7 @@ function main() -> i32 {
     }
 
     printf("%lld\n", ans)
-    free(repl)
-    free(digs)
+    free(slots)
     free(sieve)
     return 0
 }

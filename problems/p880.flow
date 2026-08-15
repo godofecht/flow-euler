@@ -24,7 +24,7 @@ function icbrt(n: i64) -> i64 {
 }
 
 function iroot4(n: i64) -> i64 {
-    let mut r: i64 = sqrt(sqrt(n as f64)) as i64
+    let mut r: i64 = (n as f64 |> sqrt |> sqrt) as i64
     let n128: i128 = n as i128
     while ((r + 1) as i128) * ((r + 1) as i128) * ((r + 1) as i128) * ((r + 1) as i128) <= n128 { r = r + 1 }
     while (r as i128) * (r as i128) * (r as i128) * (r as i128) > n128 { r = r - 1 }

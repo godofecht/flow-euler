@@ -106,63 +106,74 @@ function hand_score(ranks: ptr<i32>, suits: ptr<i32>) -> i64 {
 
     if straight && flush {
         cat = 8
-        key = hi as i64
     } elif four != 0 {
         cat = 7
-        key = four as i64
-        i = 14
-        while i >= 2 {
-            if cnt[i] == 1 {
-                key = key * 100 + (i as i64)
-                break
-            }
-            i = i - 1
-        }
     } elif three != 0 && pairs >= 1 {
         cat = 6
-        key = (three as i64) * 100 + (p1 as i64)
     } elif flush {
         cat = 5
-        key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64)
     } elif straight {
         cat = 4
-        key = hi as i64
     } elif three != 0 {
         cat = 3
-        key = three as i64
-        i = 14
-        while i >= 2 {
-            if cnt[i] == 1 {
-                key = key * 100 + (i as i64)
-            }
-            i = i - 1
-        }
     } elif pairs == 2 {
         cat = 2
-        let hi_p: i32 = max2i(p1, p2)
-        let lo_p: i32 = min2i(p1, p2)
-        key = (hi_p as i64) * 10000 + (lo_p as i64) * 100
-        i = 14
-        while i >= 2 {
-            if cnt[i] == 1 {
-                key = key + (i as i64)
-                break
-            }
-            i = i - 1
-        }
     } elif pairs == 1 {
         cat = 1
-        key = p1 as i64
-        i = 14
-        while i >= 2 {
-            if cnt[i] == 1 {
-                key = key * 100 + (i as i64)
-            }
-            i = i - 1
-        }
     } else {
         cat = 0
-        key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64)
+    }
+
+    match cat {
+        8 => { key = hi as i64 }
+        7 => {
+            key = four as i64
+            i = 14
+            while i >= 2 {
+                if cnt[i] == 1 {
+                    key = key * 100 + (i as i64)
+                    break
+                }
+                i = i - 1
+            }
+        }
+        6 => { key = (three as i64) * 100 + (p1 as i64) }
+        5 => { key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64) }
+        4 => { key = hi as i64 }
+        3 => {
+            key = three as i64
+            i = 14
+            while i >= 2 {
+                if cnt[i] == 1 {
+                    key = key * 100 + (i as i64)
+                }
+                i = i - 1
+            }
+        }
+        2 => {
+            let hi_p: i32 = max2i(p1, p2)
+            let lo_p: i32 = min2i(p1, p2)
+            key = (hi_p as i64) * 10000 + (lo_p as i64) * 100
+            i = 14
+            while i >= 2 {
+                if cnt[i] == 1 {
+                    key = key + (i as i64)
+                    break
+                }
+                i = i - 1
+            }
+        }
+        1 => {
+            key = p1 as i64
+            i = 14
+            while i >= 2 {
+                if cnt[i] == 1 {
+                    key = key * 100 + (i as i64)
+                }
+                i = i - 1
+            }
+        }
+        _ => { key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64) }
     }
 
     free(cnt)

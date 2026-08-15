@@ -23,8 +23,7 @@ function main() -> i32 {
     while true {
         let n: i64 = p * p + 1
         let root: i64 = isqrt(n)
-        let mut d: i64 = 1
-        while d <= root {
+        for d in 1..(root + 1) {
             if n % d == 0 {
                 let e: i64 = n / d
                 if mul_ok(p, p + d) && mul_ok(p * (p + d), p + e) {
@@ -55,7 +54,6 @@ function main() -> i32 {
                     }
                 }
             }
-            d = d + 1
         }
         p = p + 1
         if hn == K {

@@ -29,10 +29,8 @@ function carmichael(n: i64) -> i64 {
         elif a == 2 { lam = 2 }
         else {
             let mut t: i64 = 1
-            let mut i: i64 = 0
-            while i < a - 2 {
+            for i in 0..(a - 2) {
                 t = t * 2
-                i = i + 1
             }
             lam = t
         }

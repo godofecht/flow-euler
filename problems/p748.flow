@@ -28,7 +28,7 @@ function isqrt128(n: i128) -> i128 {
 
 function fourth_root_floor128(n: i128) -> i128 {
     if n == 0 { return 0 }
-    let mut x: i128 = isqrt128(isqrt128(n))
+    let mut x: i128 = n |> isqrt128 |> isqrt128
     let mut xp1: i128 = x + 1
     while xp1 * xp1 * xp1 * xp1 <= n {
         x = xp1
