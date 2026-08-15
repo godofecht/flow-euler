@@ -10,33 +10,27 @@ extern {
 # Memo: open addressing hash map key = state bytes + best, value = f64.
 
 function pack_key(seg: ptr<i8>, nseg: i32, best: i32, out: ptr<i8>) -> void {
-    let mut i: i32 = 0
-    while i < nseg {
+    for i in 0..nseg {
         out[i] = seg[i]
-        i = i + 1
     }
-    while i < 40 {
+    for i in nseg..40 {
         out[i] = 0
-        i = i + 1
     }
     out[40] = best as i8
 }
 
 function hash_key(key: ptr<i8>) -> i64 {
     let mut h: i64 = 1469598103934665603
-    let mut i: i32 = 0
-    while i < 41 {
+    for i in 0..41 {
         h = h ^ (key[i] as i64)
         h = h * 1099511628211
-        i = i + 1
     }
     if h < 0 { h = -h }
     return h
 }
 
 function sort_segs(seg: ptr<i8>, n: i32) -> void {
-    let mut i: i32 = 1
-    while i < n {
+    for i in 1..n {
         let key: i8 = seg[i]
         let mut j: i32 = i - 1
         while j >= 0 && (seg[j] as i32) > (key as i32) {
@@ -44,7 +38,6 @@ function sort_segs(seg: ptr<i8>, n: i32) -> void {
             j = j - 1
         }
         seg[j + 1] = key
-        i = i + 1
     }
 }
 
@@ -74,13 +67,11 @@ function expected(seg: ptr<i8>, nseg: i32, best: i32, keys: ptr<i8>, vals: ptr<f
     }
     # compute
     let mut remaining: i32 = 0
-    let mut i: i32 = 0
-    while i < nseg {
+    for i in 0..nseg {
         remaining = remaining + (seg[i] as i32)
-        i = i + 1
     }
     let mut total: f64 = 0.0
-    i = 0
+    let mut i: i32 = 0
     while i < nseg {
         let seg_len: i32 = seg[i] as i32
         let mut j: i32 = i + 1
@@ -91,21 +82,18 @@ function expected(seg: ptr<i8>, nseg: i32, best: i32, keys: ptr<i8>, vals: ptr<f
         # build base = state without one copy of seg_len at i
         let base: ptr<i8> = calloc(40, 1)
         let mut bn: i32 = 0
-        let mut k: i32 = 0
-        while k < nseg {
+        for k in 0..nseg {
             if k != i {
                 base[bn] = seg[k]
                 bn = bn + 1
             }
-            k = k + 1
         }
         if seg_len == 1 {
             let nb: i32 = best
             let mut nn: i32 = bn
             # next state is base
             let nxt: ptr<i8> = calloc(40, 1)
-            k = 0
-            while k < bn { nxt[k] = base[k]; k = k + 1 }
+            for k in 0..bn { nxt[k] = base[k] }
             let nbest: i32 = nb
             if nn > nbest { nbest = nn }
             total = total + (count as f64) * expected(nxt, nn, nbest, keys, vals, used, cap)
@@ -113,8 +101,7 @@ function expected(seg: ptr<i8>, nseg: i32, best: i32, keys: ptr<i8>, vals: ptr<f
         } else {
             # case: shrink to seg_len-1
             let nxt: ptr<i8> = calloc(40, 1)
-            k = 0
-            while k < bn { nxt[k] = base[k]; k = k + 1 }
+            for k in 0..bn { nxt[k] = base[k] }
             nxt[bn] = (seg_len - 1) as i8
             let nn: i32 = bn + 1
             sort_segs(nxt, nn)
@@ -124,14 +111,12 @@ function expected(seg: ptr<i8>, nseg: i32, best: i32, keys: ptr<i8>, vals: ptr<f
             free(nxt)
             # splits
             let rest: i32 = seg_len - 1
-            let mut left: i32 = 1
-            while left <= rest / 2 {
+            for left in 1..(rest / 2 + 1) {
                 let right: i32 = rest - left
                 let mult: f64 = 2.0
                 if left == right { mult = 1.0 }
                 let nxt2: ptr<i8> = calloc(40, 1)
-                k = 0
-                while k < bn { nxt2[k] = base[k]; k = k + 1 }
+                for k in 0..bn { nxt2[k] = base[k] }
                 nxt2[bn] = left as i8
                 nxt2[bn + 1] = right as i8
                 let nn2: i32 = bn + 2
@@ -140,7 +125,6 @@ function expected(seg: ptr<i8>, nseg: i32, best: i32, keys: ptr<i8>, vals: ptr<f
                 if nn2 > nbest2 { nbest2 = nn2 }
                 total = total + (mult * (count as f64)) * expected(nxt2, nn2, nbest2, keys, vals, used, cap)
                 free(nxt2)
-                left = left + 1
             }
         }
         free(base)
@@ -149,10 +133,8 @@ function expected(seg: ptr<i8>, nseg: i32, best: i32, keys: ptr<i8>, vals: ptr<f
     let result: f64 = total / (remaining as f64)
     # insert
     used[slot] = 1
-    i = 0
-    while i < 41 {
+    for i in 0..41 {
         keys[slot * 41 + i] = key[i]
-        i = i + 1
     }
     vals[slot] = result
     free(key)

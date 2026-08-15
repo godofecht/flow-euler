@@ -8,37 +8,29 @@ extern {
 
 function mul_poly(p: ptr<i64>, q: ptr<i64>, rec: ptr<i64>, k: i64, mod: i64, out: ptr<i64>) -> i32 {
     let tmp: ptr<i64> = calloc(2 * k, 8)
-    let mut i: i64 = 0
-    while i < k {
+    for i in 0..k {
         let pi: i64 = p[i]
         if pi != 0 {
-            let mut j: i64 = 0
-            while j < k {
+            for j in 0..k {
                 let qj: i64 = q[j]
                 if qj != 0 {
                     tmp[i + j] = (tmp[i + j] + pi * qj) % mod
                 }
-                j = j + 1
             }
         }
-        i = i + 1
     }
     let mut d: i64 = 2 * k - 2
     while d >= k {
         let val: i64 = tmp[d]
         if val != 0 {
-            let mut t: i64 = 1
-            while t <= k {
+            for t in 1..k + 1 {
                 tmp[d - t] = (tmp[d - t] + val * rec[t - 1]) % mod
-                t = t + 1
             }
         }
         d = d - 1
     }
-    i = 0
-    while i < k {
+    for i in 0..k {
         out[i] = tmp[i]
-        i = i + 1
     }
     free(tmp)
     return 0
@@ -47,12 +39,10 @@ function mul_poly(p: ptr<i64>, q: ptr<i64>, rec: ptr<i64>, k: i64, mod: i64, out
 function big_halve(digits: ptr<i8>, n: i64) -> i64 {
     # divide decimal digit array (MSB at 0) by 2; return old LSB parity
     let mut rem: i64 = 0
-    let mut i: i64 = 0
-    while i < n {
+    for i in 0..n {
         let cur: i64 = rem * 10 + (digits[i] as i64)
         digits[i] = (cur / 2) as i8
         rem = cur % 2
-        i = i + 1
     }
     return rem
 }
@@ -98,21 +88,17 @@ function main() -> i32 {
         let odd: i64 = big_halve(digits, nd)
         if odd == 1 {
             mul_poly(res, base, rec, k, mod, tmp)
-            let mut i: i64 = 0
-            while i < k { res[i] = tmp[i]; i = i + 1 }
+            for i in 0..k { res[i] = tmp[i] }
         }
         if big_is_zero(digits, nd) == 0 {
             mul_poly(base, base, rec, k, mod, tmp)
-            let mut j: i64 = 0
-            while j < k { base[j] = tmp[j]; j = j + 1 }
+            for j in 0..k { base[j] = tmp[j] }
         }
     }
 
     let mut ans: i64 = 0
-    let mut i: i64 = 0
-    while i < k {
+    for i in 0..k {
         ans = (ans + res[i] * init[i]) % mod
-        i = i + 1
     }
     printf("%lld\n", ans)
     free(rec); free(init); free(digits); free(res); free(base); free(tmp)

@@ -73,10 +73,9 @@ function main() -> i32 {
     seg[0] = 119; seg[1] = 36; seg[2] = 93; seg[3] = 109; seg[4] = 46
     seg[5] = 107; seg[6] = 123; seg[7] = 39; seg[8] = 127; seg[9] = 111
 
-    let mut i: i64 = 0
-    while i < half { sieve[i] = 1; i = i + 1 }
+    for i in 0..half { sieve[i] = 1 }
     sieve[0] = 0
-    i = 1
+    let mut i: i64 = 1
     while 2 * i * i < half {
         if sieve[i] == 1 {
             let mut current: i64 = 3 * i + 1

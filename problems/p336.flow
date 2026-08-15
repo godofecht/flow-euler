@@ -52,10 +52,8 @@ function main() -> i32 {
     if train == null || current == null { return 1 }
     # CABDEFGHIJK
     train[0]=67; train[1]=65; train[2]=66
-    let mut i: i32 = 3
-    while i < length {
-        train[i] = (65 + i) as i8  # D=68 at i=3 ... 
-        i = i + 1
+    for i in 3..length {
+        train[i] = (65 + i) as i8  # D=68 at i=3 ...
     }
     # Fix: should be C A B D E F G H I J K
     train[0]=67; train[1]=65; train[2]=66; train[3]=68; train[4]=69
@@ -64,10 +62,8 @@ function main() -> i32 {
     let max_rot: i32 = (length - 1) * 2 - 1
     let mut num_found: i32 = 0
     while true {
-        i = 0
-        while i < length {
+        for i in 0..length {
             current[i] = train[i]
-            i = i + 1
         }
         let mut want: i8 = 65
         let mut rotations: i32 = 0
@@ -95,10 +91,8 @@ function main() -> i32 {
         if !next_perm(train, length) { break }
     }
     # print train as string
-    let mut k: i32 = 0
-    while k < length {
+    for k in 0..length {
         printf("%c", train[k] as i32)
-        k = k + 1
     }
     printf("\n")
     free(train); free(current)

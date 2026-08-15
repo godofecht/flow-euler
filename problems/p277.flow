@@ -12,15 +12,19 @@ function is_good(x0: i64, seq: ptr<i8>, length: i64) -> bool {
     while i < length {
         let s: i32 = seq[i] as i32
         let mod: i64 = x % 3
-        if mod == 0 {
-            if s != 68 { return false }
-            x = x / 3
-        } elif mod == 1 {
-            if s != 85 { return false }
-            x = (4 * x + 2) / 3
-        } else {
-            if s != 100 { return false }
-            x = (2 * x - 1) / 3
+        match mod {
+            0 => {
+                if s != 68 { return false }
+                x = x / 3
+            }
+            1 => {
+                if s != 85 { return false }
+                x = (4 * x + 2) / 3
+            }
+            _ => {
+                if s != 100 { return false }
+                x = (2 * x - 1) / 3
+            }
         }
         i = i + 1
     }

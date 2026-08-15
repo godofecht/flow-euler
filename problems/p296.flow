@@ -42,8 +42,7 @@ function main() -> i32 {
     let primes: ptr<i64> = calloc(max_q / 5 + 10, 8)
     mu[1] = 1
     let mut pc: i64 = 0
-    let mut n: i64 = 2
-    while n <= max_q {
+    for n in 2..(max_q + 1) {
         if is_comp[n] == 0 {
             primes[pc] = n
             pc = pc + 1
@@ -63,54 +62,40 @@ function main() -> i32 {
             mu[ip] = 0 - mi
             j = j + 1
         }
-        n = n + 1
     }
 
     # divisors[q] stored as flat: first count, then pairs (d, mu) in separate arrays via CSR
     let offs: ptr<i64> = calloc(max_q + 2, 8)
-    let mut d: i64 = 1
-    while d <= max_q {
+    for d in 1..(max_q + 1) {
         if mu[d] != 0 {
-            let mut mult: i64 = d
-            while mult <= max_q {
+            for mult in d..(max_q + 1) step d {
                 offs[mult + 1] = offs[mult + 1] + 1
-                mult = mult + d
             }
         }
-        d = d + 1
     }
-    let mut i: i64 = 1
-    while i <= max_q + 1 {
+    for i in 1..(max_q + 2) {
         offs[i] = offs[i] + offs[i - 1]
-        i = i + 1
     }
     let total_pairs: i64 = offs[max_q + 1]
     let ds: ptr<i64> = calloc(total_pairs, 8)
     let ms: ptr<i32> = calloc(total_pairs, 4)
     let cur: ptr<i64> = calloc(max_q + 1, 8)
-    i = 0
-    while i <= max_q {
+    for i in 0..(max_q + 1) {
         cur[i] = offs[i]
-        i = i + 1
     }
-    d = 1
-    while d <= max_q {
+    for d in 1..(max_q + 1) {
         if mu[d] != 0 {
-            let mut mult: i64 = d
-            while mult <= max_q {
+            for mult in d..(max_q + 1) step d {
                 let at: i64 = cur[mult]
                 ds[at] = d
                 ms[at] = mu[d]
                 cur[mult] = at + 1
-                mult = mult + d
             }
         }
-        d = d + 1
     }
 
     let mut count: i64 = 0
-    let mut q: i64 = 2
-    while q <= max_q {
+    for q in 2..(max_q + 1) {
         let max_g_plus_k: i64 = limit / q
         let half_q: i64 = q / 2
         let start: i64 = offs[q]
@@ -118,14 +103,11 @@ function main() -> i32 {
 
         # reduced_up_to_half = sum mu*(half_q//d)
         let mut reduced_up_to_half: i64 = 0
-        let mut t: i64 = start
-        while t < end {
+        for t in start..end {
             reduced_up_to_half = reduced_up_to_half + (ms[t] as i64) * (half_q / ds[t])
-            t = t + 1
         }
 
-        let mut g: i64 = 2
-        while g < max_g_plus_k {
+        for g in 2..max_g_plus_k {
             let mut min_h: i64 = 1
             let alt: i64 = 2 * g - max_g_plus_k
             if alt > min_h { min_h = alt }
@@ -134,8 +116,7 @@ function main() -> i32 {
                 let mut coprime_before: i64 = 0
                 let mut floor_half: i64 = 0
                 let mut floor_before: i64 = 0
-                t = start
-                while t < end {
+                for t in start..end {
                     let dd: i64 = ds[t]
                     let mmu: i64 = ms[t] as i64
                     coprime_before = coprime_before + mmu * (before / dd)
@@ -147,15 +128,12 @@ function main() -> i32 {
                     if n2 > 0 {
                         floor_before = floor_before + mmu * floor_sum(n2 + 1, q / dd, g, 0)
                     }
-                    t = t + 1
                 }
                 let reduced_count: i64 = reduced_up_to_half - coprime_before
                 let floor_part: i64 = floor_half - floor_before
                 count = count + floor_part - (min_h - 1) * reduced_count
             }
-            g = g + 1
         }
-        q = q + 1
     }
     printf("%lld\n", count)
     free(mu); free(is_comp); free(primes); free(offs); free(ds); free(ms); free(cur)

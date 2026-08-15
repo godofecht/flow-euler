@@ -38,10 +38,8 @@ function main() -> i32 {
     while tc > 0 {
         # pop smallest (linear scan since few)
         let mut best: i64 = 0
-        let mut bi: i64 = 1
-        while bi < tc {
+        for bi in 1..tc {
             if todo_n[bi] < todo_n[best] { best = bi }
-            bi = bi + 1
         }
         let number: i64 = todo_n[best]
         let maxp: i64 = todo_m[best]
@@ -82,8 +80,7 @@ function main() -> i32 {
     let seen: ptr<i8> = calloc(10000, 1)
     if seen == null { return 1 }
     let mut sum: i64 = 0
-    let mut ai: i64 = 0
-    while ai < ac {
+    for ai in 0..ac {
         let n: i64 = adm[ai]
         let mut m: i64 = 3
         while true {
@@ -96,7 +93,6 @@ function main() -> i32 {
             }
             m = m + 2
         }
-        ai = ai + 1
     }
     printf("%lld\n", sum)
     free(seen); free(adm); free(todo_n); free(todo_m); free(factors)

@@ -32,15 +32,11 @@ function main() -> i32 {
     }
     let pow_cache: ptr<i64> = calloc(max_e + 3, 8)
     let a: ptr<i64> = calloc(max_e + 1, 8)
-    let mut e: i64 = 0
-    while e <= max_e + 1 {
+    for e in 0..max_e + 2 {
         pow_cache[e] = modpow(e, N, mod)
-        e = e + 1
     }
-    e = 1
-    while e <= max_e {
+    for e in 1..max_e + 1 {
         a[e] = (pow_cache[e + 1] - 2 * pow_cache[e] + pow_cache[e - 1] + 2 * mod) % mod
-        e = e + 1
     }
     let spf: ptr<i32> = calloc(n + 1, 4)
     let primes: ptr<i32> = calloc(n / 5 + 10, 4)
@@ -68,8 +64,7 @@ function main() -> i32 {
     if expv == null || rest == null || c == null || pref == null { return 1 }
     rest[1] = 1
     c[1] = 1
-    i = 2
-    while i <= n {
+    for i in 2..n + 1 {
         let p: i64 = spf[i] as i64
         let m: i64 = i / p
         if (spf[m] as i64) == p {
@@ -80,14 +75,11 @@ function main() -> i32 {
             rest[i] = m as i32
         }
         c[i] = ((c[rest[i]] as i64) * a[expv[i]] % mod) as i32
-        i = i + 1
     }
     let mut s: i64 = 0
-    i = 1
-    while i <= n {
+    for i in 1..n + 1 {
         s = (s + (c[i] as i64)) % mod
         pref[i] = s as i32
-        i = i + 1
     }
     let mut ans: i64 = 0
     let mut d: i64 = G

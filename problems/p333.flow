@@ -42,10 +42,8 @@ function main() -> i32 {
     let rev2: ptr<i32> = calloc(256, 4)
     let rev3: ptr<i32> = calloc(256, 4)
     let mut next_id: i64 = 1
-    let mut e2: i64 = 0
-    while e2 < n2 {
-        let mut e3: i64 = 0
-        while e3 < n3 {
+    for e2 in 0..n2 {
+        for e3 in 0..n3 {
             let cur: i64 = ipow2_3(e2, e3)
             if cur <= limit {
                 ids[e2 * n3 + e3] = next_id as i32
@@ -53,49 +51,39 @@ function main() -> i32 {
                 rev3[next_id] = e3 as i32
                 next_id = next_id + 1
             }
-            e3 = e3 + 1
         }
-        e2 = e2 + 1
     }
 
     let stride: i64 = limit + 1
     let reach: ptr<i8> = calloc((next_id * stride + 7) / 8, 1)
     let multi: ptr<i8> = calloc((next_id * stride + 7) / 8, 1)
 
-    let mut idx: i64 = 1
-    while idx < next_id {
+    for idx in 1..next_id {
         let v: i64 = ipow2_3(rev2[idx] as i64, rev3[idx] as i64)
         bit_set(reach, idx * stride, v)
-        idx = idx + 1
     }
 
     let half: i64 = (limit >> 1) + 1
     let sieve: ptr<i8> = calloc(half, 1)
-    let mut i: i64 = 0
-    while i < half { sieve[i] = 1; i = i + 1 }
+    for i in 0..half { sieve[i] = 1 }
     sieve[0] = 0
-    i = 1
+    let mut i: i64 = 1
     while 2 * i * i < half {
         if sieve[i] == 1 {
-            let mut cur: i64 = 3 * i + 1
             let step: i64 = 2 * i + 1
-            while cur < half {
+            for cur in (3 * i + 1)..half step step {
                 sieve[cur] = 0
-                cur = cur + step
             }
         }
         i = i + 1
     }
 
     let mut total: i64 = 0
-    let mut value: i64 = 1
-    while value <= limit {
+    for value in 1..(limit + 1) {
         let mut possible: i64 = 0
         let mut unique: i64 = 1
-        idx = 1
-        while idx < next_id {
+        for idx in 1..next_id {
             if bit_get(reach, idx * stride, value) == 0 {
-                idx = idx + 1
                 continue
             }
             if possible == 1 || bit_get(multi, idx * stride, value) == 1 {
@@ -104,8 +92,7 @@ function main() -> i32 {
             possible = 1
             let exp_two: i64 = rev2[idx] as i64
             let exp_three: i64 = rev3[idx] as i64
-            let mut ne2: i64 = exp_two + 1
-            while ne2 < n2 {
+            for ne2 in (exp_two + 1)..n2 {
                 let mut ne3: i64 = 0
                 while ne3 < exp_three {
                     let nid: i64 = ids[ne2 * n3 + ne3] as i64
@@ -119,9 +106,7 @@ function main() -> i32 {
                     }
                     ne3 = ne3 + 1
                 }
-                ne2 = ne2 + 1
             }
-            idx = idx + 1
         }
         let mut is_p: i64 = 0
         if value == 2 { is_p = 1 }
@@ -129,7 +114,6 @@ function main() -> i32 {
         if possible == 1 && unique == 1 && is_p == 1 {
             total = total + value
         }
-        value = value + 1
     }
     printf("%lld\n", total)
     free(ids); free(rev2); free(rev3); free(reach); free(multi); free(sieve)

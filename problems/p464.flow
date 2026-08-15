@@ -68,12 +68,16 @@ function compute_C(n: i64) -> i64 {
     let mut pos: i64 = 1
     while pos <= n {
         let m: i64 = mu[pos] as i64
-        if m == 1 {
-            prefix_a = prefix_a + 99
-            prefix_b = prefix_b - 100
-        } elif m == 0 - 1 {
-            prefix_a = prefix_a - 100
-            prefix_b = prefix_b + 99
+        match m {
+            1 => {
+                prefix_a = prefix_a + 99
+                prefix_b = prefix_b - 100
+            }
+            -1 => {
+                prefix_a = prefix_a - 100
+                prefix_b = prefix_b + 99
+            }
+            _ => { }
         }
         if prefix_a < min_a { min_a = prefix_a }
         elif prefix_a > max_a { max_a = prefix_a }
@@ -102,12 +106,16 @@ function compute_C(n: i64) -> i64 {
     pos = 1
     while pos <= n {
         let m: i64 = mu[pos] as i64
-        if m == 1 {
-            prefix_a = prefix_a + 99
-            prefix_b = prefix_b - 100
-        } elif m == 0 - 1 {
-            prefix_a = prefix_a - 100
-            prefix_b = prefix_b + 99
+        match m {
+            1 => {
+                prefix_a = prefix_a + 99
+                prefix_b = prefix_b - 100
+            }
+            -1 => {
+                prefix_a = prefix_a - 100
+                prefix_b = prefix_b + 99
+            }
+            _ => { }
         }
 
         let idx_a: i64 = prefix_a + offset_a

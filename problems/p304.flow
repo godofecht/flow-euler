@@ -51,13 +51,15 @@ function is_prime(p: i64) -> bool {
     let mut bi: i32 = 0
     while bi < 7 {
         let base: i64 = 0
-        if bi == 0 { base = 2 }
-        elif bi == 1 { base = 325 }
-        elif bi == 2 { base = 9375 }
-        elif bi == 3 { base = 28178 }
-        elif bi == 4 { base = 450775 }
-        elif bi == 5 { base = 9780504 }
-        else { base = 1795265022 }
+        match bi {
+            0 => { base = 2 }
+            1 => { base = 325 }
+            2 => { base = 9375 }
+            3 => { base = 28178 }
+            4 => { base = 450775 }
+            5 => { base = 9780504 }
+            _ => { base = 1795265022 }
+        }
         let a: i64 = base % p
         if a == 0 {
             bi = bi + 1

@@ -75,34 +75,38 @@ function main() -> i32 {
             sp = sp - 1
             continue
         }
-        if ch == 0 {
-            stack_choice[sp] = 1
-            if pos + 2 <= WIDTH {
-                if pos + 2 < WIDTH {
-                    tmp[tn] = pos + 2
-                    stack_n[sp + 1] = tn + 1
-                } else {
-                    stack_n[sp + 1] = tn
+        match ch {
+            0 => {
+                stack_choice[sp] = 1
+                if pos + 2 <= WIDTH {
+                    if pos + 2 < WIDTH {
+                        tmp[tn] = pos + 2
+                        stack_n[sp + 1] = tn + 1
+                    } else {
+                        stack_n[sp + 1] = tn
+                    }
+                    stack_pos[sp + 1] = pos + 2
+                    stack_choice[sp + 1] = 0
+                    sp = sp + 1
                 }
-                stack_pos[sp + 1] = pos + 2
-                stack_choice[sp + 1] = 0
-                sp = sp + 1
             }
-        } elif ch == 1 {
-            stack_choice[sp] = 2
-            if pos + 3 <= WIDTH {
-                if pos + 3 < WIDTH {
-                    tmp[tn] = pos + 3
-                    stack_n[sp + 1] = tn + 1
-                } else {
-                    stack_n[sp + 1] = tn
+            1 => {
+                stack_choice[sp] = 2
+                if pos + 3 <= WIDTH {
+                    if pos + 3 < WIDTH {
+                        tmp[tn] = pos + 3
+                        stack_n[sp + 1] = tn + 1
+                    } else {
+                        stack_n[sp + 1] = tn
+                    }
+                    stack_pos[sp + 1] = pos + 3
+                    stack_choice[sp + 1] = 0
+                    sp = sp + 1
                 }
-                stack_pos[sp + 1] = pos + 3
-                stack_choice[sp + 1] = 0
-                sp = sp + 1
             }
-        } else {
-            sp = sp - 1
+            _ => {
+                sp = sp - 1
+            }
         }
     }
 

@@ -13,10 +13,8 @@ function main() -> i32 {
     let sieve: ptr<i8> = calloc(LIMIT + 2, 1)
     if sieve == null { return 1 }
 
-    let mut i: i64 = 0
-    while i <= LIMIT + 1 {
+    for i in 0..LIMIT + 2 {
         sieve[i] = 1
-        i = i + 1
     }
     sieve[0] = 0
     sieve[1] = 0
@@ -33,8 +31,7 @@ function main() -> i32 {
     }
 
     let mut total: i64 = 1
-    let mut x: i64 = 2
-    while x <= LIMIT {
+    for x in 2..LIMIT + 1 step 4 {
         # n ≡ 2 (mod 4)
         let mut ok: i32 = 1
         if sieve[x + 1] == 0 {
@@ -56,7 +53,6 @@ function main() -> i32 {
         if ok == 1 {
             total = total + x
         }
-        x = x + 4
     }
 
     printf("%lld\n", total)
