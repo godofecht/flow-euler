@@ -50,14 +50,12 @@ function floor_div(a: i64, b: i64) -> i64 {
 }
 
 function first_sign(Bf: ptr<i64>, base: i64, n: i64) -> i64 {
-    let mut dd: i64 = 1
-    while dd <= n {
+    for dd in 1..(n + 1) {
         let v: i64 = Bf[base + dd]
         if v != 0 {
             if v > 0 { return 1 }
             return 0 - 1
         }
-        dd = dd + 1
     }
     return 0
 }
