@@ -40,10 +40,8 @@ function delta_mod_i128(n0: i128) -> i64 {
 
     # n mod MOD from digits
     let mut n_mod: i64 = 0
-    let mut d: i32 = 0
-    while d < len {
+    for d in 0..len {
         n_mod = ((n_mod * 10) % MOD + (digits[d] as i64)) % MOD
-        d = d + 1
     }
 
     # Find largest i with digits[i] < digits[i+1]
@@ -80,10 +78,8 @@ function delta_mod_i128(n0: i128) -> i64 {
 
     # next_permutation value mod MOD
     let mut np_mod: i64 = 0
-    d = 0
-    while d < len {
+    for d in 0..len {
         np_mod = ((np_mod * 10) % MOD + (digits[d] as i64)) % MOD
-        d = d + 1
     }
 
     let dm: i64 = (np_mod - n_mod) % MOD
@@ -137,8 +133,7 @@ function recurse(suffix0: i64, width: i32, trailing_zeros: i32) -> i64 {
 
     let mut total: i64 = 0
 
-    let mut digit: i32 = 0
-    while digit < 10 {
+    for digit in 0..10 {
         let next_suffix: i128 = (digit as i128) * next_place + (suffix0 as i128)
         let next_sq: i128 = next_suffix * next_suffix
         let new_digit: i64 = ((next_sq % next_modulus) / next_place) as i64
@@ -162,7 +157,6 @@ function recurse(suffix0: i64, width: i32, trailing_zeros: i32) -> i64 {
                 total = (total + term) % MOD
             }
         }
-        digit = digit + 1
     }
     return total
 }
@@ -172,29 +166,21 @@ function correction_sum(k: i32) -> i64 {
 
     # Build pow10 array (exact, up to 2*k+2) using i128
     g_pow10[0] = 1
-    let mut i: i32 = 1
-    while i <= 2 * k + 2 {
+    for i in 1..(2 * k + 3) {
         g_pow10[i] = g_pow10[i - 1] * 10
-        i = i + 1
     }
 
     # Build pow10_mod (up to k)
     g_pow10_mod[0] = 1
-    i = 1
-    while i <= k {
+    for i in 1..(k + 1) {
         g_pow10_mod[i] = (g_pow10_mod[i - 1] * 10) % MOD
-        i = i + 1
     }
 
     let mut total: i64 = 0
-    let mut trailing_zeros: i32 = 0
-    while trailing_zeros < k {
-        let mut last_digit: i32 = 1
-        while last_digit < 10 {
+    for trailing_zeros in 0..k {
+        for last_digit in 1..10 {
             total = (total + recurse((last_digit as i64), 1, trailing_zeros)) % MOD
-            last_digit = last_digit + 1
         }
-        trailing_zeros = trailing_zeros + 1
     }
     return total
 }

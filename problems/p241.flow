@@ -67,8 +67,7 @@ function is_prime(value: i64) -> bool {
     let bases: ptr<i64> = calloc(7, 8)
     bases[0] = 2; bases[1] = 325; bases[2] = 9375; bases[3] = 28178
     bases[4] = 450775; bases[5] = 9780504; bases[6] = 1795265022
-    let mut bi: i32 = 0
-    while bi < 7 {
+    for bi in 0..7 {
         let base: i64 = bases[bi] % value
         if base != 0 {
             let mut x: i64 = modpow(base, d, value)
@@ -83,7 +82,6 @@ function is_prime(value: i64) -> bool {
                 if !ok { free(bases); return false }
             }
         }
-        bi = bi + 1
     }
     free(bases)
     return true
@@ -189,11 +187,9 @@ function search_target(target_num: i64) -> void {
         if n % p == 0 { continue }
         let mut prime_power: i64 = 1
         let mut sigma_power: i64 = 1
-        let mut e: i32 = 0
-        while e < min_exp {
+        for e in 0..min_exp {
             prime_power = prime_power * p
             sigma_power = sigma_power + prime_power
-            e = e + 1
         }
         while n <= LIMIT / prime_power {
             let mut new_num: i64 = numerator * prime_power
@@ -218,10 +214,8 @@ function main() -> i32 {
     let targets: ptr<i64> = calloc(6, 8)
     targets[0] = 3; targets[1] = 5; targets[2] = 7
     targets[3] = 9; targets[4] = 11; targets[5] = 13
-    let mut i: i32 = 0
-    while i < 6 {
+    for i in 0..6 {
         search_target(targets[i])
-        i = i + 1
     }
     printf("%lld\n", TOTAL)
     free(targets)

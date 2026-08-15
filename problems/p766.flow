@@ -47,19 +47,16 @@ function init_types() -> void {
     let count_tbl: array<i32, 6> = [2, 2, 2, 6, 1, 1]
 
     let mut start: i32 = 0
-    let mut t: i32 = 0
-    while t < NTYPES {
+    for t in 0..NTYPES {
         g_k[t] = count_tbl[t]
         g_noffs[t] = noffs_tbl[t]
         let mut i: i32 = 0
-        while i < g_noffs[t] {
+        for i in 0..g_noffs[t] {
             g_offs[t * 8 + i * 2] = offs_tbl[t * 8 + i * 2]
             g_offs[t * 8 + i * 2 + 1] = offs_tbl[t * 8 + i * 2 + 1]
-            i = i + 1
         }
 
-        let mut pos: i32 = 0
-        while pos < NCELLS {
+        for pos in 0..NCELLS {
             let x: i32 = pos % W
             let y: i32 = pos / W
             let mut m: i32 = 0
@@ -82,35 +79,29 @@ function init_types() -> void {
                 let mut md: i32 = W
                 let mut ml: i32 = W
                 let mut mr: i32 = W
-                i = 0
-                while i < g_noffs[t] {
+                for i in 0..g_noffs[t] {
                     let dy: i32 = g_offs[t * 8 + i * 2 + 1]
                     let dx: i32 = g_offs[t * 8 + i * 2]
                     if y + dy < mu { mu = y + dy }
                     if (H - 1) - (y + dy) < md { md = (H - 1) - (y + dy) }
                     if x + dx < ml { ml = x + dx }
                     if (W - 1) - (x + dx) < mr { mr = (W - 1) - (x + dx) }
-                    i = i + 1
                 }
                 g_limits[t * NCELLS * 4 + pos * 4] = mu
                 g_limits[t * NCELLS * 4 + pos * 4 + 1] = md
                 g_limits[t * NCELLS * 4 + pos * 4 + 2] = ml
                 g_limits[t * NCELLS * 4 + pos * 4 + 3] = mr
             }
-            pos = pos + 1
         }
 
         g_shift0[t] = start * 5
         g_seg_bits[t] = g_k[t] * 5
         let mut mask: i128 = 0
-        i = 0
-        while i < g_seg_bits[t] {
+        for i in 0..g_seg_bits[t] {
             mask = mask | ((1 as i128) << (g_shift0[t] + i))
-            i = i + 1
         }
         g_seg_mask[t] = mask
         start = start + g_k[t]
-        t = t + 1
     }
 }
 
@@ -136,16 +127,12 @@ function main() -> i32 {
     ]
 
     let mut state0: i128 = 0
-    let mut t: i32 = 0
-    while t < NTYPES {
+    for t in 0..NTYPES {
         let mut seg: i128 = 0
-        let mut i: i32 = 0
-        while i < g_k[t] {
+        for i in 0..g_k[t] {
             seg = seg | ((init_pos[t * 6 + i] as i128) << (5 * i))
-            i = i + 1
         }
         state0 = state0 | (seg << g_shift0[t])
-        t = t + 1
     }
 
     let keys: ptr<i128> = calloc(HCAP, 16) as ptr<i128>
@@ -173,29 +160,22 @@ function main() -> i32 {
         qhead = qhead + 1
 
         let mut occ: i32 = 0
-        t = 0
-        while t < NTYPES {
+        for t in 0..NTYPES {
             let seg: i128 = (s & g_seg_mask[t]) >> g_shift0[t]
-            let mut i: i32 = 0
-            while i < g_k[t] {
+            for i in 0..g_k[t] {
                 decoded[t * 6 + i] = ((seg >> (5 * i)) & 31) as i32
                 occ = occ | g_mask_at[t * NCELLS + decoded[t * 6 + i]]
-                i = i + 1
             }
-            t = t + 1
         }
 
-        t = 0
-        while t < NTYPES {
+        for t in 0..NTYPES {
             let k: i32 = g_k[t]
-            let mut j: i32 = 0
-            while j < k {
+            for j in 0..k {
                 let pos: i32 = decoded[t * 6 + j]
                 let m_old: i32 = g_mask_at[t * NCELLS + pos]
                 let occ_wo: i32 = occ ^ m_old
 
-                let mut d: i32 = 0
-                while d < 4 {
+                for d in 0..4 {
                     let limit: i32 = g_limits[t * NCELLS * 4 + pos * 4 + d]
                     if limit > 0 {
                         let mut step: i32 = 1
@@ -206,10 +186,8 @@ function main() -> i32 {
                             if (new_mask & occ_wo) != 0 {
                                 blocked = true
                             } else {
-                                let mut i: i32 = 0
-                                while i < k {
+                                for i in 0..k {
                                     pl[i] = decoded[t * 6 + i]
-                                    i = i + 1
                                 }
                                 pl[j] = new_pos
                                 let mut idx: i32 = j
@@ -227,10 +205,8 @@ function main() -> i32 {
                                 }
 
                                 let mut new_seg: i128 = 0
-                                i = 0
-                                while i < k {
+                                for i in 0..k {
                                     new_seg = new_seg | ((pl[i] as i128) << (5 * i))
-                                    i = i + 1
                                 }
                                 let new_state: i128 = (s & (all_ones ^ g_seg_mask[t])) | (new_seg << g_shift0[t])
 
@@ -254,11 +230,8 @@ function main() -> i32 {
                             step = step + 1
                         }
                     }
-                    d = d + 1
                 }
-                j = j + 1
             }
-            t = t + 1
         }
     }
 

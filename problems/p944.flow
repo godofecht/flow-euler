@@ -58,10 +58,8 @@ function S(n: i64) -> i64 {
     let L: i64 = 200000
     let mut pow2_small: ptr<i64> = calloc(L + 1, 8)
     pow2_small[0] = 1
-    let mut i: i64 = 1
-    while i <= L {
+    for i in 1..(L + 1) {
         pow2_small[i] = (pow2_small[i - 1] * 2) % MOD
-        i = i + 1
     }
     let mut U_small: i64 = 0
     let mut q: i64 = n

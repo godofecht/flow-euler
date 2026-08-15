@@ -18,8 +18,7 @@ const BN_LIMBS: i32 = 40
 # ---- bignum (base 2^64, little-endian) ----
 
 function bn_zero(a: ptr<u64>, nl: i32) -> void {
-    let mut i: i32 = 0
-    while i < nl { a[i] = 0; i = i + 1 }
+    for i in 0..nl { a[i] = 0 }
 }
 
 function bn_set_val(a: ptr<u64>, v: i64, nl: i32) -> void {
@@ -30,20 +29,16 @@ function bn_set_val(a: ptr<u64>, v: i64, nl: i32) -> void {
 function bn_mul_small(dst: ptr<u64>, a: ptr<u64>, m: i64, nl: i32) -> void {
     let mu: u64 = m as u64
     let mut carry: u64 = 0
-    let mut i: i32 = 0
-    while i < nl {
+    for i in 0..nl {
         let prod: i128 = (a[i] as i128) * (mu as i128) + (carry as i128)
         dst[i] = prod as u64
         carry = (prod >> 64) as u64
-        i = i + 1
     }
 }
 
 function bn_shr1(dst: ptr<u64>, src: ptr<u64>, nl: i32) -> void {
-    let mut i: i32 = 0
-    while i < nl - 1 {
+    for i in 0..(nl - 1) {
         dst[i] = (src[i] >> 1) | (src[i + 1] << 63)
-        i = i + 1
     }
     dst[nl - 1] = src[nl - 1] >> 1
 }
@@ -97,13 +92,11 @@ let mut invfact: ptr<i64> = null
 
 function prepare_factorials(nmax: i32) -> void {
     fact[0] = 1
-    let mut i: i32 = 1
-    while i <= nmax {
+    for i in 1..(nmax + 1) {
         fact[i] = mulmod(fact[i - 1], i as i64, MOD)
-        i = i + 1
     }
     invfact[nmax] = mod_pow(fact[nmax], MOD - 2, MOD)
-    i = nmax
+    let mut i: i32 = nmax
     while i >= 1 {
         invfact[i - 1] = mulmod(invfact[i], i as i64, MOD)
         i = i - 1
@@ -111,10 +104,8 @@ function prepare_factorials(nmax: i32) -> void {
 }
 
 function binom_row(top: i32, row: ptr<i64>) -> void {
-    let mut j: i32 = 0
-    while j <= top {
+    for j in 0..(top + 1) {
         row[j] = mulmod(fact[top], mulmod(invfact[j], invfact[top - j], MOD), MOD)
-        j = j + 1
     }
 }
 
@@ -125,26 +116,20 @@ function binom_row(top: i32, row: ptr<i64>) -> void {
 function convolve_and_decimate(a: ptr<i64>, la: i32, b: ptr<i64>, lb: i32, bit: i32, res: ptr<i64>) -> i32 {
     let out_len: i32 = la + lb - 1
     let res_len: i32 = (out_len - bit + 1) / 2
-    let mut i: i32 = 0
-    while i < res_len {
+    for i in 0..res_len {
         res[i] = 0
-        i = i + 1
     }
-    let mut k: i32 = 0
-    while k < out_len {
+    for k in 0..out_len {
         let mut sum: i128 = 0
         let jmin: i32 = if k - lb + 1 > 0 { k - lb + 1 } else { 0 }
         let jmax: i32 = if k < la - 1 { k } else { la - 1 }
-        let mut j: i32 = jmin
-        while j <= jmax {
+        for j in jmin..(jmax + 1) {
             sum = sum + (a[j] as i128) * (b[k - j] as i128)
-            j = j + 1
         }
         let val: i64 = (sum % (MOD as i128)) as i64
         if k >= bit && ((k - bit) % 2) == 0 {
             res[(k - bit) / 2] = val
         }
-        k = k + 1
     }
     return res_len
 }
@@ -154,12 +139,9 @@ function main() -> i32 {
     let n_val: ptr<u64> = calloc(BN_LIMBS as i64, 8) as ptr<u64>
     let tmp_bn: ptr<u64> = calloc(BN_LIMBS as i64, 8) as ptr<u64>
     bn_set_val(n_val, 1, BN_LIMBS)
-    let mut i: i32 = 0
-    while i < 777 {
+    for i in 0..777 {
         bn_mul_small(tmp_bn, n_val, 7, BN_LIMBS)
-        let mut j: i32 = 0
-        while j < BN_LIMBS { n_val[j] = tmp_bn[j]; j = j + 1 }
-        i = i + 1
+        for j in 0..BN_LIMBS { n_val[j] = tmp_bn[j] }
     }
 
     # m = n >> 1
@@ -182,16 +164,13 @@ function main() -> i32 {
     let mut dp_len: i32 = 1
     dp[0] = 1
 
-    let mut k: i32 = 0
-    while k < L {
+    for k in 0..L {
         let bit: i32 = bn_get_bit(m_val, k)
         let top: i32 = k + 2
         binom_row(top, row)
         let new_len: i32 = convolve_and_decimate(dp, dp_len, row, top + 1, bit, new_dp)
-        let mut j: i32 = 0
-        while j < new_len { dp[j] = new_dp[j]; j = j + 1 }
+        for j in 0..new_len { dp[j] = new_dp[j] }
         dp_len = new_len
-        k = k + 1
     }
 
     let result: i64 = dp[0] % MOD

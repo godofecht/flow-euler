@@ -13,16 +13,13 @@ function solve() -> i64 {
     let r_max: i64 = N_MAX / 2
     let inv: ptr<i64> = calloc(r_max + 2, 8)
     inv[1] = 1
-    let mut i: i64 = 2
-    while i <= r_max + 1 {
+    for i in 2..(r_max + 2) {
         inv[i] = (MOD - ((MOD / i) * inv[MOD % i]) % MOD) % MOD
-        i = i + 1
     }
     let inv2: i64 = (MOD + 1) / 2
     let mut b: i64 = 1
     let mut ans: i64 = 0
-    let mut r: i64 = 0
-    while r <= r_max {
+    for r in 0..(r_max + 1) {
         let bb: i64 = ((b as i128) * (b as i128) % (MOD as i128)) as i64
         if r > 0 {
             ans = (ans + ((bb as i128) * (inv2 as i128) % (MOD as i128)) as i64) % MOD
@@ -38,7 +35,6 @@ function solve() -> i64 {
             b = ((b as i128) * (inv_rp1 as i128) % (MOD as i128)) as i64
             b = ((b as i128) * (inv_rp1 as i128) % (MOD as i128)) as i64
         }
-        r = r + 1
     }
     free(inv)
     return ans % MOD

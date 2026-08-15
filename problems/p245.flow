@@ -67,8 +67,7 @@ function is_prime(value: i64) -> bool {
     let bases: ptr<i64> = calloc(7, 8)
     bases[0] = 2; bases[1] = 325; bases[2] = 9375; bases[3] = 28178
     bases[4] = 450775; bases[5] = 9780504; bases[6] = 1795265022
-    let mut bi: i32 = 0
-    while bi < 7 {
+    for bi in 0..7 {
         let base: i64 = bases[bi] % value
         if base != 0 {
             let mut x: i64 = modpow(base, d, value)
@@ -83,7 +82,6 @@ function is_prime(value: i64) -> bool {
                 if !ok { free(bases); return false }
             }
         }
-        bi = bi + 1
     }
     free(bases)
     return true
@@ -157,16 +155,12 @@ function divisors_from(fac: ptr<i64>, fc: i32, divs: ptr<i64>, dc: ptr<i32>) -> 
         }
         let cur: i32 = dc[0]
         let mut power: i64 = 1
-        let mut k: i32 = 0
-        while k < e {
+        for k in 0..e {
             power = power * p
-            let mut j: i32 = 0
-            while j < cur {
+            for j in 0..cur {
                 divs[dc[0]] = divs[j] * power
                 dc[0] = dc[0] + 1
-                j = j + 1
             }
-            k = k + 1
         }
     }
 }
@@ -325,20 +319,15 @@ function main() -> i32 {
         let s: i64 = p * p - p + 1
         factor_into(s, fac, oc)
         # sort fac small
-        let mut a: i32 = 0
-        while a < oc[0] {
-            let mut b: i32 = a + 1
-            while b < oc[0] {
+        for a in 0..oc[0] {
+            for b in (a + 1)..oc[0] {
                 if fac[b] < fac[a] {
                     let t: i64 = fac[a]; fac[a] = fac[b]; fac[b] = t
                 }
-                b = b + 1
             }
-            a = a + 1
         }
         divisors_from(fac, oc[0], divs, dc)
-        let mut j: i32 = 0
-        while j < dc[0] {
+        for j in 0..dc[0] {
             let d: i64 = divs[j]
             if d >= 2 * p - 1 {
                 let q: i64 = d - p + 1
@@ -348,7 +337,6 @@ function main() -> i32 {
                     }
                 }
             }
-            j = j + 1
         }
         i = i + 1
     }
@@ -362,13 +350,11 @@ function main() -> i32 {
         max_k = max_k + 1
         i = i + 1
     }
-    let mut k: i32 = 3
-    while k <= max_k {
+    for k in 3..(max_k + 1) {
         let m: i32 = k - 1
         if m >= 2 {
             dfs(0, m, 1, 1, 2)
         }
-        k = k + 1
     }
     let mut total: i64 = 0
     i = 0

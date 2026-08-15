@@ -28,16 +28,13 @@ let mut g_Q: ptr<i64> = null
 
 function sieve_with_pi(limit: i32) -> void {
     g_is_prime_arr = calloc((limit + 1) as i64, 4)
-    let mut i: i32 = 0
-    while i <= limit {
+    for i in 0..(limit + 1) {
         g_is_prime_arr[i] = 1
-        i = i + 1
     }
     g_is_prime_arr[0] = 0
     g_is_prime_arr[1] = 0
     let r: i32 = sqrt(limit as f64) as i32
-    i = 2
-    while i <= r {
+    for i in 2..(r + 1) {
         if g_is_prime_arr[i] != 0 {
             let mut j: i32 = i * i
             while j <= limit {
@@ -45,31 +42,24 @@ function sieve_with_pi(limit: i32) -> void {
                 j = j + i
             }
         }
-        i = i + 1
     }
     let mut cnt: i32 = 0
-    i = 0
-    while i <= limit {
+    for i in 0..(limit + 1) {
         if g_is_prime_arr[i] != 0 { cnt = cnt + 1 }
-        i = i + 1
     }
     g_primes_list = calloc(cnt as i64, 4)
     g_plen = 0
-    i = 2
-    while i <= limit {
+    for i in 2..(limit + 1) {
         if g_is_prime_arr[i] != 0 {
             g_primes_list[g_plen] = i
             g_plen = g_plen + 1
         }
-        i = i + 1
     }
     g_pi_small = calloc((limit + 1) as i64, 4)
     let mut c: i32 = 0
-    i = 0
-    while i <= limit {
+    for i in 0..(limit + 1) {
         if g_is_prime_arr[i] != 0 { c = c + 1 }
         g_pi_small[i] = c
-        i = i + 1
     }
 }
 
@@ -84,15 +74,11 @@ function build_prime_pi_table(N: i64, Sval: i32) -> void {
     g_m_table = Sval + g_start_small
     g_table = calloc(g_m_table as i64, 8)
 
-    let mut i: i32 = 0
-    while i < Sval {
+    for i in 0..Sval {
         g_table[i] = N / ((i + 1) as i64) - 1
-        i = i + 1
     }
-    let mut v: i32 = 1
-    while v <= g_start_small {
+    for v in 1..(g_start_small + 1) {
         g_table[g_m_table - v] = (v - 1) as i64
-        v = v + 1
     }
 
     let mut pi: i32 = 0
@@ -105,18 +91,16 @@ function build_prime_pi_table(N: i64, Sval: i32) -> void {
 
         if p2 <= (Sval as i64) {
             let mut j: i64 = p
-            i = 0
-            while i < Sval {
+            for i in 0..Sval {
                 if j <= (Sval as i64) {
                     g_table[i] = g_table[i] - (g_table[(j as i32) - 1] - sp)
                 } else {
                     g_table[i] = g_table[i] - (g_table[g_m_table - ((N / j) as i32)] - sp)
                 }
                 j = j + p
-                i = i + 1
             }
             if p2 <= (g_start_small as i64) {
-                v = g_start_small
+                let mut v: i32 = g_start_small
                 while v >= (p2 as i32) {
                     g_table[g_m_table - v] = g_table[g_m_table - v] - (g_table[g_m_table - (v / (p as i32))] - sp)
                     v = v - 1
@@ -127,15 +111,13 @@ function build_prime_pi_table(N: i64, Sval: i32) -> void {
             if endd > (Sval as i64) { endd = Sval as i64 }
 
             let mut j2: i64 = p
-            i = 0
-            while i < (endd as i32) {
+            for i in 0..(endd as i32) {
                 if j2 <= (Sval as i64) {
                     g_table[i] = g_table[i] - (g_table[(j2 as i32) - 1] - sp)
                 } else {
                     g_table[i] = g_table[i] - (g_table[g_m_table - ((N / j2) as i32)] - sp)
                 }
                 j2 = j2 + p
-                i = i + 1
             }
         }
         pi = pi + 1
@@ -158,13 +140,11 @@ function count_sqf(limit: i64, mleft: i32, start_idx: i32) -> i64 {
             base = base - (g_pi_small[g_primes_list[start_idx - 1]] as i64)
         }
         let start_p: i32 = g_primes_list[start_idx]
-        let mut q: i32 = 0
-        while q < g_forb_count {
+        for q in 0..g_forb_count {
             let fp: i64 = g_forb_primes[q] as i64
             if fp >= (start_p as i64) && fp <= limit {
                 base = base - 1
             }
-            q = q + 1
         }
         return base
     }
@@ -184,13 +164,11 @@ function count_sqf(limit: i64, mleft: i32, start_idx: i32) -> i64 {
             if skip { i = i + 1; continue }
             let lim: i64 = limit / p
             let mut total: i64 = prime_pi(lim) - (g_pi_small[p as i32] as i64)
-            q = 0
-            while q < g_forb_count {
+            for q in 0..g_forb_count {
                 let fp: i64 = g_forb_primes[q] as i64
                 if fp > p && fp <= lim {
                     total = total - 1
                 }
-                q = q + 1
             }
             cnt = cnt + total
             i = i + 1
@@ -299,10 +277,8 @@ function main() -> i32 {
     build_prime_pi_table(N_MAIN, Sval)
 
     g_Q = calloc(11, 8)
-    let mut i: i32 = 0
-    while i < 11 {
+    for i in 0..11 {
         g_Q[i] = 0
-        i = i + 1
     }
     g_forb_count = 0
     g_forb_primes = calloc(16, 4)
@@ -310,10 +286,8 @@ function main() -> i32 {
     dfs_powerful(0, 1, 1)
 
     let mut ans: i64 = 0
-    i = 2
-    while i <= 10 {
+    for i in 2..11 {
         ans = ans + g_Q[i]
-        i = i + 1
     }
 
     printf("%lld\n", ans)

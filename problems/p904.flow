@@ -25,11 +25,9 @@ function g_of_t(t: f64) -> f64 {
 function root_left(y: f64) -> f64 {
     let mut lo: f64 = 0.0
     let mut hi: f64 = T0_F
-    let mut i: i32 = 0
-    while i < 35 {
+    for i in 0..35 {
         let mid: f64 = (lo + hi) * 0.5
         if g_of_t(mid) < y { lo = mid } else { hi = mid }
-        i = i + 1
     }
     return (lo + hi) * 0.5
 }
@@ -37,11 +35,9 @@ function root_left(y: f64) -> f64 {
 function root_right(y: f64) -> f64 {
     let mut lo: f64 = T0_F
     let mut hi: f64 = 1.0
-    let mut i: i32 = 0
-    while i < 35 {
+    for i in 0..35 {
         let mid: f64 = (lo + hi) * 0.5
         if g_of_t(mid) > y { lo = mid } else { hi = mid }
-        i = i + 1
     }
     return (lo + hi) * 0.5
 }
@@ -226,12 +222,10 @@ function f_val(alpha_deg: f64, L: i64) -> i64 {
     let cands_p: ptr<i64> = calloc(200, 8)
     let cands_q: ptr<i64> = calloc(200, 8)
 
-    let mut ri: i32 = 0
-    while ri < 2 {
+    for ri in 0..2 {
         let root: f64 = if ri == 0 { r1 } else { r2 }
         let ncands: i32 = cf_candidates_circle(root, L, cands_p, cands_q, 200)
-        let mut ci: i32 = 0
-        while ci < ncands {
+        for ci in 0..ncands {
             let n_val: i64 = cands_p[ci]
             let m_val: i64 = cands_q[ci]
             if n_val > 0 && n_val < m_val {
@@ -265,9 +259,7 @@ function f_val(alpha_deg: f64, L: i64) -> i64 {
                     }
                 }
             }
-            ci = ci + 1
         }
-        ri = ri + 1
     }
 
     free(cands_p)

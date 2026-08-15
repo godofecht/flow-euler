@@ -85,10 +85,12 @@ function is_connected(cells: ptr<i32>, ncells: i64) -> bool {
         while d < 4 {
             let mut nr: i32 = r
             let mut nc: i32 = c
-            if d == 0 { nr = r + 1 }
-            elif d == 1 { nr = r - 1 }
-            elif d == 2 { nc = c + 1 }
-            else { nc = c - 1 }
+            match d {
+                0 => { nr = r + 1 }
+                1 => { nr = r - 1 }
+                2 => { nc = c + 1 }
+                _ => { nc = c - 1 }
+            }
             let mut j: i64 = 0
             while j < ncells {
                 if cells[2 * j] == nr && cells[2 * j + 1] == nc {

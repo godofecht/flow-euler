@@ -27,19 +27,14 @@ function digit_len(b: i64) -> i64 {
 function compute(N: i64) -> i64 {
     let mut total: i64 = -1
     let mut lim: i64 = 1
-    let mut i: i64 = 0
-    while i < N / 2 {
+    for i in 0..(N / 2) {
         lim = lim * 10
-        i = i + 1
     }
-    let mut b: i64 = 1
-    while b < lim {
+    for b in 1..lim {
         let n: i64 = digit_len(b)
         let mut ten_n: i64 = 1
-        let mut j: i64 = 0
-        while j < n {
+        for j in 0..n {
             ten_n = ten_n * 10
-            j = j + 1
         }
         let v0: i64 = 4 * b * (1 - ten_n) + ten_n * ten_n
         if v0 > 0 {
@@ -51,7 +46,6 @@ function compute(N: i64) -> i64 {
                 total = total + a2 * ten_n + b
             }
         }
-        b = b + 1
     }
     return total
 }

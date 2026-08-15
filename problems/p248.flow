@@ -61,8 +61,7 @@ function is_prime(value: i64) -> bool {
     let bases: ptr<i64> = calloc(7, 8)
     bases[0] = 2; bases[1] = 325; bases[2] = 9375; bases[3] = 28178
     bases[4] = 450775; bases[5] = 9780504; bases[6] = 1795265022
-    let mut bi: i32 = 0
-    while bi < 7 {
+    for bi in 0..7 {
         let base: i64 = bases[bi] % value
         if base != 0 {
             let mut x: i64 = modpow(base, d, value)
@@ -83,7 +82,6 @@ function is_prime(value: i64) -> bool {
                 }
             }
         }
-        bi = bi + 1
     }
     free(bases)
     return true
@@ -109,11 +107,9 @@ function find_cands(number: i64, last_idx: i32) -> void {
     let base: i64 = FPRIMES[last_idx]
     let exp: i32 = FEXPS[last_idx]
     let mut num: i64 = number
-    let mut e: i32 = 0
-    while e <= exp {
+    for e in 0..(exp + 1) {
         find_cands(num, last_idx + 1)
         num = num * base
-        e = e + 1
     }
 }
 

@@ -30,10 +30,8 @@ function batch_inverses(start: i64, end: i64, mod: i64, invs: ptr<i64>) -> void 
     let length: i64 = end - start + 1
     let pref: ptr<i64> = malloc((length + 1) * 8)
     pref[0] = 1
-    let mut i: i64 = 0
-    while i < length {
+    for i in 0..length {
         pref[i + 1] = ((pref[i] as i128) * (start + i) % mod) as i64
-        i = i + 1
     }
     let mut inv_total: i64 = modpow(pref[length], mod - 2, mod)
     let mut j: i64 = length - 1
@@ -72,10 +70,8 @@ function main() -> i32 {
     # Precompute inverses 1..p+1
     let inv_small: ptr<i64> = malloc((p + 2) * 8)
     inv_small[1] = 1
-    let mut i: i64 = 2
-    while i <= p + 1 {
+    for i in 2..(p + 2) {
         inv_small[i] = (mod - (mod / i) * inv_small[mod % i] % mod) % mod
-        i = i + 1
     }
 
     # Precompute C(p-1, x) for x=0..p-1
@@ -83,12 +79,10 @@ function main() -> i32 {
     choose_p[0] = 1
     let mut c: i64 = 1
     let n1: i64 = p - 1
-    let mut x: i64 = 0
-    while x < p - 1 {
+    for x in 0..(p - 1) {
         c = ((c as i128) * (n1 - x) % mod) as i64
         c = ((c as i128) * inv_small[x + 1] % mod) as i64
         choose_p[x + 1] = c
-        x = x + 1
     }
 
     # Precompute C(q-1, x) for x=0..p
@@ -96,12 +90,10 @@ function main() -> i32 {
     choose_q[0] = 1
     let mut c2: i64 = 1
     let n2: i64 = q - 1
-    let mut x2: i64 = 0
-    while x2 < p {
+    for x2 in 0..p {
         c2 = ((c2 as i128) * (n2 - x2) % mod) as i64
         c2 = ((c2 as i128) * inv_small[x2 + 1] % mod) as i64
         choose_q[x2 + 1] = c2
-        x2 = x2 + 1
     }
 
     # Batch inverses for the binomial recurrence
@@ -115,11 +107,9 @@ function main() -> i32 {
     # Compute B_0 = C(r+k, k) = prod_{i=1..k} (r+i)/i
     let mut num: i64 = 1
     let mut den: i64 = 1
-    let mut i2: i64 = 1
-    while i2 <= k {
+    for i2 in 1..(k + 1) {
         num = ((num as i128) * (r + i2) % mod) as i64
         den = ((den as i128) * i2 % mod) as i64
-        i2 = i2 + 1
     }
     let mut B: i64 = ((num as i128) * modpow(den, mod - 2, mod) % mod) as i64
 
@@ -127,8 +117,7 @@ function main() -> i32 {
     let mut n_total: i64 = N0
     let mut n_gap: i64 = r
 
-    let mut t: i64 = 1
-    while t <= tmax {
+    for t in 1..(tmax + 1) {
         # Update B from t-1 to t
         let mut ratio: i64 = ((n_gap % mod) as i128 * ((n_gap - 1) % mod) % mod) as i64
         ratio = ((ratio as i128) * inv_range[n_total - inv_base] % mod) as i64
@@ -153,8 +142,6 @@ function main() -> i32 {
         }
 
         ans = (ans + ((count_t as i128) * B % mod) as i64) % mod
-
-        t = t + 1
     }
 
     printf("%lld\n", ans)
