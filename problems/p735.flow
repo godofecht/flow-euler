@@ -103,8 +103,7 @@ function solve(n: i64, y: i64) -> i64 {
     let comp: ptr<i32> = calloc(lim + 1, 4)
     if mu == null || comp == null { return -1 }
     for i in 1..(lim + 1) { mu[i] = 1 }
-    let mut p: i64 = 2
-    while p <= lim {
+    for p in 2..(lim + 1) {
         if comp[p] == 0 {
             let mut m: i64 = p
             while m <= lim {
@@ -119,7 +118,6 @@ function solve(n: i64, y: i64) -> i64 {
                 m2 = m2 + p2
             }
         }
-        p = p + 1
     }
 
     let mut total: i64 = 0

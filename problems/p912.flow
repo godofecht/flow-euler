@@ -31,45 +31,57 @@ function ensure(cap_needed: i64) -> void {
 }
 
 function get_count(rem: i64, cons: i64) -> i128 {
-    if cons == 0 { return count0[rem] }
-    if cons == 1 { return count1[rem] }
-    return count2[rem]
+    match cons {
+        0 => { return count0[rem] }
+        1 => { return count1[rem] }
+        _ => { return count2[rem] }
+    }
 }
 
 function get_oc(rem: i64, cons: i64) -> i64 {
-    if cons == 0 { return oc0[rem] }
-    if cons == 1 { return oc1[rem] }
-    return oc2[rem]
+    match cons {
+        0 => { return oc0[rem] }
+        1 => { return oc1[rem] }
+        _ => { return oc2[rem] }
+    }
 }
 
 function get_os(rem: i64, cons: i64) -> i64 {
-    if cons == 0 { return os0[rem] }
-    if cons == 1 { return os1[rem] }
-    return os2a[rem]
+    match cons {
+        0 => { return os0[rem] }
+        1 => { return os1[rem] }
+        _ => { return os2a[rem] }
+    }
 }
 
 function get_os2(rem: i64, cons: i64) -> i64 {
-    if cons == 0 { return os20[rem] }
-    if cons == 1 { return os21[rem] }
-    return os22[rem]
+    match cons {
+        0 => { return os20[rem] }
+        1 => { return os21[rem] }
+        _ => { return os22[rem] }
+    }
 }
 
 function set_row(rem: i64, cons: i64, cnt: i128, oc: i64, os: i64, os2v: i64) -> void {
-    if cons == 0 {
-        count0[rem] = cnt
-        oc0[rem] = oc
-        os0[rem] = os
-        os20[rem] = os2v
-    } elif cons == 1 {
-        count1[rem] = cnt
-        oc1[rem] = oc
-        os1[rem] = os
-        os21[rem] = os2v
-    } else {
-        count2[rem] = cnt
-        oc2[rem] = oc
-        os2a[rem] = os
-        os22[rem] = os2v
+    match cons {
+        0 => {
+            count0[rem] = cnt
+            oc0[rem] = oc
+            os0[rem] = os
+            os20[rem] = os2v
+        }
+        1 => {
+            count1[rem] = cnt
+            oc1[rem] = oc
+            os1[rem] = os
+            os21[rem] = os2v
+        }
+        _ => {
+            count2[rem] = cnt
+            oc2[rem] = oc
+            os2a[rem] = os
+            os22[rem] = os2v
+        }
     }
 }
 

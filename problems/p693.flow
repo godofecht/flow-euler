@@ -33,8 +33,7 @@ function g_x(x: i64, mark_buf: ptr<i8>, active_buf: ptr<i64>) -> i64 {
         y = y + 1
     }
     # Clear marks
-    let mut k: i64 = 0
-    while k < n_active { mark_buf[active_buf[k]] = 0; k = k + 1 }
+    for k in 0..n_active { mark_buf[active_buf[k]] = 0 }
 
     let mut length: i64 = 2
     let mut mod_val: i64 = x + 1
@@ -42,19 +41,16 @@ function g_x(x: i64, mark_buf: ptr<i8>, active_buf: ptr<i64>) -> i64 {
     # Reduce active set until empty or singleton
     while n_active > 1 {
         let mut next_n: i64 = 0
-        k = 0
-        while k < n_active {
+        for k in 0..n_active {
             let v: i64 = (active_buf[k] * active_buf[k]) % mod_val
             if v > 1 && mark_buf[v] == 0 {
                 mark_buf[v] = 1
                 active_buf[next_n] = v
                 next_n = next_n + 1
             }
-            k = k + 1
         }
         # Clear marks
-        k = 0
-        while k < next_n { mark_buf[active_buf[k]] = 0; k = k + 1 }
+        for k in 0..next_n { mark_buf[active_buf[k]] = 0 }
         n_active = next_n
         length = length + 1
         mod_val = mod_val + 1
@@ -137,10 +133,8 @@ function main() -> i32 {
     while n_intervals > 0 {
         let mut max_idx: i64 = 0
         let mut max_ub: i64 = iub[0]
-        let mut mi: i64 = 1
-        while mi < n_intervals {
+        for mi in 1..n_intervals {
             if iub[mi] > max_ub { max_ub = iub[mi]; max_idx = mi }
-            mi = mi + 1
         }
         if best >= max_ub { break }
 

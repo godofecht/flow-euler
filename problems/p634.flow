@@ -21,16 +21,14 @@ function iroot3(n: i64) -> i64 {
     let mut hi: i64 = 2
     while true {
         let mut p: i128 = 1 as i128
-        let mut i: i64 = 0
-        while i < 3 { p = p * (hi as i128); i = i + 1 }
+        for _ in 0..3 { p = p * (hi as i128) }
         if p > (n as i128) { break }
         hi = hi * 2
     }
     while lo + 1 < hi {
         let mid: i64 = (lo + hi) / 2
         let mut p: i128 = 1 as i128
-        let mut i: i64 = 0
-        while i < 3 { p = p * (mid as i128); i = i + 1 }
+        for _ in 0..3 { p = p * (mid as i128) }
         if p <= (n as i128) { lo = mid } else { hi = mid }
     }
     return lo
@@ -41,8 +39,7 @@ function iroot6(n: i64) -> i64 {
     let mut hi: i64 = 2
     while true {
         let mut p: i128 = 1 as i128
-        let mut i: i64 = 0
-        while i < 6 { p = p * (hi as i128); i = i + 1 }
+        for _ in 0..6 { p = p * (hi as i128) }
         if p > (n as i128) { break }
         hi = hi * 2
     }
@@ -99,8 +96,7 @@ function main() -> i32 {
 
     mu[1] = 1
     let mut pc: i64 = 0
-    let mut i: i64 = 2
-    while i <= L {
+    for i in 2..(L + 1) {
         if is_comp[i] == 0 {
             primes[pc] = i as i32
             pc = pc + 1
@@ -116,7 +112,6 @@ function main() -> i32 {
             mu[ip] = (0 - (mu[i] as i64)) as i8
             j = j + 1
         }
-        i = i + 1
     }
 
     # P = powerful count = sum_{squarefree b ≤ N^(1/3)} floor(sqrt(N / b³))
@@ -124,8 +119,7 @@ function main() -> i32 {
     # Sieve squarefree up to m
     let sqfree: ptr<i8> = calloc(m + 1, 1)
     if sqfree == null { return 1 }
-    let mut k: i64 = 0
-    while k <= m { sqfree[k] = 1; k = k + 1 }
+    for k in 0..(m + 1) { sqfree[k] = 1 }
     sqfree[0] = 0
     let mut p: i64 = 2
     while p * p <= m {
@@ -153,10 +147,8 @@ function main() -> i32 {
 
     # X2 = count of squarefree numbers ≤ N^(1/3) (cubes of squarefree)
     let X2: i64 = 0
-    b = 1
-    while b <= m {
+    for b in 1..(m + 1) {
         if sqfree[b] == 1 { X2 = X2 + 1 }
-        b = b + 1
     }
 
     # X3 = count of primes p with p^6 ≤ N
@@ -175,10 +167,8 @@ function main() -> i32 {
         p = p + 1
     }
     let mut X3: i64 = 0
-    p = 2
-    while p <= r6 {
+    for p in 2..(r6 + 1) {
         if sieve6[p] == 0 { X3 = X3 + 1 }
-        p = p + 1
     }
 
     let ans: i64 = P - X1 - X2 - X3 + 1

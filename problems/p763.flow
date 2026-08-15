@@ -19,24 +19,20 @@ function main() -> i32 {
 
     let offset_arr: ptr<i64> = calloc(NMAX, 8) as ptr<i64>
     let lens_arr: ptr<i64> = calloc(NMAX, 8) as ptr<i64>
-    let mut n: i64 = 0
-    while n < NMAX {
+    for n in 0..NMAX {
         offset_arr[n] = (n + 1) * (n + 2) / 2
         let ln: i64 = M_VAL - offset_arr[n] + 1
         lens_arr[n] = if ln > 0 { ln } else { 0 }
-        n = n + 1
     }
 
     let u: ptr<ptr<i32> > = calloc(NMAX, 8) as ptr<ptr<i32> >
     let v: ptr<ptr<i32> > = calloc(NMAX, 8) as ptr<ptr<i32> >
-    n = 1
-    while n < NMAX {
+    for n in 1..NMAX {
         let ln: i64 = lens_arr[n]
         if ln > 0 {
             u[n] = calloc(n * ln, 4) as ptr<i32>
             v[n] = calloc(n * ln, 4) as ptr<i32>
         }
-        n = n + 1
     }
 
     let f0: ptr<i32> = calloc(M_VAL + 1, 4) as ptr<i32>
@@ -50,8 +46,7 @@ function main() -> i32 {
             n_active = n_active + 1
         }
 
-        n = 1
-        while n <= n_active {
+        for n in 1..(n_active + 1) {
             let off: i64 = offset_arr[n]
             let ln: i64 = lens_arr[n]
             let idx_cur: i64 = m - off
@@ -110,21 +105,18 @@ function main() -> i32 {
                 let mut base_m: i64 = 0
 
                 if idx1 < 0 {
-                    let mut k: i64 = 1
-                    while k < n {
+                    for k in 1..n {
                         u_n[base + idx_cur] = u_m[base_m + idx3]
                         v_n[base + idx_cur] = v_m[base_m + idx3]
                         base = base_next
                         base_next = base_next + ln
                         base_m = base_m + lnm
-                        k = k + 1
                     }
                     u_n[(n - 1) * ln + idx_cur] = u_m[(n - 2) * lnm + idx3]
                     v_n[(n - 1) * ln + idx_cur] = v_m[(n - 2) * lnm + idx3]
                 } else {
                     if idx2 >= 0 && lnp > 0 {
-                        let mut k: i64 = 1
-                        while k < n {
+                        for k in 1..n {
                             let uu: i64 = (u_n[base + idx1] as i64)
                                 + v_p1
                                 + (u_p[base_p + idx2] as i64)
@@ -145,7 +137,6 @@ function main() -> i32 {
                             base_next = base_next + ln
                             base_p = base_p + lnp
                             base_m = base_m + lnm
-                            k = k + 1
                         }
                         let bl: i64 = (n - 1) * ln
                         let uu2: i64 = 2 * (u_n[bl + idx1] as i64)
@@ -162,8 +153,7 @@ function main() -> i32 {
                             + (v_m[(n - 2) * lnm + idx3] as i64)
                         v_n[bl + idx_cur] = (vv2 % MOD) as i32
                     } else {
-                        let mut k: i64 = 1
-                        while k < n {
+                        for k in 1..n {
                             let uu: i64 = (u_n[base + idx1] as i64)
                                 + (u_m[base_m + idx3] as i64)
                                 + v_n1
@@ -179,7 +169,6 @@ function main() -> i32 {
                             base = base_next
                             base_next = base_next + ln
                             base_m = base_m + lnm
-                            k = k + 1
                         }
                         let bl: i64 = (n - 1) * ln
                         let uu2: i64 = 2 * (u_n[bl + idx1] as i64)
@@ -194,7 +183,6 @@ function main() -> i32 {
                     }
                 }
             }
-            n = n + 1
         }
 
         let mut val_f: i64 = 0
@@ -217,11 +205,9 @@ function main() -> i32 {
 
     let ans: i64 = a2[M_VAL] as i64
 
-    n = 1
-    while n < NMAX {
+    for n in 1..NMAX {
         free(u[n])
         free(v[n])
-        n = n + 1
     }
     free(u)
     free(v)

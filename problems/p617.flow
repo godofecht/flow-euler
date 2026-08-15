@@ -103,52 +103,42 @@ function count_for_exponent(N: i64, e: i64) -> i64 {
 
     # Precompute non-primitive set (exact e-th powers up to max t)
     let mut max_t_limit: i64 = 0
-    let mut bi: i64 = 0
-    while bi < nbs {
+    for bi in 0..nbs {
         let exp: i64 = ipow(e, bs[bi])
         let tl: i64 = int_nth_root(N - 2, exp)
         if tl > max_t_limit { max_t_limit = tl }
-        bi = bi + 1
     }
 
     let u_max: i64 = int_nth_root(max_t_limit, e)
     # Mark e-th powers in a set (use a hash or array)
     let non_prim: ptr<i8> = calloc(max_t_limit + 1, 1)
     if non_prim == null { free(bs); return -1 }
-    let mut u: i64 = 2
-    while u <= u_max {
+    for u in 2..(u_max + 1) {
         let pk: i64 = ipow(u, e)
         if pk <= max_t_limit { non_prim[pk] = 1 }
-        u = u + 1
     }
 
     # For each b, enumerate primitive t
-    bi = 0
-    while bi < nbs {
+    for bi in 0..nbs {
         let bval: i64 = bs[bi]
         let exp: i64 = ipow(e, bval)
         let t_limit: i64 = int_nth_root(N - 2, exp)
-        let mut t: i64 = 2
-        while t <= t_limit {
+        for t in 2..(t_limit + 1) {
             if non_prim[t] == 0 {
                 # Build power tower p[0..b], p[k] = t^(e^k)
                 # Count valid a in [0..b-1] with p[a] + p[b] ≤ N
                 let top: i64 = pow_capped(t, exp, N)
                 let mut pa: i64 = 1  # p[0] = t^1 = t
                 let mut ek: i64 = 1  # e^0 = 1
-                let mut a: i64 = 0
-                while a < bval {
+                for a in 0..bval {
                     if pa + top <= N {
                         total = total + bval
                     }
                     ek = ek * e
                     pa = pow_capped(t, ek, N)
-                    a = a + 1
                 }
             }
-            t = t + 1
         }
-        bi = bi + 1
     }
 
     free(non_prim)

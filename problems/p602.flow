@@ -32,17 +32,14 @@ function eulerian(n: i64, m: i64) -> i64 {
     let inv: ptr<i32> = calloc(M + 2, 4)
     if inv == null { return -1 }
     inv[1] = 1
-    let mut i: i64 = 2
-    while i <= M + 1 {
+    for i in 2..(M + 2) {
         let t: i64 = (MOD - (MOD / i) * (inv[MOD % i] as i64) % MOD) % MOD
         inv[i] = t as i32
-        i = i + 1
     }
     let mut comb: i64 = 1
     let mut res: i64 = 0
     let n1: i64 = n + 1
-    let mut j: i64 = 0
-    while j <= M {
+    for j in 0..(M + 1) {
         let base: i64 = M - j
         if base != 0 {
             let term: i64 = (comb * modpow(base, n, MOD)) % MOD
@@ -58,7 +55,6 @@ function eulerian(n: i64, m: i64) -> i64 {
             comb = (comb * (n1 - j)) % MOD
             comb = (comb * (inv[j + 1] as i64)) % MOD
         }
-        j = j + 1
     }
     free(inv)
     return res
