@@ -41,18 +41,22 @@ function main() -> i32 {
     let mut i: i32 = 0
     while i < 16 {
         let c: i32 = start_s[i] as i32
-        if c == 46 { cells[i] = 0 }
-        elif c == 114 { cells[i] = 1 }
-        else { cells[i] = 2 }
+        match c {
+            46 => { cells[i] = 0 }
+            114 => { cells[i] = 1 }
+            _ => { cells[i] = 2 }
+        }
         i = i + 1
     }
     let start: i64 = encode(cells)
     i = 0
     while i < 16 {
         let c: i32 = goal_s[i] as i32
-        if c == 46 { cells[i] = 0 }
-        elif c == 114 { cells[i] = 1 }
-        else { cells[i] = 2 }
+        match c {
+            46 => { cells[i] = 0 }
+            114 => { cells[i] = 1 }
+            _ => { cells[i] = 2 }
+        }
         i = i + 1
     }
     let goal: i64 = encode(cells)
@@ -95,10 +99,12 @@ function main() -> i32 {
                 let mut tx: i32 = ex
                 let mut ty: i32 = ey
                 let mut ok: bool = true
-                if mi == 0 { move = 76; if ex == 3 { ok = false } else { tx = ex + 1 } }
-                elif mi == 1 { move = 82; if ex == 0 { ok = false } else { tx = ex - 1 } }
-                elif mi == 2 { move = 85; if ey == 3 { ok = false } else { ty = ey + 1 } }
-                else { move = 68; if ey == 0 { ok = false } else { ty = ey - 1 } }
+                match mi {
+                    0 => { move = 76; if ex == 3 { ok = false } else { tx = ex + 1 } }
+                    1 => { move = 82; if ex == 0 { ok = false } else { tx = ex - 1 } }
+                    2 => { move = 85; if ey == 3 { ok = false } else { ty = ey + 1 } }
+                    _ => { move = 68; if ey == 0 { ok = false } else { ty = ey - 1 } }
+                }
                 if ok {
                     let ti: i32 = ty * 4 + tx
                     let mut j: i32 = 0

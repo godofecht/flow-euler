@@ -30,14 +30,12 @@ function period(n: i64) -> i32 {
 
 function main() -> i32 {
     let mut count: i64 = 0
-    let mut n: i64 = 2
-    while n <= 10000 {
+    for n in 2..10001 {
         if !is_square(n) {
             if period(n) % 2 == 1 {
                 count = count + 1
             }
         }
-        n = n + 1
     }
     printf("%lld\n", count)
     return 0

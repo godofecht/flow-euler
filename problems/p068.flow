@@ -42,24 +42,19 @@ function main() -> i32 {
     let inner: ptr<i32> = calloc(5, 4)
     if nums == null || outer == null || inner == null { return 1 }
     let mut i: i32 = 0
-    while i < 10 {
+    for i in 0..10 {
         nums[i] = i + 1
-        i = i + 1
     }
 
     let mut best: i64 = 0
     while true {
-        i = 0
-        while i < 5 {
+        for i in 0..5 {
             outer[i] = nums[i]
             inner[i] = nums[i + 5]
-            i = i + 1
         }
         let mut has10: bool = false
-        i = 0
-        while i < 5 {
+        for i in 0..5 {
             if outer[i] == 10 { has10 = true }
-            i = i + 1
         }
         if has10 {
             let s0: i32 = outer[0] + inner[0] + inner[1]
@@ -76,15 +71,12 @@ function main() -> i32 {
             }
             if magic {
                 let mut start: i32 = 0
-                i = 1
-                while i < 5 {
+                for i in 1..5 {
                     if outer[i] < outer[start] { start = i }
-                    i = i + 1
                 }
                 let mut v: i64 = 0
                 let mut digs: i32 = 0
-                i = 0
-                while i < 5 {
+                for i in 0..5 {
                     let mut idx: i32 = start + i
                     if idx >= 5 { idx = idx - 5 }
                     let a: i32 = outer[idx]
@@ -97,7 +89,6 @@ function main() -> i32 {
                     v = append_num(v, a)
                     v = append_num(v, b)
                     v = append_num(v, c)
-                    i = i + 1
                 }
                 if digs == 16 && v > best {
                     best = v

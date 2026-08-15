@@ -111,14 +111,17 @@ function main() -> i32 {
         if xx == 0 { mask = mask | 8 }
         G_masks[i] = mask
         let mut t: i32 = 0
-        if mask == 1 { t = 0 }
-        elif mask == 2 { t = 1 }
-        elif mask == 4 { t = 2 }
-        elif mask == 8 { t = 3 }
-        elif mask == 3 { t = 4 }
-        elif mask == 6 { t = 5 }
-        elif mask == 12 { t = 6 }
-        elif mask == 9 { t = 7 }
+        match mask {
+            1 => { t = 0 }
+            2 => { t = 1 }
+            4 => { t = 2 }
+            8 => { t = 3 }
+            3 => { t = 4 }
+            6 => { t = 5 }
+            12 => { t = 6 }
+            9 => { t = 7 }
+            _ => { }
+        }
         G_types[i] = t
         i = i + 1
     }

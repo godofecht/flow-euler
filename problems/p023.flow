@@ -7,50 +7,52 @@ extern {
     function free(p: ptr<void>) -> void
 }
 
+struct NumInfo {
+    sumdiv: i32,
+    abundant: i32,
+    can: i8
+}
+
 function main() -> i32 {
     let limit: i32 = 28123
-    let sumdiv: ptr<i32> = calloc((limit + 1) as i64, 4)
-    if sumdiv == null {
+    let info: ptr<NumInfo> = calloc((limit + 1) as i64, 9) as ptr<NumInfo>
+    if info == null {
         return 1
     }
 
     for i in 1..(limit + 1) {
         let mut j: i32 = 2 * i
         while j <= limit {
-            sumdiv[j] = sumdiv[j] + i
+            info[j].sumdiv = info[j].sumdiv + i
             j = j + i
         }
     }
 
-    let abundant: ptr<i32> = calloc((limit + 1) as i64, 4)
     let mut acount: i32 = 0
     for i in 1..(limit + 1) {
-        if sumdiv[i] > i {
-            abundant[acount] = i
+        if info[i].sumdiv > i {
+            info[acount].abundant = i
             acount = acount + 1
         }
     }
 
-    let can: ptr<i8> = calloc((limit + 1) as i64, 1)
     for a in 0..acount {
         for b in a..acount {
-            let s: i32 = abundant[a] + abundant[b]
+            let s: i32 = info[a].abundant + info[b].abundant
             if s > limit {
                 break
             }
-            can[s] = 1
+            info[s].can = 1
         }
     }
 
     let mut total: i64 = 0
     for i in 1..(limit + 1) {
-        if can[i] == 0 {
+        if info[i].can == 0 {
             total = total + (i as i64)
         }
     }
     printf("%lld\n", total)
-    free(can)
-    free(abundant)
-    free(sumdiv)
+    free(info)
     return 0
 }

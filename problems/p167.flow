@@ -16,19 +16,15 @@ function ulam_2_v_k(v: i64, k: i64) -> i64 {
 
     let init_bits: ptr<i8> = calloc(m as i64, 1)
     if init_bits == null { return 0 }
-    let mut t: i32 = n
-    while t <= 2 * n + 1 {
+    for t in n..(2 * n + 2) {
         init_bits[t] = 1
-        t = t + 1
     }
 
     let mut state: i64 = 0
-    let mut i: i32 = 0
-    while i < m {
+    for i in 0..m {
         if init_bits[m - 1 - i] != 0 {
             state = state | (1 << i)
         }
-        i = i + 1
     }
     let init_state: i64 = state
     let mask: i64 = (1 << m) - 1
@@ -37,10 +33,8 @@ function ulam_2_v_k(v: i64, k: i64) -> i64 {
     let max_bits: i64 = 5000000
     let bits: ptr<i8> = calloc(max_bits, 1)
     if bits == null { free(init_bits); return 0 }
-    i = 0
-    while i < m {
+    for i in 0..m {
         bits[i] = init_bits[i]
-        i = i + 1
     }
     let mut period: i32 = 0
     let mut len: i32 = m
@@ -58,13 +52,11 @@ function ulam_2_v_k(v: i64, k: i64) -> i64 {
     let ones: ptr<i32> = calloc(period as i64, 4)
     if ones == null { free(bits); free(init_bits); return 0 }
     let mut ones_count: i32 = 0
-    i = 0
-    while i < period {
+    for i in 0..period {
         if bits[i] != 0 {
             ones[ones_count] = i
             ones_count = ones_count + 1
         }
-        i = i + 1
     }
 
     let q: i64 = (target_odd - 1) / (ones_count as i64)
@@ -81,10 +73,8 @@ function ulam_2_v_k(v: i64, k: i64) -> i64 {
 function main() -> i32 {
     let k: i64 = 100000000000
     let mut ans: i64 = 0
-    let mut n: i64 = 2
-    while n <= 10 {
+    for n in 2..11 {
         ans = ans + ulam_2_v_k(2 * n + 1, k)
-        n = n + 1
     }
     printf("%lld\n", ans)
     return 0

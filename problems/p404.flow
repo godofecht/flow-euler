@@ -28,7 +28,7 @@ function is_odd(n: i64) -> bool {
 
 function main() -> i32 {
     let LIMIT: i64 = 100000000000000000
-    let m_max: i64 = isqrt(isqrt(2 * LIMIT)) + 1
+    let m_max: i64 = ((2 * LIMIT) |> isqrt |> isqrt) + 1
     let mut total: i64 = 0
     let mut m: i64 = 1
     while m <= m_max {

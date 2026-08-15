@@ -42,8 +42,7 @@ function is_prime(n: i64) -> bool {
         d = d / 2
         s = s + 1
     }
-    let mut bi: i32 = 0
-    while bi < 5 {
+    for bi in 0..5 {
         let a: i64 = bases[bi] % n
         if a != 0 {
             let mut x: i64 = modpow(a, d, n)
@@ -58,7 +57,6 @@ function is_prime(n: i64) -> bool {
                 if bad { return false }
             }
         }
-        bi = bi + 1
     }
     return true
 }
@@ -68,13 +66,11 @@ function count_splits(digs: ptr<i32>, start: i32, last: i64) -> i64 {
     if start == 9 { return 1 }
     let mut total: i64 = 0
     let mut num: i64 = 0
-    let mut j: i32 = start
-    while j < 9 {
+    for j in start..9 {
         num = num * 10 + (digs[j] as i64)
         if num >= last && is_prime(num) {
             total = total + count_splits(digs, j + 1, num)
         }
-        j = j + 1
     }
     return total
 }
@@ -114,10 +110,8 @@ extern {
 function main() -> i32 {
     let digs: ptr<i32> = calloc(9, 4)
     if digs == null { return 1 }
-    let mut i: i32 = 0
-    while i < 9 {
+    for i in 0..9 {
         digs[i] = i + 1
-        i = i + 1
     }
     let mut total: i64 = 0
     while true {

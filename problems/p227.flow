@@ -28,11 +28,13 @@ function main() -> i32 {
         while k < 5 {
             let mut delta: i32 = 0
             let mut p: f64 = 0.0
-            if k == 0 { delta = 0 - 2; p = p_m2 }
-            elif k == 1 { delta = 0 - 1; p = p_m1 }
-            elif k == 2 { delta = 0; p = p_0 }
-            elif k == 3 { delta = 1; p = p_p1 }
-            else { delta = 2; p = p_p2 }
+            match k {
+                0 => { delta = 0 - 2; p = p_m2 }
+                1 => { delta = 0 - 1; p = p_m1 }
+                2 => { delta = 0; p = p_0 }
+                3 => { delta = 1; p = p_p1 }
+                _ => { delta = 2; p = p_p2 }
+            }
             let mut d2: i32 = (d + delta) % N
             if d2 < 0 { d2 = d2 + N }
             if d2 != 0 {

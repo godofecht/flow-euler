@@ -35,10 +35,8 @@ function divisor_count(m: i64, s0: i64) -> i64 {
 
 function ipow10(n: i32) -> i64 {
     let mut r: i64 = 1
-    let mut i: i32 = 0
-    while i < n {
+    for i in 0..n {
         r = r * 10
-        i = i + 1
     }
     return r
 }
@@ -53,42 +51,30 @@ function count_for_n(n: i32) -> i64 {
         0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
     ]
     let mut nd: i32 = 0
-    let mut i: i32 = 0
-    while i <= n {
-        let mut j: i32 = 0
+    for i in 0..(n + 1) {
         let mut p2: i64 = 1
-        let mut t: i32 = 0
-        while t < i { p2 = p2 * 2; t = t + 1 }
-        while j <= n {
+        for t in 0..i { p2 = p2 * 2 }
+        for j in 0..(n + 1) {
             let mut p5: i64 = 1
-            t = 0
-            while t < j { p5 = p5 * 5; t = t + 1 }
+            for t in 0..j { p5 = p5 * 5 }
             divs[nd] = p2 * p5
             nd = nd + 1
-            j = j + 1
         }
-        i = i + 1
     }
     # sort divs (small)
-    let mut a: i32 = 0
-    while a < nd {
-        let mut b: i32 = a + 1
-        while b < nd {
+    for a in 0..nd {
+        for b in (a + 1)..nd {
             if divs[b] < divs[a] {
                 let tmp: i64 = divs[a]
                 divs[a] = divs[b]
                 divs[b] = tmp
             }
-            b = b + 1
         }
-        a = a + 1
     }
 
     let mut total: i64 = 0
-    let mut xi: i32 = 0
-    while xi < nd {
-        let mut yi: i32 = xi
-        while yi < nd {
+    for xi in 0..nd {
+        for yi in xi..nd {
             let x: i64 = divs[xi]
             let y: i64 = divs[yi]
             if gcd(x, y) == 1 {
@@ -98,19 +84,15 @@ function count_for_n(n: i32) -> i64 {
                     total = total + divisor_count(m, x + y)
                 }
             }
-            yi = yi + 1
         }
-        xi = xi + 1
     }
     return total
 }
 
 function main() -> i32 {
     let mut ans: i64 = 0
-    let mut n: i32 = 1
-    while n <= 9 {
+    for n in 1..10 {
         ans = ans + count_for_n(n)
-        n = n + 1
     }
     printf("%lld\n", ans)
     return 0

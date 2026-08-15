@@ -69,15 +69,12 @@ function fill_segmented_sieve(from_val: i64, to_val: i64) -> void {
     segment_len = num_values + 1
     segment = calloc(segment_len, 1)
     three_plus = calloc(segment_len, 1)
-    let mut i: i64 = 0
-    while i < segment_len {
+    for i in 0..segment_len {
         segment[i] = 1
         three_plus[i] = 0
-        i = i + 1
     }
     let lim: i64 = isqrt(to_val)
-    let mut p: i64 = 3
-    while p <= lim {
+    for p in 3..(lim + 1) step 2 {
         if is_prime_small(p) {
             let mut smallest: i64 = from_val - (from_val % p) + p
             if smallest % 2 == 0 { smallest = smallest + p }
@@ -87,7 +84,6 @@ function fill_segmented_sieve(from_val: i64, to_val: i64) -> void {
                 j = j + 2 * p
             }
         }
-        p = p + 2
     }
 }
 
@@ -104,10 +100,8 @@ function process_line(line: i64) -> i64 {
     if line <= 2 { sieve_from = 1 }
     fill_segmented_sieve(sieve_from, sieve_to)
 
-    let mut y: i64 = line - 1
-    while y <= line + 1 {
-        let mut x: i64 = 1
-        while x <= y {
+    for y in (line - 1)..(line + 2) {
+        for x in 1..(y + 1) {
             if is_prime_in_segment(x, y) {
                 let mut count_primes: i32 = 0
                 let mut dx: i64 = 0 - 1
@@ -127,14 +121,11 @@ function process_line(line: i64) -> i64 {
                     three_plus[get_number(x, y) - segment_start] = 0
                 }
             }
-            x = x + 1
         }
-        y = y + 1
     }
 
     let mut total: i64 = 0
-    let mut x: i64 = 1
-    while x <= line {
+    for x in 1..(line + 1) {
         if is_prime_in_segment(x, line) {
             let mut at_least: bool = false
             let mut dx: i64 = 0 - 1
@@ -152,7 +143,6 @@ function process_line(line: i64) -> i64 {
                 total = total + get_number(x, line)
             }
         }
-        x = x + 1
     }
     return total
 }

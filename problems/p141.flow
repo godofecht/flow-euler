@@ -26,7 +26,7 @@ function main() -> i32 {
     if arr == null { return 1 }
     let mut cnt: i64 = 0
 
-    let zmax: i64 = isqrt(isqrt(limit)) + 2  # ~1000; safer cube root
+    let zmax: i64 = (limit |> isqrt |> isqrt) + 2  # ~1000; safer cube root
     # cube root of limit
     let mut z: i64 = 2
     while z * z * z <= limit {

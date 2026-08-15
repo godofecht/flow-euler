@@ -66,10 +66,12 @@ function main() -> i32 {
         while k < 4 {
             let mut nr: i32 = r
             let mut nc: i32 = c
-            if k == 0 { nr = r - 1 }
-            elif k == 1 { nr = r + 1 }
-            elif k == 2 { nc = c - 1 }
-            else { nc = c + 1 }
+            match k {
+                0 => { nr = r - 1 }
+                1 => { nr = r + 1 }
+                2 => { nc = c - 1 }
+                _ => { nc = c + 1 }
+            }
             if nr >= 0 && nr < n && nc >= 0 && nc < n {
                 let w: i32 = nr * n + nc
                 let nd: i64 = dist[u] + a[w]

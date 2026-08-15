@@ -35,10 +35,8 @@ function sub3(a: ptr<i32>, i: i32) -> i32 {
 
 function to_num(a: ptr<i32>) -> i64 {
     let mut v: i64 = 0
-    let mut i: i32 = 0
-    while i < 10 {
+    for i in 0..10 {
         v = v * 10 + (a[i] as i64)
-        i = i + 1
     }
     return v
 }
@@ -46,10 +44,8 @@ function to_num(a: ptr<i32>) -> i64 {
 function main() -> i32 {
     let d: ptr<i32> = calloc(10, 4)
     if d == null { return 1 }
-    let mut i: i32 = 0
-    while i < 10 {
+    for i in 0..10 {
         d[i] = i
-        i = i + 1
     }
 
     let primes: array<i32, 7> = [2, 3, 5, 7, 11, 13, 17]

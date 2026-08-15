@@ -13,9 +13,9 @@ function iroot(n: i64, k: i32) -> i64 {
     let mut x: i64 = 1
     # rough init via sqrt repeatedly
     if k == 3 {
-        x = isqrt(isqrt(n)) + 2
+        x = (n |> isqrt |> isqrt) + 2
     } elif k == 7 {
-        x = isqrt(isqrt(isqrt(n))) + 2
+        x = (n |> isqrt |> isqrt |> isqrt) + 2
     } else {
         x = isqrt(n)
     }

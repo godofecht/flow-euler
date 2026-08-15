@@ -182,7 +182,7 @@ function isqrt(n: i64) -> i64 {
 function iroot(n: i64, k: i32) -> i64 {
     if k == 1 { return n }
     if k == 2 { return isqrt(n) }
-    let mut x: i64 = isqrt(isqrt(n)) + 2
+    let mut x: i64 = (n |> isqrt |> isqrt) + 2
     while true {
         let mut p: i64 = 1
         let mut i: i32 = 0

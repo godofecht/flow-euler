@@ -59,10 +59,8 @@ function concat3(a: i64, b: i64, c: i64) -> i64 {
 
 function pow10(n: i32) -> i64 {
     let mut r: i64 = 1
-    let mut i: i32 = 0
-    while i < n {
+    for i in 0..n {
         r = r * 10
-        i = i + 1
     }
     return r
 }
@@ -94,10 +92,8 @@ function prev_perm(d: ptr<i8>) -> bool {
 
 function digits_to_num(d: ptr<i8>) -> i64 {
     let mut n: i64 = 0
-    let mut i: i32 = 0
-    while i < 10 {
+    for i in 0..10 {
         n = n * 10 + (d[i] as i64)
-        i = i + 1
     }
     return n
 }
@@ -106,23 +102,18 @@ function main() -> i32 {
     let mut d: array<i8, 10> = [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
     while true {
         let current: i64 = digits_to_num(d)
-        let mut split: i32 = 1
-        while split < 10 {
+        for split in 1..10 {
             if d[0] != 0 && d[split] != 0 {
                 let left: i64 = 0
-                let mut i: i32 = 0
-                while i < split {
+                for i in 0..split {
                     left = left * 10 + (d[i] as i64)
-                    i = i + 1
                 }
                 let right: i64 = 0
-                while i < 10 {
+                for i in split..10 {
                     right = right * 10 + (d[i] as i64)
-                    i = i + 1
                 }
                 let shared: i64 = gcd(left, right)
-                let mut factor: i64 = 3
-                while factor <= shared {
+                for factor in 3..(shared + 1) step 3 {
                     if left % factor == 0 && right % factor == 0 {
                         let one: i64 = left / factor
                         let two: i64 = right / factor
@@ -132,10 +123,8 @@ function main() -> i32 {
                             return 0
                         }
                     }
-                    factor = factor + 3
                 }
             }
-            split = split + 1
         }
         if prev_perm(d) == false { break }
     }
