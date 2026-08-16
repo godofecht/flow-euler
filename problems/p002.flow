@@ -1,25 +1,30 @@
 # Project Euler 002
 # Sum of even Fibonacci numbers not exceeding four million.
 #
-# Even Fibonaccis are every third term; a tight while-loop is enough
-# and compiles to the same tight C loop you'd write by hand.
+# Every third Fibonacci number is even.
+# The even subsequence satisfies:
+#
+#   E(n + 2) = 4*E(n + 1) + E(n)
+#
+# so we generate only the values that contribute.
 
 function solve(limit: i64) -> i64 {
-    let mut a: i64 = 1
-    let mut b: i64 = 2
+    let mut a: i64 = 2
+    let mut b: i64 = 8
     let mut total: i64 = 0
+
     while a <= limit {
-        if a % 2 == 0 {
-            total = total + a
-        }
-        let next: i64 = a + b
+        total = total + a
+
+        let next: i64 = 4 * b + a
         a = b
         b = next
     }
+
     return total
 }
 
 function main() -> i32 {
-    printf("%lld\n", solve(4000000))
+    println(solve(4000000))
     return 0
 }
