@@ -1,0 +1,39 @@
+# @module euler.digits
+# @means Shared digit-array helpers for big ints.
+
+export struct Digits {
+    data: ptr<i32>
+    len: i32
+}
+
+extern {
+    function calloc(n: i64, size: i64) -> ptr<void>
+}
+
+export function digits_one(cap: i64) -> Digits {
+    let data: ptr<i32> = calloc(cap, 4)
+    data[0] = 1
+    return Digits { data: data, len: 1 }
+}
+
+export function digits_mul_u32(d: ptr<Digits>, m: i32) -> void {
+    let mut carry: i32 = 0
+    for i in 0..d[0].len {
+        let v: i32 = d[0].data[i] * m + carry
+        d[0].data[i] = v % 10
+        carry = v / 10
+    }
+    while carry > 0 {
+        d[0].data[d[0].len] = carry % 10
+        carry = carry / 10
+        d[0].len = d[0].len + 1
+    }
+}
+
+export function digits_sum(d: Digits) -> i64 {
+    let mut total: i64 = 0
+    for i in 0..d.len {
+        total = total + (d.data[i] as i64)
+    }
+    return total
+}
