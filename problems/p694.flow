@@ -42,7 +42,8 @@ function main() -> i32 {
     let sieve: ptr<i8> = calloc(lim + 1, 1) as ptr<i8>
     primes = calloc(lim, 8) as ptr<i64>
     pc = 0
-    for i in 2..(lim + 1) {
+    let mut i: i64 = 2
+    while i <= lim {
         if sieve[i] == 0 {
             primes[pc] = i
             pc = pc + 1
@@ -52,6 +53,7 @@ function main() -> i32 {
                 j = j + i
             }
         }
+        i = i + 1
     }
     let mut ans: i64 = N
     for i in 0..pc {

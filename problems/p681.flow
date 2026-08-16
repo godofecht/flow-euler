@@ -86,7 +86,8 @@ function main() -> i32 {
 
     let mut total: i64 = 0
 
-    for k in 1..(n + 1) {
+    let mut k: i64 = 1
+    while k <= n {
         let k2: i64 = k * k
 
         # Factorize k
@@ -185,6 +186,7 @@ function main() -> i32 {
                 }
             }
         }
+        k = k + 1
     }
 
     printf("%lld\n", total)

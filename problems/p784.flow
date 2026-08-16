@@ -41,18 +41,21 @@ function main() -> i32 {
     }
 
     let mut total: i64 = 0
-    for r in 2..N {
+    let mut r: i64 = 2
+    while r < N {
         let mut kmax: i64 = N - r
         if kmax > r - 1 {
             kmax = r - 1
         }
         if kmax <= 0 {
+            r = r + 1
             continue
         }
         let n_val: i64 = r * r - 1
         let base: i64 = 2 * r
         if kmax == 1 {
             total = total + base + 1 + n_val
+            r = r + 1
             continue
         }
         let mut a: i64 = r - 1
@@ -138,6 +141,7 @@ function main() -> i32 {
         free(fac_e)
         free(divs)
         free(newd)
+        r = r + 1
     }
     free(spf)
     free(primes)

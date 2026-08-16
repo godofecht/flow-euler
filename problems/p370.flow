@@ -58,7 +58,8 @@ function main() -> i32 {
     if lo > threshold { threshold = lo }
 
     let mut total: i64 = 0
-    for n in 1..(n_max + 1) {
+    let mut n: i64 = 1
+    while n <= n_max {
         let nn: i64 = n * n
         let m_ratio: i64 = (n + isq(5 * nn)) / 2
         let disc: i64 = 4 * N - 3 * nn
@@ -68,10 +69,12 @@ function main() -> i32 {
             if m_perim < m_max { m_max = m_perim }
             if m_max >= n {
                 if n <= threshold {
-                    for m in n..(m_max + 1) {
+                    let mut m: i64 = n
+                    while m <= m_max {
                         if gcd(m, n) == 1 {
                             total = total + N / (m * m + m * n + nn)
                         }
+                        m = m + 1
                     }
                 } else {
                     # squarefree divisors of n via distinct primes
@@ -118,6 +121,7 @@ function main() -> i32 {
                 }
             }
         }
+        n = n + 1
     }
 
     printf("%lld\n", total)

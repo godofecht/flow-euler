@@ -124,8 +124,12 @@ function main() -> i32 {
     # Temp buffer for excluded primes
     let excluded: ptr<i64> = calloc(20, 8)
 
-    for u in 1..(root + 1) {
-        if u % 2 == 0 { continue }
+    let mut u: i64 = 1
+    while u <= root {
+        if u % 2 == 0 {
+            u = u + 1
+            continue
+        }
 
         let u2: i64 = u * u
         let max2: i64 = N / u2
@@ -180,6 +184,7 @@ function main() -> i32 {
             total = total + cnt - ex
             xv = xv / 2
         }
+        u = u + 1
     }
 
     printf("%lld\n", total)
