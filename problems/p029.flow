@@ -1,121 +1,72 @@
 # Project Euler 029
-# How many distinct terms in a^b for 2 ≤ a ≤ 100 and 2 ≤ b ≤ 100?
-# Represent each a^b by its prime-exponent signature hashed into a sorted unique set
-# via string of "log" approximation isn't exact — use big-integer digit compare via
-# reducing to canonical (base, exp) after extracting powers.
+# Count distinct a^b for 2 <= a <= 100 and 2 <= b <= 100.
+#
+# Canonicalize each base as root^scale.
+# Then a^b is uniquely identified by (root, scale * b),
+# so no big integers are needed.
 
-extern {
-    function calloc(n: i64, size: i64) -> ptr<void>
-    function free(p: ptr<void>) -> void
-    function memcpy(dst: ptr<void>, src: ptr<void>, n: i64) -> ptr<void>
-    function memcmp(a: ptr<void>, b: ptr<void>, n: i64) -> i32
-}
+struct Canonical { root: i32, exponent: i32 }
 
-# Store each value as a 200-byte little-endian digit array (base 256) — enough for 100^100.
-# Simpler approach: count with a boolean map of (a_reduced, b_scaled) using radical powers.
+function ipow(base: i32, exp: i32) -> i32 {
+    let mut result: i32 = 1
 
-function pow_i64(base: i64, exp: i64) -> i64 {
-    # only used for small checks; main path uses digit pow
-    let mut r: i64 = 1
-    let mut e: i64 = exp
-    let mut b: i64 = base
-    while e > 0 {
-        if e % 2 == 1 { r = r * b }
-        b = b * b
-        e = e / 2
+    for _ in 0 to exp {
+        result = result * base
     }
-    return r
+
+    return result
 }
 
-# Digit array multiply by small int; returns new length
-function mul_small(digits: ptr<i32>, len: i32, m: i64) -> i32 {
-    let mut carry: i64 = 0
+function canonical_power(n: i32) -> Canonical {
+    let mut result: Canonical = Canonical { root: n, exponent: 1 }
+
+    for power in 2 to 7 {
+        for candidate in 2 to n + 1 {
+            let value: i32 = ipow(candidate, power)
+
+            if value == n {
+                result.root = candidate
+                result.exponent = power
+            }
+
+            if value > n {
+                break
+            }
+        }
+    }
+
+    return result
+}
+
+function solve() -> i32 {
+    let mut seen: array<bool, 60701>
     let mut i: i32 = 0
-    while i < len {
-        let v: i64 = (digits[i] as i64) * m + carry
-        digits[i] = (v % 10) as i32
-        carry = v / 10
+    while i < 60701 {
+        seen[i] = false
         i = i + 1
-    }
-    while carry > 0 {
-        digits[len] = (carry % 10) as i32
-        carry = carry / 10
-        len = len + 1
-    }
-    return len
-}
-
-function main() -> i32 {
-    # Up to 100^100 has 201 digits; store as fixed 210 digit rows
-    let width: i32 = 210
-    let max_terms: i32 = 99 * 99   # 9801
-    let store: ptr<i8> = calloc((max_terms * width) as i64, 1)
-    let lens: ptr<i32> = calloc(max_terms as i64, 4)
-    let digits: ptr<i32> = calloc(width as i64, 4)
-    if store == null || lens == null || digits == null {
-        return 1
     }
 
     let mut count: i32 = 0
-    let mut a: i64 = 2
-    while a <= 100 {
-        let mut b: i64 = 2
-        while b <= 100 {
-            # compute a^b into digits
-            let mut i: i32 = 0
-            while i < width {
-                digits[i] = 0
-                i = i + 1
-            }
-            digits[0] = 1
-            let mut len: i32 = 1
-            let mut e: i64 = 0
-            while e < b {
-                len = mul_small(digits, len, a)
-                e = e + 1
-            }
 
-            # pack into store row as ascii digits (MSB first for strcmp-like compare)
-            let row: i32 = count
-            # check uniqueness against previous
-            let mut unique: bool = true
-            let mut t: i32 = 0
-            while t < count {
-                if lens[t] == len {
-                    let mut same: bool = true
-                    let mut k: i32 = 0
-                    while k < len {
-                        let stored: i32 = store[t * width + k] as i32
-                        if stored != digits[k] {
-                            same = false
-                            break
-                        }
-                        k = k + 1
-                    }
-                    if same {
-                        unique = false
-                        break
-                    }
-                }
-                t = t + 1
-            }
-            if unique {
-                let mut k: i32 = 0
-                while k < len {
-                    store[row * width + k] = digits[k] as i8
-                    k = k + 1
-                }
-                lens[row] = len
+    for a in 2 to 101 {
+        let c: Canonical = canonical_power(a)
+        let root: i32 = c.root
+        let scale: i32 = c.exponent
+
+        for b in 2 to 101 {
+            let key: i32 = root * 601 + scale * b
+
+            if !seen[key] {
+                seen[key] = true
                 count = count + 1
             }
-            b = b + 1
         }
-        a = a + 1
     }
 
-    printf("%lld\n", count as i64)
-    free(digits)
-    free(lens)
-    free(store)
+    return count
+}
+
+function main() -> i32 {
+    println(solve())
     return 0
 }
