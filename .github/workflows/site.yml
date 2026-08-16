@@ -43,6 +43,9 @@ jobs:
           export FLOW_REPO="$HOME/flow"
           python3 scripts/measure.py --out complexity.json --timeout 30
 
+      - name: Generate best-known reference
+        run: python3 scripts/gen-best-known.py
+
       - name: Generate site
         env:
           FLOW_HOST: python

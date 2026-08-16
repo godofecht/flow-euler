@@ -1,0 +1,5037 @@
+{
+  "1": {
+    "approach": "Closed-form inclusion-exclusion",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "2": {
+    "approach": "Iterate Fibonacci, sum evens",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "3": {
+    "approach": "Trial division",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "4": {
+    "approach": "Brute-force product, check palindrome",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "5": {
+    "approach": "LCM via prime factorisation",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "6": {
+    "approach": "Closed-form sum of squares",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "7": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "8": {
+    "approach": "Sliding window product",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "9": {
+    "approach": "Euclid parametrisation of Pythagorean triples",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "10": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "11": {
+    "approach": "Linear scan of grid directions",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "12": {
+    "approach": "Sieve-based divisor count",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "13": {
+    "approach": "Big-integer addition",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "14": {
+    "approach": "Memoised Collatz lengths",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "15": {
+    "approach": "Binomial coefficient via DP or combinatorics",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "16": {
+    "approach": "Big-integer multiplication, digit sum",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "17": {
+    "approach": "Direct word count",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "18": {
+    "approach": "Bottom-up DP on triangle",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "19": {
+    "approach": "Zeller congruence or direct count",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "20": {
+    "approach": "Big-integer factorial, digit sum",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "21": {
+    "approach": "Sieve-based sum of proper divisors",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "22": {
+    "approach": "Sort names, compute scores",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "23": {
+    "approach": "Sieve of abundant sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "24": {
+    "approach": "Factorial number system",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "25": {
+    "approach": "Iterate Fibonacci, check digit count",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "26": {
+    "approach": "Long division cycle detection",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "27": {
+    "approach": "Sieve + quadratic prime search",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "28": {
+    "approach": "Closed-form diagonal sum",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "29": {
+    "approach": "Distinct powers via set or prime factoring",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2 log n)"
+  },
+  "30": {
+    "approach": "Brute-force digit power sum",
+    "best_space": "O(1)",
+    "best_time": "O(n * d)"
+  },
+  "31": {
+    "approach": "Coin change DP",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "32": {
+    "approach": "Pandigital product search",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "33": {
+    "approach": "Digit-cancelling fraction search",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "34": {
+    "approach": "Brute-force digit factorial sum",
+    "best_space": "O(1)",
+    "best_time": "O(n * d)"
+  },
+  "35": {
+    "approach": "Sieve + circular prime check",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "36": {
+    "approach": "Check palindrome in base 2 and 10",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "37": {
+    "approach": "Sieve + truncatable prime check",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "38": {
+    "approach": "Pandigital concatenation search",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "39": {
+    "approach": "Pythagorean triple perimeter count",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "40": {
+    "approach": "Champernowne digit positions",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "41": {
+    "approach": "Pandigital prime search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "42": {
+    "approach": "Sort + triangle number check",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "43": {
+    "approach": "Pandigital substring divisibility",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "44": {
+    "approach": "Pentagonal number difference search",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "45": {
+    "approach": "Triangular-pentagonal-hexagonal search",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "46": {
+    "approach": "Sieve + Goldbach check",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "47": {
+    "approach": "Sieve + distinct prime factor count",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "48": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "49": {
+    "approach": "Sieve + prime permutation search",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "50": {
+    "approach": "Consecutive prime sum search",
+    "best_space": "O(n)",
+    "best_time": "O(n^2 / log n)"
+  },
+  "51": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "52": {
+    "approach": "Permutation check on multiples",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "53": {
+    "approach": "Pascal triangle combinatorics",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "54": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "55": {
+    "approach": "Lychrel number iteration",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "56": {
+    "approach": "Big-integer power, digit sum",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "57": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "58": {
+    "approach": "Spiral prime ratio iteration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "59": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "60": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "61": {
+    "approach": "Figurate number enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "62": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "63": {
+    "approach": "Count n-digit nth powers",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "64": {
+    "approach": "Continued fraction convergents",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "65": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "66": {
+    "approach": "Continued fraction convergents",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "67": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "68": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "69": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "70": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "71": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "72": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "73": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "74": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "75": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "76": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "77": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "78": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "79": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "80": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "81": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "82": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "83": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "84": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "85": {
+    "approach": "Closed-form or combinatorial counting",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "86": {
+    "approach": "Enumerate and count",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "87": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "88": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "89": {
+    "approach": "Direct numeral conversion",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "90": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "91": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "92": {
+    "approach": "Square digit chain memoisation",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "93": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "94": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "95": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "96": {
+    "approach": "Backtracking search",
+    "best_space": "O(n^2)",
+    "best_time": "O(n!)"
+  },
+  "97": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "98": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "99": {
+    "approach": "Compare logarithms of large numbers",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "100": {
+    "approach": "Pell equation / continued fractions",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "101": {
+    "approach": "Polynomial interpolation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "102": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "103": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "104": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "105": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "106": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "107": {
+    "approach": "Kruskal or Prim algorithm",
+    "best_space": "O(v)",
+    "best_time": "O(e log v)"
+  },
+  "108": {
+    "approach": "Divisor-based Diophantine solver",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "109": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "110": {
+    "approach": "Divisor-based Diophantine solver",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "111": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "112": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "113": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "114": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "115": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "116": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "117": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "118": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "119": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "120": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "121": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "122": {
+    "approach": "Addition chain DP",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "123": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "124": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "125": {
+    "approach": "Brute-force or constructive search",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "126": {
+    "approach": "Enumerate and count",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "127": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "128": {
+    "approach": "Tile difference enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "129": {
+    "approach": "Repunit divisibility",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "130": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "131": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "132": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "133": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "134": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "135": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "136": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "137": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "138": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "139": {
+    "approach": "Euclid parametrisation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "140": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "141": {
+    "approach": "Divisor-based enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "142": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "143": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "144": {
+    "approach": "Iterative reflection simulation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "145": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "146": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "147": {
+    "approach": "Closed-form or combinatorial counting",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "148": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "149": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "150": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "151": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "152": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "153": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "154": {
+    "approach": "Pascal triangle computation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "155": {
+    "approach": "Kruskal or Prim algorithm",
+    "best_space": "O(v)",
+    "best_time": "O(e log v)"
+  },
+  "156": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "157": {
+    "approach": "Divisor-based Diophantine solver",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "158": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "159": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "160": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "161": {
+    "approach": "Tiling DP with state",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "162": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "163": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "164": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "165": {
+    "approach": "Sweep line or pairwise check",
+    "best_space": "O(n)",
+    "best_time": "O(n^2 log n)"
+  },
+  "166": {
+    "approach": "Brute-force grid search",
+    "best_space": "O(n^d)",
+    "best_time": "O(n^d)"
+  },
+  "167": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "168": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "169": {
+    "approach": "Stern-Brocot or binary representation",
+    "best_space": "O(log n)",
+    "best_time": "O(log n)"
+  },
+  "170": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "171": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "172": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "173": {
+    "approach": "Enumerative counting",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "174": {
+    "approach": "Enumerative counting",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "175": {
+    "approach": "Stern-Brocot or binary representation",
+    "best_space": "O(log n)",
+    "best_time": "O(log n)"
+  },
+  "176": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "177": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "178": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "179": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "180": {
+    "approach": "Triple enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "181": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "182": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "183": {
+    "approach": "Prime factor check",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "184": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "185": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "186": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "187": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "188": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "189": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "190": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "191": {
+    "approach": "DP over states",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "192": {
+    "approach": "Continued fraction convergents",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "193": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "194": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "195": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "196": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "197": {
+    "approach": "Iterative sequence simulation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "198": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "199": {
+    "approach": "Numerical iteration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "200": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "201": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "202": {
+    "approach": "Iterative reflection simulation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "203": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "204": {
+    "approach": "Priority queue generation",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "205": {
+    "approach": "Dice distribution DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "206": {
+    "approach": "Concealed square search",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "207": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "208": {
+    "approach": "Path counting DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "209": {
+    "approach": "Cycle decomposition",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "210": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "211": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "212": {
+    "approach": "Enumerate and count",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "213": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "214": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "215": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "216": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "217": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "218": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "219": {
+    "approach": "Huffman coding",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "220": {
+    "approach": "Recursive curve computation",
+    "best_space": "O(log n)",
+    "best_time": "O(log n)"
+  },
+  "221": {
+    "approach": "Divisor-based enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "222": {
+    "approach": "Greedy packing simulation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "223": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "224": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "225": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "226": {
+    "approach": "Numerical iteration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "227": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "228": {
+    "approach": "Convex polygon sum",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "229": {
+    "approach": "Sieve-based representation count",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "230": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "231": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "232": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "233": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "234": {
+    "approach": "Sieve-based computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "235": {
+    "approach": "Binary search on series",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "236": {
+    "approach": "Scan with comparison",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "237": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "238": {
+    "approach": "Period finding and digit sum",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "239": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "240": {
+    "approach": "Dice distribution DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "241": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "242": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "243": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "244": {
+    "approach": "BFS or A* search",
+    "best_space": "O(n!)",
+    "best_time": "O(n!)"
+  },
+  "245": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "246": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "247": {
+    "approach": "Geometric enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "248": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "249": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "250": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "251": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "252": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "253": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "254": {
+    "approach": "Big-integer factorial",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "255": {
+    "approach": "Newton iteration",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "256": {
+    "approach": "Tiling DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "257": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "258": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "259": {
+    "approach": "Expression enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n * d)"
+  },
+  "260": {
+    "approach": "Game theory DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^3)"
+  },
+  "261": {
+    "approach": "Search with pruning",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "262": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "263": {
+    "approach": "Search with primality checks",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "264": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "265": {
+    "approach": "Bitmask enumeration",
+    "best_space": "O(2^n)",
+    "best_time": "O(2^n)"
+  },
+  "266": {
+    "approach": "Sieve-based search",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "267": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "268": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "269": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "270": {
+    "approach": "Combinatorial counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "271": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "272": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "273": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "274": {
+    "approach": "Sieve-based computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "275": {
+    "approach": "Iterative reflection simulation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "276": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "277": {
+    "approach": "Memoised Collatz iteration",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "278": {
+    "approach": "Triple enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "279": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "280": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "281": {
+    "approach": "Double enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "282": {
+    "approach": "Modular Ackermann computation",
+    "best_space": "O(n)",
+    "best_time": "O(n * a)"
+  },
+  "283": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "284": {
+    "approach": "Digit DP in base b",
+    "best_space": "O(d)",
+    "best_time": "O(n * d)"
+  },
+  "285": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "286": {
+    "approach": "Binomial or DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "287": {
+    "approach": "Recursive tree traversal",
+    "best_space": "O(log n)",
+    "best_time": "O(n)"
+  },
+  "288": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "289": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "290": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "291": {
+    "approach": "Sieve + parametric search",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "292": {
+    "approach": "Euclid parametrisation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "293": {
+    "approach": "Sieve-based search",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "294": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "295": {
+    "approach": "Geometric enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "296": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "297": {
+    "approach": "Zeckendorf representation sum",
+    "best_space": "O(log n)",
+    "best_time": "O(n log n)"
+  },
+  "298": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "299": {
+    "approach": "Geometric enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "300": {
+    "approach": "Self-avoiding walk simulation",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "301": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "302": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "303": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "304": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "305": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "306": {
+    "approach": "Game theory DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^3)"
+  },
+  "307": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "308": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "309": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "310": {
+    "approach": "Game theory DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^3)"
+  },
+  "311": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "312": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "313": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "314": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "315": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "316": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "317": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "318": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "319": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "320": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "321": {
+    "approach": "Divisor-based Diophantine solver",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "322": {
+    "approach": "Pascal triangle computation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "323": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "324": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "325": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "326": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "327": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "328": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "329": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "330": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "331": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "332": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "333": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "334": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "335": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "336": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "337": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "338": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "339": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "340": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "341": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "342": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "343": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "344": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "345": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "346": {
+    "approach": "Repunit divisibility",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "347": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "348": {
+    "approach": "Brute-force or constructive search",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "349": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "350": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "351": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "352": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "353": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "354": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "355": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "356": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "357": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "358": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "359": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "360": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "361": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "362": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "363": {
+    "approach": "Numerical iteration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "364": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "365": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "366": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "367": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "368": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "369": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "370": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "371": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "372": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "373": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "374": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "375": {
+    "approach": "Polynomial interpolation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "376": {
+    "approach": "Dice distribution DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "377": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "378": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "379": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "380": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "381": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "382": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "383": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "384": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "385": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "386": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "387": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "388": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "389": {
+    "approach": "Dice distribution DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "390": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "391": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "392": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "393": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "394": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "395": {
+    "approach": "Euclid parametrisation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "396": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "397": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "398": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "399": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "400": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "401": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "402": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "403": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "404": {
+    "approach": "Sweep line or pairwise check",
+    "best_space": "O(n)",
+    "best_time": "O(n^2 log n)"
+  },
+  "405": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "406": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "407": {
+    "approach": "Idempotents via divisor analysis",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "408": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "409": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "410": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "411": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "412": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "413": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "414": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "415": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "416": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "417": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "418": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "419": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "420": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "421": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "422": {
+    "approach": "Geometric enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "423": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "424": {
+    "approach": "Backtracking search",
+    "best_space": "O(n^2)",
+    "best_time": "O(n!)"
+  },
+  "425": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "426": {
+    "approach": "Sieve-based representation count",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "427": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "428": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "429": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "430": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "431": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "432": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "433": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "434": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "435": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "436": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "437": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "438": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "439": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "440": {
+    "approach": "Tiling DP with state",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "441": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "442": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "443": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "444": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "445": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "446": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "447": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "448": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "449": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "450": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "451": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "452": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "453": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "454": {
+    "approach": "Divisor-based Diophantine solver",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "455": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "456": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "457": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "458": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "459": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "460": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "461": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "462": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "463": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "464": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "465": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "466": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "467": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "468": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "469": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "470": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "471": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "472": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "473": {
+    "approach": "Brute-force or constructive search",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "474": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "475": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "476": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "477": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "478": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "479": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "480": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "481": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "482": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "483": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "484": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "485": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "486": {
+    "approach": "Brute-force or constructive search",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "487": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "488": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "489": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "490": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "491": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "492": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "493": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "494": {
+    "approach": "Memoised Collatz iteration",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "495": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "496": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "497": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "498": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "499": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "500": {
+    "approach": "Smallest number with 2^500500 divisors",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "501": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "502": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "503": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "504": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "505": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "506": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "507": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "508": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "509": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "510": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "511": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "512": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "513": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "514": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "515": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "516": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "517": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "518": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "519": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "520": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "521": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "522": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "523": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "524": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "525": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "526": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "527": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "528": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "529": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "530": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "531": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "532": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "533": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "534": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "535": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "536": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "537": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "538": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "539": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "540": {
+    "approach": "Euclid parametrisation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "541": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "542": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "543": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "544": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "545": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "546": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "547": {
+    "approach": "Enumerative counting",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "548": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "549": {
+    "approach": "Big-integer factorial",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "550": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "551": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "552": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "553": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "554": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "555": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "556": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "557": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "558": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "559": {
+    "approach": "Big-integer factorial",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "560": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "561": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "562": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "563": {
+    "approach": "Tiling DP with state",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "564": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "565": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "566": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "567": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "568": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "569": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "570": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "571": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "572": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "573": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "574": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "575": {
+    "approach": "Path counting DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "576": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "577": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "578": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "579": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "580": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "581": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "582": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "583": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "584": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "585": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "586": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "587": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "588": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "589": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "590": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "591": {
+    "approach": "Continued fraction convergents",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "592": {
+    "approach": "Big-integer factorial",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "593": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "594": {
+    "approach": "Tiling DP with state",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "595": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "596": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "597": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "598": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "599": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "600": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "601": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "602": {
+    "approach": "DP over cycle structure",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "603": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "604": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "605": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "606": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "607": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "608": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "609": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "610": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "611": {
+    "approach": "Sieve-based representation count",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "612": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "613": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "614": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "615": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "616": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "617": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "618": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "619": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "620": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "621": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "622": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "623": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "624": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "625": {
+    "approach": "Geometric enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "626": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "627": {
+    "approach": "Big-integer factorial",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "628": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "629": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "630": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "631": {
+    "approach": "Backtracking search",
+    "best_space": "O(n^2)",
+    "best_time": "O(n!)"
+  },
+  "632": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "633": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "634": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "635": {
+    "approach": "Pascal triangle computation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "636": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "637": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "638": {
+    "approach": "Pascal triangle computation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "639": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "640": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "641": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "642": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "643": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "644": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "645": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "646": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "647": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "648": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "649": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "650": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "651": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "652": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "653": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "654": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "655": {
+    "approach": "Brute-force or constructive search",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "656": {
+    "approach": "Brute-force or constructive search",
+    "best_space": "O(1)",
+    "best_time": "O(n^2)"
+  },
+  "657": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "658": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "659": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "660": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "661": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "662": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "663": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "664": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "665": {
+    "approach": "Game theory DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^3)"
+  },
+  "666": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "667": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "668": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "669": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "670": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "671": {
+    "approach": "Tiling DP with state",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "672": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "673": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "674": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "675": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "676": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "677": {
+    "approach": "Polynomial interpolation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "678": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "679": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "680": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "681": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "682": {
+    "approach": "Polynomial interpolation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "683": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "684": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "685": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "686": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "687": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "688": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "689": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "690": {
+    "approach": "Kruskal or Prim algorithm",
+    "best_space": "O(v)",
+    "best_time": "O(e log v)"
+  },
+  "691": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "692": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "693": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "694": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "695": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "696": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "697": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "698": {
+    "approach": "Polynomial interpolation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "699": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "700": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "701": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "702": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "703": {
+    "approach": "Kruskal or Prim algorithm",
+    "best_space": "O(v)",
+    "best_time": "O(e log v)"
+  },
+  "704": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "705": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "706": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "707": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "708": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "709": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "710": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "711": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "712": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "713": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "714": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "715": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "716": {
+    "approach": "Kruskal or Prim algorithm",
+    "best_space": "O(v)",
+    "best_time": "O(e log v)"
+  },
+  "717": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "718": {
+    "approach": "Expression enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n * d)"
+  },
+  "719": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "720": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "721": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "722": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "723": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "724": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "725": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "726": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "727": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "728": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "729": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "730": {
+    "approach": "Euclid parametrisation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "731": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "732": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "733": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "734": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "735": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "736": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "737": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "738": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "739": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "740": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "741": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "742": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "743": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "744": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "745": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "746": {
+    "approach": "Addition chain DP",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "747": {
+    "approach": "Double enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "748": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "749": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "750": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "751": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "752": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "753": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "754": {
+    "approach": "Big-integer factorial",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "755": {
+    "approach": "Zeckendorf representation sum",
+    "best_space": "O(log n)",
+    "best_time": "O(n log n)"
+  },
+  "756": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "757": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "758": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "759": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "760": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "761": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "762": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "763": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "764": {
+    "approach": "Euclid parametrisation",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "765": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "766": {
+    "approach": "BFS or A* search",
+    "best_space": "O(n!)",
+    "best_time": "O(n!)"
+  },
+  "767": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "768": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "769": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "770": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "771": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "772": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "773": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "774": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "775": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "776": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "777": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "778": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "779": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "780": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "781": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "782": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "783": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "784": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "785": {
+    "approach": "Divisor-based Diophantine solver",
+    "best_space": "O(1)",
+    "best_time": "O(n log n)"
+  },
+  "786": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "787": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "788": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "789": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "790": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "791": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "792": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "793": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "794": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "795": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "796": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "797": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "798": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "799": {
+    "approach": "BFS or A* search",
+    "best_space": "O(n!)",
+    "best_time": "O(n!)"
+  },
+  "800": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "801": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "802": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "803": {
+    "approach": "BFS or A* search",
+    "best_space": "O(n!)",
+    "best_time": "O(n!)"
+  },
+  "804": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "805": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "806": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "807": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "808": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "809": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "810": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "811": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "812": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "813": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "814": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "815": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "816": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "817": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "818": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "819": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "820": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "821": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "822": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "823": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "824": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "825": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "826": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "827": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "828": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "829": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "830": {
+    "approach": "Pascal triangle computation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "831": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "832": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "833": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "834": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "835": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "836": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "837": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "838": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "839": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "840": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "841": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "842": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "843": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "844": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "845": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "846": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "847": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "848": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "849": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "850": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "851": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "852": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "853": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "854": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "855": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "856": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "857": {
+    "approach": "Kruskal or Prim algorithm",
+    "best_space": "O(v)",
+    "best_time": "O(e log v)"
+  },
+  "858": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "859": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "860": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "861": {
+    "approach": "Sieve-based divisor sums",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "862": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "863": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "864": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "865": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "866": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "867": {
+    "approach": "Tiling DP with state",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "868": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "869": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "870": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "871": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "872": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "873": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "874": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "875": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "876": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "877": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "878": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "879": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "880": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "881": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "882": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "883": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "884": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "885": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "886": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "887": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "888": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "889": {
+    "approach": "Numerical iteration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "890": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "891": {
+    "approach": "Direct hand evaluation or enumeration",
+    "best_space": "O(1)",
+    "best_time": "O(n)"
+  },
+  "892": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "893": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "894": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "895": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "896": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "897": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "898": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "899": {
+    "approach": "Game theory DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^3)"
+  },
+  "900": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "901": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "902": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "903": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "904": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "905": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "906": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "907": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "908": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "909": {
+    "approach": "Big-integer arithmetic",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "910": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "911": {
+    "approach": "Continued fraction convergents",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "912": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "913": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "914": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "915": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "916": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "917": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "918": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "919": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "920": {
+    "approach": "Addition chain DP",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "921": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "922": {
+    "approach": "Key search and XOR decryption",
+    "best_space": "O(n)",
+    "best_time": "O(n * k)"
+  },
+  "923": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "924": {
+    "approach": "Search with pruning or sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "925": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "926": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "927": {
+    "approach": "Sweep line or pairwise check",
+    "best_space": "O(n)",
+    "best_time": "O(n^2 log n)"
+  },
+  "928": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "929": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "930": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "931": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "932": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "933": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "934": {
+    "approach": "Chinese Remainder Theorem",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "935": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "936": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "937": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "938": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "939": {
+    "approach": "Dynamic programming or generating function",
+    "best_space": "O(n)",
+    "best_time": "O(n * m)"
+  },
+  "940": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(n^2)",
+    "best_time": "O(log n)"
+  },
+  "941": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "942": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "943": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "944": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "945": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "946": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "947": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "948": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "949": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "950": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "951": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "952": {
+    "approach": "Big-integer factorial",
+    "best_space": "O(n)",
+    "best_time": "O(n)"
+  },
+  "953": {
+    "approach": "Backtracking search",
+    "best_space": "O(n^2)",
+    "best_time": "O(n!)"
+  },
+  "954": {
+    "approach": "Digit DP",
+    "best_space": "O(d * s)",
+    "best_time": "O(n * d * s)"
+  },
+  "955": {
+    "approach": "Trial division or Pollard rho",
+    "best_space": "O(1)",
+    "best_time": "O(sqrt(n))"
+  },
+  "956": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "957": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "958": {
+    "approach": "Stern-Brocot or binary representation",
+    "best_space": "O(log n)",
+    "best_time": "O(log n)"
+  },
+  "959": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "960": {
+    "approach": "Modular DP or matrix exponentiation",
+    "best_space": "O(n)",
+    "best_time": "O(n log n)"
+  },
+  "961": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "962": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "963": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "964": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "965": {
+    "approach": "Markov chain or DP over states",
+    "best_space": "O(s^2)",
+    "best_time": "O(n * s^2)"
+  },
+  "966": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "967": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "968": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "969": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "970": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "971": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "972": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "973": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "974": {
+    "approach": "Permutation enumeration or constraint search",
+    "best_space": "O(n)",
+    "best_time": "O(n!)"
+  },
+  "975": {
+    "approach": "Sieve of Eratosthenes",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "976": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "977": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "978": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "979": {
+    "approach": "Kruskal or Prim algorithm",
+    "best_space": "O(v)",
+    "best_time": "O(e log v)"
+  },
+  "980": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "981": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "982": {
+    "approach": "Dice distribution DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "983": {
+    "approach": "Combinatorial or DP counting",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "984": {
+    "approach": "Closed-form formula",
+    "best_space": "O(1)",
+    "best_time": "O(1)"
+  },
+  "985": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "986": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "987": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "988": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "989": {
+    "approach": "Mobius sieve",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "990": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "991": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "992": {
+    "approach": "Kruskal or Prim algorithm",
+    "best_space": "O(v)",
+    "best_time": "O(e log v)"
+  },
+  "993": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "994": {
+    "approach": "Sieve-based totient computation",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "995": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "996": {
+    "approach": "Polynomial interpolation",
+    "best_space": "O(n)",
+    "best_time": "O(n^2)"
+  },
+  "997": {
+    "approach": "Dice distribution DP",
+    "best_space": "O(s)",
+    "best_time": "O(n * s)"
+  },
+  "998": {
+    "approach": "Bottom-up DP",
+    "best_space": "O(n^2)",
+    "best_time": "O(n^2)"
+  },
+  "999": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "1000": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "1001": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "1002": {
+    "approach": "Not curated",
+    "best_space": "?",
+    "best_time": "?"
+  },
+  "1003": {
+    "approach": "Backtracking search",
+    "best_space": "O(n^2)",
+    "best_time": "O(n!)"
+  },
+  "1004": {
+    "approach": "Sieve or enumeration",
+    "best_space": "O(n)",
+    "best_time": "O(n log log n)"
+  },
+  "1005": {
+    "approach": "Subset sum DP",
+    "best_space": "O(sum)",
+    "best_time": "O(n * sum)"
+  },
+  "1006": {
+    "approach": "Matrix exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  },
+  "1007": {
+    "approach": "Modular exponentiation",
+    "best_space": "O(1)",
+    "best_time": "O(log n)"
+  }
+}

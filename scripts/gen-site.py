@@ -10,6 +10,7 @@ Skips problems in .ci-skip.txt to avoid timeouts.
 """
 import argparse
 import html
+import json
 import os
 import re
 import subprocess
@@ -47,10 +48,70 @@ FLOW_PY = str(Path(FLOW_REPO) / "src")
 COMPLEXITY = {}
 complexity_file = ROOT / "complexity.json"
 if complexity_file.exists():
-    import json
     with open(complexity_file) as f:
         for entry in json.load(f):
             COMPLEXITY[entry["problem"]] = entry
+
+# Load best-known reference data.
+BEST_KNOWN = {}
+bk_file = ROOT / "scripts" / "best-known.json"
+if bk_file.exists():
+    with open(bk_file) as f:
+        raw = json.load(f)
+        for k, v in raw.items():
+            BEST_KNOWN[int(k)] = v
+
+
+def extract_description(n: int) -> str:
+    """Extract the problem description from the comment header of a .flow file."""
+    label = f"{n:03d}"
+    src = ROOT / f"problems/p{label}.flow"
+    if not src.exists():
+        return ""
+    text = src.read_text(errors="replace")
+    lines = text.split("\n")
+    comments = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            comments.append(stripped[1:].strip())
+        elif stripped == "":
+            continue
+        else:
+            break
+    # Skip "Project Euler NNN" header line
+    desc_parts = []
+    for c in comments[1:]:
+        if c.startswith("Project Euler"):
+            continue
+        if c == "":
+            continue
+        desc_parts.append(c)
+    return " ".join(desc_parts)
+
+
+def complexity_match(ours: str, best: str) -> str:
+    """Compare our complexity string against the best known."""
+    if not ours or not best or ours == "?" or best == "?":
+        return "unknown"
+    # Normalise for comparison
+    ours_n = ours.replace(" ", "").lower()
+    best_n = best.replace(" ", "").lower()
+    if ours_n == best_n:
+        return "match"
+    # Rough ordering of common complexity classes (best to worst)
+    order = ["o(1)", "o(loglogn)", "o(logn)", "o(sqrt(n))",
+             "o(n)", "o(nloglogn)", "o(nlogn)", "o(n*sqrt(n))",
+             "o(n^2)", "o(n^2logn)", "o(n^3)", "o(n^4)",
+             "o(2^n)", "o(n!)"]
+    try:
+        oi = order.index(ours_n)
+        bi = order.index(best_n)
+    except ValueError:
+        return "unknown"
+    if oi <= bi:
+        return "match"
+    return "worse"
 
 
 def transpile(src_path: Path, mode: str, out_path: Path) -> str:
@@ -122,21 +183,48 @@ def page_template(n: int, flow_src: str, c_src: str, mlir_src: str,
 
     native_note = '<p class="native-note">This problem uses a native C/C++ helper. MLIR is generated from the Flow wrapper only and may not run standalone.</p>' if native else ''
 
+    # Problem description and PE link
+    desc = extract_description(n)
+    desc_html = f'<p class="problem-desc">{esc(desc)}</p>' if desc else ''
+    pe_link = f'<p class="pe-link"><a href="https://projecteuler.net/problem={n}">View problem on Project Euler</a></p>'
+
     # Complexity metrics from complexity.json (if available).
     cx = COMPLEXITY.get(n, {})
     cx_rows = ""
+    our_time_o = "?"
+    our_space_o = "?"
     if cx:
         time_ms = cx.get("time_ms", -1)
         rss_kb = cx.get("peak_rss_kb", -1)
         comp = cx.get("complexity", {})
-        time_o = comp.get("time", "?")
-        space_o = comp.get("space", "?")
+        our_time_o = comp.get("time", "?")
+        our_space_o = comp.get("space", "?")
         time_str = f"{time_ms} ms" if time_ms >= 0 else "n/a"
         rss_str = f"{rss_kb} KB" if rss_kb >= 0 else "n/a"
         cx_rows = f"""<tr><th>Runtime</th><td>{time_str}</td></tr>
 <tr><th>Peak memory</th><td>{rss_str}</td></tr>
-<tr><th>Time complexity</th><td><code>{esc(time_o)}</code> <span class="est-note">(estimated)</span></td></tr>
-<tr><th>Space complexity</th><td><code>{esc(space_o)}</code> <span class="est-note">(estimated)</span></td></tr>"""
+<tr><th>Time complexity</th><td><code>{esc(our_time_o)}</code> <span class="est-note">(estimated)</span></td></tr>
+<tr><th>Space complexity</th><td><code>{esc(our_space_o)}</code> <span class="est-note">(estimated)</span></td></tr>"""
+
+    # Best-known comparison
+    bk = BEST_KNOWN.get(n, {})
+    bk_time = bk.get("best_time", "?")
+    bk_space = bk.get("best_space", "?")
+    bk_approach = bk.get("approach", "Not curated")
+    match = complexity_match(our_time_o, bk_time)
+    match_label = {"match": "Optimal", "worse": "Suboptimal", "unknown": "Unknown"}[match]
+    match_cls = f"cmp-{match}"
+
+    comparison_section = f"""<h2>Performance comparison</h2>
+<table class="comparison">
+<thead><tr><th>Metric</th><th>Our solution</th><th>Best known</th></tr></thead>
+<tbody>
+<tr><th>Time complexity</th><td><code>{esc(our_time_o)}</code></td><td><code>{esc(bk_time)}</code></td></tr>
+<tr><th>Space complexity</th><td><code>{esc(our_space_o)}</code></td><td><code>{esc(bk_space)}</code></td></tr>
+<tr><th>Approach</th><td>Flow solution</td><td>{esc(bk_approach)}</td></tr>
+<tr><th>Verdict</th><td colspan="2" class="{match_cls}">{match_label}</td></tr>
+</tbody>
+</table>"""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -149,6 +237,8 @@ def page_template(n: int, flow_src: str, c_src: str, mlir_src: str,
 <body>
 <nav><a href="../index.html">&larr; All problems</a></nav>
 <h1>Problem {label}</h1>
+{desc_html}
+{pe_link}
 <table class="meta">
 <tr><th>Answer</th><td><code>{esc(expected)}</code></td></tr>
 <tr><th>Output</th><td><code>{esc(output)}</code></td></tr>
@@ -156,6 +246,7 @@ def page_template(n: int, flow_src: str, c_src: str, mlir_src: str,
 <tr><th>Native helper</th><td>{"yes" if native else "no"}</td></tr>
 {cx_rows}
 </table>
+{comparison_section}
 {native_note}
 <h2>Flow source</h2>
 <pre><code>{esc(flow_src)}</code></pre>
@@ -182,10 +273,15 @@ def index_template(entries: list) -> str:
             t = cx.get("time_ms", -1)
             r = cx.get("peak_rss_kb", -1)
             comp = cx.get("complexity", {})
-            time_str = f"{t} ms" if t >= 0 else ""
-            rss_str = f"{r} KB" if r >= 0 else ""
             time_o = comp.get("time", "")
             space_o = comp.get("space", "")
+            time_str = f"{t} ms" if t >= 0 else ""
+            rss_str = f"{r} KB" if r >= 0 else ""
+        bk = BEST_KNOWN.get(n, {})
+        bk_time = bk.get("best_time", "?")
+        match = complexity_match(time_o, bk_time)
+        match_label = {"match": "=", "worse": ">", "unknown": "?"}[match]
+        match_cls = f"cmp-{match}"
         rows.append(
             f'<tr><td><a href="problems/p{label}.html">{label}</a></td>'
             f'<td class="{cls}">{status}</td>'
@@ -195,7 +291,9 @@ def index_template(entries: list) -> str:
             f'<td>{time_str}</td>'
             f'<td>{rss_str}</td>'
             f'<td><code>{esc(time_o)}</code></td>'
-            f'<td><code>{esc(space_o)}</code></td></tr>'
+            f'<td><code>{esc(space_o)}</code></td>'
+            f'<td><code>{esc(bk_time)}</code></td>'
+            f'<td class="{match_cls}">{match_label}</td></tr>'
         )
     body = "\n".join(rows)
     total = len(entries)
@@ -212,10 +310,10 @@ def index_template(entries: list) -> str:
 <body>
 <h1>Flow x Project Euler</h1>
 <p>Solving <a href="https://projecteuler.net">Project Euler</a> in <a href="https://github.com/flooooooooooow/flow">Flow</a>.</p>
-<p>Each problem page shows the Flow source, generated C, generated MLIR, and the program output.</p>
+<p>Each problem page shows the problem statement, Flow source, generated C, generated MLIR, the program output, and a performance comparison against the best known approach.</p>
 <p>{passed} passed, {skipped} skipped, {total} total.</p>
 <table>
-<thead><tr><th>Problem</th><th>Status</th><th>Output</th><th>Expected</th><th>Type</th><th>Time</th><th>Memory</th><th>Time O</th><th>Space O</th></tr></thead>
+<thead><tr><th>Problem</th><th>Status</th><th>Output</th><th>Expected</th><th>Type</th><th>Time</th><th>Memory</th><th>Time O</th><th>Space O</th><th>Best O</th><th>Cmp</th></tr></thead>
 <tbody>
 {body}
 </tbody>
@@ -244,6 +342,13 @@ pre code { font-size: 0.8rem; }
 .est-note { color: #999; font-size: 0.8rem; }
 a { color: #1565c0; text-decoration: none; }
 a:hover { text-decoration: underline; }
+.problem-desc { font-size: 1rem; line-height: 1.5; margin: 0.5rem 0 1rem; color: #333; }
+.pe-link { font-size: 0.9rem; margin: 0 0 1.5rem; }
+.comparison { font-size: 0.9rem; }
+.comparison th { width: 8rem; }
+.cmp-match { color: #2a7d2a; font-weight: bold; }
+.cmp-worse { color: #c62828; font-weight: bold; }
+.cmp-unknown { color: #666; }
 """
 
 
