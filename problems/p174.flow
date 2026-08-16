@@ -11,7 +11,8 @@ function main() -> i32 {
     let typec: ptr<i32> = calloc(limit + 1, 4)
     if typec == null { return 1 }
 
-    for n in 3..(limit / 4 + 2) {
+    let mut n: i64 = 3
+    while n <= limit / 4 + 1 {
         let mut m: i64 = n - 2
         while m > 0 {
             let tiles: i64 = n * n - m * m
@@ -19,13 +20,16 @@ function main() -> i32 {
             typec[tiles] = typec[tiles] + 1
             m = m - 2
         }
+        n = n + 1
     }
 
     let mut ans: i64 = 0
-    for t in 1..(limit + 1) {
+    let mut t: i64 = 1
+    while t <= limit {
         if typec[t] >= 1 && typec[t] <= 10 {
             ans = ans + 1
         }
+        t = t + 1
     }
     printf("%lld\n", ans)
     free(typec)
