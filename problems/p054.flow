@@ -34,6 +34,19 @@ function sort5(v: ptr<i32>) -> void {
     }
 }
 
+
+enum HandCat {
+    HighCard,
+    Pair,
+    TwoPair,
+    ThreeOfAKind,
+    Straight,
+    Flush,
+    FullHouse,
+    FourOfAKind,
+    StraightFlush
+}
+
 function max2i(a: i32, b: i32) -> i32 {
     if a > b { return a }
     return b
@@ -101,32 +114,34 @@ function hand_score(ranks: ptr<i32>, suits: ptr<i32>) -> i64 {
         i = i - 1
     }
 
-    let mut cat: i64 = 0
-    let mut key: i64 = 0
-
+    let mut cat: HandCat = HandCat { tag: HandCat_HighCard }
     if straight && flush {
-        cat = 8
+        cat = HandCat { tag: HandCat_StraightFlush }
     } elif four != 0 {
-        cat = 7
+        cat = HandCat { tag: HandCat_FourOfAKind }
     } elif three != 0 && pairs >= 1 {
-        cat = 6
+        cat = HandCat { tag: HandCat_FullHouse }
     } elif flush {
-        cat = 5
+        cat = HandCat { tag: HandCat_Flush }
     } elif straight {
-        cat = 4
+        cat = HandCat { tag: HandCat_Straight }
     } elif three != 0 {
-        cat = 3
+        cat = HandCat { tag: HandCat_ThreeOfAKind }
     } elif pairs == 2 {
-        cat = 2
+        cat = HandCat { tag: HandCat_TwoPair }
     } elif pairs == 1 {
-        cat = 1
-    } else {
-        cat = 0
+        cat = HandCat { tag: HandCat_Pair }
     }
 
-    match cat {
-        8 => { key = hi as i64 }
-        7 => {
+    let mut key: i64 = 0
+    let mut cat_val: i64 = 0
+
+    match cat.tag {
+        HandCat_StraightFlush => {
+            key = hi as i64
+            cat_val = 8
+        }
+        HandCat_FourOfAKind => {
             key = four as i64
             i = 14
             while i >= 2 {
@@ -136,11 +151,21 @@ function hand_score(ranks: ptr<i32>, suits: ptr<i32>) -> i64 {
                 }
                 i = i - 1
             }
+            cat_val = 7
         }
-        6 => { key = (three as i64) * 100 + (p1 as i64) }
-        5 => { key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64) }
-        4 => { key = hi as i64 }
-        3 => {
+        HandCat_FullHouse => {
+            key = (three as i64) * 100 + (p1 as i64)
+            cat_val = 6
+        }
+        HandCat_Flush => {
+            key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64)
+            cat_val = 5
+        }
+        HandCat_Straight => {
+            key = hi as i64
+            cat_val = 4
+        }
+        HandCat_ThreeOfAKind => {
             key = three as i64
             i = 14
             while i >= 2 {
@@ -149,8 +174,9 @@ function hand_score(ranks: ptr<i32>, suits: ptr<i32>) -> i64 {
                 }
                 i = i - 1
             }
+            cat_val = 3
         }
-        2 => {
+        HandCat_TwoPair => {
             let hi_p: i32 = max2i(p1, p2)
             let lo_p: i32 = min2i(p1, p2)
             key = (hi_p as i64) * 10000 + (lo_p as i64) * 100
@@ -162,8 +188,9 @@ function hand_score(ranks: ptr<i32>, suits: ptr<i32>) -> i64 {
                 }
                 i = i - 1
             }
+            cat_val = 2
         }
-        1 => {
+        HandCat_Pair => {
             key = p1 as i64
             i = 14
             while i >= 2 {
@@ -172,13 +199,17 @@ function hand_score(ranks: ptr<i32>, suits: ptr<i32>) -> i64 {
                 }
                 i = i - 1
             }
+            cat_val = 1
         }
-        _ => { key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64) }
+        HandCat_HighCard => {
+            key = (r[4] as i64) * 100000000 + (r[3] as i64) * 1000000 + (r[2] as i64) * 10000 + (r[1] as i64) * 100 + (r[0] as i64)
+            cat_val = 0
+        }
     }
 
     free(cnt)
     free(r)
-    return cat * 10000000000 + key
+    return cat_val * 10000000000 + key
 }
 
 function skip_ws(f: ptr<void>, c0: i32) -> i32 {

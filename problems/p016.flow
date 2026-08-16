@@ -2,38 +2,24 @@
 # Sum of digits of 2^1000.
 # Digits grow in an array — no bigint library required.
 
+import euler.digits { Digits, digits_one, digits_mul_u32, digits_sum }
+
 extern {
     function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
 }
 
 function main() -> i32 {
-    let digits: ptr<i32> = calloc(400, 4)
-    if digits == null {
+    let mut d: Digits = digits_one(400)
+    if d.data == null {
         return 1
     }
-    digits[0] = 1
-    let mut len: i32 = 1
 
     for exp in 0..1000 {
-        let mut carry: i32 = 0
-        for i in 0..len {
-            let v: i32 = digits[i] * 2 + carry
-            digits[i] = v % 10
-            carry = v / 10
-        }
-        while carry > 0 {
-            digits[len] = carry % 10
-            carry = carry / 10
-            len = len + 1
-        }
+        digits_mul_u32(&d, 2)
     }
 
-    let mut total: i64 = 0
-    for i in 0..len {
-        total = total + (digits[i] as i64)
-    }
-    printf("%lld\n", total)
-    free(digits)
+    printf("%lld\n", digits_sum(d))
+    free(d.data)
     return 0
 }
