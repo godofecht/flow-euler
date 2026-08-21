@@ -1,44 +1,10 @@
 # Project Euler 020
 # Sum of digits in 100!
-#
-# Digit-bigint packed into a small Digits struct (exemplar for the corpus).
+
+import euler.digits { Digits, digits_one, digits_mul_u32, digits_sum }
 
 extern {
-    function calloc(n: i64, size: i64) -> ptr<void>
     function free(p: ptr<void>) -> void
-}
-
-struct Digits {
-    data: ptr<i32>
-    len: i32
-}
-
-function digits_one(cap: i64) -> Digits {
-    let data: ptr<i32> = calloc(cap, 4)
-    data[0] = 1
-    return Digits { data: data, len: 1 }
-}
-
-function digits_mul_u32(d: ptr<Digits>, m: i32) -> void {
-    let mut carry: i32 = 0
-    for i in 0..d[0].len {
-        let v: i32 = d[0].data[i] * m + carry
-        d[0].data[i] = v % 10
-        carry = v / 10
-    }
-    while carry > 0 {
-        d[0].data[d[0].len] = carry % 10
-        carry = carry / 10
-        d[0].len = d[0].len + 1
-    }
-}
-
-function digits_sum(d: Digits) -> i64 {
-    let mut total: i64 = 0
-    for i in 0..d.len {
-        total = total + (d.data[i] as i64)
-    }
-    return total
 }
 
 function main() -> i32 {
@@ -46,9 +12,11 @@ function main() -> i32 {
     if d.data == null {
         return 1
     }
+
     for n in 2..101 {
         digits_mul_u32(&d, n)
     }
+
     printf("%lld\n", digits_sum(d))
     free(d.data)
     return 0

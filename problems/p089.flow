@@ -24,13 +24,11 @@ function minimal_len(n: i32) -> i32 {
     let lens: array<i32, 13> = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1]
     let mut len: i32 = 0
     let mut x: i32 = n
-    let mut i: i32 = 0
-    while i < 13 {
+    for i in 0..13 {
         while x >= vals[i] {
             x = x - vals[i]
             len = len + lens[i]
         }
-        i = i + 1
     }
     return len
 }
