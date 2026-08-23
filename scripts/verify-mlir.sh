@@ -31,8 +31,96 @@ fail=0
 skip=0
 mlir_fail=0
 
+failed_labels=()
+failed_actual=()
+failed_expected=()
+failed_reasons=()
+mlir_failed_labels=()
+mlir_failed_reasons=()
+
 build="$ROOT/.build/mlir"
 mkdir -p "$build"
+
+gha_escape() {
+  local value="$1"
+  value="${value//'%'/'%25'}"
+  value="${value//$'\r'/'%0D'}"
+  value="${value//$'\n'/'%0A'}"
+  printf '%s' "$value"
+}
+
+record_failure() {
+  local label="$1"
+  local actual="$2"
+  local expected="$3"
+  local reason="$4"
+
+  failed_labels+=("$label")
+  failed_actual+=("$actual")
+  failed_expected+=("$expected")
+  failed_reasons+=("$reason")
+  fail=$((fail + 1))
+
+  echo "FAIL p${label}: ${reason}; got '${actual}' expected '${expected}'" >&2
+  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    echo "::error title=Euler p${label} ${reason}::$(gha_escape "got '${actual}', expected '${expected}'")"
+  fi
+}
+
+record_mlir_failure() {
+  local label="$1"
+  local reason="$2"
+
+  mlir_failed_labels+=("$label")
+  mlir_failed_reasons+=("$reason")
+  mlir_fail=$((mlir_fail + 1))
+  echo "MLIR_FAIL p${label}: ${reason}" >&2
+}
+
+print_failure_summary() {
+  if [[ "$fail" -gt 0 ]]; then
+    echo
+    echo "FAILED PROBLEMS ($fail)"
+    echo "--------------------"
+    for i in "${!failed_labels[@]}"; do
+      echo "p${failed_labels[$i]}: ${failed_reasons[$i]}; got '${failed_actual[$i]}' expected '${failed_expected[$i]}'"
+    done
+  fi
+
+  if [[ "$mlir_fail" -gt 0 ]]; then
+    echo
+    echo "MLIR BACKEND LIMITATIONS ($mlir_fail)"
+    echo "--------------------------------"
+    for i in "${!mlir_failed_labels[@]}"; do
+      echo "p${mlir_failed_labels[$i]}: ${mlir_failed_reasons[$i]}"
+    done
+  fi
+
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    {
+      if [[ "$fail" -gt 0 ]]; then
+        echo "## MLIR answer mismatches"
+        echo
+        echo "| Problem | Failure | Expected | Actual |"
+        echo "| --- | --- | --- | --- |"
+        for i in "${!failed_labels[@]}"; do
+          echo "| \`p${failed_labels[$i]}\` | ${failed_reasons[$i]} | \`${failed_expected[$i]}\` | \`${failed_actual[$i]}\` |"
+        done
+        echo
+      fi
+
+      if [[ "$mlir_fail" -gt 0 ]]; then
+        echo "## MLIR backend limitations"
+        echo
+        echo "| Problem | Stage |"
+        echo "| --- | --- |"
+        for i in "${!mlir_failed_labels[@]}"; do
+          echo "| \`p${mlir_failed_labels[$i]}\` | ${mlir_failed_reasons[$i]} |"
+        done
+      fi
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+}
 
 run_mlir() {
   local n="$1" src="$2"
@@ -102,11 +190,21 @@ while read -r num expected; do
     continue
   fi
 
-  out=$(run_mlir "$numeric" "$src" 2>/dev/null || true)
-  rc=$?
-  if [[ -z "$out" ]]; then
-    echo "MLIR_FAIL p${label}" >&2
-    mlir_fail=$((mlir_fail + 1))
+  if out=$(run_mlir "$numeric" "$src" 2>/dev/null); then
+    rc=0
+  else
+    rc=$?
+  fi
+
+  if [[ "$rc" -ne 0 || -z "$out" ]]; then
+    case "$rc" in
+      2) reason="Flow to MLIR transpile failure" ;;
+      3) reason="MLIR/LLVM toolchain failure" ;;
+      124) reason="execution timeout" ;;
+      0) reason="no answer produced" ;;
+      *) reason="backend exited with status $rc" ;;
+    esac
+    record_mlir_failure "$label" "$reason"
     continue
   fi
 
@@ -114,10 +212,11 @@ while read -r num expected; do
     echo "OK  p${label} = $out"
     pass=$((pass + 1))
   else
-    echo "FAIL p${label}: got '${out}' expected '${expected}'" >&2
-    fail=$((fail + 1))
+    record_failure "$label" "$out" "$expected" "answer mismatch"
   fi
 done < answers.txt
+
+print_failure_summary
 
 echo "----"
 echo "passed=$pass failed=$fail mlir_fail=$mlir_fail skipped=$skip"
