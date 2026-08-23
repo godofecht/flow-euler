@@ -20,10 +20,10 @@ function solve(limit: i64, streak: i64) -> i64 {
 
 function main() -> i32 {
     let mut result: i64 = 0
-    let mut pow4: i64 = 4
+    let mut pow4: i64 = 1
     for i in 1..32 {
-        result = result + solve(pow4, i)
         pow4 = pow4 * 4
+        result = result + solve(pow4, i)
     }
 
     printf("%lld\n", result)
