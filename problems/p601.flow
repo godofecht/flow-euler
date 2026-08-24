@@ -7,8 +7,10 @@ import euler.nt { lcm }
 
 function solve(limit: i64, streak: i64) -> i64 {
     let mut multiple: i64 = streak
-    for i in 2..streak {
-        multiple = lcm(multiple, i)
+    if streak > 2 {
+        for i in 2..streak {
+            multiple = lcm(multiple, i)
+        }
     }
 
     let lim: i64 = limit - 2
