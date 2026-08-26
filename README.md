@@ -7,6 +7,8 @@ Solving [Project Euler](https://projecteuler.net) in [Flow](https://github.com/f
 
 1007 problems solved. All 1007 known answers in `answers.txt` have Flow solutions. 262 use native C/C++ helpers for algorithms that need `__int128`, GMP, MPFR, or NTT.
 
+For the conventions learned from this corpus, see [FLOW_IDIOMS.md](FLOW_IDIOMS.md). The rule is simple: adopt an idiom when repeated real solutions show that it improves intent or reuse without changing the low-level execution contract.
+
 ## Quick start
 
 ```bash
@@ -75,10 +77,12 @@ Reproduce with `./scripts/bench.sh`.
 ```
 problems/           one .flow file per Euler problem
 problems/native/    C/C++ helpers (NTT, i128, GMP, MPFR)
+lib/                shared zero-cost Flow kernels and representations
 data/               input grids, digit strings, tables
 bench/              hand-written C twins + timing harness
 scripts/            run, verify, verify-mlir, bench
 answers.txt         expected answers for automated checks
+FLOW_IDIOMS.md      corpus-derived Flow conventions and adoption rules
 docs/               architecture, backends, adding solutions
 ```
 
@@ -129,6 +133,7 @@ Three GitHub Actions workflows run on every push and pull request:
 
 ## Documentation
 
+- [FLOW_IDIOMS.md](FLOW_IDIOMS.md): corpus-derived Flow idioms and the rules for adopting them
 - [docs/architecture.md](docs/architecture.md): repository structure, solution patterns, compilation paths
 - [docs/backends.md](docs/backends.md): C and MLIR backend details, prerequisites, limitations
 - [docs/adding-solutions.md](docs/adding-solutions.md): how to add a new solution, native helper conventions

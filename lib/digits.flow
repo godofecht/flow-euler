@@ -1,5 +1,5 @@
 # @module euler.digits
-# @means Shared digit-array helpers for big ints.
+# @means Shared digit-array helpers for decimal big ints.
 
 export struct Digits {
     data: ptr<i32>
@@ -12,8 +12,33 @@ extern {
 
 export function digits_one(cap: i64) -> Digits {
     let data: ptr<i32> = calloc(cap, 4)
-    data[0] = 1
+    if data != null {
+        data[0] = 1
+    }
     return Digits { data: data, len: 1 }
+}
+
+export function digits_set_one(d: ptr<Digits>) -> void {
+    d[0].data[0] = 1
+    d[0].len = 1
+}
+
+export function digits_set_u64(d: ptr<Digits>, value: i64) -> void {
+    let mut x: i64 = value
+    let mut len: i32 = 0
+
+    if x == 0 {
+        d[0].data[0] = 0
+        d[0].len = 1
+        return
+    }
+
+    while x > 0 {
+        d[0].data[len] = (x % 10) as i32
+        x = x / 10
+        len = len + 1
+    }
+    d[0].len = len
 }
 
 export function digits_mul_u32(d: ptr<Digits>, m: i32) -> void {
@@ -28,6 +53,38 @@ export function digits_mul_u32(d: ptr<Digits>, m: i32) -> void {
         carry = carry / 10
         d[0].len = d[0].len + 1
     }
+}
+
+export function digits_reverse_add(d: ptr<Digits>, tmp: ptr<i32>) -> void {
+    let len: i32 = d[0].len
+    let mut carry: i32 = 0
+
+    for i in 0..len {
+        let v: i32 = d[0].data[i] + d[0].data[len - 1 - i] + carry
+        tmp[i] = v % 10
+        carry = v / 10
+    }
+
+    let mut new_len: i32 = len
+    if carry > 0 {
+        tmp[new_len] = carry
+        new_len = new_len + 1
+    }
+
+    for i in 0..new_len {
+        d[0].data[i] = tmp[i]
+    }
+    d[0].len = new_len
+}
+
+export function digits_is_palindrome(d: Digits) -> bool {
+    let half: i32 = d.len / 2
+    for i in 0..half {
+        if d.data[i] != d.data[d.len - 1 - i] {
+            return false
+        }
+    }
+    return true
 }
 
 export function digits_sum(d: Digits) -> i64 {
